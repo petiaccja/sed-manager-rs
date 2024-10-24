@@ -1,0 +1,5 @@
+[workspace]
+
+members = [
+    "sed_manager", "sed_manager_macros",
+]

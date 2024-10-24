@@ -1,0 +1,266 @@
+use std::io::Seek;
+
+pub enum SerializationError {
+    Fail,
+}
+
+pub trait ItemRead<Item> {
+    fn read_exact<'me>(&'me mut self, count: usize) -> Option<&'me [Item]>;
+    fn read_one<'me>(&'me mut self) -> Option<&'me Item>;
+    fn peek_exact<'me>(&'me mut self, count: usize) -> Option<&'me [Item]>;
+    fn peek_one<'me>(&'me mut self) -> Option<&'me Item>;
+}
+
+pub trait ItemWrite<Item> {
+    fn write_exact(&mut self, items: &[Item])
+    where
+        Item: Clone;
+    fn write_one(&mut self, item: Item);
+    fn peek_exact<'me>(&'me mut self, count: usize) -> Option<&'me mut [Item]>;
+    fn peek_one<'me>(&'me mut self) -> Option<&'me mut Item>;
+}
+
+pub struct InputStream<Item> {
+    data: Vec<Item>,
+    cursor: usize,
+}
+
+pub struct OutputStream<Item> {
+    data: Vec<Item>,
+    cursor: usize,
+}
+
+impl<Item> InputStream<Item> {
+    pub fn new(items: &[Item]) -> InputStream<Item>
+    where
+        Item: Clone,
+    {
+        InputStream { data: items.into(), cursor: 0 }
+    }
+}
+
+impl<Item> From<Vec<Item>> for InputStream<Item> {
+    fn from(value: Vec<Item>) -> Self {
+        Self { data: value, cursor: 0 }
+    }
+}
+
+impl<Item> OutputStream<Item> {
+    pub fn new() -> OutputStream<Item> {
+        OutputStream { data: vec![], cursor: 0 }
+    }
+    pub fn take(&mut self) -> Vec<Item> {
+        self.data.drain(..).collect()
+    }
+    pub fn as_slice(&self) -> &[Item] {
+        self.data.as_slice()
+    }
+    pub fn as_mut_slice(&mut self) -> &[Item] {
+        self.data.as_mut_slice()
+    }
+}
+
+impl<Item> ItemRead<Item> for InputStream<Item> {
+    fn read_exact<'me>(&'me mut self, count: usize) -> Option<&'me [Item]> {
+        if self.cursor + count <= self.data.len() {
+            let result = Some(&self.data[self.cursor..(self.cursor + count)]);
+            self.cursor += count;
+            result
+        } else {
+            None
+        }
+    }
+    fn read_one<'me>(&'me mut self) -> Option<&'me Item> {
+        match self.read_exact(1) {
+            Some(range) => Some(&range[0]),
+            None => None,
+        }
+    }
+    fn peek_exact<'me>(&'me mut self, count: usize) -> Option<&'me [Item]> {
+        if self.cursor + count <= self.data.len() {
+            Some(&self.data[self.cursor..(self.cursor + count)])
+        } else {
+            None
+        }
+    }
+    fn peek_one<'me>(&'me mut self) -> Option<&'me Item> {
+        match self.peek_exact(1) {
+            Some(range) => Some(&range[0]),
+            None => None,
+        }
+    }
+}
+
+fn seek_from(len: usize, from: usize, offset: i64) -> Result<u64, std::io::Error> {
+    let target = from as i64 + offset;
+    if 0 <= target && target <= len as i64 {
+        Ok(target as u64)
+    } else {
+        Err(std::io::ErrorKind::UnexpectedEof.into())
+    }
+}
+
+impl<Item> Seek for InputStream<Item> {
+    fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
+        match pos {
+            std::io::SeekFrom::Start(offset) => {
+                self.cursor = seek_from(self.data.len(), 0, offset as i64)? as usize;
+                Ok(self.cursor as u64)
+            }
+            std::io::SeekFrom::End(offset) => {
+                self.cursor = seek_from(self.data.len(), self.data.len(), offset as i64)? as usize;
+                Ok(self.cursor as u64)
+            }
+            std::io::SeekFrom::Current(offset) => {
+                self.cursor = seek_from(self.data.len(), self.cursor, offset as i64)? as usize;
+                Ok(self.cursor as u64)
+            }
+        }
+    }
+}
+
+impl<Item> ItemWrite<Item> for OutputStream<Item> {
+    fn peek_exact<'me>(&'me mut self, count: usize) -> Option<&'me mut [Item]> {
+        if self.cursor + count <= self.data.len() {
+            Some(&mut self.data[self.cursor..(self.cursor + count)])
+        } else {
+            None
+        }
+    }
+    fn peek_one<'me>(&'me mut self) -> Option<&'me mut Item> {
+        match self.peek_exact(1) {
+            Some(range) => Some(&mut range[0]),
+            None => None,
+        }
+    }
+    fn write_exact(&mut self, items: &[Item])
+    where
+        Item: Clone,
+    {
+        for item in items {
+            if self.cursor < self.data.len() {
+                self.data[self.cursor] = item.clone();
+            } else {
+                self.data.push(item.clone());
+            }
+            self.cursor += 1;
+        }
+    }
+    fn write_one(&mut self, item: Item) {
+        if self.cursor < self.data.len() {
+            self.data[self.cursor] = item;
+        } else {
+            self.data.push(item);
+        }
+        self.cursor += 1;
+    }
+}
+
+impl<Item> Seek for OutputStream<Item> {
+    fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
+        match pos {
+            std::io::SeekFrom::Start(offset) => {
+                self.cursor = seek_from(self.data.len(), 0, offset as i64)? as usize;
+                Ok(self.cursor as u64)
+            }
+            std::io::SeekFrom::End(offset) => {
+                self.cursor = seek_from(self.data.len(), self.data.len(), offset as i64)? as usize;
+                Ok(self.cursor as u64)
+            }
+            std::io::SeekFrom::Current(offset) => {
+                self.cursor = seek_from(self.data.len(), self.cursor, offset as i64)? as usize;
+                Ok(self.cursor as u64)
+            }
+        }
+    }
+}
+
+pub trait Serialize<T, Item> {
+    fn serialize(&self, stream: OutputStream<Item>) -> Result<(), SerializationError>;
+}
+
+pub trait Deserialize<T, Item> {
+    fn deserialize(stream: InputStream<Item>) -> Result<T, SerializationError>;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn input_stream_read_one() {
+        let mut stream = InputStream::<i32>::from(vec![1, 2, 3, 4, 5]);
+        let item = stream.read_one();
+        assert!(item.is_some());
+        assert_eq!(*item.unwrap(), 1);
+        assert_eq!(stream.stream_position().unwrap(), 1);
+    }
+
+    #[test]
+    fn input_stream_read_one_eof() {
+        let mut stream = InputStream::<i32>::from(vec![1]);
+        stream.read_one();
+        let item = stream.read_one();
+        assert!(item.is_none());
+        assert_eq!(stream.stream_position().unwrap(), 1);
+    }
+
+    #[test]
+    fn input_stream_peek_one() {
+        let mut stream = InputStream::<i32>::from(vec![1, 2, 3, 4, 5]);
+        let item = stream.peek_one();
+        assert!(item.is_some());
+        assert_eq!(*item.unwrap(), 1);
+        assert_eq!(stream.stream_position().unwrap(), 0);
+    }
+
+    #[test]
+    fn input_stream_peek_one_eof() {
+        let mut stream = InputStream::<i32>::from(vec![1]);
+        stream.read_one();
+        let item = stream.peek_one();
+        assert!(item.is_none());
+        assert_eq!(stream.stream_position().unwrap(), 1);
+    }
+
+    #[test]
+    fn input_stream_seek() {
+        let mut stream = InputStream::<i32>::from(vec![1, 2, 3, 4, 5]);
+
+        assert!(stream.seek(std::io::SeekFrom::Start(3)).is_ok());
+        let mut item = stream.peek_one();
+        assert!(item.is_some());
+        assert_eq!(*item.unwrap(), 4);
+
+        assert!(stream.seek(std::io::SeekFrom::Current(-2)).is_ok());
+        item = stream.peek_one();
+        assert!(item.is_some());
+        assert_eq!(*item.unwrap(), 2);
+
+        assert!(stream.seek(std::io::SeekFrom::End(-1)).is_ok());
+        item = stream.peek_one();
+        assert!(item.is_some());
+        assert_eq!(*item.unwrap(), 5);
+    }
+
+    #[test]
+    fn output_stream_write_one() {
+        let mut stream = OutputStream::<i32>::new();
+        stream.write_one(1);
+        stream.write_one(2);
+        stream.write_one(3);
+        assert_eq!(stream.take(), vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn output_stream_write_seek() {
+        let mut stream = OutputStream::<i32>::new();
+        stream.write_one(1);
+        stream.write_one(2);
+        assert!(stream.seek(std::io::SeekFrom::Start(0)).is_ok());
+        stream.write_one(5);
+        assert!(stream.seek(std::io::SeekFrom::End(0)).is_ok());
+        stream.write_exact(&[3]);
+        assert_eq!(stream.take(), vec![5, 2, 3]);
+    }
+}
