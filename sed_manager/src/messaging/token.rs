@@ -78,11 +78,3 @@ impl Default for Token {
         }
     }
 }
-
-pub trait Tokenize<T> {
-    fn tokenize(&self) -> Vec<Token>;
-}
-
-pub trait FromTokens<T> {
-    fn from_tokens(tokens: &[Token]) -> Result<(T, &[Token]), TokenParsingError>;
-}

@@ -1,9 +1,4 @@
 use std::io::Seek;
-
-pub enum SerializationError {
-    Fail,
-}
-
 pub trait ItemRead<Item> {
     fn read_exact<'me>(&'me mut self, count: usize) -> Option<&'me [Item]>;
     fn read_one<'me>(&'me mut self) -> Option<&'me Item>;
@@ -22,12 +17,12 @@ pub trait ItemWrite<Item> {
 
 pub struct InputStream<Item> {
     data: Vec<Item>,
-    cursor: usize,
+    stream_pos: usize,
 }
 
 pub struct OutputStream<Item> {
     data: Vec<Item>,
-    cursor: usize,
+    stream_pos: usize,
 }
 
 impl<Item> InputStream<Item> {
@@ -35,19 +30,19 @@ impl<Item> InputStream<Item> {
     where
         Item: Clone,
     {
-        InputStream { data: items.into(), cursor: 0 }
+        InputStream { data: items.into(), stream_pos: 0 }
     }
 }
 
 impl<Item> From<Vec<Item>> for InputStream<Item> {
     fn from(value: Vec<Item>) -> Self {
-        Self { data: value, cursor: 0 }
+        Self { data: value, stream_pos: 0 }
     }
 }
 
 impl<Item> OutputStream<Item> {
     pub fn new() -> OutputStream<Item> {
-        OutputStream { data: vec![], cursor: 0 }
+        OutputStream { data: vec![], stream_pos: 0 }
     }
     pub fn take(&mut self) -> Vec<Item> {
         self.data.drain(..).collect()
@@ -62,9 +57,9 @@ impl<Item> OutputStream<Item> {
 
 impl<Item> ItemRead<Item> for InputStream<Item> {
     fn read_exact<'me>(&'me mut self, count: usize) -> Option<&'me [Item]> {
-        if self.cursor + count <= self.data.len() {
-            let result = Some(&self.data[self.cursor..(self.cursor + count)]);
-            self.cursor += count;
+        if self.stream_pos + count <= self.data.len() {
+            let result = Some(&self.data[self.stream_pos..(self.stream_pos + count)]);
+            self.stream_pos += count;
             result
         } else {
             None
@@ -77,8 +72,8 @@ impl<Item> ItemRead<Item> for InputStream<Item> {
         }
     }
     fn peek_exact<'me>(&'me mut self, count: usize) -> Option<&'me [Item]> {
-        if self.cursor + count <= self.data.len() {
-            Some(&self.data[self.cursor..(self.cursor + count)])
+        if self.stream_pos + count <= self.data.len() {
+            Some(&self.data[self.stream_pos..(self.stream_pos + count)])
         } else {
             None
         }
@@ -104,16 +99,16 @@ impl<Item> Seek for InputStream<Item> {
     fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
         match pos {
             std::io::SeekFrom::Start(offset) => {
-                self.cursor = seek_from(self.data.len(), 0, offset as i64)? as usize;
-                Ok(self.cursor as u64)
+                self.stream_pos = seek_from(self.data.len(), 0, offset as i64)? as usize;
+                Ok(self.stream_pos as u64)
             }
             std::io::SeekFrom::End(offset) => {
-                self.cursor = seek_from(self.data.len(), self.data.len(), offset as i64)? as usize;
-                Ok(self.cursor as u64)
+                self.stream_pos = seek_from(self.data.len(), self.data.len(), offset as i64)? as usize;
+                Ok(self.stream_pos as u64)
             }
             std::io::SeekFrom::Current(offset) => {
-                self.cursor = seek_from(self.data.len(), self.cursor, offset as i64)? as usize;
-                Ok(self.cursor as u64)
+                self.stream_pos = seek_from(self.data.len(), self.stream_pos, offset as i64)? as usize;
+                Ok(self.stream_pos as u64)
             }
         }
     }
@@ -121,8 +116,8 @@ impl<Item> Seek for InputStream<Item> {
 
 impl<Item> ItemWrite<Item> for OutputStream<Item> {
     fn peek_exact<'me>(&'me mut self, count: usize) -> Option<&'me mut [Item]> {
-        if self.cursor + count <= self.data.len() {
-            Some(&mut self.data[self.cursor..(self.cursor + count)])
+        if self.stream_pos + count <= self.data.len() {
+            Some(&mut self.data[self.stream_pos..(self.stream_pos + count)])
         } else {
             None
         }
@@ -138,21 +133,21 @@ impl<Item> ItemWrite<Item> for OutputStream<Item> {
         Item: Clone,
     {
         for item in items {
-            if self.cursor < self.data.len() {
-                self.data[self.cursor] = item.clone();
+            if self.stream_pos < self.data.len() {
+                self.data[self.stream_pos] = item.clone();
             } else {
                 self.data.push(item.clone());
             }
-            self.cursor += 1;
+            self.stream_pos += 1;
         }
     }
     fn write_one(&mut self, item: Item) {
-        if self.cursor < self.data.len() {
-            self.data[self.cursor] = item;
+        if self.stream_pos < self.data.len() {
+            self.data[self.stream_pos] = item;
         } else {
             self.data.push(item);
         }
-        self.cursor += 1;
+        self.stream_pos += 1;
     }
 }
 
@@ -160,27 +155,19 @@ impl<Item> Seek for OutputStream<Item> {
     fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
         match pos {
             std::io::SeekFrom::Start(offset) => {
-                self.cursor = seek_from(self.data.len(), 0, offset as i64)? as usize;
-                Ok(self.cursor as u64)
+                self.stream_pos = seek_from(self.data.len(), 0, offset as i64)? as usize;
+                Ok(self.stream_pos as u64)
             }
             std::io::SeekFrom::End(offset) => {
-                self.cursor = seek_from(self.data.len(), self.data.len(), offset as i64)? as usize;
-                Ok(self.cursor as u64)
+                self.stream_pos = seek_from(self.data.len(), self.data.len(), offset as i64)? as usize;
+                Ok(self.stream_pos as u64)
             }
             std::io::SeekFrom::Current(offset) => {
-                self.cursor = seek_from(self.data.len(), self.cursor, offset as i64)? as usize;
-                Ok(self.cursor as u64)
+                self.stream_pos = seek_from(self.data.len(), self.stream_pos, offset as i64)? as usize;
+                Ok(self.stream_pos as u64)
             }
         }
     }
-}
-
-pub trait Serialize<T, Item> {
-    fn serialize(&self, stream: OutputStream<Item>) -> Result<(), SerializationError>;
-}
-
-pub trait Deserialize<T, Item> {
-    fn deserialize(stream: InputStream<Item>) -> Result<T, SerializationError>;
 }
 
 #[cfg(test)]
