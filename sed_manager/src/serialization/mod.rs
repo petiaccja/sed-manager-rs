@@ -1,4 +1,4 @@
-pub mod impls;
+pub mod impl_ser_bin;
 pub mod serialize;
 pub mod stream;
 
