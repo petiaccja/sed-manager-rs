@@ -31,7 +31,18 @@ fn gen_optional_range<T: quote::ToTokens>(opt: &Option<std::ops::Range<T>>) -> T
     }
 }
 
-fn gen_field_serialize(field: &FieldDesc) -> TokenStream2 {
+fn gen_save_struct_pos() -> TokenStream2 {
+    let struct_pos = VariableNames::struct_pos();
+    let stream = VariableNames::stream();
+    quote! {
+        use ::std::io::Seek;
+        let ::core::result::Result::Ok(#struct_pos) = #stream.stream_position() else {
+            return ::core::result::Result::Err(::sed_manager::serialization::SerializationError::StreamError);
+        };
+    }
+}
+
+fn gen_serialize_field(field: &FieldDesc) -> TokenStream2 {
     let name: TokenStream2 = field.name.parse().unwrap();
     let stream = VariableNames::stream();
     let struct_pos = VariableNames::struct_pos();
@@ -50,18 +61,7 @@ fn gen_field_serialize(field: &FieldDesc) -> TokenStream2 {
     }
 }
 
-fn gen_get_struct_pos() -> TokenStream2 {
-    let struct_pos = VariableNames::struct_pos();
-    let stream = VariableNames::stream();
-    quote! {
-        use ::std::io::Seek;
-        let ::core::result::Result::Ok(#struct_pos) = #stream.stream_position() else {
-            return ::core::result::Result::Err(::sed_manager::serialization::SerializationError::StreamError);
-        };
-    }
-}
-
-fn gen_struct_layout(layout: &Layout) -> TokenStream2 {
+fn gen_serialize_struct_layout(layout: &Layout) -> TokenStream2 {
     if let Some(round) = layout.round {
         let round = round as u64;
         let struct_pos = VariableNames::struct_pos();
@@ -79,7 +79,7 @@ fn gen_struct_layout(layout: &Layout) -> TokenStream2 {
     }
 }
 
-fn gen_struct_serialize_skeleton(
+fn gen_serialize_struct_skeleton(
     name: TokenStream2,
     struct_pos: TokenStream2,
     struct_layout: TokenStream2,
@@ -99,15 +99,15 @@ fn gen_struct_serialize_skeleton(
     }
 }
 
-pub fn gen_struct_serialize(struct_desc: &StructDesc) -> TokenStream2 {
+pub fn gen_serialize_struct(struct_desc: &StructDesc) -> TokenStream2 {
     let name: TokenStream2 = struct_desc.name.parse().unwrap();
-    let struct_pos = gen_get_struct_pos();
+    let struct_pos = gen_save_struct_pos();
     let mut fields = quote! {};
     for field in &struct_desc.fields {
-        fields.append_all(gen_field_serialize(field));
+        fields.append_all(gen_serialize_field(field));
     }
-    let struct_layout = gen_struct_layout(&struct_desc.layout);
-    gen_struct_serialize_skeleton(name, struct_pos, struct_layout, fields)
+    let struct_layout = gen_serialize_struct_layout(&struct_desc.layout);
+    gen_serialize_struct_skeleton(name, struct_pos, struct_layout, fields)
 }
 
 #[cfg(test)]
@@ -153,7 +153,7 @@ mod tests {
     #[test]
     fn gen_field_serialize_simple() {
         let field = FieldDesc { name: String::from("field_n"), layout: Layout { ..Default::default() } };
-        let expr = gen_field_serialize(&field);
+        let expr = gen_serialize_field(&field);
         let expected = quote! {
             ::sed_manager::serialization::serialize::serialize_field(
                 &self.field_n,

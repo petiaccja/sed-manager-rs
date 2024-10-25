@@ -6,7 +6,7 @@ use syn::{parse_macro_input, DeriveInput};
 mod gen;
 mod parse;
 
-use gen::gen_struct_serialize;
+use gen::gen_serialize_struct;
 use parse::parse_struct;
 
 #[proc_macro_derive(Serialize, attributes(layout))]
@@ -16,7 +16,7 @@ pub fn derive_serialize(tokens: TokenStream) -> TokenStream {
         Ok(struct_desc) => struct_desc,
         Err(err) => return err.to_compile_error().into(),
     };
-    gen_struct_serialize(&struct_desc).into()
+    gen_serialize_struct(&struct_desc).into()
 }
 
 #[proc_macro_derive(Deserialize)]
