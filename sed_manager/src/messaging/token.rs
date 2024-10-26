@@ -1,3 +1,6 @@
+use crate::serialization::{Error, SerializeError};
+use std::fmt::Display;
+
 #[repr(u8)]
 #[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Copy, Clone)]
 pub enum Tag {
@@ -26,17 +29,44 @@ pub enum Mask {
     LongAtom = 0b1111_1000,
 }
 
-#[derive(Debug)]
-pub enum TokenParsingError {
+pub enum TokenizeError {
     EndOfStream,
-    EndOfData,
-    IncorrectTag,
-    IncorrectSignedness,
-    IntegerExpected,
-    BytesExpected,
-    SignedExpected,
-    NonContinuedExpected,
+    EndOfTokens,
+    UnexpectedTag,
+    UnexpectedSignedness,
+    ExpectedInteger,
+    ExpectedBytes,
+    ContinuedBytesUnsupported,
     IntegerOverflow,
+}
+
+impl Error for TokenizeError {
+    fn into_serialize_error(self) -> SerializeError {
+        SerializeError::Other(Box::new(self))
+    }
+}
+
+impl Display for TokenizeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TokenizeError::EndOfStream => f.write_fmt(format_args!("end of stream")),
+            TokenizeError::EndOfTokens => f.write_fmt(format_args!("end of tokens")),
+            TokenizeError::UnexpectedTag => f.write_fmt(format_args!("unexpected tag")),
+            TokenizeError::UnexpectedSignedness => f.write_fmt(format_args!("signedness does not match integer type")),
+            TokenizeError::ExpectedInteger => f.write_fmt(format_args!("expected atom of type integer")),
+            TokenizeError::ExpectedBytes => f.write_fmt(format_args!("expected atom of type bytes")),
+            TokenizeError::ContinuedBytesUnsupported => {
+                f.write_fmt(format_args!("continued bytes atoms are not supported"))
+            }
+            TokenizeError::IntegerOverflow => f.write_fmt(format_args!("integer atom too large for integer type")),
+        }
+    }
+}
+
+impl std::fmt::Debug for TokenizeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        (self as &dyn Display).fmt(f)
+    }
 }
 
 pub fn get_tag(data_length: usize) -> Tag {
@@ -70,11 +100,6 @@ pub struct Token {
 
 impl Default for Token {
     fn default() -> Self {
-        Token {
-            tag: Tag::Empty,
-            is_byte: false,
-            is_signed: false,
-            data: vec![],
-        }
+        Token { tag: Tag::Empty, is_byte: false, is_signed: false, data: vec![] }
     }
 }

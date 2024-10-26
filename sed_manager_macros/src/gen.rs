@@ -37,7 +37,7 @@ fn gen_save_struct_pos() -> TokenStream2 {
     quote! {
         use ::std::io::Seek;
         let ::core::result::Result::Ok(#struct_pos) = #stream.stream_position() else {
-            return ::core::result::Result::Err(::sed_manager::serialization::SerializationError::StreamError);
+            return ::core::result::Result::Err(::sed_manager::serialization::SerializeError::SeekFailed);
         };
     }
 }
@@ -68,11 +68,31 @@ fn gen_serialize_struct_layout(layout: &Layout) -> TokenStream2 {
         let stream = VariableNames::stream();
         quote! {
             let ::core::result::Result::Ok(end_pos) = #stream.stream_position() else {
-                return ::core::result::Result::Err(::sed_manager::serialization::SerializationError::StreamError);
+                return ::core::result::Result::Err(::sed_manager::serialization::SerializeError::SeekFailed);
             };
             let total_len = end_pos - #struct_pos;
             let rounded_len = (total_len + #round - 1) / #round * #round;
             ::sed_manager::serialization::serialize::extend_with_zeros_until(#stream, #struct_pos + rounded_len);
+        }
+    } else {
+        TokenStream2::new()
+    }
+}
+
+fn gen_deserialize_struct_layout(layout: &Layout) -> TokenStream2 {
+    if let Some(round) = layout.round {
+        let round = round as u64;
+        let struct_pos = VariableNames::struct_pos();
+        let stream = VariableNames::stream();
+        quote! {
+            let ::core::result::Result::Ok(end_pos) = #stream.stream_position() else {
+                return ::core::result::Result::Err(::sed_manager::serialization::SerializeError::SeekFailed);
+            };
+            let total_len = end_pos - #struct_pos;
+            let rounded_len = (total_len + #round - 1) / #round * #round;
+            let ::core::result::Result::Ok(_) = #stream.seek(::std::io::SeekFrom::Start(#struct_pos + rounded_len)) else {
+                return ::core::result::Result::Err(::sed_manager::serialization::SerializeError::EndOfStream);
+            };
         }
     } else {
         TokenStream2::new()
@@ -88,7 +108,7 @@ fn gen_serialize_struct_skeleton(
     let stream = VariableNames::stream();
     quote! {
         impl ::sed_manager::serialization::Serialize<#name, u8> for #name {
-            type Error = ::sed_manager::serialization::SerializationError;
+            type Error = ::sed_manager::serialization::SerializeError;
             fn serialize(&self, #stream: &mut ::sed_manager::serialization::OutputStream<u8>) -> ::core::result::Result<(), Self::Error> {
                 #struct_pos
                 #fields
@@ -108,6 +128,58 @@ pub fn gen_serialize_struct(struct_desc: &StructDesc) -> TokenStream2 {
     }
     let struct_layout = gen_serialize_struct_layout(&struct_desc.layout);
     gen_serialize_struct_skeleton(name, struct_pos, struct_layout, fields)
+}
+
+fn gen_deserialize_field(field: &FieldDesc) -> TokenStream2 {
+    let name: TokenStream2 = field.name.parse().unwrap();
+    let ty = &field.ty;
+    let stream = VariableNames::stream();
+    let struct_pos = VariableNames::struct_pos();
+    let offset = gen_optional(field.layout.offset);
+    let bits = gen_optional_range(&field.layout.bits);
+    let round = gen_optional(field.layout.round);
+    quote! {
+        #name: ::sed_manager::serialization::serialize::deserialize_field::<#ty>(
+            #stream,
+            #struct_pos,
+            #offset,
+            #bits,
+            #round
+        )?,
+    }
+}
+
+fn gen_deserialize_struct_skeleton(
+    name: TokenStream2,
+    struct_pos: TokenStream2,
+    struct_layout: TokenStream2,
+    fields: TokenStream2,
+) -> TokenStream2 {
+    let stream = VariableNames::stream();
+    quote! {
+        impl ::sed_manager::serialization::Deserialize<#name, u8> for #name {
+            type Error = ::sed_manager::serialization::SerializeError;
+            fn deserialize(#stream: &mut ::sed_manager::serialization::InputStream<u8>) -> ::core::result::Result<Self, Self::Error> {
+                #struct_pos
+                let value = #name {
+                    #fields
+                };
+                #struct_layout
+                ::core::result::Result::Ok(value)
+            }
+        }
+    }
+}
+
+pub fn gen_deserialize_struct(struct_desc: &StructDesc) -> TokenStream2 {
+    let name: TokenStream2 = struct_desc.name.parse().unwrap();
+    let struct_pos = gen_save_struct_pos();
+    let mut fields = quote! {};
+    for field in &struct_desc.fields {
+        fields.append_all(gen_deserialize_field(field));
+    }
+    let struct_layout = gen_deserialize_struct_layout(&struct_desc.layout);
+    gen_deserialize_struct_skeleton(name, struct_pos, struct_layout, fields)
 }
 
 #[cfg(test)]
@@ -151,8 +223,8 @@ mod tests {
     }
 
     #[test]
-    fn gen_field_serialize_simple() {
-        let field = FieldDesc { name: String::from("field_n"), layout: Layout { ..Default::default() } };
+    fn get_serialize_field_simple() {
+        let field = FieldDesc { name: String::from("field_n"), ty: quote! {}, layout: Layout { ..Default::default() } };
         let expr = gen_serialize_field(&field);
         let expected = quote! {
             ::sed_manager::serialization::serialize::serialize_field(
@@ -163,6 +235,23 @@ mod tests {
                 ::core::option::Option::None,
                 ::core::option::Option::None
             )?;
+        };
+        assert_eq!(expr.to_string(), expected.to_string());
+    }
+
+    #[test]
+    fn get_deserialize_field_simple() {
+        let field =
+            FieldDesc { name: String::from("field_n"), ty: quote! { u32 }, layout: Layout { ..Default::default() } };
+        let expr = gen_deserialize_field(&field);
+        let expected = quote! {
+            field_n: ::sed_manager::serialization::serialize::deserialize_field::<u32>(
+                stream,
+                struct_pos,
+                ::core::option::Option::None,
+                ::core::option::Option::None,
+                ::core::option::Option::None
+            )?,
         };
         assert_eq!(expr.to_string(), expected.to_string());
     }

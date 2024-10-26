@@ -1,4 +1,5 @@
-use quote::quote;
+use proc_macro2::TokenStream as TokenStream2;
+use quote::{quote, ToTokens};
 use syn::{self, spanned::Spanned};
 
 #[derive(Debug, Clone)]
@@ -16,6 +17,7 @@ impl Default for Layout {
 
 pub struct FieldDesc {
     pub name: String,
+    pub ty: TokenStream2,
     pub layout: Layout,
 }
 
@@ -95,7 +97,7 @@ fn parse_field(field: &syn::Field) -> Result<FieldDesc, syn::Error> {
             Some(attr) => parse_layout_attr(attr)?.into(),
             None => Layout { ..Default::default() },
         };
-        Ok(FieldDesc { name: ident.to_string(), layout: layout })
+        Ok(FieldDesc { name: ident.to_string(), ty: field.ty.clone().into_token_stream(), layout: layout })
     } else {
         Err(syn::Error::new(field.span(), "field must have a name"))
     }

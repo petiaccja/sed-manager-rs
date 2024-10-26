@@ -1,11 +1,11 @@
-use super::serialize::{Deserialize, SerializationError, Serialize};
+use super::serialize::{Deserialize, Serialize, SerializeError};
 use super::stream::{InputStream, ItemWrite, OutputStream};
 use super::ItemRead;
 
 macro_rules! impl_serialize_for_int {
     ($int_ty:ty) => {
         impl Serialize<$int_ty, u8> for $int_ty {
-            type Error = SerializationError;
+            type Error = SerializeError;
             fn serialize(&self, stream: &mut OutputStream<u8>) -> Result<(), Self::Error> {
                 stream.write_exact(&self.to_be_bytes());
                 Ok(())
@@ -24,7 +24,7 @@ impl_serialize_for_int!(i32);
 impl_serialize_for_int!(i64);
 
 impl Serialize<bool, u8> for bool {
-    type Error = SerializationError;
+    type Error = SerializeError;
     fn serialize(&self, stream: &mut OutputStream<u8>) -> Result<(), Self::Error> {
         let byte = if *self { 1_u8 } else { 0_u8 };
         stream.write_one(byte);
@@ -35,12 +35,22 @@ impl Serialize<bool, u8> for bool {
 macro_rules! impl_deserialize_for_int {
     ($int_ty:ty) => {
         impl Deserialize<$int_ty, u8> for $int_ty {
-            type Error = SerializationError;
+            type Error = SerializeError;
             fn deserialize(stream: &mut InputStream<u8>) -> Result<$int_ty, Self::Error> {
-                let Some(bytes) = stream.read_exact(size_of::<$int_ty>()) else {
-                    return Err(SerializationError::EndOfStream);
-                };
-                Ok(<$int_ty>::from_be_bytes(bytes.try_into().unwrap()))
+                let mut partial = [0_u8; size_of::<$int_ty>()];
+                let mut num_bytes_read = 0;
+                for byte in &mut partial {
+                    if let Some(read_byte) = stream.read_one() {
+                        *byte = *read_byte;
+                        num_bytes_read += 1;
+                    }
+                }
+                if num_bytes_read == 0 {
+                    Err(SerializeError::EndOfStream)
+                } else {
+                    partial.rotate_left(num_bytes_read);
+                    Ok(<$int_ty>::from_be_bytes(partial))
+                }
             }
         }
     };
@@ -56,15 +66,15 @@ impl_deserialize_for_int!(i32);
 impl_deserialize_for_int!(i64);
 
 impl Deserialize<bool, u8> for bool {
-    type Error = SerializationError;
+    type Error = SerializeError;
     fn deserialize(stream: &mut InputStream<u8>) -> Result<bool, Self::Error> {
         let Some(byte) = stream.read_one() else {
-            return Err(SerializationError::EndOfStream);
+            return Err(SerializeError::EndOfStream);
         };
         match byte {
             0 => Ok(false),
             1 => Ok(true),
-            _ => Err(SerializationError::Overflow),
+            _ => Err(SerializeError::InvalidRepr),
         }
     }
 }
@@ -105,5 +115,19 @@ mod tests {
             let value = bool::deserialize(&mut is).unwrap();
             assert_eq!(input, value);
         }
+    }
+
+    #[test]
+    fn deserialize_partial() {
+        let mut is = InputStream::<u8>::from(vec![0xFF, 0xFF]);
+        let value = u64::deserialize(&mut is).unwrap();
+        assert_eq!(value, 0x0000_0000_0000_FFFF_u64);
+    }
+
+    #[test]
+    fn deserialize_leftover() {
+        let mut is = InputStream::<u8>::from(vec![0xFF, 0xFF, 0x00, 0x00]);
+        let value = u16::deserialize(&mut is).unwrap();
+        assert_eq!(value, 0xFFFF_u16);
     }
 }

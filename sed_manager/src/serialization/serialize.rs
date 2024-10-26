@@ -1,53 +1,60 @@
 use std::{
+    fmt::{Debug, Display},
     io::{Seek, SeekFrom},
     ops::Range,
 };
 
-use super::stream::{InputStream, ItemWrite, OutputStream};
+use super::{
+    stream::{InputStream, ItemWrite, OutputStream},
+    ItemRead,
+};
 use bitvec::{order::Msb0, slice::BitSlice, vec::BitVec};
 
-#[derive(Debug)]
-pub enum SerializationError {
-    StreamError,
+pub trait Error: Display {
+    fn into_serialize_error(self) -> SerializeError;
+}
+
+pub enum SerializeError {
+    Other(Box<dyn Error>),
+    SeekFailed,
     EndOfStream,
-    Overflow,
+    InvalidRepr,
+}
+
+impl Error for SerializeError {
+    fn into_serialize_error(self) -> SerializeError {
+        self
+    }
+}
+
+impl Display for SerializeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SerializeError::Other(err) => f.write_fmt(format_args!("other: `{}`", err.as_ref())),
+            SerializeError::SeekFailed => f.write_fmt(format_args!("seek failed")),
+            SerializeError::EndOfStream => f.write_fmt(format_args!("end of stream")),
+            SerializeError::InvalidRepr => f.write_fmt(format_args!("invalid serialized representation of object")),
+        }
+    }
+}
+
+impl Debug for SerializeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        (self as &dyn Display).fmt(f)
+    }
 }
 
 pub trait Serialize<T, Item> {
-    type Error;
+    type Error: Error;
     fn serialize(&self, stream: &mut OutputStream<Item>) -> Result<(), Self::Error>;
 }
 
 pub trait Deserialize<T, Item> {
-    type Error;
+    type Error: Error;
     fn deserialize(stream: &mut InputStream<Item>) -> Result<T, Self::Error>;
 }
 
-fn reduce_field_offset(
-    field_default_offset: usize,
-    field_offset: &Option<usize>,
-    field_bits: &Option<std::ops::Range<usize>>,
-) -> (Option<usize>, Option<std::ops::Range<usize>>) {
-    match &field_bits {
-        Some(bits_) => {
-            if bits_.start < 8 {
-                (field_offset.clone(), field_bits.clone())
-            } else {
-                let new_start = bits_.start % 8;
-                let new_end = new_start + (bits_.end - bits_.start);
-                let extra_offset = bits_.start / 8;
-                let new_offset = match field_offset {
-                    Some(offset_) => offset_ + extra_offset,
-                    None => field_default_offset + extra_offset,
-                };
-                (Some(new_offset), Some(Range { start: new_start, end: new_end }))
-            }
-        }
-        None => (field_offset.clone(), field_bits.clone()),
-    }
-}
-
-fn move_bits_to_range(source_bytes: &[u8], pos: &Range<usize>) -> Vec<u8> {
+fn move_end_to_range(source_bytes: &[u8], pos: &Range<usize>) -> Vec<u8> {
     let moved_len = (pos.end + 7) / 8 * 8;
     let bitfield_len = pos.len();
     let source_len = source_bytes.len() * 8;
@@ -57,6 +64,17 @@ fn move_bits_to_range(source_bytes: &[u8], pos: &Range<usize>) -> Vec<u8> {
     moved_bits.resize(moved_len, false);
     let source_iter = source_bits[source_start..].iter().map(|x| -> bool { *x.as_ref() });
     moved_bits.splice(pos.start..pos.end, source_iter);
+    moved_bits.into_vec()
+}
+
+fn move_range_to_end(source_bytes: &[u8], pos: &Range<usize>) -> Vec<u8> {
+    let bitfield_len = pos.len();
+    let moved_len = (bitfield_len + 7) / 8 * 8;
+    let source_bits = BitSlice::<u8, Msb0>::from_slice(source_bytes);
+    let mut moved_bits = BitVec::<u8, Msb0>::new();
+    moved_bits.resize(moved_len, false);
+    let source_iter = source_bits[pos.start..pos.end].iter().map(|x| -> bool { *x.as_ref() });
+    moved_bits.splice((moved_len - bitfield_len).., source_iter);
     moved_bits.into_vec()
 }
 
@@ -86,47 +104,78 @@ pub fn serialize_field<T: Serialize<T, u8>>(
     offset: Option<usize>,
     bits: Option<std::ops::Range<usize>>,
     round: Option<usize>,
-) -> Result<(), <T as Serialize<T, u8>>::Error> {
-    // Stream's cursor must be left at the end of the stream after this function!
-    let default_field_pos = stream.stream_position().unwrap();
-    let default_offset = default_field_pos - struct_pos;
-    let (offset_adj, bits_adj) = reduce_field_offset(default_offset as usize, &offset, &bits);
-    let field_pos = match offset_adj {
-        Some(offset_adj) => struct_pos + offset_adj as u64,
-        None => default_field_pos,
+) -> Result<(), SerializeError> {
+    let stream_pos = stream.stream_position().unwrap();
+    let field_pos = match offset {
+        Some(offset) => struct_pos + offset as u64,
+        None => stream_pos,
     };
 
-    let result = if let Some(bits_adj) = &bits_adj {
-        let mut temp_stream = OutputStream::<u8>::new();
-        match field.serialize(&mut temp_stream) {
-            Ok(_) => {
-                let bytes = temp_stream.as_slice();
-                let moved_bytes = move_bits_to_range(bytes, &bits_adj);
-                extend_with_zeros_until(stream, field_pos);
-                stream.seek(SeekFrom::Start(field_pos)).unwrap();
-                write_exact_bit_or(stream, moved_bytes.as_slice());
-                stream.seek(SeekFrom::End(0)).unwrap();
-                Ok(())
-            }
-            Err(err) => Err(err),
-        }
+    extend_with_zeros_until(stream, field_pos);
+    stream.seek(SeekFrom::Start(field_pos)).unwrap();
+
+    let mut bitfield_stream = OutputStream::<u8>::new();
+    let result = field.serialize(if bits.is_none() { stream } else { &mut bitfield_stream });
+    if let Err(err) = result {
+        return Err(err.into_serialize_error());
+    };
+
+    if let Some(bits) = bits {
+        let bytes = bitfield_stream.as_slice();
+        let moved_bytes = move_end_to_range(bytes, &bits);
+        write_exact_bit_or(stream, moved_bytes.as_slice());
+    }
+
+    if let Some(round) = round {
+        let final_pos = stream.stream_position().unwrap();
+        let field_len = final_pos - field_pos;
+        let rounded_len = (field_len + round as u64 - 1) / round as u64 * round as u64;
+        extend_with_zeros_until(stream, field_pos + rounded_len);
+    }
+
+    Ok(())
+}
+
+pub fn deserialize_field<T: Deserialize<T, u8>>(
+    stream: &mut InputStream<u8>,
+    struct_pos: u64,
+    offset: Option<usize>,
+    bits: Option<std::ops::Range<usize>>,
+    round: Option<usize>,
+) -> Result<T, SerializeError> {
+    let stream_pos = stream.stream_position().unwrap();
+    let field_pos = match offset {
+        Some(offset) => struct_pos + offset as u64,
+        None => stream_pos,
+    };
+
+    if stream.seek(SeekFrom::Start(field_pos)).is_err() {
+        return Err(SerializeError::EndOfStream);
+    }
+
+    let result = if let Some(bits) = &bits {
+        let Some(bytes) = stream.read_exact((bits.end + 7) / 8) else {
+            return Err(SerializeError::EndOfStream);
+        };
+        let moved_bytes = move_range_to_end(bytes, bits);
+        T::deserialize(&mut InputStream::<u8>::from(moved_bytes))
     } else {
-        extend_with_zeros_until(stream, field_pos);
-        stream.seek(SeekFrom::Start(field_pos)).unwrap();
-        let result = field.serialize(stream);
-        stream.seek(SeekFrom::End(0)).unwrap();
-        result
+        T::deserialize(stream)
     };
 
     if let Some(round) = round {
         let final_pos = stream.stream_position().unwrap();
-        let len = final_pos - field_pos;
-        let rounded_len = (len + round as u64 - 1) / round as u64 * round as u64;
-        let rounded_pos = field_pos + rounded_len;
-        extend_with_zeros_until(stream, rounded_pos);
+        let field_len = final_pos - field_pos;
+        let rounded_len = (field_len + round as u64 - 1) / round as u64 * round as u64;
+        if stream.seek(SeekFrom::Start(field_pos + rounded_len)).is_err() {
+            return Err(SerializeError::EndOfStream);
+        }
     }
 
-    result
+    match result {
+        Ok(value) => Ok(value),
+        Err(err) => Err(err.into_serialize_error()),
+    }
 }
 
 #[cfg(test)]
@@ -142,44 +191,9 @@ mod tests {
     }
 
     #[test]
-    fn reduce_field_offset_nn() {
-        let (offset, bits) = reduce_field_offset(3, &None, &None);
-        assert!(offset.is_none());
-        assert!(bits.is_none());
-    }
-
-    #[test]
-    fn reduce_field_offset_on() {
-        let (offset, bits) = reduce_field_offset(3, &Some(3), &None);
-        assert_eq!(offset.unwrap(), 3);
-        assert!(bits.is_none());
-    }
-
-    #[test]
-    fn reduce_field_offset_nb_regular() {
-        let (offset, bits) = reduce_field_offset(3, &None, &Some(3..4));
-        assert!(offset.is_none());
-        assert_eq!(bits.unwrap(), (3..4));
-    }
-
-    #[test]
-    fn reduce_field_offset_nb_overflow() {
-        let (offset, bits) = reduce_field_offset(3, &None, &Some(12..15));
-        assert_eq!(offset.unwrap(), 4);
-        assert_eq!(bits.unwrap(), (4..7));
-    }
-
-    #[test]
-    fn reduce_field_offset_ob_overflow() {
-        let (offset, bits) = reduce_field_offset(3, &Some(6), &Some(12..15));
-        assert_eq!(offset.unwrap(), 7);
-        assert_eq!(bits.unwrap(), (4..7));
-    }
-
-    #[test]
     fn move_bits_to_range_left() {
         let bytes = [0b0000_0110, 0b0000_0001];
-        let relocated = move_bits_to_range(&bytes, &(2..12));
+        let relocated = move_end_to_range(&bytes, &(2..12));
         let expected = [0b0010_0000, 0b0001_0000];
         assert_eq!(relocated.as_ref(), expected);
     }
@@ -187,37 +201,51 @@ mod tests {
     #[test]
     fn move_bits_to_range_right() {
         let bytes = [0b0110_0000, 0b0000_0001];
-        let relocated = move_bits_to_range(&bytes, &(7..21));
+        let relocated = move_end_to_range(&bytes, &(7..21));
         let expected = [0b0000_0001, 0b0000_0000, 0b0000_1000];
         assert_eq!(relocated.as_ref(), expected);
     }
 
     #[test]
-    fn serialize_at_offset_extend_zeros() {
+    fn move_bits_to_range_large() {
+        let bytes = [0b0110_0000, 0b0000_0001];
+        let relocated = move_end_to_range(&bytes, &(15..29));
+        let expected = [0b0000_0000, 0b0000_0001, 0b0000_0000, 0b0000_1000];
+        assert_eq!(relocated.as_ref(), expected);
+    }
+
+    #[test]
+    fn serialize_field_simple() {
         let field = 3_u8;
         let mut stream = OutputStream::<u8>::new();
         let struct_base = stream.stream_position().unwrap();
-        let offset = Some(2);
-        assert!(serialize_field(&field, &mut stream, struct_base, offset, None, None).is_ok());
+        assert!(serialize_field(&field, &mut stream, struct_base, None, None, None).is_ok());
         assert!(is_stream_pos_at_end(&mut stream));
+        assert_eq!(stream.as_slice(), [3u8]);
+    }
+
+    #[test]
+    fn serialize_field_offset_extend_zeros() {
+        let field = 3_u8;
+        let mut stream = OutputStream::<u8>::new();
+        assert!(serialize_field(&field, &mut stream, 0, Some(2), None, None).is_ok());
+        assert_eq!(stream.stream_position().unwrap(), 3);
         assert_eq!(stream.as_slice(), [0u8, 0u8, 3u8]);
     }
 
     #[test]
-    fn serialize_at_offset_overwrite() {
+    fn serialize_field_offset_overwrite() {
         let field = 3_u8;
         let mut stream = OutputStream::<u8>::new();
-        stream.write_exact(&[1u8, 1u8, 1u8, 1u8, 1u8]);
+        stream.write_exact(&[0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8]);
         stream.seek(SeekFrom::Start(0)).unwrap();
-        let struct_base = stream.stream_position().unwrap();
-        let offset = Some(2);
-        assert!(serialize_field(&field, &mut stream, struct_base, offset, None, None).is_ok());
-        assert!(is_stream_pos_at_end(&mut stream));
-        assert_eq!(stream.as_slice(), [1u8, 1u8, 3u8, 1u8, 1u8]);
+        assert!(serialize_field(&field, &mut stream, 0, Some(2), None, None).is_ok());
+        assert_eq!(stream.stream_position().unwrap(), 3);
+        assert_eq!(stream.as_slice(), [0xFFu8, 0xFFu8, 3u8, 0xFFu8, 0xFFu8]);
     }
 
     #[test]
-    fn serialize_at_offset_bit_or() {
+    fn serialize_field_offset_bit_or() {
         let field = 0b_1111_1111_u8;
         let mut stream = OutputStream::<u8>::new();
         stream.write_exact(&[0b_0000_0000_u8, 0b_0000_0000_u8]);
@@ -231,7 +259,7 @@ mod tests {
     }
 
     #[test]
-    fn serialize_at_offset_round_short() {
+    fn serialize_field_round_single() {
         let field = 0xFF_u8;
         let mut stream = OutputStream::<u8>::new();
 
@@ -241,7 +269,7 @@ mod tests {
     }
 
     #[test]
-    fn serialize_at_offset_round_long() {
+    fn serialize_field_round_multiple() {
         let field = 0xFFFF_FFFF_FFFF_FFFF_u64;
         let mut stream = OutputStream::<u8>::new();
 
@@ -251,5 +279,49 @@ mod tests {
             stream.as_slice(),
             [0xFF_u8, 0xFF_u8, 0xFF_u8, 0xFF_u8, 0xFF_u8, 0xFF_u8, 0xFF_u8, 0xFF_u8, 0x00_u8]
         );
+    }
+
+    const DESERIALIZE_DATA: [u8; 9] = [
+        0x01_u8, 0x23_u8, 0x45_u8, 0x67_u8, 0x89_u8, 0xAB_u8, 0xCD_u8, 0xEF_u8, 0x00_u8,
+    ];
+
+    #[test]
+    fn deserialize_field_simple() {
+        let mut stream = InputStream::<u8>::new(DESERIALIZE_DATA.as_slice());
+        let result = deserialize_field::<u16>(&mut stream, 0, None, None, None);
+        assert_eq!(result.unwrap(), 0x0123);
+        assert_eq!(stream.stream_position().unwrap(), 2);
+    }
+
+    #[test]
+    fn deserialize_field_offset() {
+        let mut stream = InputStream::<u8>::new(DESERIALIZE_DATA.as_slice());
+        let result = deserialize_field::<u16>(&mut stream, 0, Some(2), None, None);
+        assert_eq!(result.unwrap(), 0x4567);
+        assert_eq!(stream.stream_position().unwrap(), 4);
+    }
+
+    #[test]
+    fn deserialize_field_bits() {
+        let mut stream = InputStream::<u8>::new(DESERIALIZE_DATA.as_slice());
+        let result = deserialize_field::<u16>(&mut stream, 0, None, Some(4..20), None);
+        assert_eq!(result.unwrap(), 0x1234);
+        assert_eq!(stream.stream_position().unwrap(), 3);
+    }
+
+    #[test]
+    fn deserialize_field_round_single() {
+        let mut stream = InputStream::<u8>::new(DESERIALIZE_DATA.as_slice());
+        let result = deserialize_field::<u16>(&mut stream, 0, None, None, Some(6));
+        assert_eq!(result.unwrap(), 0x0123);
+        assert_eq!(stream.stream_position().unwrap(), 6);
+    }
+
+    #[test]
+    fn deserialize_field_round_multiple() {
+        let mut stream = InputStream::<u8>::new(DESERIALIZE_DATA.as_slice());
+        let result = deserialize_field::<u64>(&mut stream, 0, None, None, Some(9));
+        assert_eq!(result.unwrap(), 0x0123456789ABCDEF);
+        assert_eq!(stream.stream_position().unwrap(), 9);
     }
 }
