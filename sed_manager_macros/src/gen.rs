@@ -1,6 +1,6 @@
-use super::parse::{FieldDesc, Layout, StructDesc};
+use super::parse::{EnumDesc, FieldDesc, Layout, StructDesc};
 use proc_macro2::TokenStream as TokenStream2;
-use quote::{quote, TokenStreamExt};
+use quote::{format_ident, quote, TokenStreamExt};
 
 struct VariableNames;
 
@@ -180,6 +180,61 @@ pub fn gen_deserialize_struct(struct_desc: &StructDesc) -> TokenStream2 {
     }
     let struct_layout = gen_deserialize_struct_layout(&struct_desc.layout);
     gen_deserialize_struct_skeleton(name, struct_pos, struct_layout, fields)
+}
+
+pub fn gen_serialize_enum(enum_desc: &EnumDesc) -> TokenStream2 {
+    let name = &enum_desc.name;
+    let ty = &enum_desc.ty;
+    let stream = VariableNames::stream();
+    let mut variants = TokenStream2::new();
+    for variant in &enum_desc.variants {
+        let ident = format_ident!("{}", variant);
+        let pattern = quote! { #name::#ident => #name::#ident as #ty, };
+        variants.append_all(pattern);
+    }
+    quote! {
+        impl ::sed_manager::serialization::Serialize<#name, u8> for #name {
+            type Error = ::sed_manager::serialization::SerializeError;
+            fn serialize(&self, #stream: &mut ::sed_manager::serialization::OutputStream<u8>) -> ::core::result::Result<(), Self::Error> {
+                use ::sed_manager::serialization::Error;
+                let discr = match self {
+                    #variants
+                };
+                match discr.serialize(#stream) {
+                    ::core::result::Result::Ok(_) => ::core::result::Result::Ok(()),
+                    ::core::result::Result::Err(err) => ::core::result::Result::Err(err.into_serialize_error()),
+                }
+            }
+        }
+    }
+}
+
+pub fn gen_deserialize_enum(enum_desc: &EnumDesc) -> TokenStream2 {
+    let name = &enum_desc.name;
+    let ty = &enum_desc.ty;
+    let stream = VariableNames::stream();
+    let mut variants = TokenStream2::new();
+    for variant in &enum_desc.variants {
+        let ident = format_ident!("{}", variant);
+        let pattern = quote! { x if x == (#name::#ident as #ty) => ::core::result::Result::Ok(#name::#ident), };
+        variants.append_all(pattern);
+    }
+    quote! {
+        impl ::sed_manager::serialization::Deserialize<#name, u8> for #name {
+            type Error = ::sed_manager::serialization::SerializeError;
+            fn deserialize(#stream: &mut ::sed_manager::serialization::InputStream<u8>) -> ::core::result::Result<Self, Self::Error> {
+                use ::sed_manager::serialization::Error;
+                let discr = match #ty::deserialize(#stream) {
+                    ::core::result::Result::Ok(discr) => discr,
+                    ::core::result::Result::Err(err) => return ::core::result::Result::Err(err.into_serialize_error()),
+                };
+                match discr {
+                    #variants
+                    _ => ::core::result::Result::Err(::sed_manager::serialization::SerializeError::InvalidRepr),
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]

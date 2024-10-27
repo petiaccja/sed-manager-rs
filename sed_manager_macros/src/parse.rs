@@ -27,6 +27,12 @@ pub struct StructDesc {
     pub fields: Vec<FieldDesc>,
 }
 
+pub struct EnumDesc {
+    pub name: TokenStream2,
+    pub ty: TokenStream2,
+    pub variants: Vec<String>,
+}
+
 fn parse_literal_usize(expr: &syn::Expr) -> Result<usize, syn::Error> {
     let syn::Expr::Lit(lit) = expr else {
         return Err(syn::Error::new(expr.span(), "expected an integer literal"));
@@ -105,7 +111,7 @@ fn parse_field(field: &syn::Field) -> Result<FieldDesc, syn::Error> {
 
 pub fn parse_struct(input: &syn::DeriveInput) -> Result<StructDesc, syn::Error> {
     let syn::Data::Struct(data) = &input.data else {
-        return Err(syn::Error::new(input.span(), "can only derive Serialize for structs"));
+        return Err(syn::Error::new(input.span(), "expected a struct"));
     };
 
     let name = input.ident.to_string();
@@ -130,6 +136,34 @@ pub fn parse_struct(input: &syn::DeriveInput) -> Result<StructDesc, syn::Error> 
     }
 
     Ok(StructDesc { name: name, layout: layout, fields: fields })
+}
+
+fn parse_num_repr(attrs: &[syn::Attribute]) -> Option<TokenStream2> {
+    const INTEGER_REPRS: [&str; 8] = ["u8", "u16", "u32", "u64", "i8", "i16", "i32", "i64"];
+    for attr in attrs {
+        if attr.path().is_ident("repr") {
+            if let syn::Meta::List(arg) = &attr.meta {
+                if let Ok(ident) = syn::parse2::<syn::Ident>(arg.tokens.clone()) {
+                    if INTEGER_REPRS.contains(&ident.to_string().as_str()) {
+                        return Some(ident.into_token_stream());
+                    }
+                };
+            };
+        };
+    }
+    None
+}
+
+pub fn parse_enum(input: &syn::DeriveInput) -> Result<EnumDesc, syn::Error> {
+    let syn::Data::Enum(data) = &input.data else {
+        return Err(syn::Error::new(input.span(), "expected an enum"));
+    };
+    let Some(ty) = parse_num_repr(&input.attrs) else {
+        return Err(syn::Error::new(input.span(), "enum must have a `#[repr(i/u*)]` attribute"));
+    };
+    let name = input.ident.clone().into_token_stream();
+    let fields = Vec::from_iter(data.variants.iter().map(|variant| -> String { variant.ident.to_string() }));
+    Ok(EnumDesc { name: name, ty: ty, variants: fields })
 }
 
 #[cfg(test)]
@@ -223,5 +257,34 @@ mod tests {
         assert_eq!(struct_desc.fields.len(), 1);
         assert_eq!(struct_desc.fields[0].layout.offset.unwrap(), 2);
         assert_eq!(struct_desc.fields[0].layout.bits.clone().unwrap(), (1..2));
+    }
+
+    #[test]
+    fn parse_enum_no_repr() {
+        let stream = quote! {
+            enum Enum {
+                Var1,
+            }
+        };
+        let input = syn::parse2::<DeriveInput>(stream).unwrap();
+        assert!(parse_enum(&input).is_err());
+    }
+
+    #[test]
+    fn parse_enum_simple() {
+        let stream = quote! {
+            #[repr(u16)]
+            enum Enum {
+                Var1,
+                Var2,
+            }
+        };
+        let input = syn::parse2::<DeriveInput>(stream).unwrap();
+        let desc = parse_enum(&input).unwrap();
+        assert_eq!(desc.name.to_string(), quote! {Enum}.to_string());
+        assert_eq!(desc.ty.to_string(), quote! {u16}.to_string());
+        assert_eq!(desc.variants.len(), 2);
+        assert_eq!(desc.variants[0], "Var1");
+        assert_eq!(desc.variants[1], "Var2");
     }
 }

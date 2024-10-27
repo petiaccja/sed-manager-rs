@@ -40,6 +40,13 @@ struct RoundedStructMultiple {
     pub field_a: u64,
 }
 
+#[repr(u8)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+enum SimpleEnum {
+    A = 0x01,
+    B = 0x02,
+}
+
 #[test]
 fn serialize_struct_simple() {
     let data = SimpleData { field_a: 0xABCDEF01, field_b: 0x2345 };
@@ -158,4 +165,14 @@ fn deserialize_struct_rounded_struct_multiple() {
 
     assert_eq!(data.field_a, 0x0123456789ABCDEF);
     assert_eq!(is.stream_position().unwrap(), 9);
+}
+
+#[test]
+fn serialize_enum() {
+    let mut os = OutputStream::<u8>::new();
+    let input = SimpleEnum::B;
+    input.serialize(&mut os).unwrap();
+    let mut is = InputStream::from(os.take());
+    let output = SimpleEnum::deserialize(&mut is).unwrap();
+    assert_eq!(input, output);
 }
