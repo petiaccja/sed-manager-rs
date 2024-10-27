@@ -36,7 +36,7 @@ pub fn derive_serialize(tokens: TokenStream) -> TokenStream {
     }
 }
 
-#[proc_macro_derive(Deserialize)]
+#[proc_macro_derive(Deserialize, attributes(layout))]
 pub fn derive_deserialize(tokens: TokenStream) -> TokenStream {
     let input = parse_macro_input!(tokens as DeriveInput);
     match input.data {

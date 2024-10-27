@@ -1,6 +1,11 @@
 use super::{Deserialize, Error, InputStream, OutputStream, Serialize, SerializeError};
 use std::{io::Seek, marker::PhantomData};
 
+/// A vector of `T` with special a serialization format.
+///
+/// The elements are serialized consecutively, but instead of writing the number
+/// of items as usual serializers, the number of bytes is written in a specific
+/// integer format `L`.
 pub struct WithLen<T, L: TryFrom<usize> + TryInto<usize>> {
     data: Vec<T>,
     phantom_data: std::marker::PhantomData<L>,
