@@ -10,3 +10,8 @@ sed_manager_macros = { path = "../sed_manager_macros" }
 version = "1"
 default-features = false
 features = ["alloc"]
+
+[dependencies.winapi]
+version = "0.3.9"
+default-features = false
+features = ["std", "ioapiset", "errhandlingapi", "fileapi", "winnt", "handleapi", "winioctl", "wbemcli", "combaseapi", "oleauto", "winbase", "ntddscsi"]

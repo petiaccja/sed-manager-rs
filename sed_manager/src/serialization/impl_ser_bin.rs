@@ -1,6 +1,6 @@
 use super::serialize::{Deserialize, Serialize, SerializeError};
 use super::stream::{InputStream, ItemWrite, OutputStream};
-use super::ItemRead;
+use super::{Error, ItemRead};
 
 macro_rules! impl_serialize_for_int {
     ($int_ty:ty) => {
@@ -75,6 +75,43 @@ impl Deserialize<bool, u8> for bool {
             0 => Ok(false),
             1 => Ok(true),
             _ => Err(SerializeError::InvalidRepr),
+        }
+    }
+}
+
+impl<T, const LEN: usize> Serialize<[T; LEN], u8> for [T; LEN]
+where
+    T: Serialize<T, u8>,
+{
+    type Error = SerializeError;
+    fn serialize(&self, stream: &mut OutputStream<u8>) -> Result<(), Self::Error> {
+        for item in self {
+            match item.serialize(stream) {
+                Ok(_) => (),
+                Err(err) => return Err(err.into_serialize_error()),
+            }
+        }
+        Ok(())
+    }
+}
+
+impl<T, const LEN: usize> Deserialize<[T; LEN], u8> for [T; LEN]
+where
+    T: Deserialize<T, u8>,
+{
+    type Error = SerializeError;
+    fn deserialize(stream: &mut InputStream<u8>) -> Result<[T; LEN], Self::Error> {
+        let deserialize_one = |_| -> Result<T, Self::Error> {
+            match T::deserialize(stream) {
+                Ok(item) => Ok(item),
+                Err(err) => Err(err.into_serialize_error()),
+            }
+        };
+
+        let result: Result<Vec<_>, Self::Error> = (0..LEN).map(deserialize_one).collect();
+        match result {
+            Ok(items) => Ok(items.try_into().unwrap_or_else(|_| panic!("vector must be the right size at this point"))),
+            Err(err) => Err(err),
         }
     }
 }
