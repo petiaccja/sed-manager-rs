@@ -196,13 +196,12 @@ pub fn gen_serialize_enum(enum_desc: &EnumDesc) -> TokenStream2 {
         impl ::sed_manager::serialization::Serialize<#name, u8> for #name {
             type Error = ::sed_manager::serialization::SerializeError;
             fn serialize(&self, #stream: &mut ::sed_manager::serialization::OutputStream<u8>) -> ::core::result::Result<(), Self::Error> {
-                use ::sed_manager::serialization::Error;
                 let discr = match self {
                     #variants
                 };
                 match discr.serialize(#stream) {
                     ::core::result::Result::Ok(_) => ::core::result::Result::Ok(()),
-                    ::core::result::Result::Err(err) => ::core::result::Result::Err(err.into_serialize_error()),
+                    ::core::result::Result::Err(err) => ::core::result::Result::Err(err.into()),
                 }
             }
         }
@@ -223,14 +222,13 @@ pub fn gen_deserialize_enum(enum_desc: &EnumDesc) -> TokenStream2 {
         impl ::sed_manager::serialization::Deserialize<#name, u8> for #name {
             type Error = ::sed_manager::serialization::SerializeError;
             fn deserialize(#stream: &mut ::sed_manager::serialization::InputStream<u8>) -> ::core::result::Result<Self, Self::Error> {
-                use ::sed_manager::serialization::Error;
                 let discr = match #ty::deserialize(#stream) {
                     ::core::result::Result::Ok(discr) => discr,
-                    ::core::result::Result::Err(err) => return ::core::result::Result::Err(err.into_serialize_error()),
+                    ::core::result::Result::Err(err) => return ::core::result::Result::Err(err.into()),
                 };
                 match discr {
                     #variants
-                    _ => ::core::result::Result::Err(::sed_manager::serialization::SerializeError::InvalidRepr),
+                    _ => ::core::result::Result::Err(::sed_manager::serialization::SerializeError::InvalidRepresentation),
                 }
             }
         }

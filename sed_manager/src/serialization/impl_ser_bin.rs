@@ -1,6 +1,6 @@
 use super::serialize::{Deserialize, Serialize, SerializeError};
 use super::stream::{InputStream, ItemWrite, OutputStream};
-use super::{Error, ItemRead};
+use super::ItemRead;
 
 macro_rules! impl_serialize_for_int {
     ($int_ty:ty) => {
@@ -74,7 +74,7 @@ impl Deserialize<bool, u8> for bool {
         match byte {
             0 => Ok(false),
             1 => Ok(true),
-            _ => Err(SerializeError::InvalidRepr),
+            _ => Err(SerializeError::InvalidRepresentation),
         }
     }
 }
@@ -82,13 +82,14 @@ impl Deserialize<bool, u8> for bool {
 impl<T, const LEN: usize> Serialize<[T; LEN], u8> for [T; LEN]
 where
     T: Serialize<T, u8>,
+    SerializeError: From<<T as Serialize<T, u8>>::Error>,
 {
     type Error = SerializeError;
     fn serialize(&self, stream: &mut OutputStream<u8>) -> Result<(), Self::Error> {
         for item in self {
             match item.serialize(stream) {
                 Ok(_) => (),
-                Err(err) => return Err(err.into_serialize_error()),
+                Err(err) => return Err(err.into()),
             }
         }
         Ok(())
@@ -98,15 +99,11 @@ where
 impl<T, const LEN: usize> Deserialize<[T; LEN], u8> for [T; LEN]
 where
     T: Deserialize<T, u8>,
+    SerializeError: From<<T as Deserialize<T, u8>>::Error>,
 {
     type Error = SerializeError;
     fn deserialize(stream: &mut InputStream<u8>) -> Result<[T; LEN], Self::Error> {
-        let deserialize_one = |_| -> Result<T, Self::Error> {
-            match T::deserialize(stream) {
-                Ok(item) => Ok(item),
-                Err(err) => Err(err.into_serialize_error()),
-            }
-        };
+        let deserialize_one = |_| -> Result<T, Self::Error> { Ok(T::deserialize(stream)?) };
 
         let result: Result<Vec<_>, Self::Error> = (0..LEN).map(deserialize_one).collect();
         match result {

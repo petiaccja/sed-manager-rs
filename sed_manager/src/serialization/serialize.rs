@@ -1,4 +1,5 @@
 use std::{
+    error::Error,
     fmt::{Debug, Display},
     io::{Seek, SeekFrom},
     ops::Range,
@@ -10,22 +11,14 @@ use super::{
 };
 use bitvec::{order::Msb0, slice::BitSlice, vec::BitVec};
 
-pub trait Error: Display {
-    fn into_serialize_error(self) -> SerializeError;
-}
-
 pub enum SerializeError {
-    Other(Box<dyn Error>),
     SeekFailed,
     EndOfStream,
-    InvalidRepr,
+    InvalidRepresentation,
+    Other(Box<dyn Error>),
 }
 
-impl Error for SerializeError {
-    fn into_serialize_error(self) -> SerializeError {
-        self
-    }
-}
+impl Error for SerializeError {}
 
 impl Display for SerializeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -33,7 +26,9 @@ impl Display for SerializeError {
             SerializeError::Other(err) => f.write_fmt(format_args!("other: `{}`", err.as_ref())),
             SerializeError::SeekFailed => f.write_fmt(format_args!("seek failed")),
             SerializeError::EndOfStream => f.write_fmt(format_args!("end of stream")),
-            SerializeError::InvalidRepr => f.write_fmt(format_args!("invalid serialized representation of object")),
+            SerializeError::InvalidRepresentation => {
+                f.write_fmt(format_args!("invalid serialized representation of object"))
+            }
         }
     }
 }
@@ -104,7 +99,10 @@ pub fn serialize_field<T: Serialize<T, u8>>(
     offset: Option<usize>,
     bits: Option<std::ops::Range<usize>>,
     round: Option<usize>,
-) -> Result<(), SerializeError> {
+) -> Result<(), SerializeError>
+where
+    SerializeError: From<<T as Serialize<T, u8>>::Error>,
+{
     let stream_pos = stream.stream_position().unwrap();
     let field_pos = match offset {
         Some(offset) => struct_pos + offset as u64,
@@ -115,10 +113,7 @@ pub fn serialize_field<T: Serialize<T, u8>>(
     stream.seek(SeekFrom::Start(field_pos)).unwrap();
 
     let mut bitfield_stream = OutputStream::<u8>::new();
-    let result = field.serialize(if bits.is_none() { stream } else { &mut bitfield_stream });
-    if let Err(err) = result {
-        return Err(err.into_serialize_error());
-    };
+    field.serialize(if bits.is_none() { stream } else { &mut bitfield_stream })?;
 
     if let Some(bits) = bits {
         let bytes = bitfield_stream.as_slice();
@@ -142,7 +137,10 @@ pub fn deserialize_field<T: Deserialize<T, u8>>(
     offset: Option<usize>,
     bits: Option<std::ops::Range<usize>>,
     round: Option<usize>,
-) -> Result<T, SerializeError> {
+) -> Result<T, SerializeError>
+where
+    SerializeError: From<<T as Deserialize<T, u8>>::Error>,
+{
     let stream_pos = stream.stream_position().unwrap();
     let field_pos = match offset {
         Some(offset) => struct_pos + offset as u64,
@@ -161,7 +159,7 @@ pub fn deserialize_field<T: Deserialize<T, u8>>(
         T::deserialize(&mut InputStream::<u8>::from(moved_bytes))
     } else {
         T::deserialize(stream)
-    };
+    }?;
 
     if let Some(round) = round {
         let final_pos = stream.stream_position().unwrap();
@@ -172,10 +170,7 @@ pub fn deserialize_field<T: Deserialize<T, u8>>(
         }
     }
 
-    match result {
-        Ok(value) => Ok(value),
-        Err(err) => Err(err.into_serialize_error()),
-    }
+    Ok(result)
 }
 
 #[cfg(test)]

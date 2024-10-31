@@ -1,13 +1,13 @@
 use super::token::{Tag, Token};
 use super::value::Value;
-use crate::serialization::{Deserialize, Error, InputStream, OutputStream, Serialize, SerializeError};
+use crate::serialization::{Deserialize, InputStream, OutputStream, Serialize, SerializeError};
 
 impl Serialize<Value, u8> for Value {
     type Error = SerializeError;
     fn serialize(&self, stream: &mut OutputStream<u8>) -> Result<(), Self::Error> {
         let mut tokens = OutputStream::<Token>::new();
         if let Err(err) = self.serialize(&mut tokens) {
-            return Err(err.into_serialize_error());
+            return Err(err.into());
         };
         for token in tokens.as_slice() {
             token.serialize(stream)?
@@ -39,10 +39,7 @@ impl Deserialize<Value, u8> for Value {
                 break;
             };
         }
-        match Value::deserialize(&mut InputStream::from(tokens)) {
-            Ok(value) => Ok(value),
-            Err(err) => Err(err.into_serialize_error()),
-        }
+        Ok(Value::deserialize(&mut InputStream::from(tokens))?)
     }
 }
 
