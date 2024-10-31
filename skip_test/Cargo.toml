@@ -1,0 +1,7 @@
+[package]
+name = "skip_test"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+skip_test_macros = { path = "../skip_test_macros" }
