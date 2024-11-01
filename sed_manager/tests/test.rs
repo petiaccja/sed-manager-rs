@@ -1,2 +1,2 @@
-mod serialization;
 mod fake_device;
+mod serialization;

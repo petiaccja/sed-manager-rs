@@ -50,7 +50,7 @@ fn gen_serialize_field(field: &FieldDesc) -> TokenStream2 {
     let bits = gen_optional_range(&field.layout.bits);
     let round = gen_optional(field.layout.round);
     quote! {
-        ::sed_manager::serialization::serialize::serialize_field(
+        ::sed_manager::serialization::serialize_field(
             &self.#name,
             #stream,
             #struct_pos,
@@ -72,7 +72,7 @@ fn gen_serialize_struct_layout(layout: &Layout) -> TokenStream2 {
             };
             let total_len = end_pos - #struct_pos;
             let rounded_len = (total_len + #round - 1) / #round * #round;
-            ::sed_manager::serialization::serialize::extend_with_zeros_until(#stream, #struct_pos + rounded_len);
+            ::sed_manager::serialization::extend_with_zeros_until(#stream, #struct_pos + rounded_len);
         }
     } else {
         TokenStream2::new()
@@ -139,7 +139,7 @@ fn gen_deserialize_field(field: &FieldDesc) -> TokenStream2 {
     let bits = gen_optional_range(&field.layout.bits);
     let round = gen_optional(field.layout.round);
     quote! {
-        #name: ::sed_manager::serialization::serialize::deserialize_field::<#ty>(
+        #name: ::sed_manager::serialization::deserialize_field::<#ty>(
             #stream,
             #struct_pos,
             #offset,
@@ -280,7 +280,7 @@ mod tests {
         let field = FieldDesc { name: String::from("field_n"), ty: quote! {}, layout: Layout { ..Default::default() } };
         let expr = gen_serialize_field(&field);
         let expected = quote! {
-            ::sed_manager::serialization::serialize::serialize_field(
+            ::sed_manager::serialization::serialize_field(
                 &self.field_n,
                 stream,
                 struct_pos,
@@ -298,7 +298,7 @@ mod tests {
             FieldDesc { name: String::from("field_n"), ty: quote! { u32 }, layout: Layout { ..Default::default() } };
         let expr = gen_deserialize_field(&field);
         let expected = quote! {
-            field_n: ::sed_manager::serialization::serialize::deserialize_field::<u32>(
+            field_n: ::sed_manager::serialization::deserialize_field::<u32>(
                 stream,
                 struct_pos,
                 ::core::option::Option::None,

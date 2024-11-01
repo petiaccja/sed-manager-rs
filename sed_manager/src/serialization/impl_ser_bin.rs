@@ -1,6 +1,7 @@
-use super::serialize::{Deserialize, Serialize, SerializeError};
+use super::serialize::{Deserialize, Serialize};
 use super::stream::{InputStream, ItemWrite, OutputStream};
 use super::ItemRead;
+use super::error::SerializeError;
 
 macro_rules! impl_serialize_for_int {
     ($int_ty:ty) => {
