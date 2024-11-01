@@ -1,7 +1,7 @@
+use super::error::Error;
 use std::cell::OnceCell;
 
 use crate::{
-    device,
     device::Device,
     messaging::packet::Discovery,
     serialization::{Deserialize, InputStream},
@@ -12,21 +12,26 @@ pub struct TPer {
     cached_discovery: OnceCell<Discovery>,
 }
 
-
-
 impl TPer {
-    pub fn discovery(&self) -> Result<&Discovery, device::Error> {
-        todo!();
-        //match self.cached_discovery.get() {
-            // Some(discovery) => Ok(discovery),
-            // None => {
-            //     let data = self.device.security_recv(0x01, 0x0001_u16.to_be_bytes(), 4096)?;
-            //     let mut stream = InputStream::from(data);
-            //     match discovery = Discovery::deserialize(&mut stream) {
+    pub fn new(device: Box<dyn Device>) -> TPer {
+        TPer { device: device, cached_discovery: OnceCell::new() }
+    }
 
-            //     };
-            //     Ok(self.cached_discovery.get_or_init(|| discovery))
-            // }
-        //}
+    pub fn take(self) -> Box<dyn Device> {
+        self.device
+    }
+
+    pub fn discovery(&self) -> Result<&Discovery, Error> {
+        match self.cached_discovery.get() {
+            Some(discovery) => Ok(discovery),
+            None => {
+                let data = self.device.security_recv(0x01, 0x0001_u16.to_be_bytes(), 4096)?;
+                let mut stream = InputStream::from(data);
+                match Discovery::deserialize(&mut stream) {
+                    Ok(discovery) => Ok(self.cached_discovery.get_or_init(|| discovery)),
+                    Err(_) => Err(Error::InvalidResponse),
+                }
+            }
+        }
     }
 }

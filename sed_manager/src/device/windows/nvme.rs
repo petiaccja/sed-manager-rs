@@ -1,7 +1,8 @@
 use super::error::Error;
-use crate::device::device;
+use crate::device;
 use crate::device::device::{Device, Interface};
 use crate::device::nvme::{NVMeIdentifyController, NVMeOpcode};
+use crate::device::shared::string::ToNullTerminated;
 use crate::serialization::{Deserialize, InputStream};
 use core::ptr::null_mut;
 use std::cell::OnceCell;
@@ -20,7 +21,6 @@ use winapi::um::winioctl::{IOCTL_STORAGE_QUERY_PROPERTY, STORAGE_PROPERTY_QUERY}
 use winapi::um::winnt::{FILE_SHARE_READ, FILE_SHARE_WRITE, GENERIC_EXECUTE, GENERIC_READ, GENERIC_WRITE};
 
 use super::error::get_last_error;
-use super::string::string_to_wchars;
 
 pub struct NVMeDevice {
     handle: HANDLE,
@@ -124,7 +124,7 @@ struct STORAGE_PROTOCOL_SPECIFIC_DATA {
 }
 
 fn nvme_open_device(file_name: &str) -> Result<HANDLE, Error> {
-    let mut file_name_utf16: Vec<u16> = string_to_wchars(file_name);
+    let mut file_name_utf16: Vec<u16> = file_name.to_null_terminated_utf16();
     unsafe {
         let handle = CreateFileW(
             file_name_utf16.as_mut_ptr(),

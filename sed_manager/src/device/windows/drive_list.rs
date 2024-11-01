@@ -21,12 +21,12 @@ use winapi::{
 };
 
 use crate::device::device::Interface;
-use crate::device::{device, windows::com_interface::COM_INTERFACE};
+use crate::device::{self, windows::com_interface::COM_INTERFACE};
 
+use super::super::shared::string::{FromNullTerminated, ToNullTerminated};
 use super::{
     com_ptr::ComPtr,
     error::{check_hresult, Error},
-    string::{null_terminated_to_string, string_to_wchars},
 };
 
 fn co_create_instance<T: Deref<Target = IUnknown>>(clsid: &GUID, riid: &GUID) -> Result<ComPtr<T>, Error> {
@@ -47,7 +47,7 @@ fn co_create_instance<T: Deref<Target = IUnknown>>(clsid: &GUID, riid: &GUID) ->
 }
 
 fn get_wbem_services(wbem_locator: *mut IWbemLocator, network_resource: &str) -> Result<ComPtr<IWbemServices>, Error> {
-    let mut network_resource_utf16: Vec<_> = string_to_wchars(network_resource);
+    let mut network_resource_utf16: Vec<_> = network_resource.to_null_terminated_utf16();
     let mut ptr = ComPtr::<IWbemServices>::null();
     let result = unsafe {
         check_hresult((*wbem_locator).ConnectServer(
@@ -83,8 +83,8 @@ fn co_set_proxy_blanket(wbem_services: *mut IWbemServices) -> Result<(), Error> 
 }
 
 fn exec_query(wbem_services: *mut IWbemServices, query: &str) -> Result<ComPtr<IEnumWbemClassObject>, Error> {
-    let mut language_utf16: Vec<_> = string_to_wchars("WQL");
-    let mut query_utf16: Vec<_> = string_to_wchars(query);
+    let mut language_utf16: Vec<_> = "WQL".to_null_terminated_utf16();
+    let mut query_utf16: Vec<_> = query.to_null_terminated_utf16();
     let mut ptr = ComPtr::<IEnumWbemClassObject>::null();
     let result = unsafe {
         check_hresult((*wbem_services).ExecQuery(
@@ -119,8 +119,8 @@ fn map_enumerator(
 }
 
 fn get_drive_properties(object: *mut IWbemClassObject) -> Result<(String, Interface), Error> {
-    let mut bus_type_utf16: Vec<_> = string_to_wchars("BusType");
-    let mut path_utf16: Vec<_> = string_to_wchars("Path");
+    let mut bus_type_utf16: Vec<_> = "BusType".to_null_terminated_utf16();
+    let mut path_utf16: Vec<_> = "Path".to_null_terminated_utf16();
     let path = unsafe {
         // Do not return within this unsafe block.
         let mut property: VARIANT = zeroed();
@@ -135,9 +135,9 @@ fn get_drive_properties(object: *mut IWbemClassObject) -> Result<(String, Interf
         let path = match result {
             Ok(_) => {
                 let s = property.n1.n2().n3.bstrVal();
-                match null_terminated_to_string(*s) {
-                    Ok(path) => Ok(path),
-                    Err(_) => Err(Error::COM(E_FAIL)),
+                match String::from_null_terminated_utf16(*s) {
+                    Some(path) => Ok(path),
+                    None => Err(Error::COM(E_FAIL)),
                 }
             }
             Err(err) => Err(err),

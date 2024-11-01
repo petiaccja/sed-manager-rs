@@ -1,5 +1,5 @@
 use super::{Deserialize, InputStream, OutputStream, Serialize, SerializeError};
-use std::{io::Seek, marker::PhantomData};
+use std::{io::Seek, marker::PhantomData, ops::Deref, ops::DerefMut};
 
 /// A vector of `T` with special a serialization format.
 ///
@@ -15,10 +15,23 @@ impl<T, L: TryFrom<usize> + TryInto<usize>> WithLen<T, L> {
     pub fn new(value: Vec<T>) -> Self {
         Self { data: value, phantom_data: PhantomData }
     }
-    pub fn as_ref(&self) -> &Vec<T> {
+}
+
+impl<T, L> Deref for WithLen<T, L>
+where
+    L: TryFrom<usize> + TryInto<usize>,
+{
+    type Target = Vec<T>;
+    fn deref(&self) -> &Self::Target {
         &self.data
     }
-    pub fn as_mut_ref(&mut self) -> &mut Vec<T> {
+}
+
+impl<T, L> DerefMut for WithLen<T, L>
+where
+    L: TryFrom<usize> + TryInto<usize>,
+{
+    fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.data
     }
 }
@@ -95,6 +108,6 @@ mod tests {
         let mut is = InputStream::from(os.take());
         let output = WithLen::<u8, u32>::deserialize(&mut is).unwrap();
         assert_eq!(is.stream_position().unwrap(), 9);
-        assert_eq!(output.as_ref(), input.as_ref());
+        assert_eq!(*output, *input);
     }
 }

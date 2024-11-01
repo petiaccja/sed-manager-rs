@@ -1,5 +1,7 @@
 mod device;
 mod nvme;
+mod error;
+mod shared;
 
 #[cfg(target_os = "windows")]
 mod windows;
@@ -13,5 +15,6 @@ use windows as os;
 #[cfg(target_os = "linux")]
 use linux as os;
 
-pub use device::{Device, Error, Interface};
+pub use device::{Device, Interface};
+pub use error::Error;
 pub use os::{get_drive_interface, list_physical_drives, NVMeDevice};

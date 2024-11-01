@@ -34,7 +34,7 @@ pub enum StackResetStatus {
     Pending = 2,
 }
 
-#[derive(Serialize, Deserialize, Clone, Copy, Debug)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u16)]
 pub enum FeatureCode {
     TPer = 0x0001,
@@ -145,75 +145,75 @@ pub struct StackResetResponsePayload {
 
 #[derive(Serialize, Deserialize)]
 pub struct DiscoveryHeader {
-    length_of_data: u32,
-    major_version: u16,
-    minor_version: u16,
+    pub length_of_data: u32,
+    pub major_version: u16,
+    pub minor_version: u16,
     #[layout(offset = 16)]
-    vendor_unique: [u8; 32],
+    pub vendor_unique: [u8; 32],
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct Discovery {
-    pub descriptors: WithLen<FeatureDescriptor, DiscoveryHeader>,
+    pub descs: WithLen<FeatureDescriptor, DiscoveryHeader>,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct FeatureDescriptorHeader {
-    feature_code: FeatureCode,
+    pub feature_code: FeatureCode,
     #[layout(offset = 2, bits = 4..=7)]
-    version: u8,
+    pub version: u8,
     #[layout(offset = 3)]
-    length: u8,
+    pub length: u8,
 }
 
 #[derive(Serialize, Deserialize)]
 #[layout(round = 12)]
 pub struct TPerFeatureDescriptor {
     #[layout(offset = 0, bits = 0..=0)]
-    sync_supported: bool,
+    pub sync_supported: bool,
     #[layout(offset = 0, bits = 1..=1)]
-    async_supported: bool,
+    pub async_supported: bool,
     #[layout(offset = 0, bits = 2..=2)]
-    ack_nak_supported: bool,
+    pub ack_nak_supported: bool,
     #[layout(offset = 0, bits = 3..=3)]
-    buffer_mgmt_supported: bool,
+    pub buffer_mgmt_supported: bool,
     #[layout(offset = 0, bits = 4..=4)]
-    streaming_supported: bool,
+    pub streaming_supported: bool,
     #[layout(offset = 0, bits = 6..=6)]
-    com_id_mgmt_supported: bool,
+    pub com_id_mgmt_supported: bool,
 }
 
 #[derive(Serialize, Deserialize)]
 #[layout(round = 12)]
 pub struct LockingFeatureDescriptor {
     #[layout(offset = 0, bits = 0..=0)]
-    locking_supported: bool,
+    pub locking_supported: bool,
     #[layout(offset = 0, bits = 1..=1)]
-    locking_enabled: bool,
+    pub locking_enabled: bool,
     #[layout(offset = 0, bits = 2..=2)]
-    locked: bool,
+    pub locked: bool,
     #[layout(offset = 0, bits = 3..=3)]
-    media_encryption: bool,
+    pub media_encryption: bool,
     #[layout(offset = 0, bits = 4..=4)]
-    mbr_enabled: bool,
+    pub mbr_enabled: bool,
     #[layout(offset = 0, bits = 5..=5)]
-    mbr_done: bool,
+    pub mbr_done: bool,
     #[layout(offset = 0, bits = 6..=6)]
-    mbr_shadowing_not_supported: bool,
+    pub mbr_shadowing_not_supported: bool,
     #[layout(offset = 0, bits = 7..=7)]
-    hw_reset_supported: bool,
+    pub hw_reset_supported: bool,
 }
 
 #[derive(Serialize, Deserialize)]
 #[layout(round = 16)]
 pub struct OpalV2FeatureDescriptor {
-    base_com_id: u16,
-    num_com_ids: u16,
+    pub base_com_id: u16,
+    pub num_com_ids: u16,
     #[layout(offset = 5)]
-    num_locking_admins_supported: u16,
-    num_locking_users_supported: u16,
-    initial_owner_pw: OwnerPasswordState,
-    reverted_owner_pw: OwnerPasswordState,
+    pub num_locking_admins_supported: u16,
+    pub num_locking_users_supported: u16,
+    pub initial_owner_pw: OwnerPasswordState,
+    pub reverted_owner_pw: OwnerPasswordState,
 }
 
 pub enum FeatureDescriptor {
@@ -304,5 +304,14 @@ impl TryFrom<usize> for DiscoveryHeader {
             minor_version: 0,
             vendor_unique: [0; 32],
         })
+    }
+}
+
+impl Discovery {
+    pub fn new(descs: Vec<FeatureDescriptor>) -> Discovery {
+        Discovery { descs: WithLen::new(descs) }
+    }
+    pub fn get(&self, feature_code: FeatureCode) -> Option<&FeatureDescriptor> {
+        self.descs.iter().find(|feature_desc| -> bool { feature_code == FeatureCode::from(*feature_desc) })
     }
 }

@@ -1,6 +1,6 @@
 use crate::device;
+use super::super::shared::string::FromNullTerminated;
 
-use super::string::null_terminated_to_string;
 use std::{fmt::Display, ptr::null_mut};
 use winapi::{
     shared::{
@@ -17,7 +17,7 @@ use winapi::{
     },
 };
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Error {
     Win32(DWORD),
     COM(HRESULT),
@@ -93,8 +93,8 @@ fn format_win32_error(code: DWORD) -> Option<String> {
     if num_written == 0 {
         return None;
     }
-    match null_terminated_to_string(buffer.as_mut_ptr()) {
-        Ok(text) => Some(text),
-        Err(_) => None,
+    match String::from_null_terminated_utf16(buffer.as_mut_ptr()) {
+        Some(text) => Some(text),
+        None => None,
     }
 }
