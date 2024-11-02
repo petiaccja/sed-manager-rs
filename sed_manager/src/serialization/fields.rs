@@ -3,7 +3,7 @@ use std::{
     ops::Range,
 };
 
-use super::error::SerializeError;
+use super::error::Error;
 use super::serialize::{Deserialize, Serialize};
 use super::stream::{InputStream, ItemRead, ItemWrite, OutputStream};
 use bitvec::{order::Msb0, slice::BitSlice, vec::BitVec};
@@ -44,8 +44,8 @@ pub fn extend_with_zeros_until(stream: &mut OutputStream<u8>, stream_pos: u64) {
 fn write_exact_bit_or(stream: &mut OutputStream<u8>, bytes: &[u8]) {
     for byte in bytes {
         let new_byte = match stream.peek_one() {
-            Some(existing_byte) => *existing_byte | byte,
-            None => *byte,
+            Ok(existing_byte) => *existing_byte | byte,
+            Err(_) => *byte,
         };
         stream.write_one(new_byte);
     }
@@ -58,18 +58,18 @@ pub fn serialize_field<T: Serialize<T, u8>>(
     offset: Option<usize>,
     bits: Option<std::ops::Range<usize>>,
     round: Option<usize>,
-) -> Result<(), SerializeError>
+) -> Result<(), Error>
 where
-    SerializeError: From<<T as Serialize<T, u8>>::Error>,
+    Error: From<<T as Serialize<T, u8>>::Error>,
 {
-    let stream_pos = stream.stream_position().unwrap();
+    let stream_pos = stream.stream_position()?;
     let field_pos = match offset {
         Some(offset) => struct_pos + offset as u64,
         None => stream_pos,
     };
 
     extend_with_zeros_until(stream, field_pos);
-    stream.seek(SeekFrom::Start(field_pos)).unwrap();
+    stream.seek(SeekFrom::Start(field_pos))?;
 
     let mut bitfield_stream = OutputStream::<u8>::new();
     field.serialize(if bits.is_none() { stream } else { &mut bitfield_stream })?;
@@ -81,7 +81,7 @@ where
     }
 
     if let Some(round) = round {
-        let final_pos = stream.stream_position().unwrap();
+        let final_pos = stream.stream_position()?;
         let field_len = final_pos - field_pos;
         let rounded_len = (field_len + round as u64 - 1) / round as u64 * round as u64;
         extend_with_zeros_until(stream, field_pos + rounded_len);
@@ -96,24 +96,20 @@ pub fn deserialize_field<T: Deserialize<T, u8>>(
     offset: Option<usize>,
     bits: Option<std::ops::Range<usize>>,
     round: Option<usize>,
-) -> Result<T, SerializeError>
+) -> Result<T, Error>
 where
-    SerializeError: From<<T as Deserialize<T, u8>>::Error>,
+    Error: From<<T as Deserialize<T, u8>>::Error>,
 {
-    let stream_pos = stream.stream_position().unwrap();
+    let stream_pos = stream.stream_position()?;
     let field_pos = match offset {
         Some(offset) => struct_pos + offset as u64,
         None => stream_pos,
     };
 
-    if stream.seek(SeekFrom::Start(field_pos)).is_err() {
-        return Err(SerializeError::EndOfStream);
-    }
+    stream.seek(SeekFrom::Start(field_pos))?;
 
     let result = if let Some(bits) = &bits {
-        let Some(bytes) = stream.read_exact((bits.end + 7) / 8) else {
-            return Err(SerializeError::EndOfStream);
-        };
+        let bytes = stream.read_exact((bits.end + 7) / 8)?;
         let moved_bytes = move_range_to_end(bytes, bits);
         T::deserialize(&mut InputStream::<u8>::from(moved_bytes))
     } else {
@@ -121,12 +117,10 @@ where
     }?;
 
     if let Some(round) = round {
-        let final_pos = stream.stream_position().unwrap();
+        let final_pos = stream.stream_position()?;
         let field_len = final_pos - field_pos;
         let rounded_len = (field_len + round as u64 - 1) / round as u64 * round as u64;
-        if stream.seek(SeekFrom::Start(field_pos + rounded_len)).is_err() {
-            return Err(SerializeError::EndOfStream);
-        }
+        stream.seek(SeekFrom::Start(field_pos + rounded_len))?;
     }
 
     Ok(result)

@@ -1,6 +1,6 @@
 use super::token::{Tag, Token};
 use super::value::Value;
-use crate::serialization::{Deserialize, InputStream, OutputStream, Serialize, SerializeError};
+use crate::serialization::{Deserialize, Error as SerializeError, InputStream, OutputStream, Serialize};
 
 impl Serialize<Value, u8> for Value {
     type Error = SerializeError;

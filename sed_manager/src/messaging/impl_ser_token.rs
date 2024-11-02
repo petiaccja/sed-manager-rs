@@ -25,7 +25,7 @@ macro_rules! impl_from_tokens_integer {
         impl Deserialize<$int_ty, Token> for $int_ty {
             type Error = TokenizeError;
             fn deserialize(stream: &mut InputStream<Token>) -> Result<$int_ty, Self::Error> {
-                if let Some(token) = stream.read_one() {
+                if let Ok(token) = stream.read_one() {
                     if !is_data(token.tag) {
                         Err(TokenizeError::UnexpectedTag)
                     } else if token.is_byte {
@@ -90,7 +90,7 @@ impl Serialize<Command, Token> for Command {
 impl Deserialize<Command, Token> for Command {
     type Error = TokenizeError;
     fn deserialize(stream: &mut InputStream<Token>) -> Result<Command, Self::Error> {
-        if let Some(token) = stream.read_one() {
+        if let Ok(token) = stream.read_one() {
             let command = match token.tag {
                 Tag::Call => Some(Command::Call),
                 Tag::EndOfData => Some(Command::EndOfData),
@@ -127,14 +127,14 @@ impl Serialize<Named, Token> for Named {
 impl Deserialize<Named, Token> for Named {
     type Error = TokenizeError;
     fn deserialize(stream: &mut InputStream<Token>) -> Result<Named, Self::Error> {
-        fn is_terminator(maybe_token: Option<&Token>) -> bool {
+        fn is_terminator(maybe_token: Result<&Token, std::io::Error>) -> bool {
             match maybe_token {
-                Some(token) => token.tag == Tag::EndName,
-                None => false,
+                Ok(token) => token.tag == Tag::EndName,
+                _ => false,
             }
         }
 
-        if let Some(token) = stream.read_one() {
+        if let Ok(token) = stream.read_one() {
             if token.tag != Tag::StartName {
                 Err(TokenizeError::UnexpectedTag)
             } else {
@@ -172,7 +172,7 @@ impl Serialize<Bytes, Token> for Bytes {
 impl Deserialize<Bytes, Token> for Bytes {
     type Error = TokenizeError;
     fn deserialize(stream: &mut InputStream<Token>) -> Result<Bytes, Self::Error> {
-        if let Some(token) = stream.read_one() {
+        if let Ok(token) = stream.read_one() {
             if !is_data(token.tag) {
                 Err(TokenizeError::UnexpectedTag)
             } else if !token.is_byte {
@@ -207,14 +207,14 @@ impl Serialize<List, Token> for List {
 impl Deserialize<List, Token> for List {
     type Error = TokenizeError;
     fn deserialize(stream: &mut InputStream<Token>) -> Result<List, Self::Error> {
-        fn is_terminator(token: Option<&Token>) -> bool {
+        fn is_terminator(token: Result<&Token, std::io::Error>) -> bool {
             match token {
-                Some(token) => token.tag == Tag::EndList,
-                None => false,
+                Ok(token) => token.tag == Tag::EndList,
+                _ => false,
             }
         }
 
-        if let Some(token) = stream.read_one() {
+        if let Ok(token) = stream.read_one() {
             if token.tag != Tag::StartList {
                 Err(TokenizeError::UnexpectedTag)
             } else {
@@ -283,7 +283,7 @@ impl Deserialize<Value, Token> for Value {
             }
         }
 
-        if let Some(peek) = stream.peek_one() {
+        if let Ok(peek) = stream.peek_one() {
             match peek.tag {
                 Tag::TinyAtom => parse_value(stream),
                 Tag::ShortAtom => parse_value(stream),

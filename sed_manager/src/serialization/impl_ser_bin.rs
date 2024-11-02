@@ -1,12 +1,12 @@
+use super::error::Error;
 use super::serialize::{Deserialize, Serialize};
 use super::stream::{InputStream, ItemWrite, OutputStream};
 use super::ItemRead;
-use super::error::SerializeError;
 
 macro_rules! impl_serialize_for_int {
     ($int_ty:ty) => {
         impl Serialize<$int_ty, u8> for $int_ty {
-            type Error = SerializeError;
+            type Error = Error;
             fn serialize(&self, stream: &mut OutputStream<u8>) -> Result<(), Self::Error> {
                 stream.write_exact(&self.to_be_bytes());
                 Ok(())
@@ -25,7 +25,7 @@ impl_serialize_for_int!(i32);
 impl_serialize_for_int!(i64);
 
 impl Serialize<bool, u8> for bool {
-    type Error = SerializeError;
+    type Error = Error;
     fn serialize(&self, stream: &mut OutputStream<u8>) -> Result<(), Self::Error> {
         let byte = if *self { 1_u8 } else { 0_u8 };
         stream.write_one(byte);
@@ -36,18 +36,18 @@ impl Serialize<bool, u8> for bool {
 macro_rules! impl_deserialize_for_int {
     ($int_ty:ty) => {
         impl Deserialize<$int_ty, u8> for $int_ty {
-            type Error = SerializeError;
+            type Error = Error;
             fn deserialize(stream: &mut InputStream<u8>) -> Result<$int_ty, Self::Error> {
                 let mut partial = [0_u8; size_of::<$int_ty>()];
                 let mut num_bytes_read = 0;
                 for byte in &mut partial {
-                    if let Some(read_byte) = stream.read_one() {
+                    if let Ok(read_byte) = stream.read_one() {
                         *byte = *read_byte;
                         num_bytes_read += 1;
                     }
                 }
                 if num_bytes_read == 0 {
-                    Err(SerializeError::EndOfStream)
+                    Err(Error::io(std::io::ErrorKind::UnexpectedEof.into(), None))
                 } else {
                     partial.rotate_left(num_bytes_read);
                     Ok(<$int_ty>::from_be_bytes(partial))
@@ -67,15 +67,13 @@ impl_deserialize_for_int!(i32);
 impl_deserialize_for_int!(i64);
 
 impl Deserialize<bool, u8> for bool {
-    type Error = SerializeError;
+    type Error = Error;
     fn deserialize(stream: &mut InputStream<u8>) -> Result<bool, Self::Error> {
-        let Some(byte) = stream.read_one() else {
-            return Err(SerializeError::EndOfStream);
-        };
+        let byte = stream.read_one()?;
         match byte {
             0 => Ok(false),
             1 => Ok(true),
-            _ => Err(SerializeError::InvalidRepresentation),
+            _ => Err(Error::io(std::io::ErrorKind::UnexpectedEof.into(), None)),
         }
     }
 }
@@ -83,15 +81,12 @@ impl Deserialize<bool, u8> for bool {
 impl<T, const LEN: usize> Serialize<[T; LEN], u8> for [T; LEN]
 where
     T: Serialize<T, u8>,
-    SerializeError: From<<T as Serialize<T, u8>>::Error>,
+    Error: From<<T as Serialize<T, u8>>::Error>,
 {
-    type Error = SerializeError;
+    type Error = Error;
     fn serialize(&self, stream: &mut OutputStream<u8>) -> Result<(), Self::Error> {
         for item in self {
-            match item.serialize(stream) {
-                Ok(_) => (),
-                Err(err) => return Err(err.into()),
-            }
+            item.serialize(stream)?;
         }
         Ok(())
     }
@@ -100,9 +95,9 @@ where
 impl<T, const LEN: usize> Deserialize<[T; LEN], u8> for [T; LEN]
 where
     T: Deserialize<T, u8>,
-    SerializeError: From<<T as Deserialize<T, u8>>::Error>,
+    Error: From<<T as Deserialize<T, u8>>::Error>,
 {
-    type Error = SerializeError;
+    type Error = Error;
     fn deserialize(stream: &mut InputStream<u8>) -> Result<[T; LEN], Self::Error> {
         let deserialize_one = |_| -> Result<T, Self::Error> { Ok(T::deserialize(stream)?) };
 

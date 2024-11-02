@@ -16,3 +16,6 @@ features = ["alloc"]
 version = "0.3.9"
 default-features = false
 features = ["std", "ioapiset", "errhandlingapi", "fileapi", "winnt", "handleapi", "winioctl", "wbemcli", "combaseapi", "oleauto", "winbase", "ntddscsi"]
+
+[dependencies.thiserror]
+version = "1.0.66"

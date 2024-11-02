@@ -5,7 +5,7 @@ use sed_manager::tper::TPer;
 
 #[test]
 fn discovery_success() -> Result<(), TPerError> {
-    let device = FakeDevice {};
+    let device = FakeDevice::new();
     let tper = TPer::new(Box::new(device));
     let discovery = tper.discovery()?;
 
@@ -29,7 +29,7 @@ fn discovery_success() -> Result<(), TPerError> {
     assert_eq!(locking_desc.locking_supported, true);
     assert_eq!(locking_desc.locking_enabled, false);
     assert_eq!(locking_desc.locked, false);
-    assert_eq!(locking_desc.media_encryption, false);
+    assert_eq!(locking_desc.media_encryption, true);
     assert_eq!(locking_desc.mbr_enabled, false);
     assert_eq!(locking_desc.mbr_done, false);
     assert_eq!(locking_desc.mbr_shadowing_not_supported, false);

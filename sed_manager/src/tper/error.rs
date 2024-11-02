@@ -1,24 +1,22 @@
-use crate::device;
+use crate::device::Error as DeviceError;
+use crate::serialization::Error as SerializeError;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
-    InvalidResponse,
-    DeviceError(device::Error),
+    #[error("error decoding/encoding data: {0}")]
+    InvalidFormat(SerializeError),
+    #[error("error communicating with device: {0}")]
+    InvalidRequest(DeviceError),
 }
 
-impl std::error::Error for Error {}
-
-impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Error::InvalidResponse => f.write_fmt(format_args!("invalid response")),
-            Error::DeviceError(device_err) => f.write_fmt(format_args!("device error: {}", device_err)),
-        }
+impl From<SerializeError> for Error {
+    fn from(value: SerializeError) -> Self {
+        Error::InvalidFormat(value)
     }
 }
 
-impl From<device::Error> for Error {
-    fn from(value: device::Error) -> Self {
-        Error::DeviceError(value)
+impl From<DeviceError> for Error {
+    fn from(value: DeviceError) -> Self {
+        Error::InvalidRequest(value)
     }
 }

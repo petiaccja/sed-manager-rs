@@ -1,4 +1,4 @@
-use super::{Deserialize, InputStream, OutputStream, Serialize, SerializeError};
+use super::{annotate_field, Deserialize, Error, InputStream, OutputStream, Serialize};
 use std::{io::Seek, marker::PhantomData, ops::Deref, ops::DerefMut};
 
 /// A vector of `T` with special a serialization format.
@@ -40,28 +40,40 @@ impl<T, L: TryFrom<usize> + TryInto<usize>> Serialize<WithLen<T, L>, u8> for Wit
 where
     T: Serialize<T, u8>,
     L: Serialize<L, u8>,
-    SerializeError: From<<T as Serialize<T, u8>>::Error>,
-    SerializeError: From<<L as Serialize<L, u8>>::Error>,
+    Error: From<<T as Serialize<T, u8>>::Error>,
+    Error: From<<L as Serialize<L, u8>>::Error>,
 {
-    type Error = SerializeError;
+    type Error = Error;
     fn serialize(&self, stream: &mut OutputStream<u8>) -> Result<(), Self::Error> {
-        let len_pos = stream.stream_position().unwrap();
+        let len_pos = stream.stream_position()?;
+
         let Ok(zero) = L::try_from(0usize) else {
-            return Err(SerializeError::InvalidRepresentation);
+            return annotate_field(
+                Err(Error::io(std::io::ErrorKind::InvalidData.into(), Some(len_pos))),
+                "length_placeholder".into(),
+            );
         };
-        zero.serialize(stream)?;
-        let data_pos = stream.stream_position().unwrap();
+
+        annotate_field(zero.serialize(stream), "length_placeholder".into())?;
+
+        let data_pos = stream.stream_position()?;
+        let mut idx = 0_usize;
         for value in &self.data {
-            value.serialize(stream)?;
+            annotate_field(value.serialize(stream), format!("data[{}]", idx))?;
+            idx += 1;
         }
-        let end_pos = stream.stream_position().unwrap();
+
+        let end_pos = stream.stream_position()?;
         let value_len = end_pos - data_pos;
-        stream.seek(std::io::SeekFrom::Start(len_pos)).unwrap();
+        stream.seek(std::io::SeekFrom::Start(len_pos))?;
         let Ok(value_len) = L::try_from(value_len as usize) else {
-            return Err(SerializeError::InvalidRepresentation);
+            return annotate_field(
+                Err(Error::io(std::io::ErrorKind::InvalidData.into(), Some(len_pos))),
+                "length".into(),
+            );
         };
-        value_len.serialize(stream)?;
-        stream.seek(std::io::SeekFrom::Start(end_pos)).unwrap();
+        annotate_field(value_len.serialize(stream), "length".into())?;
+        stream.seek(std::io::SeekFrom::Start(end_pos))?;
         Ok(())
     }
 }
@@ -70,26 +82,24 @@ impl<T, L: TryFrom<usize> + TryInto<usize>> Deserialize<WithLen<T, L>, u8> for W
 where
     T: Deserialize<T, u8>,
     L: Deserialize<L, u8>,
-    SerializeError: From<<T as Deserialize<T, u8>>::Error>,
-    SerializeError: From<<L as Deserialize<L, u8>>::Error>,
+    Error: From<<T as Deserialize<T, u8>>::Error>,
+    Error: From<<L as Deserialize<L, u8>>::Error>,
 {
-    type Error = SerializeError;
+    type Error = Error;
     fn deserialize(stream: &mut InputStream<u8>) -> Result<WithLen<T, L>, Self::Error> {
-        let len = L::deserialize(stream)?;
+        let len = annotate_field(L::deserialize(stream), "length".into())?;
         let Ok(len) = TryInto::<usize>::try_into(len) else {
-            return Err(SerializeError::InvalidRepresentation);
+            return annotate_field(Err(Error::io(std::io::ErrorKind::InvalidData.into(), None)), "length".into());
         };
         let data_pos = stream.stream_position().unwrap();
         let end_pos = data_pos + len as u64;
         let mut data = Vec::<T>::new();
         while stream.stream_position().unwrap() < end_pos {
-            match T::deserialize(stream) {
-                Ok(value) => data.push(value),
-                Err(err) => return Err(err.into()),
-            };
+            let item = annotate_field(T::deserialize(stream), format!("data[{}]", data.len()))?;
+            data.push(item);
         }
         if stream.stream_position().unwrap() != end_pos {
-            return Err(SerializeError::InvalidRepresentation); // We've overshot the actual length.
+            return annotate_field(Err(Error::io(std::io::ErrorKind::InvalidData.into(), None)), "data".into());
         }
         Ok(WithLen::new(data))
     }

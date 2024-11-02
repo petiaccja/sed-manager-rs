@@ -1,6 +1,6 @@
-use crate::serialization::{Deserialize, ItemRead, ItemWrite, Serialize, SerializeError};
-use std::error::Error;
-use std::fmt::Display;
+use crate::serialization::Error as SerializeError;
+use crate::serialization::{Deserialize, ItemRead, ItemWrite, Serialize};
+use std::io::ErrorKind as IoErrorKind;
 
 #[repr(u8)]
 #[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Copy, Clone)]
@@ -53,45 +53,29 @@ pub enum Mask {
     LongAtom = 0b1111_1000,
 }
 
+#[derive(Debug, thiserror::Error)]
 pub enum TokenizeError {
+    #[error("end of stream")]
     EndOfStream,
+    #[error("end of tokens")]
     EndOfTokens,
+    #[error("unexpected tag")]
     UnexpectedTag,
+    #[error("unexpected signedness")]
     UnexpectedSignedness,
+    #[error("expected an integer")]
     ExpectedInteger,
+    #[error("expected bytes")]
     ExpectedBytes,
+    #[error("continued byte tokens are not supported")]
     ContinuedBytesUnsupported,
+    #[error("integer type too small to represent data")]
     IntegerOverflow,
 }
 
-impl Error for TokenizeError {}
-
 impl From<TokenizeError> for SerializeError {
     fn from(value: TokenizeError) -> Self {
-        SerializeError::Other(value.into())
-    }
-}
-
-impl Display for TokenizeError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            TokenizeError::EndOfStream => f.write_fmt(format_args!("end of stream")),
-            TokenizeError::EndOfTokens => f.write_fmt(format_args!("end of tokens")),
-            TokenizeError::UnexpectedTag => f.write_fmt(format_args!("unexpected tag")),
-            TokenizeError::UnexpectedSignedness => f.write_fmt(format_args!("signedness does not match integer type")),
-            TokenizeError::ExpectedInteger => f.write_fmt(format_args!("expected atom of type integer")),
-            TokenizeError::ExpectedBytes => f.write_fmt(format_args!("expected atom of type bytes")),
-            TokenizeError::ContinuedBytesUnsupported => {
-                f.write_fmt(format_args!("continued bytes atoms are not supported"))
-            }
-            TokenizeError::IntegerOverflow => f.write_fmt(format_args!("integer atom too large for integer type")),
-        }
-    }
-}
-
-impl std::fmt::Debug for TokenizeError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        (self as &dyn Display).fmt(f)
+        SerializeError::other(value, None)
     }
 }
 
@@ -150,7 +134,7 @@ impl Serialize<Token, u8> for Token {
             Tag::TinyAtom => {
                 let header = (self.is_signed as u8) << signed_bit;
                 let Some(data) = self.data.first() else {
-                    return Err(SerializeError::InvalidRepresentation);
+                    return Err(SerializeError::io(IoErrorKind::InvalidData.into(), None));
                 };
                 stream.write_one(header | (data & 0b0011_1111));
                 Ok(())
@@ -160,7 +144,7 @@ impl Serialize<Token, u8> for Token {
                     (self.tag as u8) | ((self.is_byte as u8) << byte_bit) | ((self.is_signed as u8) << signed_bit);
                 let len = (self.data.len() as u8) & 0b0000_1111;
                 if len as usize != self.data.len() {
-                    return Err(SerializeError::InvalidRepresentation);
+                    return Err(SerializeError::io(IoErrorKind::InvalidData.into(), None));
                 }
                 stream.write_one(header | len);
                 stream.write_exact(&self.data);
@@ -171,7 +155,7 @@ impl Serialize<Token, u8> for Token {
                     (self.tag as u8) | ((self.is_byte as u8) << byte_bit) | ((self.is_signed as u8) << signed_bit);
                 let len = (self.data.len() as u16) & 0b111_1111_1111;
                 if len as usize != self.data.len() {
-                    return Err(SerializeError::InvalidRepresentation);
+                    return Err(SerializeError::io(IoErrorKind::InvalidData.into(), None));
                 }
                 stream.write_one(header | ((len >> 8) as u8));
                 stream.write_one(len as u8);
@@ -183,7 +167,7 @@ impl Serialize<Token, u8> for Token {
                     (self.tag as u8) | ((self.is_byte as u8) << byte_bit) | ((self.is_signed as u8) << signed_bit);
                 let len = (self.data.len() as u32) & 0x00FF_FFFF;
                 if len as usize != self.data.len() {
-                    return Err(SerializeError::InvalidRepresentation);
+                    return Err(SerializeError::io(IoErrorKind::InvalidData.into(), None));
                 }
                 stream.write_one(header | ((len >> 8) as u8));
                 stream.write_exact(&len.to_be_bytes()[1..]);
@@ -214,9 +198,7 @@ fn extend_tiny_atom(data: u8, is_signed: bool) -> u8 {
 impl Deserialize<Token, u8> for Token {
     type Error = SerializeError;
     fn deserialize(stream: &mut crate::serialization::InputStream<u8>) -> Result<Token, Self::Error> {
-        let Some(&header) = stream.read_one() else {
-            return Err(SerializeError::EndOfStream);
-        };
+        let header = *stream.read_one()?;
         if header & (Mask::TinyAtom as u8) == Tag::TinyAtom as u8 {
             let (_, signed_bit) = flag_bits(Tag::TinyAtom);
             let is_signed = (header >> signed_bit) & 1 != 0;
@@ -227,41 +209,29 @@ impl Deserialize<Token, u8> for Token {
             let is_byte = (header >> byte_bit) & 1 != 0;
             let is_signed = (header >> signed_bit) & 1 != 0;
             let len = header & 0b1111;
-            let Some(data) = stream.read_exact(len as usize) else {
-                return Err(SerializeError::EndOfStream);
-            };
+            let data = stream.read_exact(len as usize)?;
             Ok(Token { tag: Tag::ShortAtom, is_byte: is_byte, is_signed: is_signed, data: data.into() })
         } else if header & (Mask::MediumAtom as u8) == Tag::MediumAtom as u8 {
             let (byte_bit, signed_bit) = flag_bits(Tag::MediumAtom);
             let is_byte = (header >> byte_bit) & 1 != 0;
             let is_signed = (header >> signed_bit) & 1 != 0;
-            let len = if let Some(&len_lsb) = stream.read_one() {
-                (((header & 0b111) as usize) << 8) | (len_lsb as usize)
-            } else {
-                return Err(SerializeError::EndOfStream);
-            };
-            let Some(data) = stream.read_exact(len) else {
-                return Err(SerializeError::EndOfStream);
-            };
+            let len_lsb = *stream.read_one()?;
+            let len = (((header & 0b111) as usize) << 8) | (len_lsb as usize);
+            let data = stream.read_exact(len)?;
             Ok(Token { tag: Tag::MediumAtom, is_byte: is_byte, is_signed: is_signed, data: data.into() })
         } else if header & (Mask::LongAtom as u8) == Tag::LongAtom as u8 {
             let (byte_bit, signed_bit) = flag_bits(Tag::LongAtom);
             let is_byte = (header >> byte_bit) & 1 != 0;
             let is_signed = (header >> signed_bit) & 1 != 0;
-            let len = if let Some(len) = stream.read_exact(3) {
-                ((len[0] as usize) << 16) | ((len[1] as usize) << 8) | (len[2] as usize)
-            } else {
-                return Err(SerializeError::EndOfStream);
-            };
-            let Some(data) = stream.read_exact(len) else {
-                return Err(SerializeError::EndOfStream);
-            };
+            let len_bytes = stream.read_exact(3)?;
+            let len = ((len_bytes[0] as usize) << 16) | ((len_bytes[1] as usize) << 8) | (len_bytes[2] as usize);
+            let data = stream.read_exact(len)?;
             Ok(Token { tag: Tag::LongAtom, is_byte: is_byte, is_signed: is_signed, data: data.into() })
         } else {
             if let Ok(tag) = Tag::try_from(header) {
                 Ok(Token { tag: tag, ..Default::default() })
             } else {
-                Err(SerializeError::InvalidRepresentation)
+                Err(SerializeError::io(IoErrorKind::InvalidData.into(), None))
             }
         }
     }

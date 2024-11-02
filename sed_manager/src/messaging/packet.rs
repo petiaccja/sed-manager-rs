@@ -1,6 +1,6 @@
 use std::io::Seek;
 
-use crate::serialization::{with_len::WithLen, Deserialize, Serialize, SerializeError};
+use crate::serialization::{with_len::WithLen, Deserialize, Error as SerializeError, Serialize};
 
 use super::value::Value;
 

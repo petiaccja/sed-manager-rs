@@ -55,7 +55,14 @@ fn parse_literal_range_usize(expr: &syn::Expr) -> Result<std::ops::Range<usize>,
     };
 
     let start = parse_literal_usize(start_expr.as_ref())?;
-    let end = parse_literal_usize(end_expr.as_ref())?;
+    let end_value = parse_literal_usize(end_expr.as_ref())?;
+    let end = match range.limits {
+        syn::RangeLimits::HalfOpen(_) => end_value,
+        syn::RangeLimits::Closed(_) => end_value + 1,
+    };
+    if start >= end {
+        return Err(syn::Error::new(expr.span(), "empty range is not accepted"));
+    }
     Ok(std::ops::Range::<usize> { start: start, end: end })
 }
 

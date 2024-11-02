@@ -27,10 +27,8 @@ impl TPer {
             None => {
                 let data = self.device.security_recv(0x01, 0x0001_u16.to_be_bytes(), 4096)?;
                 let mut stream = InputStream::from(data);
-                match Discovery::deserialize(&mut stream) {
-                    Ok(discovery) => Ok(self.cached_discovery.get_or_init(|| discovery)),
-                    Err(_) => Err(Error::InvalidResponse),
-                }
+                let discovery = Discovery::deserialize(&mut stream)?;
+                Ok(self.cached_discovery.get_or_init(|| discovery))
             }
         }
     }

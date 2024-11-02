@@ -1,9 +1,9 @@
 use std::io::Seek;
 pub trait ItemRead<Item> {
-    fn read_exact<'me>(&'me mut self, count: usize) -> Option<&'me [Item]>;
-    fn read_one<'me>(&'me mut self) -> Option<&'me Item>;
-    fn peek_exact<'me>(&'me mut self, count: usize) -> Option<&'me [Item]>;
-    fn peek_one<'me>(&'me mut self) -> Option<&'me Item>;
+    fn read_exact<'me>(&'me mut self, count: usize) -> Result<&'me [Item], std::io::Error>;
+    fn read_one<'me>(&'me mut self) -> Result<&'me Item, std::io::Error>;
+    fn peek_exact<'me>(&'me mut self, count: usize) -> Result<&'me [Item], std::io::Error>;
+    fn peek_one<'me>(&'me mut self) -> Result<&'me Item, std::io::Error>;
 }
 
 pub trait ItemWrite<Item> {
@@ -11,8 +11,8 @@ pub trait ItemWrite<Item> {
     where
         Item: Clone;
     fn write_one(&mut self, item: Item);
-    fn peek_exact<'me>(&'me mut self, count: usize) -> Option<&'me mut [Item]>;
-    fn peek_one<'me>(&'me mut self) -> Option<&'me mut Item>;
+    fn peek_exact<'me>(&'me mut self, count: usize) -> Result<&'me mut [Item], std::io::Error>;
+    fn peek_one<'me>(&'me mut self) -> Result<&'me mut Item, std::io::Error>;
 }
 
 pub struct InputStream<Item> {
@@ -56,32 +56,32 @@ impl<Item> OutputStream<Item> {
 }
 
 impl<Item> ItemRead<Item> for InputStream<Item> {
-    fn read_exact<'me>(&'me mut self, count: usize) -> Option<&'me [Item]> {
+    fn read_exact<'me>(&'me mut self, count: usize) -> Result<&'me [Item], std::io::Error> {
         if self.stream_pos + count <= self.data.len() {
-            let result = Some(&self.data[self.stream_pos..(self.stream_pos + count)]);
+            let result = Ok(&self.data[self.stream_pos..(self.stream_pos + count)]);
             self.stream_pos += count;
             result
         } else {
-            None
+            Err(std::io::ErrorKind::UnexpectedEof.into())
         }
     }
-    fn read_one<'me>(&'me mut self) -> Option<&'me Item> {
+    fn read_one<'me>(&'me mut self) -> Result<&'me Item, std::io::Error> {
         match self.read_exact(1) {
-            Some(range) => Some(&range[0]),
-            None => None,
+            Ok(range) => Ok(&range[0]),
+            Err(err) => Err(err),
         }
     }
-    fn peek_exact<'me>(&'me mut self, count: usize) -> Option<&'me [Item]> {
+    fn peek_exact<'me>(&'me mut self, count: usize) -> Result<&'me [Item], std::io::Error> {
         if self.stream_pos + count <= self.data.len() {
-            Some(&self.data[self.stream_pos..(self.stream_pos + count)])
+            Ok(&self.data[self.stream_pos..(self.stream_pos + count)])
         } else {
-            None
+            Err(std::io::ErrorKind::UnexpectedEof.into())
         }
     }
-    fn peek_one<'me>(&'me mut self) -> Option<&'me Item> {
+    fn peek_one<'me>(&'me mut self) -> Result<&'me Item, std::io::Error> {
         match self.peek_exact(1) {
-            Some(range) => Some(&range[0]),
-            None => None,
+            Ok(range) => Ok(&range[0]),
+            Err(err) => Err(err),
         }
     }
 }
@@ -115,17 +115,17 @@ impl<Item> Seek for InputStream<Item> {
 }
 
 impl<Item> ItemWrite<Item> for OutputStream<Item> {
-    fn peek_exact<'me>(&'me mut self, count: usize) -> Option<&'me mut [Item]> {
+    fn peek_exact<'me>(&'me mut self, count: usize) -> Result<&'me mut [Item], std::io::Error> {
         if self.stream_pos + count <= self.data.len() {
-            Some(&mut self.data[self.stream_pos..(self.stream_pos + count)])
+            Ok(&mut self.data[self.stream_pos..(self.stream_pos + count)])
         } else {
-            None
+            Err(std::io::ErrorKind::UnexpectedEof.into())
         }
     }
-    fn peek_one<'me>(&'me mut self) -> Option<&'me mut Item> {
+    fn peek_one<'me>(&'me mut self) -> Result<&'me mut Item, std::io::Error> {
         match self.peek_exact(1) {
-            Some(range) => Some(&mut range[0]),
-            None => None,
+            Ok(range) => Ok(&mut range[0]),
+            Err(err) => Err(err),
         }
     }
     fn write_exact(&mut self, items: &[Item])
@@ -178,7 +178,6 @@ mod tests {
     fn input_stream_read_one() {
         let mut stream = InputStream::<i32>::from(vec![1, 2, 3, 4, 5]);
         let item = stream.read_one();
-        assert!(item.is_some());
         assert_eq!(*item.unwrap(), 1);
         assert_eq!(stream.stream_position().unwrap(), 1);
     }
@@ -186,9 +185,9 @@ mod tests {
     #[test]
     fn input_stream_read_one_eof() {
         let mut stream = InputStream::<i32>::from(vec![1]);
-        stream.read_one();
+        stream.read_one().unwrap();
         let item = stream.read_one();
-        assert!(item.is_none());
+        assert!(item.is_err());
         assert_eq!(stream.stream_position().unwrap(), 1);
     }
 
@@ -196,7 +195,6 @@ mod tests {
     fn input_stream_peek_one() {
         let mut stream = InputStream::<i32>::from(vec![1, 2, 3, 4, 5]);
         let item = stream.peek_one();
-        assert!(item.is_some());
         assert_eq!(*item.unwrap(), 1);
         assert_eq!(stream.stream_position().unwrap(), 0);
     }
@@ -204,9 +202,9 @@ mod tests {
     #[test]
     fn input_stream_peek_one_eof() {
         let mut stream = InputStream::<i32>::from(vec![1]);
-        stream.read_one();
+        stream.read_one().unwrap();
         let item = stream.peek_one();
-        assert!(item.is_none());
+        assert!(item.is_err());
         assert_eq!(stream.stream_position().unwrap(), 1);
     }
 
@@ -216,17 +214,14 @@ mod tests {
 
         assert!(stream.seek(std::io::SeekFrom::Start(3)).is_ok());
         let mut item = stream.peek_one();
-        assert!(item.is_some());
         assert_eq!(*item.unwrap(), 4);
 
         assert!(stream.seek(std::io::SeekFrom::Current(-2)).is_ok());
         item = stream.peek_one();
-        assert!(item.is_some());
         assert_eq!(*item.unwrap(), 2);
 
         assert!(stream.seek(std::io::SeekFrom::End(-1)).is_ok());
         item = stream.peek_one();
-        assert!(item.is_some());
         assert_eq!(*item.unwrap(), 5);
     }
 
