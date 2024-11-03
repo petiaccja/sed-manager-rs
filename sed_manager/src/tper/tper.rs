@@ -3,7 +3,7 @@ use std::cell::OnceCell;
 
 use crate::{
     device::Device,
-    messaging::packet::Discovery,
+    messaging::packet::{ComIdState, Discovery},
     serialization::{Deserialize, InputStream},
 };
 
@@ -22,6 +22,8 @@ impl TPer {
     }
 
     pub fn discovery(&self) -> Result<&Discovery, Error> {
+        // - The device MAY allow level 0 discovery at any point in time.
+        // - The data MUST either be truncated or padded by the device if the transfer length is not exact.
         match self.cached_discovery.get() {
             Some(discovery) => Ok(discovery),
             None => {
@@ -31,5 +33,25 @@ impl TPer {
                 Ok(self.cached_discovery.get_or_init(|| discovery))
             }
         }
+    }
+
+    pub fn com_id(&self) -> u16 {
+        todo!()
+    }
+
+    pub fn com_id_ext(&self) -> u16 {
+        todo!()
+    }
+
+    pub async fn verify_com_id(&self) -> Result<ComIdState, Error> {
+        todo!()
+    }
+
+    pub async fn stack_reset(&self) -> Result<(), Error> {
+        todo!()
+    }
+
+    pub async fn tper_reset(&self) -> Result<(), Error> {
+        todo!()
     }
 }

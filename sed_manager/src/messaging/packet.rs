@@ -2,8 +2,6 @@ use std::io::Seek;
 
 use crate::serialization::{with_len::WithLen, Deserialize, Error as SerializeError, Serialize};
 
-use super::value::Value;
-
 /// The transfer length for IF-RECV for HANDLE_COM_ID_REQUESTs that fits the
 /// response for NO_RESPONSE_AVAILABLE, VERIFY_COM_ID_VALID, and STACK_RESET
 /// commands.
@@ -32,6 +30,14 @@ pub enum StackResetStatus {
     Success = 0,
     Failure = 1,
     Pending = 2,
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, Debug)]
+#[repr(u16)]
+pub enum AckType {
+    ACK = 0x0001,
+    NAK = 0x0002,
+    None = 0x0000,
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
@@ -68,7 +74,7 @@ pub struct SubPacket {
     #[layout(offset = 6)]
     pub kind: SubPacketKind,
     #[layout(offset = 8, round = 4)]
-    pub payload: WithLen<Value, u32>,
+    pub payload: WithLen<u8, u32>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -77,7 +83,7 @@ pub struct Packet {
     pub host_session_number: u32,
     pub sequence_number: u32,
     #[layout(offset = 14)]
-    pub ack_type: u16,
+    pub ack_type: AckType,
     pub acknowledgement: u32,
     pub payload: WithLen<SubPacket, u32>,
 }
