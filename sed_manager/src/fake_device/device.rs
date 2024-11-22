@@ -38,7 +38,9 @@ impl Device for FakeDevice {
         let mut persistent_state = self.persistent_state.borrow_mut();
         let route_modifications = handler.push_request(&mut persistent_state, data)?;
         for (route, handler) in route_modifications.new_routes {
-            routing_state.add_route_boxed(route, handler).expect("push_request should not return invalid routes");
+            routing_state
+                .add_route_boxed(route, handler)
+                .expect("push_request should not return invalid routes");
         }
         for route in route_modifications.deleted_routes {
             routing_state.remove_route(route).expect("push_request should not return invalid routes");

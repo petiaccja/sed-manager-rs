@@ -282,7 +282,8 @@ impl Timeout {
         if retry <= self.properties.max_retries {
             let delay = self.properties.timeout / 2;
             let future = tokio::time::sleep(delay);
-            self.timers.push_back(Timer { sequence_number: sequence_number, retry: retry, future: Box::pin(future) });
+            self.timers
+                .push_back(Timer { sequence_number: sequence_number, retry: retry, future: Box::pin(future) });
             return true;
         }
 
@@ -695,12 +696,12 @@ mod tests {
     use crate::messaging::packet::{SubPacket, SubPacketKind};
     use crate::rpc::test_utils::{try_collect_pull, try_collect_push};
     use crate::rpc::{
+        pipeline::spawn,
+        properties::ASSUMED_PROPERTIES,
         test_utils::{
             collect_pull, collect_push, create_sink_pull, create_sink_push, create_source_pull, create_source_push,
             run_async_test,
         },
-        pipeline::spawn,
-        properties::ASSUMED_PROPERTIES,
     };
     use crate::serialization::with_len::WithLen;
 

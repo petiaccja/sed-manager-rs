@@ -63,12 +63,12 @@ where
     }
 }
 
-impl<T, L: TryFrom<usize> + TryInto<usize>> Serialize<WithLen<T, L>, u8> for WithLen<T, L>
+impl<T, L: TryFrom<usize> + TryInto<usize>> Serialize<u8> for WithLen<T, L>
 where
-    T: Serialize<T, u8>,
-    L: Serialize<L, u8>,
-    Error: From<<T as Serialize<T, u8>>::Error>,
-    Error: From<<L as Serialize<L, u8>>::Error>,
+    T: Serialize<u8>,
+    L: Serialize<u8>,
+    Error: From<<T as Serialize<u8>>::Error>,
+    Error: From<<L as Serialize<u8>>::Error>,
 {
     type Error = Error;
     fn serialize(&self, stream: &mut OutputStream<u8>) -> Result<(), Self::Error> {
@@ -105,12 +105,12 @@ where
     }
 }
 
-impl<T, L: TryFrom<usize> + TryInto<usize>> Deserialize<WithLen<T, L>, u8> for WithLen<T, L>
+impl<T, L: TryFrom<usize> + TryInto<usize>> Deserialize<u8> for WithLen<T, L>
 where
-    T: Deserialize<T, u8>,
-    L: Deserialize<L, u8>,
-    Error: From<<T as Deserialize<T, u8>>::Error>,
-    Error: From<<L as Deserialize<L, u8>>::Error>,
+    T: Deserialize<u8>,
+    L: Deserialize<u8>,
+    Error: From<<T as Deserialize<u8>>::Error>,
+    Error: From<<L as Deserialize<u8>>::Error>,
 {
     type Error = Error;
     fn deserialize(stream: &mut InputStream<u8>) -> Result<WithLen<T, L>, Self::Error> {

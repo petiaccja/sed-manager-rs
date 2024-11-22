@@ -87,7 +87,7 @@ impl TryFrom<Value> for MethodStatus {
     }
 }
 
-impl Serialize<MethodCall, Token> for MethodCall {
+impl Serialize<Token> for MethodCall {
     type Error = TokenizeError;
     fn serialize(&self, stream: &mut crate::serialization::OutputStream<Token>) -> Result<(), Self::Error> {
         Value::from(Command::Call).serialize(stream)?;
@@ -105,7 +105,7 @@ impl Serialize<MethodCall, Token> for MethodCall {
     }
 }
 
-impl Serialize<MethodResult, Token> for MethodResult {
+impl Serialize<Token> for MethodResult {
     type Error = TokenizeError;
     fn serialize(&self, stream: &mut crate::serialization::OutputStream<Token>) -> Result<(), Self::Error> {
         Value::from(self.results.clone()).serialize(stream)?;
@@ -120,9 +120,9 @@ impl Serialize<MethodResult, Token> for MethodResult {
     }
 }
 
-impl Deserialize<MethodCall, Token> for MethodCall {
+impl Deserialize<Token> for MethodCall {
     type Error = TokenizeError;
-    fn deserialize(stream: &mut crate::serialization::InputStream<Token>) -> Result<MethodCall, Self::Error> {
+    fn deserialize(stream: &mut crate::serialization::InputStream<Token>) -> Result<Self, Self::Error> {
         let call = Command::deserialize(stream)?;
         let invoking_id_value = Value::deserialize(stream)?;
         let method_id_value = Value::deserialize(stream)?;
@@ -155,9 +155,9 @@ impl Deserialize<MethodCall, Token> for MethodCall {
     }
 }
 
-impl Deserialize<MethodResult, Token> for MethodResult {
+impl Deserialize<Token> for MethodResult {
     type Error = TokenizeError;
-    fn deserialize(stream: &mut crate::serialization::InputStream<Token>) -> Result<MethodResult, Self::Error> {
+    fn deserialize(stream: &mut crate::serialization::InputStream<Token>) -> Result<Self, Self::Error> {
         let results_value = Value::deserialize(stream)?;
         let eod = Command::deserialize(stream)?;
         let status_value = Value::deserialize(stream)?;

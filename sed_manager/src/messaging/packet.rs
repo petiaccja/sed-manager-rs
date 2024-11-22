@@ -257,7 +257,7 @@ impl From<&FeatureDescriptor> for FeatureCode {
     }
 }
 
-impl Serialize<FeatureDescriptor, u8> for FeatureDescriptor {
+impl Serialize<u8> for FeatureDescriptor {
     type Error = SerializeError;
     fn serialize(&self, stream: &mut crate::serialization::OutputStream<u8>) -> Result<(), Self::Error> {
         let start_pos = stream.stream_position().unwrap();
@@ -279,9 +279,9 @@ impl Serialize<FeatureDescriptor, u8> for FeatureDescriptor {
     }
 }
 
-impl Deserialize<FeatureDescriptor, u8> for FeatureDescriptor {
+impl Deserialize<u8> for FeatureDescriptor {
     type Error = SerializeError;
-    fn deserialize(stream: &mut crate::serialization::InputStream<u8>) -> Result<FeatureDescriptor, Self::Error> {
+    fn deserialize(stream: &mut crate::serialization::InputStream<u8>) -> Result<Self, Self::Error> {
         let header = FeatureDescriptorHeader::deserialize(stream)?;
         match header.feature_code {
             FeatureCode::TPer => Ok(FeatureDescriptor::TPer(TPerFeatureDescriptor::deserialize(stream)?)),

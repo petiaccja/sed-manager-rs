@@ -163,7 +163,11 @@ pub fn get_credit_control(packet: &Packet) -> u32 {
 }
 
 pub fn get_credit_value(packet: &Packet) -> u32 {
-    packet.payload.iter().map(|sp| -> u32 { sp.payload.len() as u32 }).fold(0_u32, |x, y| -> u32 { x + y })
+    packet
+        .payload
+        .iter()
+        .map(|sp| -> u32 { sp.payload.len() as u32 })
+        .fold(0_u32, |x, y| -> u32 { x + y })
 }
 
 pub fn get_gross_packet_len(packet: &Packet) -> usize {

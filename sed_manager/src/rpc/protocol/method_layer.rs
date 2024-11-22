@@ -390,7 +390,7 @@ impl Process for Detokenize {
     }
 }
 
-impl Serialize<PackagedMethod, Token> for PackagedMethod {
+impl Serialize<Token> for PackagedMethod {
     type Error = TokenizeError;
     fn serialize(&self, stream: &mut OutputStream<Token>) -> Result<(), Self::Error> {
         match self {
@@ -400,9 +400,9 @@ impl Serialize<PackagedMethod, Token> for PackagedMethod {
     }
 }
 
-impl Deserialize<PackagedMethod, Token> for PackagedMethod {
+impl Deserialize<Token> for PackagedMethod {
     type Error = TokenizeError;
-    fn deserialize(stream: &mut crate::serialization::InputStream<Token>) -> Result<PackagedMethod, Self::Error> {
+    fn deserialize(stream: &mut crate::serialization::InputStream<Token>) -> Result<Self, Self::Error> {
         let Ok(first) = stream.peek_one() else {
             return Err(TokenizeError::EndOfStream);
         };
@@ -419,9 +419,9 @@ mod tests {
     use tokio::task::yield_now;
 
     use crate::messaging::value::Value;
-    use crate::rpc::test_utils::{create_sink_push, create_source_push, run_async_test, try_collect_push};
     use crate::rpc::method::MethodStatus;
     use crate::rpc::pipeline::spawn;
+    use crate::rpc::test_utils::{create_sink_push, create_source_push, run_async_test, try_collect_push};
 
     use super::*;
 

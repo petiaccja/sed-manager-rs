@@ -2,7 +2,7 @@ use super::token::{Tag, Token};
 use super::value::Value;
 use crate::serialization::{Deserialize, Error as SerializeError, InputStream, OutputStream, Serialize};
 
-impl Serialize<Value, u8> for Value {
+impl Serialize<u8> for Value {
     type Error = SerializeError;
     fn serialize(&self, stream: &mut OutputStream<u8>) -> Result<(), Self::Error> {
         let mut tokens = OutputStream::<Token>::new();
@@ -16,9 +16,9 @@ impl Serialize<Value, u8> for Value {
     }
 }
 
-impl Deserialize<Value, u8> for Value {
+impl Deserialize<u8> for Value {
     type Error = SerializeError;
-    fn deserialize(stream: &mut InputStream<u8>) -> Result<Value, Self::Error> {
+    fn deserialize(stream: &mut InputStream<u8>) -> Result<Self, Self::Error> {
         let mut tokens = Vec::<Token>::new();
         let mut list_depth = 0_isize;
         let mut name_depth = 0_isize;

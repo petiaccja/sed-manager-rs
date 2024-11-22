@@ -103,7 +103,7 @@ fn gen_serialize_struct_skeleton(
 ) -> TokenStream2 {
     let stream = VariableNames::stream();
     quote! {
-        impl ::sed_manager::serialization::Serialize<#name, u8> for #name {
+        impl ::sed_manager::serialization::Serialize<u8> for #name {
             type Error = ::sed_manager::serialization::Error;
             fn serialize(&self, #stream: &mut ::sed_manager::serialization::OutputStream<u8>) -> ::core::result::Result<(), Self::Error> {
                 #struct_pos
@@ -157,7 +157,7 @@ fn gen_deserialize_struct_skeleton(
 ) -> TokenStream2 {
     let stream = VariableNames::stream();
     quote! {
-        impl ::sed_manager::serialization::Deserialize<#name, u8> for #name {
+        impl ::sed_manager::serialization::Deserialize<u8> for #name {
             type Error = ::sed_manager::serialization::Error;
             fn deserialize(#stream: &mut ::sed_manager::serialization::InputStream<u8>) -> ::core::result::Result<Self, Self::Error> {
                 #struct_pos
@@ -193,7 +193,7 @@ pub fn gen_serialize_enum(enum_desc: &EnumDesc) -> TokenStream2 {
         variants.append_all(pattern);
     }
     quote! {
-        impl ::sed_manager::serialization::Serialize<#name, u8> for #name {
+        impl ::sed_manager::serialization::Serialize<u8> for #name {
             type Error = ::sed_manager::serialization::Error;
             fn serialize(&self, #stream: &mut ::sed_manager::serialization::OutputStream<u8>) -> ::core::result::Result<(), Self::Error> {
                 let discr = match self {
@@ -219,7 +219,7 @@ pub fn gen_deserialize_enum(enum_desc: &EnumDesc) -> TokenStream2 {
         variants.append_all(pattern);
     }
     quote! {
-        impl ::sed_manager::serialization::Deserialize<#name, u8> for #name {
+        impl ::sed_manager::serialization::Deserialize<u8> for #name {
             type Error = ::sed_manager::serialization::Error;
             fn deserialize(#stream: &mut ::sed_manager::serialization::InputStream<u8>) -> ::core::result::Result<Self, Self::Error> {
                 let discr = match #ty::deserialize(#stream) {

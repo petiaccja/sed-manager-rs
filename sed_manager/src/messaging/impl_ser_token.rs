@@ -4,7 +4,7 @@ use crate::serialization::{Deserialize, InputStream, ItemRead, ItemWrite, Output
 
 macro_rules! impl_tokenize_integer {
     ($int_ty:ty, $signed:expr) => {
-        impl Serialize<$int_ty, Token> for $int_ty {
+        impl Serialize<Token> for $int_ty {
             type Error = TokenizeError;
             fn serialize(&self, stream: &mut OutputStream<Token>) -> Result<(), Self::Error> {
                 let token = Token {
@@ -22,9 +22,9 @@ macro_rules! impl_tokenize_integer {
 
 macro_rules! impl_from_tokens_integer {
     ($int_ty:ty, $signed:expr) => {
-        impl Deserialize<$int_ty, Token> for $int_ty {
+        impl Deserialize<Token> for $int_ty {
             type Error = TokenizeError;
-            fn deserialize(stream: &mut InputStream<Token>) -> Result<$int_ty, Self::Error> {
+            fn deserialize(stream: &mut InputStream<Token>) -> Result<Self, Self::Error> {
                 if let Ok(token) = stream.read_one() {
                     if !is_data(token.tag) {
                         Err(TokenizeError::UnexpectedTag)
@@ -71,7 +71,7 @@ impl_from_tokens_integer!(u16, false);
 impl_from_tokens_integer!(u32, false);
 impl_from_tokens_integer!(u64, false);
 
-impl Serialize<Command, Token> for Command {
+impl Serialize<Token> for Command {
     type Error = TokenizeError;
     fn serialize(&self, stream: &mut OutputStream<Token>) -> Result<(), Self::Error> {
         let tag = match self {
@@ -87,9 +87,9 @@ impl Serialize<Command, Token> for Command {
     }
 }
 
-impl Deserialize<Command, Token> for Command {
+impl Deserialize<Token> for Command {
     type Error = TokenizeError;
-    fn deserialize(stream: &mut InputStream<Token>) -> Result<Command, Self::Error> {
+    fn deserialize(stream: &mut InputStream<Token>) -> Result<Self, Self::Error> {
         if let Ok(token) = stream.read_one() {
             let command = match token.tag {
                 Tag::Call => Some(Command::Call),
@@ -110,7 +110,7 @@ impl Deserialize<Command, Token> for Command {
     }
 }
 
-impl Serialize<Named, Token> for Named {
+impl Serialize<Token> for Named {
     type Error = TokenizeError;
     fn serialize(&self, stream: &mut OutputStream<Token>) -> Result<(), Self::Error> {
         let start_name = Token { tag: Tag::StartName, ..Default::default() };
@@ -124,9 +124,9 @@ impl Serialize<Named, Token> for Named {
     }
 }
 
-impl Deserialize<Named, Token> for Named {
+impl Deserialize<Token> for Named {
     type Error = TokenizeError;
-    fn deserialize(stream: &mut InputStream<Token>) -> Result<Named, Self::Error> {
+    fn deserialize(stream: &mut InputStream<Token>) -> Result<Self, Self::Error> {
         fn is_terminator(maybe_token: Result<&Token, std::io::Error>) -> bool {
             match maybe_token {
                 Ok(token) => token.tag == Tag::EndName,
@@ -160,7 +160,7 @@ impl Deserialize<Named, Token> for Named {
     }
 }
 
-impl Serialize<Bytes, Token> for Bytes {
+impl Serialize<Token> for Bytes {
     type Error = TokenizeError;
     fn serialize(&self, stream: &mut OutputStream<Token>) -> Result<(), Self::Error> {
         let token = Token { tag: get_tag(self.len()), is_byte: true, is_signed: false, data: self.clone() };
@@ -169,9 +169,9 @@ impl Serialize<Bytes, Token> for Bytes {
     }
 }
 
-impl Deserialize<Bytes, Token> for Bytes {
+impl Deserialize<Token> for Bytes {
     type Error = TokenizeError;
-    fn deserialize(stream: &mut InputStream<Token>) -> Result<Bytes, Self::Error> {
+    fn deserialize(stream: &mut InputStream<Token>) -> Result<Self, Self::Error> {
         if let Ok(token) = stream.read_one() {
             if !is_data(token.tag) {
                 Err(TokenizeError::UnexpectedTag)
@@ -188,7 +188,7 @@ impl Deserialize<Bytes, Token> for Bytes {
     }
 }
 
-impl Serialize<List, Token> for List {
+impl Serialize<Token> for List {
     type Error = TokenizeError;
     fn serialize(&self, stream: &mut OutputStream<Token>) -> Result<(), Self::Error> {
         let start_list = Token { tag: Tag::StartList, ..Default::default() };
@@ -204,9 +204,9 @@ impl Serialize<List, Token> for List {
     }
 }
 
-impl Deserialize<List, Token> for List {
+impl Deserialize<Token> for List {
     type Error = TokenizeError;
-    fn deserialize(stream: &mut InputStream<Token>) -> Result<List, Self::Error> {
+    fn deserialize(stream: &mut InputStream<Token>) -> Result<Self, Self::Error> {
         fn is_terminator(token: Result<&Token, std::io::Error>) -> bool {
             match token {
                 Ok(token) => token.tag == Tag::EndList,
@@ -233,7 +233,7 @@ impl Deserialize<List, Token> for List {
     }
 }
 
-impl Serialize<Value, Token> for Value {
+impl Serialize<Token> for Value {
     type Error = TokenizeError;
     fn serialize(&self, stream: &mut OutputStream<Token>) -> Result<(), Self::Error> {
         match self.storage() {
@@ -254,9 +254,9 @@ impl Serialize<Value, Token> for Value {
     }
 }
 
-impl Deserialize<Value, Token> for Value {
+impl Deserialize<Token> for Value {
     type Error = TokenizeError;
-    fn deserialize(stream: &mut InputStream<Token>) -> Result<Value, Self::Error> {
+    fn deserialize(stream: &mut InputStream<Token>) -> Result<Self, Self::Error> {
         fn parse_value(stream: &mut InputStream<Token>) -> Result<Value, TokenizeError> {
             let token = stream.peek_one().unwrap();
             assert!(is_data(token.tag));

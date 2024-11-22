@@ -1,5 +1,5 @@
-use crate::device;
 use super::super::shared::string::FromNullTerminated;
+use crate::device;
 
 use std::{fmt::Display, ptr::null_mut};
 use winapi::{

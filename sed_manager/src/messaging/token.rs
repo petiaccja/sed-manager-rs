@@ -130,7 +130,7 @@ fn flag_bits(tag: Tag) -> (i32, i32) {
     }
 }
 
-impl Serialize<Token, u8> for Token {
+impl Serialize<u8> for Token {
     type Error = SerializeError;
     fn serialize(&self, stream: &mut crate::serialization::OutputStream<u8>) -> Result<(), Self::Error> {
         let (byte_bit, signed_bit) = flag_bits(self.tag);
@@ -199,9 +199,9 @@ fn extend_tiny_atom(data: u8, is_signed: bool) -> u8 {
     data | extension
 }
 
-impl Deserialize<Token, u8> for Token {
+impl Deserialize<u8> for Token {
     type Error = SerializeError;
-    fn deserialize(stream: &mut crate::serialization::InputStream<u8>) -> Result<Token, Self::Error> {
+    fn deserialize(stream: &mut crate::serialization::InputStream<u8>) -> Result<Self, Self::Error> {
         let header = *stream.read_one()?;
         if header & (Mask::TinyAtom as u8) == Tag::TinyAtom as u8 {
             let (_, signed_bit) = flag_bits(Tag::TinyAtom);

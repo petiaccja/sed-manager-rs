@@ -51,7 +51,7 @@ fn write_exact_bit_or(stream: &mut OutputStream<u8>, bytes: &[u8]) {
     }
 }
 
-pub fn serialize_field<T: Serialize<T, u8>>(
+pub fn serialize_field<T: Serialize<u8>>(
     field: &T,
     stream: &mut OutputStream<u8>,
     struct_pos: u64,
@@ -60,7 +60,7 @@ pub fn serialize_field<T: Serialize<T, u8>>(
     round: Option<usize>,
 ) -> Result<(), Error>
 where
-    Error: From<<T as Serialize<T, u8>>::Error>,
+    Error: From<<T as Serialize<u8>>::Error>,
 {
     let stream_pos = stream.stream_position()?;
     let field_pos = match offset {
@@ -90,7 +90,7 @@ where
     Ok(())
 }
 
-pub fn deserialize_field<T: Deserialize<T, u8>>(
+pub fn deserialize_field<T: Deserialize<u8>>(
     stream: &mut InputStream<u8>,
     struct_pos: u64,
     offset: Option<usize>,
@@ -98,7 +98,7 @@ pub fn deserialize_field<T: Deserialize<T, u8>>(
     round: Option<usize>,
 ) -> Result<T, Error>
 where
-    Error: From<<T as Deserialize<T, u8>>::Error>,
+    Error: From<<T as Deserialize<u8>>::Error>,
 {
     let stream_pos = stream.stream_position()?;
     let field_pos = match offset {

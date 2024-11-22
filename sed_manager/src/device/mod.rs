@@ -1,6 +1,6 @@
 mod device;
-mod nvme;
 mod error;
+mod nvme;
 mod shared;
 
 #[cfg(target_os = "windows")]

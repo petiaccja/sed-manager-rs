@@ -1,6 +1,6 @@
 mod device;
-mod route;
 mod discovery;
+mod route;
 mod state;
 
 pub use device::FakeDevice;

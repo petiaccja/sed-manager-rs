@@ -13,7 +13,6 @@ use crate::device::Error as DeviceError;
 //      - (0x02, ----): GET_COMID
 //      - (0x02, <valid>): GET_COMID_RESPONSE
 
-
 #[derive(PartialEq, Eq, Hash)]
 pub struct Route {
     pub protocol: u8,

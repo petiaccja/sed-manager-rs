@@ -5,7 +5,7 @@ use super::ItemRead;
 
 macro_rules! impl_serialize_for_int {
     ($int_ty:ty) => {
-        impl Serialize<$int_ty, u8> for $int_ty {
+        impl Serialize<u8> for $int_ty {
             type Error = Error;
             fn serialize(&self, stream: &mut OutputStream<u8>) -> Result<(), Self::Error> {
                 stream.write_exact(&self.to_be_bytes());
@@ -24,7 +24,7 @@ impl_serialize_for_int!(i16);
 impl_serialize_for_int!(i32);
 impl_serialize_for_int!(i64);
 
-impl Serialize<bool, u8> for bool {
+impl Serialize<u8> for bool {
     type Error = Error;
     fn serialize(&self, stream: &mut OutputStream<u8>) -> Result<(), Self::Error> {
         let byte = if *self { 1_u8 } else { 0_u8 };
@@ -35,9 +35,9 @@ impl Serialize<bool, u8> for bool {
 
 macro_rules! impl_deserialize_for_int {
     ($int_ty:ty) => {
-        impl Deserialize<$int_ty, u8> for $int_ty {
+        impl Deserialize<u8> for $int_ty {
             type Error = Error;
-            fn deserialize(stream: &mut InputStream<u8>) -> Result<$int_ty, Self::Error> {
+            fn deserialize(stream: &mut InputStream<u8>) -> Result<Self, Self::Error> {
                 let mut partial = [0_u8; size_of::<$int_ty>()];
                 let mut num_bytes_read = 0;
                 for byte in &mut partial {
@@ -66,9 +66,9 @@ impl_deserialize_for_int!(i16);
 impl_deserialize_for_int!(i32);
 impl_deserialize_for_int!(i64);
 
-impl Deserialize<bool, u8> for bool {
+impl Deserialize<u8> for bool {
     type Error = Error;
-    fn deserialize(stream: &mut InputStream<u8>) -> Result<bool, Self::Error> {
+    fn deserialize(stream: &mut InputStream<u8>) -> Result<Self, Self::Error> {
         let byte = stream.read_one()?;
         match byte {
             0 => Ok(false),
@@ -78,10 +78,10 @@ impl Deserialize<bool, u8> for bool {
     }
 }
 
-impl<T, const LEN: usize> Serialize<[T; LEN], u8> for [T; LEN]
+impl<T, const LEN: usize> Serialize<u8> for [T; LEN]
 where
-    T: Serialize<T, u8>,
-    Error: From<<T as Serialize<T, u8>>::Error>,
+    T: Serialize<u8>,
+    Error: From<<T as Serialize<u8>>::Error>,
 {
     type Error = Error;
     fn serialize(&self, stream: &mut OutputStream<u8>) -> Result<(), Self::Error> {
@@ -92,10 +92,10 @@ where
     }
 }
 
-impl<T, const LEN: usize> Deserialize<[T; LEN], u8> for [T; LEN]
+impl<T, const LEN: usize> Deserialize<u8> for [T; LEN]
 where
-    T: Deserialize<T, u8>,
-    Error: From<<T as Deserialize<T, u8>>::Error>,
+    T: Deserialize<u8>,
+    Error: From<<T as Deserialize<u8>>::Error>,
 {
     type Error = Error;
     fn deserialize(stream: &mut InputStream<u8>) -> Result<[T; LEN], Self::Error> {
