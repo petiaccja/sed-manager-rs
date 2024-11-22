@@ -32,6 +32,10 @@ impl<Item> InputStream<Item> {
     {
         InputStream { data: items.into(), stream_pos: 0 }
     }
+
+    pub fn take(self) -> Vec<Item> {
+        self.data
+    }
 }
 
 impl<Item> From<Vec<Item>> for InputStream<Item> {

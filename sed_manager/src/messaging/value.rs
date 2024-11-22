@@ -37,11 +37,6 @@ pub enum Storage {
     List(List),
 }
 
-#[derive(Debug)]
-pub enum ValueConversionError {
-    Fail,
-}
-
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Value {
     storage: Storage,
@@ -99,21 +94,21 @@ impl From<Named> for Value {
 macro_rules! impl_value_try_into {
     { $storage_ty:ty, $enum_variant:pat, $value_expr:ident} => {
         impl TryFrom<Value> for $storage_ty {
-            type Error = ValueConversionError;
+            type Error = Value;
             fn try_from(value: Value) -> Result<Self, Self::Error> {
                 match value.storage {
                     $enum_variant => Ok($value_expr),
-                    _ => Err(ValueConversionError::Fail),
+                    _ => Err(value),
                 }
             }
         }
 
         impl<'value> TryFrom<&'value Value> for $storage_ty {
-            type Error = ValueConversionError;
+            type Error = &'value Value;
             fn try_from(value: &'value Value) -> Result<Self, Self::Error> {
                 match value.storage {
                     $enum_variant => Ok($value_expr),
-                    _ => Err(ValueConversionError::Fail),
+                    _ => Err(value),
                 }
             }
         }
@@ -131,91 +126,91 @@ impl_value_try_into!(u64, Storage::Uint64(value), value);
 impl_value_try_into!(Command, Storage::Command(value), value);
 
 impl TryFrom<Value> for Named {
-    type Error = ValueConversionError;
+    type Error = Value;
     fn try_from(value: Value) -> Result<Self, Self::Error> {
         match value.storage {
             Storage::Named(value) => Ok(*value),
-            _ => Err(ValueConversionError::Fail),
+            _ => Err(value),
         }
     }
 }
 
 impl TryFrom<Value> for Bytes {
-    type Error = ValueConversionError;
+    type Error = Value;
     fn try_from(value: Value) -> Result<Self, Self::Error> {
         match value.storage {
             Storage::Bytes(value) => Ok(value),
-            _ => Err(ValueConversionError::Fail),
+            _ => Err(value),
         }
     }
 }
 
 impl TryFrom<Value> for List {
-    type Error = ValueConversionError;
+    type Error = Value;
     fn try_from(value: Value) -> Result<Self, Self::Error> {
         match value.storage {
             Storage::List(value) => Ok(value),
-            _ => Err(ValueConversionError::Fail),
+            _ => Err(value),
         }
     }
 }
 
 impl<'value> TryFrom<&'value Value> for &'value Named {
-    type Error = ValueConversionError;
+    type Error = &'value Value;
     fn try_from(value: &'value Value) -> Result<Self, Self::Error> {
         match value.storage {
             Storage::Named(ref value) => Ok(&*value),
-            _ => Err(ValueConversionError::Fail),
+            _ => Err(value),
         }
     }
 }
 
 impl<'value> TryFrom<&'value Value> for &'value Bytes {
-    type Error = ValueConversionError;
+    type Error = &'value Value;
     fn try_from(value: &'value Value) -> Result<Self, Self::Error> {
         match value.storage {
             Storage::Bytes(ref value) => Ok(value),
-            _ => Err(ValueConversionError::Fail),
+            _ => Err(value),
         }
     }
 }
 
 impl<'value> TryFrom<&'value Value> for &'value List {
-    type Error = ValueConversionError;
+    type Error = &'value Value;
     fn try_from(value: &'value Value) -> Result<Self, Self::Error> {
         match value.storage {
             Storage::List(ref value) => Ok(value),
-            _ => Err(ValueConversionError::Fail),
+            _ => Err(value),
         }
     }
 }
 
-impl TryFrom<&Value> for Named {
-    type Error = ValueConversionError;
-    fn try_from(value: &Value) -> Result<Self, Self::Error> {
+impl<'value> TryFrom<&'value Value> for Named {
+    type Error = &'value Value;
+    fn try_from(value: &'value Value) -> Result<Self, Self::Error> {
         match value.storage {
             Storage::Named(ref value) => Ok(value.as_ref().clone()),
-            _ => Err(ValueConversionError::Fail),
+            _ => Err(value),
         }
     }
 }
 
-impl TryFrom<&Value> for Bytes {
-    type Error = ValueConversionError;
-    fn try_from(value: &Value) -> Result<Self, Self::Error> {
+impl<'value> TryFrom<&'value Value> for Bytes {
+    type Error = &'value Value;
+    fn try_from(value: &'value Value) -> Result<Self, Self::Error> {
         match value.storage {
             Storage::Bytes(ref value) => Ok(value.clone()),
-            _ => Err(ValueConversionError::Fail),
+            _ => Err(value),
         }
     }
 }
 
-impl TryFrom<&Value> for List {
-    type Error = ValueConversionError;
-    fn try_from(value: &Value) -> Result<Self, Self::Error> {
+impl<'value> TryFrom<&'value Value> for List {
+    type Error = &'value Value;
+    fn try_from(value: &'value Value) -> Result<Self, Self::Error> {
         match value.storage {
             Storage::List(ref value) => Ok(value.clone()),
-            _ => Err(ValueConversionError::Fail),
+            _ => Err(value),
         }
     }
 }

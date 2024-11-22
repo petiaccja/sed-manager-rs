@@ -15,6 +15,22 @@ impl<T, L: TryFrom<usize> + TryInto<usize>> WithLen<T, L> {
     pub fn new(value: Vec<T>) -> Self {
         Self { data: value, phantom_data: PhantomData }
     }
+
+    pub fn into_vec(self) -> Vec<T> {
+        self.data
+    }
+}
+
+impl<T, L: TryFrom<usize> + TryInto<usize>> From<WithLen<T, L>> for Vec<T> {
+    fn from(value: WithLen<T, L>) -> Self {
+        value.data
+    }
+}
+
+impl<T, L: TryFrom<usize> + TryInto<usize>> From<Vec<T>> for WithLen<T, L> {
+    fn from(value: Vec<T>) -> Self {
+        Self { data: value, phantom_data: PhantomData }
+    }
 }
 
 impl<T, L> Deref for WithLen<T, L>
@@ -33,6 +49,17 @@ where
 {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.data
+    }
+}
+
+impl<T, L> Clone for WithLen<T, L>
+where
+    L: TryFrom<usize> + TryInto<usize>,
+    T: Clone,
+    L: Clone,
+{
+    fn clone(&self) -> Self {
+        Self { data: self.data.clone(), phantom_data: self.phantom_data }
     }
 }
 

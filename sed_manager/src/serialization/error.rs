@@ -2,7 +2,7 @@
 pub enum Error {
     Field { name: String, error: Box<Error> },
     IO { error: std::io::Error, stream_pos: Option<u64> },
-    Other { error: Box<dyn std::error::Error>, stream_pos: Option<u64> },
+    Other { error: Box<dyn std::error::Error + Sync + Send>, stream_pos: Option<u64> },
 }
 
 impl Error {
@@ -12,7 +12,7 @@ impl Error {
     pub fn io(error: std::io::Error, stream_pos: Option<u64>) -> Self {
         Self::IO { error: error, stream_pos: stream_pos }
     }
-    pub fn other<E: std::error::Error + 'static>(error: E, stream_pos: Option<u64>) -> Self {
+    pub fn other<E: std::error::Error + Sync + Send + 'static>(error: E, stream_pos: Option<u64>) -> Self {
         Self::Other { error: Box::new(error), stream_pos: stream_pos }
     }
 }

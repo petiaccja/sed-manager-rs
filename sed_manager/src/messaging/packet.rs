@@ -7,15 +7,19 @@ use crate::serialization::{with_len::WithLen, Deserialize, Error as SerializeErr
 /// commands.
 /// The device pads the response with zeros if the actual response is shorter.
 pub const HANDLE_COM_ID_RESPONSE_LEN: usize = 46;
+pub const COM_PACKET_HEADER_LEN: usize = 20;
+pub const PACKET_HEADER_LEN: usize = 24;
+pub const SUB_PACKET_HEADER_LEN: usize = 12;
+pub const CREDIT_CONTROL_SUB_PACKET_LEN: usize = 16;
 
-#[derive(Serialize, Deserialize, Clone, Copy, Debug)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u16)]
 pub enum SubPacketKind {
     Data = 0x0000,
     CreditControl = 0x8001,
 }
 
-#[derive(Serialize, Deserialize, Clone, Copy, Debug)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum ComIdState {
     Invalid = 0x00,
@@ -24,7 +28,7 @@ pub enum ComIdState {
     Associated = 0x03,
 }
 
-#[derive(Serialize, Deserialize, Clone, Copy, Debug)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum StackResetStatus {
     Success = 0,
@@ -32,7 +36,7 @@ pub enum StackResetStatus {
     Pending = 2,
 }
 
-#[derive(Serialize, Deserialize, Clone, Copy, Debug)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u16)]
 pub enum AckType {
     ACK = 0x0001,
@@ -62,14 +66,14 @@ pub enum OwnerPasswordState {
     VendorSpecified = 0xFF,
 }
 
-#[derive(Serialize, Deserialize, Clone, Copy, Debug)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum ComIdRequestCode {
     VerifyComIdValid = 1,
     StackReset = 2,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct SubPacket {
     #[layout(offset = 6)]
     pub kind: SubPacketKind,
@@ -77,7 +81,7 @@ pub struct SubPacket {
     pub payload: WithLen<u8, u32>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Packet {
     pub tper_session_number: u32,
     pub host_session_number: u32,
@@ -88,7 +92,7 @@ pub struct Packet {
     pub payload: WithLen<SubPacket, u32>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct ComPacket {
     #[layout(offset = 4)]
     pub com_id: u16,
@@ -98,7 +102,7 @@ pub struct ComPacket {
     pub payload: WithLen<Packet, u32>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct HandleComIdRequest {
     pub com_id: u16,
     pub com_id_ext: u16,
@@ -128,7 +132,7 @@ impl HandleComIdRequest {
 ///     let payload = VerifyComIdValidResponsePayload::deserialize(&mut stream).unwrap();
 /// }
 /// ```
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct HandleComIdResponseHeader {
     pub com_id: u16,
     pub com_id_ext: u16,
@@ -138,18 +142,18 @@ pub struct HandleComIdResponseHeader {
 }
 
 /// See [`HandleComIdResponseHeader`].
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct VerifyComIdValidResponsePayload {
     pub com_id_state: ComIdState,
 }
 
 /// See [`HandleComIdResponseHeader`].
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct StackResetResponsePayload {
     pub stack_reset_status: StackResetStatus,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct DiscoveryHeader {
     pub length_of_data: u32,
     pub major_version: u16,
@@ -158,12 +162,12 @@ pub struct DiscoveryHeader {
     pub vendor_unique: [u8; 32],
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Discovery {
     pub descs: WithLen<FeatureDescriptor, DiscoveryHeader>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct FeatureDescriptorHeader {
     pub feature_code: FeatureCode,
     #[layout(offset = 2, bits = 4..=7)]
@@ -172,7 +176,7 @@ pub struct FeatureDescriptorHeader {
     pub length: u8,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 #[layout(round = 12)]
 pub struct TPerFeatureDescriptor {
     #[layout(offset = 0, bits = 0..=0)]
@@ -189,7 +193,7 @@ pub struct TPerFeatureDescriptor {
     pub com_id_mgmt_supported: bool,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 #[layout(round = 12)]
 pub struct LockingFeatureDescriptor {
     #[layout(offset = 0, bits = 0..=0)]
@@ -210,7 +214,7 @@ pub struct LockingFeatureDescriptor {
     pub hw_reset_supported: bool,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 #[layout(round = 16)]
 pub struct OpalV2FeatureDescriptor {
     pub base_com_id: u16,
@@ -222,6 +226,7 @@ pub struct OpalV2FeatureDescriptor {
     pub reverted_owner_pw: OwnerPasswordState,
 }
 
+#[derive(Clone)]
 pub enum FeatureDescriptor {
     TPer(TPerFeatureDescriptor),
     Locking(LockingFeatureDescriptor),

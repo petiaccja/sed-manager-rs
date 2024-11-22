@@ -53,20 +53,24 @@ pub enum Mask {
     LongAtom = 0b1111_1000,
 }
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum TokenizeError {
     #[error("end of stream")]
     EndOfStream,
     #[error("end of tokens")]
     EndOfTokens,
-    #[error("unexpected tag")]
-    UnexpectedTag,
-    #[error("unexpected signedness")]
-    UnexpectedSignedness,
     #[error("expected an integer")]
     ExpectedInteger,
     #[error("expected bytes")]
     ExpectedBytes,
+    #[error("expected list")]
+    ExpectedList,
+    #[error("invalid data (but correct token)")]
+    InvalidData,
+    #[error("unexpected tag")]
+    UnexpectedTag,
+    #[error("unexpected signedness")]
+    UnexpectedSignedness,
     #[error("continued byte tokens are not supported")]
     ContinuedBytesUnsupported,
     #[error("integer type too small to represent data")]
