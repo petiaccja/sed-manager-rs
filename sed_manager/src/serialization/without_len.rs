@@ -1,0 +1,102 @@
+use super::{annotate_field, stream::SeekAlways, Deserialize, Error, InputStream, OutputStream, Serialize};
+use std::{ops::Deref, ops::DerefMut};
+
+/// A vector of `T` with special a serialization format.
+///
+/// The elements are serialized consecutively, but the number of elements
+/// is not stored in any way. When deserializing, all reimaining items in the
+/// stream are consumed.
+pub struct WithoutLen<T> {
+    data: Vec<T>,
+}
+
+impl<T> WithoutLen<T> {
+    pub fn new() -> Self {
+        Self { data: Vec::new() }
+    }
+
+    pub fn into_vec(self) -> Vec<T> {
+        self.data
+    }
+}
+
+impl<T> From<WithoutLen<T>> for Vec<T> {
+    fn from(value: WithoutLen<T>) -> Self {
+        value.data
+    }
+}
+
+impl<T> From<Vec<T>> for WithoutLen<T> {
+    fn from(value: Vec<T>) -> Self {
+        Self { data: value }
+    }
+}
+
+impl<T> Deref for WithoutLen<T> {
+    type Target = Vec<T>;
+    fn deref(&self) -> &Self::Target {
+        &self.data
+    }
+}
+
+impl<T> DerefMut for WithoutLen<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.data
+    }
+}
+
+impl<T> Clone for WithoutLen<T>
+where
+    T: Clone,
+{
+    fn clone(&self) -> Self {
+        Self { data: self.data.clone() }
+    }
+}
+
+impl<T> Serialize<u8> for WithoutLen<T>
+where
+    T: Serialize<u8>,
+    Error: From<<T as Serialize<u8>>::Error>,
+{
+    type Error = Error;
+    fn serialize(&self, stream: &mut OutputStream<u8>) -> Result<(), Self::Error> {
+        let mut idx = 0_usize;
+        for value in &self.data {
+            annotate_field(value.serialize(stream), format!("data[{}]", idx))?;
+            idx += 1;
+        }
+        Ok(())
+    }
+}
+
+impl<T> Deserialize<u8> for WithoutLen<T>
+where
+    T: Deserialize<u8>,
+    Error: From<<T as Deserialize<u8>>::Error>,
+{
+    type Error = Error;
+    fn deserialize(stream: &mut InputStream<u8>) -> Result<WithoutLen<T>, Self::Error> {
+        let mut data = Vec::<T>::new();
+        while stream.pos() != stream.len() {
+            let item = annotate_field(T::deserialize(stream), format!("data[{}]", data.len()))?;
+            data.push(item);
+        }
+        Ok(WithoutLen::from(data))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn serialize_with_len() {
+        let input = WithoutLen::<u8>::from(vec![0xFF, 0xFF, 0xFF, 0xFF, 0xFF]);
+        let mut os = OutputStream::<u8>::new();
+        input.serialize(&mut os).unwrap();
+        let mut is = InputStream::from(os.take());
+        let output = WithoutLen::<u8>::deserialize(&mut is).unwrap();
+        assert_eq!(*output, *input);
+    }
+}

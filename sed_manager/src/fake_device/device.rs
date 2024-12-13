@@ -1,4 +1,5 @@
-use std::cell::RefCell;
+use std::ops::DerefMut;
+use std::sync::Mutex;
 
 use crate::device::{Device, Error, Interface};
 
@@ -6,9 +7,13 @@ use super::discovery::DiscoveryHandler;
 use super::route::Route;
 use super::state::{PersistentState, RoutingState};
 
+struct State {
+    routing_state: RoutingState,
+    persistent_state: PersistentState,
+}
+
 pub struct FakeDevice {
-    routing_state: RefCell<RoutingState>,
-    persistent_state: RefCell<PersistentState>,
+    state: Mutex<State>,
 }
 
 impl Device for FakeDevice {
@@ -29,14 +34,15 @@ impl Device for FakeDevice {
     }
 
     fn security_send(&self, security_protocol: u8, protocol_specific: [u8; 2], data: &[u8]) -> Result<(), Error> {
+        let mut state = self.state.lock().unwrap();
+        let State { routing_state, persistent_state } = state.deref_mut();
+
         let com_id = u16::from_be_bytes(protocol_specific);
         let route = Route { protocol: security_protocol, com_id: com_id };
-        let mut routing_state = self.routing_state.borrow_mut();
         let Some(handler) = routing_state.get_route(&route) else {
             return Err(Error::InvalidProtocolOrComID);
         };
-        let mut persistent_state = self.persistent_state.borrow_mut();
-        let route_modifications = handler.push_request(&mut persistent_state, data)?;
+        let route_modifications = handler.push_request(persistent_state, data)?;
         for (route, handler) in route_modifications.new_routes {
             routing_state
                 .add_route_boxed(route, handler)
@@ -49,22 +55,22 @@ impl Device for FakeDevice {
     }
 
     fn security_recv(&self, security_protocol: u8, protocol_specific: [u8; 2], len: usize) -> Result<Vec<u8>, Error> {
+        let mut state = self.state.lock().unwrap();
+        let State { routing_state, persistent_state } = state.deref_mut();
+
         let com_id = u16::from_be_bytes(protocol_specific);
         let route = Route { protocol: security_protocol, com_id: com_id };
-        let mut routing_state = self.routing_state.borrow_mut();
         let Some(handler) = routing_state.get_route(&route) else {
             return Err(Error::InvalidProtocolOrComID);
         };
-        let mut persistent_state = self.persistent_state.borrow_mut();
-        handler.pop_response(&mut persistent_state, len)
+        handler.pop_response(persistent_state, len)
     }
 }
 
 impl FakeDevice {
     pub fn new() -> FakeDevice {
-        let routing_state = FakeDevice::default_routes();
-        let persistent_state = PersistentState {};
-        FakeDevice { routing_state: routing_state.into(), persistent_state: persistent_state.into() }
+        let state = State { routing_state: FakeDevice::default_routes(), persistent_state: PersistentState {} };
+        FakeDevice { state: state.into() }
     }
 
     fn default_routes() -> RoutingState {

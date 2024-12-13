@@ -15,6 +15,11 @@ pub trait ItemWrite<Item> {
     fn peek_one<'me>(&'me mut self) -> Result<&'me mut Item, std::io::Error>;
 }
 
+pub trait SeekAlways {
+    fn pos(&self) -> u64;
+    fn len(&self) -> u64;
+}
+
 pub struct InputStream<Item> {
     data: Vec<Item>,
     stream_pos: usize,
@@ -171,6 +176,24 @@ impl<Item> Seek for OutputStream<Item> {
                 Ok(self.stream_pos as u64)
             }
         }
+    }
+}
+
+impl<Item> SeekAlways for OutputStream<Item> {
+    fn pos(&self) -> u64 {
+        self.stream_pos as u64
+    }
+    fn len(&self) -> u64 {
+        self.data.len() as u64
+    }
+}
+
+impl<Item> SeekAlways for InputStream<Item> {
+    fn pos(&self) -> u64 {
+        self.stream_pos as u64
+    }
+    fn len(&self) -> u64 {
+        self.data.len() as u64
     }
 }
 

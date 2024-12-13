@@ -1,25 +1,28 @@
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Error {
     Field { name: String, error: Box<Error> },
-    IO { error: std::io::Error, stream_pos: Option<u64> },
-    Other { error: Box<dyn std::error::Error + Sync + Send>, stream_pos: Option<u64> },
+    InvalidData,
+    EndOfStream,
+    Unspecified,
 }
 
 impl Error {
     pub fn field(name: String, error: Error) -> Self {
         Self::Field { name: name, error: Box::new(error) }
     }
-    pub fn io(error: std::io::Error, stream_pos: Option<u64>) -> Self {
-        Self::IO { error: error, stream_pos: stream_pos }
-    }
-    pub fn other<E: std::error::Error + Sync + Send + 'static>(error: E, stream_pos: Option<u64>) -> Self {
-        Self::Other { error: Box::new(error), stream_pos: stream_pos }
+    pub fn io(error: std::io::Error) -> Self {
+        match error.kind() {
+            std::io::ErrorKind::InvalidData => Error::InvalidData,
+            std::io::ErrorKind::InvalidInput => Error::InvalidData,
+            std::io::ErrorKind::UnexpectedEof => Error::EndOfStream,
+            _ => Error::Unspecified,
+        }
     }
 }
 
 impl From<std::io::Error> for Error {
     fn from(value: std::io::Error) -> Self {
-        Error::io(value, None)
+        Error::io(value)
     }
 }
 
@@ -35,18 +38,9 @@ impl std::fmt::Display for Error {
         }
         f.write_fmt(format_args!("serialization failed:"))?;
         match item {
-            Error::IO { error, stream_pos } => {
-                if let Some(value) = stream_pos {
-                    f.write_fmt(format_args!(" @{}", value))?;
-                };
-                f.write_fmt(format_args!(" {}", error))?;
-            }
-            Error::Other { error, stream_pos } => {
-                if let Some(value) = stream_pos {
-                    f.write_fmt(format_args!(" @{}", value))?;
-                };
-                f.write_fmt(format_args!(" {}", *error))?;
-            }
+            Error::Unspecified => f.write_fmt(format_args!("unknown serialization error"))?,
+            Error::EndOfStream => f.write_fmt(format_args!("end of stream"))?,
+            Error::InvalidData => f.write_fmt(format_args!("invalid data"))?,
             Error::Field { name: _, error: _ } => unreachable!(),
         };
         if !path.is_empty() {

@@ -228,10 +228,7 @@ pub fn gen_deserialize_enum(enum_desc: &EnumDesc) -> TokenStream2 {
                 };
                 match discr {
                     #variants
-                    _ => ::core::result::Result::Err(::sed_manager::serialization::Error::IO{
-                        error: ::std::io::ErrorKind::InvalidData.into(),
-                        stream_pos: ::core::option::Option::None,
-                    }),
+                    _ => ::core::result::Result::Err(::sed_manager::serialization::Error::InvalidData),
                 }
             }
         }

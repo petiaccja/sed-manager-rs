@@ -2,16 +2,22 @@ use crate::device::Error as DeviceError;
 use crate::messaging::token::TokenizeError;
 use crate::serialization::Error as SerializeError;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Error {
     TokenizationFailed(TokenizeError),
     SerializationFailed(SerializeError),
-    InterfaceSendFailed(DeviceError),
-    InterfaceReceiveFailed(DeviceError),
+    SecuritySendFailed(DeviceError),
+    SecurityReceiveFailed(DeviceError),
+    AbortedByHost,
+    AbortedByRemote,
+    Closed,
     TimedOut,
-    HostAborted,
-    RemoteAborted,
-    MethodTooLarge,
+    MissingPacket,
     InvalidTokenStream,
-    Unknown,
+    InvalidCreditControl,
+    OutOfCreditRemote,
+    MethodTooLarge,
+    MethodCallExpected,
+    MethodResultExpected,
+    Unspecified,
 }

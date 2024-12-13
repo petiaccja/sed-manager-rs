@@ -6,6 +6,7 @@ use std::{io::Seek, marker::PhantomData, ops::Deref, ops::DerefMut};
 /// The elements are serialized consecutively, but instead of writing the number
 /// of items as usual serializers, the number of bytes is written in a specific
 /// integer format `L`.
+#[derive(Debug)]
 pub struct WithLen<T, L: TryFrom<usize> + TryInto<usize>> {
     data: Vec<T>,
     phantom_data: std::marker::PhantomData<L>,
@@ -63,6 +64,23 @@ where
     }
 }
 
+impl<T, L> PartialEq for WithLen<T, L>
+where
+    L: TryFrom<usize> + TryInto<usize>,
+    T: Eq,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.data == other.data
+    }
+}
+
+impl<T, L> Eq for WithLen<T, L>
+where
+    L: TryFrom<usize> + TryInto<usize>,
+    T: PartialEq + Eq,
+{
+}
+
 impl<T, L: TryFrom<usize> + TryInto<usize>> Serialize<u8> for WithLen<T, L>
 where
     T: Serialize<u8>,
@@ -75,10 +93,7 @@ where
         let len_pos = stream.stream_position()?;
 
         let Ok(zero) = L::try_from(0usize) else {
-            return annotate_field(
-                Err(Error::io(std::io::ErrorKind::InvalidData.into(), Some(len_pos))),
-                "length_placeholder".into(),
-            );
+            return annotate_field(Err(Error::InvalidData), "length_placeholder".into());
         };
 
         annotate_field(zero.serialize(stream), "length_placeholder".into())?;
@@ -94,10 +109,7 @@ where
         let value_len = end_pos - data_pos;
         stream.seek(std::io::SeekFrom::Start(len_pos))?;
         let Ok(value_len) = L::try_from(value_len as usize) else {
-            return annotate_field(
-                Err(Error::io(std::io::ErrorKind::InvalidData.into(), Some(len_pos))),
-                "length".into(),
-            );
+            return annotate_field(Err(Error::InvalidData), "length".into());
         };
         annotate_field(value_len.serialize(stream), "length".into())?;
         stream.seek(std::io::SeekFrom::Start(end_pos))?;
@@ -116,7 +128,7 @@ where
     fn deserialize(stream: &mut InputStream<u8>) -> Result<WithLen<T, L>, Self::Error> {
         let len = annotate_field(L::deserialize(stream), "length".into())?;
         let Ok(len) = TryInto::<usize>::try_into(len) else {
-            return annotate_field(Err(Error::io(std::io::ErrorKind::InvalidData.into(), None)), "length".into());
+            return annotate_field(Err(Error::InvalidData), "length".into());
         };
         let data_pos = stream.stream_position().unwrap();
         let end_pos = data_pos + len as u64;
@@ -126,7 +138,7 @@ where
             data.push(item);
         }
         if stream.stream_position().unwrap() != end_pos {
-            return annotate_field(Err(Error::io(std::io::ErrorKind::InvalidData.into(), None)), "data".into());
+            return annotate_field(Err(Error::InvalidData), "data".into());
         }
         Ok(WithLen::new(data))
     }

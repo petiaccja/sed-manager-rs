@@ -4,7 +4,7 @@ use super::windows::Error as PlatformError;
 #[cfg(target_os = "linux")]
 use super::linux::Error as PlatformError;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Error {
     DataTooLong,
     BufferTooShort,

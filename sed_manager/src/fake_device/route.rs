@@ -24,7 +24,7 @@ pub struct RouteModifications {
     pub deleted_routes: Vec<Route>,
 }
 
-pub trait RouteHandler {
+pub trait RouteHandler: Send + Sync {
     fn push_request(&mut self, state: &mut PersistentState, data: &[u8]) -> Result<RouteModifications, DeviceError>;
     fn pop_response(&mut self, state: &mut PersistentState, len: usize) -> Result<Vec<u8>, DeviceError>;
 }

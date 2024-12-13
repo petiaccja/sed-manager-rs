@@ -4,12 +4,14 @@ use crate::device::device::{Device, Interface};
 use crate::device::nvme::{NVMeIdentifyController, NVMeOpcode};
 use crate::device::shared::string::ToNullTerminated;
 use crate::serialization::{Deserialize, InputStream};
+
 use core::ptr::null_mut;
 use std::cell::OnceCell;
 use std::io::Seek;
 use std::mem::offset_of;
 use std::os::raw::c_void;
 use std::os::windows::raw::HANDLE;
+use std::sync::OnceLock;
 use winapi::shared::minwindef::{DWORD, FALSE};
 use winapi::shared::ntddscsi::{
     IOCTL_SCSI_PASS_THROUGH_DIRECT, SCSI_IOCTL_DATA_IN, SCSI_IOCTL_DATA_OUT, SCSI_PASS_THROUGH_DIRECT,
@@ -24,13 +26,16 @@ use super::error::get_last_error;
 
 pub struct NVMeDevice {
     handle: HANDLE,
-    cached_identity: OnceCell<NVMeIdentifyController>,
+    cached_identity: OnceLock<NVMeIdentifyController>,
 }
+
+unsafe impl Send for NVMeDevice {}
+unsafe impl Sync for NVMeDevice {}
 
 impl NVMeDevice {
     pub fn open(file_name: &str) -> Result<NVMeDevice, device::Error> {
         let handle = nvme_open_device(file_name)?;
-        Ok(NVMeDevice { handle: handle, cached_identity: OnceCell::new() })
+        Ok(NVMeDevice { handle: handle, cached_identity: OnceLock::new() })
     }
     fn identify_controller(&self) -> Result<&NVMeIdentifyController, device::Error> {
         match self.cached_identity.get() {

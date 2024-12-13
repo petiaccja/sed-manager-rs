@@ -11,7 +11,7 @@ pub enum Interface {
     Other,
 }
 
-pub trait Device {
+pub trait Device: Send + Sync {
     fn interface(&self) -> Interface;
     fn model_number(&self) -> Result<String, Error>;
     fn serial_number(&self) -> Result<String, Error>;

@@ -1,6 +1,5 @@
 use crate::serialization::Error as SerializeError;
 use crate::serialization::{Deserialize, ItemRead, ItemWrite, Serialize};
-use std::io::ErrorKind as IoErrorKind;
 
 #[repr(u8)]
 #[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Copy, Clone)]
@@ -53,7 +52,7 @@ pub enum Mask {
     LongAtom = 0b1111_1000,
 }
 
-#[derive(Debug, thiserror::Error, PartialEq, Eq)]
+#[derive(Debug, thiserror::Error, PartialEq, Eq, Clone)]
 pub enum TokenizeError {
     #[error("end of stream")]
     EndOfStream,
@@ -78,8 +77,8 @@ pub enum TokenizeError {
 }
 
 impl From<TokenizeError> for SerializeError {
-    fn from(value: TokenizeError) -> Self {
-        SerializeError::other(value, None)
+    fn from(_: TokenizeError) -> Self {
+        SerializeError::field("tokens".into(), SerializeError::Unspecified)
     }
 }
 
@@ -138,7 +137,7 @@ impl Serialize<u8> for Token {
             Tag::TinyAtom => {
                 let header = (self.is_signed as u8) << signed_bit;
                 let Some(data) = self.data.first() else {
-                    return Err(SerializeError::io(IoErrorKind::InvalidData.into(), None));
+                    return Err(SerializeError::InvalidData);
                 };
                 stream.write_one(header | (data & 0b0011_1111));
                 Ok(())
@@ -148,7 +147,7 @@ impl Serialize<u8> for Token {
                     (self.tag as u8) | ((self.is_byte as u8) << byte_bit) | ((self.is_signed as u8) << signed_bit);
                 let len = (self.data.len() as u8) & 0b0000_1111;
                 if len as usize != self.data.len() {
-                    return Err(SerializeError::io(IoErrorKind::InvalidData.into(), None));
+                    return Err(SerializeError::InvalidData);
                 }
                 stream.write_one(header | len);
                 stream.write_exact(&self.data);
@@ -159,7 +158,7 @@ impl Serialize<u8> for Token {
                     (self.tag as u8) | ((self.is_byte as u8) << byte_bit) | ((self.is_signed as u8) << signed_bit);
                 let len = (self.data.len() as u16) & 0b111_1111_1111;
                 if len as usize != self.data.len() {
-                    return Err(SerializeError::io(IoErrorKind::InvalidData.into(), None));
+                    return Err(SerializeError::InvalidData);
                 }
                 stream.write_one(header | ((len >> 8) as u8));
                 stream.write_one(len as u8);
@@ -171,7 +170,7 @@ impl Serialize<u8> for Token {
                     (self.tag as u8) | ((self.is_byte as u8) << byte_bit) | ((self.is_signed as u8) << signed_bit);
                 let len = (self.data.len() as u32) & 0x00FF_FFFF;
                 if len as usize != self.data.len() {
-                    return Err(SerializeError::io(IoErrorKind::InvalidData.into(), None));
+                    return Err(SerializeError::InvalidData);
                 }
                 stream.write_one(header | ((len >> 8) as u8));
                 stream.write_exact(&len.to_be_bytes()[1..]);
@@ -235,7 +234,7 @@ impl Deserialize<u8> for Token {
             if let Ok(tag) = Tag::try_from(header) {
                 Ok(Token { tag: tag, ..Default::default() })
             } else {
-                Err(SerializeError::io(IoErrorKind::InvalidData.into(), None))
+                Err(SerializeError::InvalidData)
             }
         }
     }

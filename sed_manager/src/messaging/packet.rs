@@ -1,6 +1,8 @@
 use std::io::Seek;
 
-use crate::serialization::{with_len::WithLen, Deserialize, Error as SerializeError, Serialize};
+use crate::serialization::{
+    with_len::WithLen, without_len::WithoutLen, Deserialize, Error as SerializeError, Serialize,
+};
 
 /// The transfer length for IF-RECV for HANDLE_COM_ID_REQUESTs that fits the
 /// response for NO_RESPONSE_AVAILABLE, VERIFY_COM_ID_VALID, and STACK_RESET
@@ -11,6 +13,8 @@ pub const COM_PACKET_HEADER_LEN: usize = 20;
 pub const PACKET_HEADER_LEN: usize = 24;
 pub const SUB_PACKET_HEADER_LEN: usize = 12;
 pub const CREDIT_CONTROL_SUB_PACKET_LEN: usize = 16;
+pub const HANDLE_COM_ID_PROTOCOL: u8 = 0x02;
+pub const TOKENIZED_PROTOCOL: u8 = 0x01;
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u16)]
@@ -73,7 +77,7 @@ pub enum ComIdRequestCode {
     StackReset = 2,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct SubPacket {
     #[layout(offset = 6)]
     pub kind: SubPacketKind,
@@ -81,7 +85,7 @@ pub struct SubPacket {
     pub payload: WithLen<u8, u32>,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct Packet {
     pub tper_session_number: u32,
     pub host_session_number: u32,
@@ -111,43 +115,32 @@ pub struct HandleComIdRequest {
 
 impl HandleComIdRequest {
     pub fn verify_com_id_valid(com_id: u16, com_id_ext: u16) -> HandleComIdRequest {
-        HandleComIdRequest { com_id: com_id, com_id_ext: com_id_ext, request_code: ComIdRequestCode::VerifyComIdValid }
+        HandleComIdRequest { com_id, com_id_ext, request_code: ComIdRequestCode::VerifyComIdValid }
     }
     pub fn stack_reset(com_id: u16, com_id_ext: u16) -> HandleComIdRequest {
-        HandleComIdRequest { com_id: com_id, com_id_ext: com_id_ext, request_code: ComIdRequestCode::StackReset }
+        HandleComIdRequest { com_id, com_id_ext, request_code: ComIdRequestCode::StackReset }
     }
 }
 
-/// The shared header for NO_RESPONSE_AVAILABLE, VERIFY_COM_ID_VALID, and
-/// STACK_RESET responses. Deserialize this and immediately deserialize
-/// the payloads if [`Self::available_data_len`] is not zero.
-///
-/// Example:
-/// ```rust
-/// use sed_manager::serialization::{InputStream, Deserialize};
-/// use sed_manager::messaging::packet::{HandleComIdResponseHeader, VerifyComIdValidResponsePayload};
-/// let mut stream = InputStream::<u8>::new(&[0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00]);
-/// let header = HandleComIdResponseHeader::deserialize(&mut stream).unwrap();
-/// if header.available_data_len > 0 {
-///     let payload = VerifyComIdValidResponsePayload::deserialize(&mut stream).unwrap();
-/// }
-/// ```
+/// The shared structure for NO_RESPONSE_AVAILABLE, VERIFY_COM_ID_VALID, and
+/// STACK_RESET responses. The payload field contains the payload for one of the above
+/// messages.
 #[derive(Serialize, Deserialize, Clone)]
-pub struct HandleComIdResponseHeader {
+pub struct HandleComIdResponse {
     pub com_id: u16,
     pub com_id_ext: u16,
     pub request_code: ComIdRequestCode,
     #[layout(offset = 10)]
-    pub available_data_len: u16,
+    pub payload: WithLen<u8, u16>,
 }
 
-/// See [`HandleComIdResponseHeader`].
+/// See [`HandleComIdResponse`].
 #[derive(Serialize, Deserialize, Clone)]
 pub struct VerifyComIdValidResponsePayload {
     pub com_id_state: ComIdState,
 }
 
-/// See [`HandleComIdResponseHeader`].
+/// See [`HandleComIdResponse`].
 #[derive(Serialize, Deserialize, Clone)]
 pub struct StackResetResponsePayload {
     pub stack_reset_status: StackResetStatus,
@@ -324,5 +317,42 @@ impl Discovery {
     }
     pub fn get(&self, feature_code: FeatureCode) -> Option<&FeatureDescriptor> {
         self.descs.iter().find(|feature_desc| -> bool { feature_code == FeatureCode::from(*feature_desc) })
+    }
+}
+
+impl Default for Packet {
+    fn default() -> Self {
+        Self {
+            tper_session_number: 0,
+            host_session_number: 0,
+            sequence_number: 0,
+            ack_type: AckType::None,
+            acknowledgement: 0,
+            payload: WithLen::new(vec![]),
+        }
+    }
+}
+
+impl Packet {
+    pub fn has_ack(&self) -> bool {
+        self.ack_type != AckType::None
+    }
+
+    pub fn has_payload(&self) -> bool {
+        !self.payload.is_empty()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        !self.has_ack() && !self.has_payload()
+    }
+
+    pub fn credit(&self) -> u32 {
+        let credit = self
+            .payload
+            .iter()
+            .filter(|s| s.kind == SubPacketKind::Data)
+            .map(|s| s.payload.len())
+            .reduce(|a, b| a + b);
+        credit.unwrap_or(0) as u32
     }
 }

@@ -47,7 +47,7 @@ macro_rules! impl_deserialize_for_int {
                     }
                 }
                 if num_bytes_read == 0 {
-                    Err(Error::io(std::io::ErrorKind::UnexpectedEof.into(), None))
+                    Err(Error::EndOfStream)
                 } else {
                     partial.rotate_left(num_bytes_read);
                     Ok(<$int_ty>::from_be_bytes(partial))
@@ -73,7 +73,7 @@ impl Deserialize<u8> for bool {
         match byte {
             0 => Ok(false),
             1 => Ok(true),
-            _ => Err(Error::io(std::io::ErrorKind::UnexpectedEof.into(), None)),
+            _ => Err(Error::EndOfStream),
         }
     }
 }
