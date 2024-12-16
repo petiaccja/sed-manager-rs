@@ -71,7 +71,11 @@ impl MultiplexerHub {
         Self { shared_state: Arc::new(SharedState::new(next_layer)) }
     }
 
-    pub async fn create_session(&self, host_session_number: u32, tper_session_number: u32) -> Option<MultiplexerSession> {
+    pub async fn create_session(
+        &self,
+        host_session_number: u32,
+        tper_session_number: u32,
+    ) -> Option<MultiplexerSession> {
         let id = SessionID { host_session_number, tper_session_number };
         if let Some(rx) = self.shared_state.add_session(id).await {
             Some(MultiplexerSession { id, shared_state: self.shared_state.clone(), receiver: rx.into() })

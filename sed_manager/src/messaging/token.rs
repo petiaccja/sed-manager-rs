@@ -20,36 +20,12 @@ pub enum Tag {
     Empty = 0xFF,
 }
 
-impl TryFrom<u8> for Tag {
-    type Error = ();
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
-        match value {
-            _ if value == Tag::TinyAtom as u8 => Ok(Tag::TinyAtom),
-            _ if value == Tag::ShortAtom as u8 => Ok(Tag::ShortAtom),
-            _ if value == Tag::MediumAtom as u8 => Ok(Tag::MediumAtom),
-            _ if value == Tag::LongAtom as u8 => Ok(Tag::LongAtom),
-            _ if value == Tag::StartList as u8 => Ok(Tag::StartList),
-            _ if value == Tag::EndList as u8 => Ok(Tag::EndList),
-            _ if value == Tag::StartName as u8 => Ok(Tag::StartName),
-            _ if value == Tag::EndName as u8 => Ok(Tag::EndName),
-            _ if value == Tag::Call as u8 => Ok(Tag::Call),
-            _ if value == Tag::EndOfData as u8 => Ok(Tag::EndOfData),
-            _ if value == Tag::EndOfSession as u8 => Ok(Tag::EndOfSession),
-            _ if value == Tag::StartTransaction as u8 => Ok(Tag::StartTransaction),
-            _ if value == Tag::EndTransaction as u8 => Ok(Tag::EndTransaction),
-            _ if value == Tag::Empty as u8 => Ok(Tag::Empty),
-            _ => Err(()),
-        }
-    }
-}
-
-#[repr(u8)]
-#[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Copy, Clone)]
-pub enum Mask {
-    TinyAtom = 0b1000_0000,
-    ShortAtom = 0b1100_0000,
-    MediumAtom = 0b1110_0000,
-    LongAtom = 0b1111_1000,
+#[derive(PartialEq, Eq, Debug)]
+pub struct Token {
+    pub tag: Tag,
+    pub is_byte: bool,
+    pub is_signed: bool,
+    pub data: Vec<u8>,
 }
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq, Clone)]
@@ -74,6 +50,38 @@ pub enum TokenizeError {
     ContinuedBytesUnsupported,
     #[error("integer type too small to represent data")]
     IntegerOverflow,
+}
+
+#[repr(u8)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Copy, Clone)]
+enum Mask {
+    TinyAtom = 0b1000_0000,
+    ShortAtom = 0b1100_0000,
+    MediumAtom = 0b1110_0000,
+    LongAtom = 0b1111_1000,
+}
+
+impl TryFrom<u8> for Tag {
+    type Error = ();
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            _ if value == Tag::TinyAtom as u8 => Ok(Tag::TinyAtom),
+            _ if value == Tag::ShortAtom as u8 => Ok(Tag::ShortAtom),
+            _ if value == Tag::MediumAtom as u8 => Ok(Tag::MediumAtom),
+            _ if value == Tag::LongAtom as u8 => Ok(Tag::LongAtom),
+            _ if value == Tag::StartList as u8 => Ok(Tag::StartList),
+            _ if value == Tag::EndList as u8 => Ok(Tag::EndList),
+            _ if value == Tag::StartName as u8 => Ok(Tag::StartName),
+            _ if value == Tag::EndName as u8 => Ok(Tag::EndName),
+            _ if value == Tag::Call as u8 => Ok(Tag::Call),
+            _ if value == Tag::EndOfData as u8 => Ok(Tag::EndOfData),
+            _ if value == Tag::EndOfSession as u8 => Ok(Tag::EndOfSession),
+            _ if value == Tag::StartTransaction as u8 => Ok(Tag::StartTransaction),
+            _ if value == Tag::EndTransaction as u8 => Ok(Tag::EndTransaction),
+            _ if value == Tag::Empty as u8 => Ok(Tag::Empty),
+            _ => Err(()),
+        }
+    }
 }
 
 impl From<TokenizeError> for SerializeError {
@@ -102,14 +110,6 @@ pub fn is_data(tag: Tag) -> bool {
         Tag::LongAtom => true,
         _ => false,
     }
-}
-
-#[derive(PartialEq, Eq, Debug)]
-pub struct Token {
-    pub tag: Tag,
-    pub is_byte: bool,
-    pub is_signed: bool,
-    pub data: Vec<u8>,
 }
 
 impl Default for Token {

@@ -2,7 +2,7 @@ use std::collections::VecDeque as Queue;
 use std::sync::Arc;
 use tokio::sync::{oneshot, Mutex};
 
-use crate::messaging::packet::{HandleComIdRequest, HandleComIdResponse};
+use crate::messaging::com_id::{HandleComIdRequest, HandleComIdResponse};
 use crate::rpc::error::Error;
 use crate::rpc::protocol::InterfaceLayer;
 

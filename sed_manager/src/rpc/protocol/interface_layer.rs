@@ -1,9 +1,8 @@
 use async_trait::async_trait;
 
-use crate::{
-    messaging::packet::{ComPacket, HandleComIdRequest, HandleComIdResponse},
-    rpc::error::Error,
-};
+use crate::messaging::com_id::{HandleComIdRequest, HandleComIdResponse};
+use crate::messaging::packet::ComPacket;
+use crate::rpc::error::Error;
 
 #[async_trait]
 pub trait InterfaceLayer: Sync + Send {

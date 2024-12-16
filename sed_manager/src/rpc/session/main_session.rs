@@ -59,7 +59,13 @@ impl MainSession {
             .map(|layer| SPSession::new(layer))
     }
 
-    async fn create_session(&self, host_sn: u32, tper_sn: u32, initial_credit: u32, initial_credit_sent: u32) -> Option<MethodLayer> {
+    async fn create_session(
+        &self,
+        host_sn: u32,
+        tper_sn: u32,
+        initial_credit: u32,
+        initial_credit_sent: u32,
+    ) -> Option<MethodLayer> {
         // Multiplexer.
         let Some(mux_session) = self.mux_hub.create_session(host_sn, tper_sn).await else {
             return None;

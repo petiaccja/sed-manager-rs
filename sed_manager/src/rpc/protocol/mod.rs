@@ -1,4 +1,5 @@
 mod ack_layer;
+mod buffer;
 mod buffering_layer;
 mod cache;
 mod com_packet_layer;
@@ -11,7 +12,6 @@ mod sequencer;
 mod sequencing_layer;
 mod sync_host_layer;
 mod with_copy;
-mod buffer;
 
 pub use ack_layer::AcknowledgementLayer;
 pub use buffering_layer::BufferingLayer;

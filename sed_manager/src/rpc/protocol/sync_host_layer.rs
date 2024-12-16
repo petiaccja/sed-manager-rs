@@ -8,10 +8,10 @@ use tokio::sync::{mpsc, Mutex};
 use super::interface_layer::InterfaceLayer;
 use super::retry::Retry;
 use crate::device::Device;
-use crate::messaging::packet::{
-    ComPacket, HandleComIdRequest, HandleComIdResponse, HANDLE_COM_ID_PROTOCOL, HANDLE_COM_ID_RESPONSE_LEN,
-    TOKENIZED_PROTOCOL,
+use crate::messaging::com_id::{
+    HandleComIdRequest, HandleComIdResponse, HANDLE_COM_ID_PROTOCOL, HANDLE_COM_ID_RESPONSE_LEN,
 };
+use crate::messaging::packet::{ComPacket, PACKETIZED_PROTOCOL};
 use crate::rpc::error::Error;
 use crate::rpc::properties::Properties;
 use crate::serialization::{Deserialize, InputStream, OutputStream, Serialize};
@@ -135,7 +135,7 @@ fn security_send_com_packet(device: &dyn Device, request: ComPacket) -> Result<(
     if let Err(err) = request.serialize(&mut os) {
         return Err(Error::SerializationFailed(err));
     };
-    if let Err(err) = device.security_send(TOKENIZED_PROTOCOL, com_id, os.take().as_slice()) {
+    if let Err(err) = device.security_send(PACKETIZED_PROTOCOL, com_id, os.take().as_slice()) {
         return Err(Error::SecuritySendFailed(err));
     };
     Ok(())
@@ -153,7 +153,7 @@ async fn security_recv_com_packet(
     let mut receive_buffer_len: u32 = 512;
     let mut packets = Vec::new();
     loop {
-        let data = match device.security_recv(TOKENIZED_PROTOCOL, com_id, receive_buffer_len as usize) {
+        let data = match device.security_recv(PACKETIZED_PROTOCOL, com_id, receive_buffer_len as usize) {
             Ok(data) => data,
             Err(err) => return Err(Error::SecurityReceiveFailed(err)),
         };

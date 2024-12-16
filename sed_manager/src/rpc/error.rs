@@ -1,3 +1,4 @@
+use super::method::MethodStatus;
 use crate::device::Error as DeviceError;
 use crate::messaging::token::TokenizeError;
 use crate::serialization::Error as SerializeError;
@@ -20,4 +21,9 @@ pub enum Error {
     MethodCallExpected,
     MethodResultExpected,
     Unspecified,
+}
+
+pub enum CallError {
+    InvalidCall(MethodStatus),
+    RPCFailed(Error),
 }

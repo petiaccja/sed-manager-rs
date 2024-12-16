@@ -175,7 +175,6 @@ impl State {
             }
         }
         let _ = join_tasks(tasks.into_iter()).await;
-        self.next_layer.close().await;
     }
 
     async fn recv_one(self: Arc<Self>, tasks: &mut Queue<JoinHandle<Result<(), Error>>>) -> Result<Packet, Error> {
@@ -243,11 +242,12 @@ impl State {
     }
 
     async fn close(&self) {
+        self.next_layer.close().await;
+
         if let Some(recv_task) = self.recv_task.get() {
             let mut recv_task = recv_task.task.lock().await;
             let _ = recv_task.deref_mut().await;
         };
-        self.next_layer.close().await;
     }
 
     async fn abort(&self) {

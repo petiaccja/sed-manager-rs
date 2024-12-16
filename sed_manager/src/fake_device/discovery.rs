@@ -1,5 +1,5 @@
 use crate::device::Error as DeviceError;
-use crate::messaging::packet::{
+use crate::messaging::discovery::{
     Discovery, FeatureDescriptor, LockingFeatureDescriptor, OpalV2FeatureDescriptor, OwnerPasswordState,
     TPerFeatureDescriptor,
 };

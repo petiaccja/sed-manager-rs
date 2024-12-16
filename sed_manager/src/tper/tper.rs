@@ -1,15 +1,21 @@
-use super::error::Error;
 use std::cell::OnceCell;
 
-use crate::{
-    device::Device,
-    messaging::packet::{ComIdState, Discovery},
-    serialization::{Deserialize, InputStream},
-};
+use crate::device::Device;
+use crate::messaging::com_id::ComIdState;
+use crate::messaging::discovery::{Discovery, FeatureCode};
+use crate::rpc::{ComIdSession, Error as RPCError, MainSession};
+use crate::serialization::{Deserialize, InputStream};
 
 pub struct TPer {
     device: Box<dyn Device>,
     cached_discovery: OnceCell<Discovery>,
+}
+
+struct Stack {
+    com_id: u16,
+    com_id_ext: u16,
+    main_session: MainSession,
+    com_id_session: ComIdSession,
 }
 
 impl TPer {
@@ -21,18 +27,30 @@ impl TPer {
         self.device
     }
 
-    pub fn discovery(&self) -> Result<&Discovery, Error> {
+    pub fn discovery(&self) -> Result<&Discovery, RPCError> {
         // - The device MAY allow level 0 discovery at any point in time.
         // - The data MUST either be truncated or padded by the device if the transfer length is not exact.
         match self.cached_discovery.get() {
             Some(discovery) => Ok(discovery),
             None => {
-                let data = self.device.security_recv(0x01, 0x0001_u16.to_be_bytes(), 4096)?;
+                let data = match self.device.security_recv(0x01, 0x0001_u16.to_be_bytes(), 4096) {
+                    Ok(data) => data,
+                    Err(err) => return Err(RPCError::SecurityReceiveFailed(err)),
+                };
                 let mut stream = InputStream::from(data);
-                let discovery = Discovery::deserialize(&mut stream)?;
+                let discovery = match Discovery::deserialize(&mut stream) {
+                    Ok(discovery) => discovery,
+                    Err(err) => return Err(RPCError::SerializationFailed(err)),
+                };
                 Ok(self.cached_discovery.get_or_init(|| discovery))
             }
         }
+    }
+
+    async fn stack(&self) -> Result<&Stack, RPCError> {
+        let discovery = self.discovery()?;
+        discovery.get(FeatureCode::Enterprise);
+        todo!()
     }
 
     pub fn com_id(&self) -> u16 {
@@ -43,15 +61,11 @@ impl TPer {
         todo!()
     }
 
-    pub async fn verify_com_id(&self) -> Result<ComIdState, Error> {
+    pub async fn verify_com_id(&self, com_id: u16, com_id_ext: u16) -> Result<ComIdState, RPCError> {
         todo!()
     }
 
-    pub async fn stack_reset(&self) -> Result<(), Error> {
-        todo!()
-    }
-
-    pub async fn tper_reset(&self) -> Result<(), Error> {
+    pub async fn stack_reset(&self, com_id: u16, com_id_ext: u16) -> Result<(), RPCError> {
         todo!()
     }
 }

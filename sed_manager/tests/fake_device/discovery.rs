@@ -1,10 +1,10 @@
 use sed_manager::fake_device::FakeDevice;
-use sed_manager::messaging::packet::{FeatureCode, FeatureDescriptor, OwnerPasswordState};
-use sed_manager::tper::Error as TPerError;
+use sed_manager::messaging::discovery::{FeatureCode, FeatureDescriptor, OwnerPasswordState};
+use sed_manager::rpc::Error as RPCError;
 use sed_manager::tper::TPer;
 
 #[test]
-fn discovery_success() -> Result<(), TPerError> {
+fn discovery_success() -> Result<(), RPCError> {
     let device = FakeDevice::new();
     let tper = TPer::new(Box::new(device));
     let discovery = tper.discovery()?;
