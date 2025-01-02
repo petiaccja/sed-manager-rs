@@ -9,7 +9,7 @@ mod validate;
 
 use gen::{gen_deserialize_enum, gen_deserialize_struct, gen_serialize_enum, gen_serialize_struct};
 use parse::{parse_enum, parse_struct};
-use validate::validate_struct;
+use validate::{validate_enum, validate_struct};
 
 #[proc_macro_derive(Serialize, attributes(layout))]
 pub fn derive_serialize(tokens: TokenStream) -> TokenStream {
@@ -30,6 +30,9 @@ pub fn derive_serialize(tokens: TokenStream) -> TokenStream {
                 Ok(struct_desc) => struct_desc,
                 Err(err) => return err.to_compile_error().into(),
             };
+            if let Err(err) = validate_enum(&desc) {
+                return syn::Error::new(input.span(), format!("{}", err)).to_compile_error().into();
+            }
             gen_serialize_enum(&desc).into()
         }
         _ => syn::Error::new(input.span(), "only structs and enums are supported").to_compile_error().into(),

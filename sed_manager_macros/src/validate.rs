@@ -1,12 +1,15 @@
 use std::fmt::Display;
 use std::ops::Range;
 
+use crate::parse::EnumDesc;
+
 use super::parse::{FieldDesc, Layout, StructDesc};
 
 pub enum LayoutError {
     InvalidStructLayoutParam(String),
     ReversedFields((String, String)),
     OverlappingFields((String, String)),
+    MultipleFallbacks,
 }
 
 impl Display for LayoutError {
@@ -22,6 +25,7 @@ impl Display for LayoutError {
             LayoutError::OverlappingFields((a, b)) => {
                 f.write_fmt(format_args!("fields `{}` and `{}` cannot overlap", a, b))
             }
+            LayoutError::MultipleFallbacks => f.write_fmt(format_args!("enum must have at most one fallback variant")),
         }
     }
 }
@@ -32,6 +36,29 @@ fn validate_struct_layout_params(layout: &Layout) -> Result<(), LayoutError> {
     }
     if layout.bits.is_some() {
         return Err(LayoutError::InvalidStructLayoutParam(String::from("bits")));
+    }
+    if layout.fallback {
+        return Err(LayoutError::InvalidStructLayoutParam(String::from("fallback")));
+    }
+    Ok(())
+}
+
+fn validate_field_layout_params(layout: &Layout) -> Result<(), LayoutError> {
+    if layout.fallback {
+        return Err(LayoutError::InvalidStructLayoutParam(String::from("fallback")));
+    }
+    Ok(())
+}
+
+fn validate_variant_layout_params(layout: &Layout) -> Result<(), LayoutError> {
+    if layout.offset.is_some() {
+        return Err(LayoutError::InvalidStructLayoutParam(String::from("offset")));
+    }
+    if layout.bits.is_some() {
+        return Err(LayoutError::InvalidStructLayoutParam(String::from("bits")));
+    }
+    if layout.round.is_some() {
+        return Err(LayoutError::InvalidStructLayoutParam(String::from("round")));
     }
     Ok(())
 }
@@ -89,9 +116,23 @@ fn validate_location_overlap(descs: &[FieldDesc], locs: &[Range<usize>]) -> Resu
 
 pub fn validate_struct(desc: &StructDesc) -> Result<(), LayoutError> {
     validate_struct_layout_params(&desc.layout)?;
+    for field in &desc.fields {
+        validate_field_layout_params(&field.layout)?;
+    }
     let locs = field_locations(&desc.fields);
     validate_location_reversal(&desc.fields, &locs)?; // Should do before overlap.
     validate_location_overlap(&desc.fields, &locs)?;
+    Ok(())
+}
+
+pub fn validate_enum(desc: &EnumDesc) -> Result<(), LayoutError> {
+    for field in &desc.variants {
+        validate_variant_layout_params(&field.layout)?;
+    }
+    let num_fallbacks = desc.variants.iter().filter(|variant| variant.layout.fallback).count();
+    if num_fallbacks > 1 {
+        return Err(LayoutError::MultipleFallbacks);
+    }
     Ok(())
 }
 

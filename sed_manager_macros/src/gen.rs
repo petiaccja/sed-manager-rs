@@ -182,13 +182,17 @@ pub fn gen_deserialize_struct(struct_desc: &StructDesc) -> TokenStream2 {
     gen_deserialize_struct_skeleton(name, struct_pos, struct_layout, fields)
 }
 
+pub fn get_fallback(enum_desc: &EnumDesc) -> Option<&String> {
+    enum_desc.variants.iter().find(|variant| variant.layout.fallback).map(|variant| &variant.name)
+}
+
 pub fn gen_serialize_enum(enum_desc: &EnumDesc) -> TokenStream2 {
     let name = &enum_desc.name;
     let ty = &enum_desc.ty;
     let stream = VariableNames::stream();
     let mut variants = TokenStream2::new();
     for variant in &enum_desc.variants {
-        let ident = format_ident!("{}", variant);
+        let ident = format_ident!("{}", variant.name);
         let pattern = quote! { #name::#ident => #name::#ident as #ty, };
         variants.append_all(pattern);
     }
@@ -211,13 +215,18 @@ pub fn gen_serialize_enum(enum_desc: &EnumDesc) -> TokenStream2 {
 pub fn gen_deserialize_enum(enum_desc: &EnumDesc) -> TokenStream2 {
     let name = &enum_desc.name;
     let ty = &enum_desc.ty;
+    let fallback = get_fallback(enum_desc).map(|name| format_ident!("{}", name));
     let stream = VariableNames::stream();
     let mut variants = TokenStream2::new();
     for variant in &enum_desc.variants {
-        let ident = format_ident!("{}", variant);
+        let ident = format_ident!("{}", variant.name);
         let pattern = quote! { x if x == (#name::#ident as #ty) => ::core::result::Result::Ok(#name::#ident), };
         variants.append_all(pattern);
     }
+    let fallback_tokens = match &fallback {
+        Some(variant) => quote! { ::core::result::Result::Ok(#name::#variant) },
+        None => quote! { ::core::result::Result::Err(::sed_manager::serialization::Error::InvalidData) },
+    };
     quote! {
         impl ::sed_manager::serialization::Deserialize<u8> for #name {
             type Error = ::sed_manager::serialization::Error;
@@ -228,7 +237,7 @@ pub fn gen_deserialize_enum(enum_desc: &EnumDesc) -> TokenStream2 {
                 };
                 match discr {
                     #variants
-                    _ => ::core::result::Result::Err(::sed_manager::serialization::Error::InvalidData),
+                    _ => #fallback_tokens,
                 }
             }
         }

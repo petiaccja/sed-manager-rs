@@ -20,10 +20,7 @@ pub enum Error {
     MethodTooLarge,
     MethodCallExpected,
     MethodResultExpected,
+    MethodFailed(MethodStatus),
+    Unsupported,
     Unspecified,
-}
-
-pub enum CallError {
-    InvalidCall(MethodStatus),
-    RPCFailed(Error),
 }

@@ -7,12 +7,18 @@ pub struct Layout {
     pub offset: Option<usize>,
     pub bits: Option<std::ops::Range<usize>>,
     pub round: Option<usize>,
+    pub fallback: bool,
 }
 
 impl Default for Layout {
     fn default() -> Self {
-        Layout { offset: None, bits: None, round: None }
+        Layout { offset: None, bits: None, round: None, fallback: false }
     }
+}
+
+pub struct VariantDesc {
+    pub name: String,
+    pub layout: Layout,
 }
 
 pub struct FieldDesc {
@@ -30,7 +36,7 @@ pub struct StructDesc {
 pub struct EnumDesc {
     pub name: TokenStream2,
     pub ty: TokenStream2,
-    pub variants: Vec<String>,
+    pub variants: Vec<VariantDesc>,
 }
 
 fn parse_literal_usize(expr: &syn::Expr) -> Result<usize, syn::Error> {
@@ -76,21 +82,46 @@ fn parse_layout_attr(attr: &syn::Attribute) -> Result<Layout, syn::Error> {
     let parsed = syn::parse2::<syn::ExprTuple>(tuple)?;
     let mut layout = Layout { ..Default::default() };
     for expr in parsed.elems {
-        let syn::Expr::Assign(assign) = expr else {
-            return Err(syn::Error::new(expr.span(), "expected `param = value`"));
-        };
-        let syn::Expr::Path(path) = *assign.left else {
-            return Err(syn::Error::new(assign.left.span(), "expected `param = value`"));
-        };
-        if path.path.is_ident("offset") {
-            layout.offset = Some(parse_literal_usize(&assign.right)?);
-        } else if path.path.is_ident("bits") {
-            layout.bits = Some(parse_literal_range_usize(&assign.right)?);
-        } else if path.path.is_ident("round") {
-            layout.round = Some(parse_literal_usize(&assign.right)?);
+        if let syn::Expr::Assign(assign) = expr {
+            let syn::Expr::Path(path) = *assign.left else {
+                return Err(syn::Error::new(assign.left.span(), "expected `param = value`"));
+            };
+            if path.path.is_ident("offset") {
+                layout.offset = Some(parse_literal_usize(&assign.right)?);
+            } else if path.path.is_ident("bits") {
+                layout.bits = Some(parse_literal_range_usize(&assign.right)?);
+            } else if path.path.is_ident("round") {
+                layout.round = Some(parse_literal_usize(&assign.right)?);
+            } else {
+                return Err(syn::Error::new(path.span(), "invalid layout param"));
+            };
+        } else if let syn::Expr::Path(path) = expr {
+            if path.path.is_ident("fallback") {
+                layout.fallback = true;
+            } else {
+                return Err(syn::Error::new(path.span(), "invalid layout param"));
+            }
         } else {
-            return Err(syn::Error::new(path.span(), "invalid layout param"));
+            return Err(syn::Error::new(expr.span(), "invalid layout param"));
         };
+
+        // let syn::Expr::Assign(assign) = expr else {
+        //     return Err(syn::Error::new(expr.span(), "expected `param = value`"));
+        // };
+        // let syn::Expr::Path(path) = *assign.left else {
+        //     return Err(syn::Error::new(assign.left.span(), "expected `param = value`"));
+        // };
+        // if path.path.is_ident("offset") {
+        //     layout.offset = Some(parse_literal_usize(&assign.right)?);
+        // } else if path.path.is_ident("bits") {
+        //     layout.bits = Some(parse_literal_range_usize(&assign.right)?);
+        // } else if path.path.is_ident("round") {
+        //     layout.round = Some(parse_literal_usize(&assign.right)?);
+        // } else if path.path.is_ident("fallback") {
+        //     layout.fallback = true;
+        // } else {
+        //     return Err(syn::Error::new(path.span(), "invalid layout param"));
+        // };
     }
     Ok(layout)
 }
@@ -137,15 +168,11 @@ pub fn parse_struct(input: &syn::DeriveInput) -> Result<StructDesc, syn::Error> 
         None => Layout { ..Default::default() },
     };
 
-    let mut fields = Vec::<FieldDesc>::new();
-    for field in &data.fields {
-        fields.push(parse_field(&field)?);
-    }
-
-    Ok(StructDesc { name: name, layout: layout, fields: fields })
+    let fields: Result<Vec<_>, _> = data.fields.iter().map(|field| parse_field(field)).collect();
+    Ok(StructDesc { name: name, layout: layout, fields: fields? })
 }
 
-fn parse_num_repr(attrs: &[syn::Attribute]) -> Option<TokenStream2> {
+fn parse_enum_repr(attrs: &[syn::Attribute]) -> Option<TokenStream2> {
     const INTEGER_REPRS: [&str; 8] = ["u8", "u16", "u32", "u64", "i8", "i16", "i32", "i64"];
     for attr in attrs {
         if attr.path().is_ident("repr") {
@@ -161,16 +188,25 @@ fn parse_num_repr(attrs: &[syn::Attribute]) -> Option<TokenStream2> {
     None
 }
 
+pub fn parse_enum_variant(variant: &syn::Variant) -> Result<VariantDesc, syn::Error> {
+    let name = variant.ident.to_string();
+    let layout = match find_layout_attr(variant.attrs.as_slice()) {
+        Some(attr) => parse_layout_attr(attr)?.into(),
+        None => Layout { ..Default::default() },
+    };
+    Ok(VariantDesc { name, layout })
+}
+
 pub fn parse_enum(input: &syn::DeriveInput) -> Result<EnumDesc, syn::Error> {
     let syn::Data::Enum(data) = &input.data else {
         return Err(syn::Error::new(input.span(), "expected an enum"));
     };
-    let Some(ty) = parse_num_repr(&input.attrs) else {
+    let Some(ty) = parse_enum_repr(&input.attrs) else {
         return Err(syn::Error::new(input.span(), "enum must have a `#[repr(i/u*)]` attribute"));
     };
     let name = input.ident.clone().into_token_stream();
-    let fields = Vec::from_iter(data.variants.iter().map(|variant| -> String { variant.ident.to_string() }));
-    Ok(EnumDesc { name: name, ty: ty, variants: fields })
+    let variants: Result<Vec<_>, _> = data.variants.iter().map(|variant| parse_enum_variant(variant)).collect();
+    Ok(EnumDesc { name: name, ty: ty, variants: variants? })
 }
 
 #[cfg(test)]
@@ -283,6 +319,7 @@ mod tests {
             #[repr(u16)]
             enum Enum {
                 Var1,
+                #[layout(fallback)]
                 Var2,
             }
         };
@@ -291,7 +328,8 @@ mod tests {
         assert_eq!(desc.name.to_string(), quote! {Enum}.to_string());
         assert_eq!(desc.ty.to_string(), quote! {u16}.to_string());
         assert_eq!(desc.variants.len(), 2);
-        assert_eq!(desc.variants[0], "Var1");
-        assert_eq!(desc.variants[1], "Var2");
+        assert_eq!(desc.variants[0].name, "Var1");
+        assert_eq!(desc.variants[1].name, "Var2");
+        assert_eq!(desc.variants[1].layout.fallback, true);
     }
 }

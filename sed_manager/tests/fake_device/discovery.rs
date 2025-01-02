@@ -1,21 +1,23 @@
+use std::sync::Arc;
+
 use sed_manager::fake_device::FakeDevice;
-use sed_manager::messaging::discovery::{FeatureCode, FeatureDescriptor, OwnerPasswordState};
+use sed_manager::messaging::discovery::{LockingDescriptor, OpalV2Descriptor, OwnerPasswordState, TPerDescriptor};
 use sed_manager::rpc::Error as RPCError;
 use sed_manager::tper::TPer;
 
 #[test]
-fn discovery_success() -> Result<(), RPCError> {
+fn discovery_normal() -> Result<(), RPCError> {
     let device = FakeDevice::new();
-    let tper = TPer::new(Box::new(device));
+    let tper = TPer::new(Arc::new(device));
     let discovery = tper.discovery()?;
 
-    let Some(FeatureDescriptor::TPer(tper_desc)) = discovery.get(FeatureCode::TPer) else {
+    let Some(tper_desc) = discovery.get::<TPerDescriptor>() else {
         panic!("expected a TPer feature descriptor");
     };
-    let Some(FeatureDescriptor::Locking(locking_desc)) = discovery.get(FeatureCode::Locking) else {
+    let Some(locking_desc) = discovery.get::<LockingDescriptor>() else {
         panic!("expected a locking feature descriptor");
     };
-    let Some(FeatureDescriptor::OpalV2(opal_desc)) = discovery.get(FeatureCode::OpalV2) else {
+    let Some(opal_desc) = discovery.get::<OpalV2Descriptor>() else {
         panic!("expected an Opal v2 feature descriptor");
     };
 

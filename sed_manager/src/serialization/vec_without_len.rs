@@ -6,11 +6,11 @@ use std::{ops::Deref, ops::DerefMut};
 /// The elements are serialized consecutively, but the number of elements
 /// is not stored in any way. When deserializing, all reimaining items in the
 /// stream are consumed.
-pub struct WithoutLen<T> {
+pub struct VecWithoutLen<T> {
     data: Vec<T>,
 }
 
-impl<T> WithoutLen<T> {
+impl<T> VecWithoutLen<T> {
     pub fn new() -> Self {
         Self { data: Vec::new() }
     }
@@ -20,32 +20,32 @@ impl<T> WithoutLen<T> {
     }
 }
 
-impl<T> From<WithoutLen<T>> for Vec<T> {
-    fn from(value: WithoutLen<T>) -> Self {
+impl<T> From<VecWithoutLen<T>> for Vec<T> {
+    fn from(value: VecWithoutLen<T>) -> Self {
         value.data
     }
 }
 
-impl<T> From<Vec<T>> for WithoutLen<T> {
+impl<T> From<Vec<T>> for VecWithoutLen<T> {
     fn from(value: Vec<T>) -> Self {
         Self { data: value }
     }
 }
 
-impl<T> Deref for WithoutLen<T> {
+impl<T> Deref for VecWithoutLen<T> {
     type Target = Vec<T>;
     fn deref(&self) -> &Self::Target {
         &self.data
     }
 }
 
-impl<T> DerefMut for WithoutLen<T> {
+impl<T> DerefMut for VecWithoutLen<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.data
     }
 }
 
-impl<T> Clone for WithoutLen<T>
+impl<T> Clone for VecWithoutLen<T>
 where
     T: Clone,
 {
@@ -54,7 +54,7 @@ where
     }
 }
 
-impl<T> Serialize<u8> for WithoutLen<T>
+impl<T> Serialize<u8> for VecWithoutLen<T>
 where
     T: Serialize<u8>,
     Error: From<<T as Serialize<u8>>::Error>,
@@ -70,19 +70,19 @@ where
     }
 }
 
-impl<T> Deserialize<u8> for WithoutLen<T>
+impl<T> Deserialize<u8> for VecWithoutLen<T>
 where
     T: Deserialize<u8>,
     Error: From<<T as Deserialize<u8>>::Error>,
 {
     type Error = Error;
-    fn deserialize(stream: &mut InputStream<u8>) -> Result<WithoutLen<T>, Self::Error> {
+    fn deserialize(stream: &mut InputStream<u8>) -> Result<VecWithoutLen<T>, Self::Error> {
         let mut data = Vec::<T>::new();
         while stream.pos() != stream.len() {
             let item = annotate_field(T::deserialize(stream), format!("data[{}]", data.len()))?;
             data.push(item);
         }
-        Ok(WithoutLen::from(data))
+        Ok(VecWithoutLen::from(data))
     }
 }
 
@@ -92,11 +92,11 @@ mod tests {
 
     #[test]
     fn serialize_with_len() {
-        let input = WithoutLen::<u8>::from(vec![0xFF, 0xFF, 0xFF, 0xFF, 0xFF]);
+        let input = VecWithoutLen::<u8>::from(vec![0xFF, 0xFF, 0xFF, 0xFF, 0xFF]);
         let mut os = OutputStream::<u8>::new();
         input.serialize(&mut os).unwrap();
         let mut is = InputStream::from(os.take());
-        let output = WithoutLen::<u8>::deserialize(&mut is).unwrap();
+        let output = VecWithoutLen::<u8>::deserialize(&mut is).unwrap();
         assert_eq!(*output, *input);
     }
 }

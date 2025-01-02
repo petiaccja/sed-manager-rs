@@ -47,6 +47,14 @@ enum SimpleEnum {
     B = 0x02,
 }
 
+#[repr(u8)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+enum FallbackEnum {
+    A = 0x01,
+    #[layout(fallback)]
+    Fallback = 0xFF,
+}
+
 #[test]
 fn serialize_struct_simple() {
     let data = SimpleData { field_a: 0xABCDEF01, field_b: 0x2345 };
@@ -175,4 +183,13 @@ fn serialize_enum() {
     let mut is = InputStream::from(os.take());
     let output = SimpleEnum::deserialize(&mut is).unwrap();
     assert_eq!(input, output);
+}
+
+#[test]
+fn deserialize_enum_fallback() {
+    let mut os = OutputStream::<u8>::new();
+    0x34_u8.serialize(&mut os).unwrap();
+    let mut is = InputStream::from(os.take());
+    let output = FallbackEnum::deserialize(&mut is).unwrap();
+    assert_eq!(FallbackEnum::Fallback, output);
 }

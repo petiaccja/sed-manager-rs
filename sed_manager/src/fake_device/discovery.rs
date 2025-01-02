@@ -1,7 +1,6 @@
 use crate::device::Error as DeviceError;
 use crate::messaging::discovery::{
-    Discovery, FeatureDescriptor, LockingFeatureDescriptor, OpalV2FeatureDescriptor, OwnerPasswordState,
-    TPerFeatureDescriptor,
+    Discovery, FeatureDescriptor, LockingDescriptor, OpalV2Descriptor, OwnerPasswordState, TPerDescriptor,
 };
 use crate::serialization::{OutputStream, Serialize};
 
@@ -42,7 +41,7 @@ fn get_tper_feature_desc(_device: &PersistentState) -> FeatureDescriptor {
     // The reason this function (and below ones) take the device as parameter
     // is because if the device contains some configuration data for testing,
     // that has to be reflected in the discovery process.
-    let desc = TPerFeatureDescriptor {
+    let desc = TPerDescriptor {
         sync_supported: true,
         async_supported: false,
         ack_nak_supported: false,
@@ -54,7 +53,7 @@ fn get_tper_feature_desc(_device: &PersistentState) -> FeatureDescriptor {
 }
 
 fn get_locking_feature_desc(_device: &PersistentState) -> FeatureDescriptor {
-    let desc = LockingFeatureDescriptor {
+    let desc = LockingDescriptor {
         hw_reset_supported: true,
         locked: false,
         locking_enabled: false,
@@ -68,7 +67,7 @@ fn get_locking_feature_desc(_device: &PersistentState) -> FeatureDescriptor {
 }
 
 fn get_ssc_feature_desc(_device: &PersistentState) -> FeatureDescriptor {
-    let desc = OpalV2FeatureDescriptor {
+    let desc = OpalV2Descriptor {
         base_com_id: 4100,
         num_com_ids: 1,
         num_locking_admins_supported: 4,

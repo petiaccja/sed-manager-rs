@@ -13,8 +13,8 @@ use crate::messaging::value::Command;
 use crate::rpc::error::Error;
 use crate::rpc::method::{MethodCall, MethodResult};
 use crate::rpc::properties::Properties;
-use crate::serialization::with_len::WithLen;
-use crate::serialization::without_len::WithoutLen;
+use crate::serialization::vec_with_len::VecWithLen;
+use crate::serialization::vec_without_len::VecWithoutLen;
 use crate::serialization::{Deserialize, InputStream, ItemRead, OutputStream, Serialize};
 
 const BUFFER_CAPACITY: u32 = 1048576;
@@ -180,7 +180,7 @@ fn bundle(mut request_queue: Queue<Vec<u8>>, _properties: &Properties) -> Vec<Pa
     let mut packets = Vec::new();
     while let Some(request) = request_queue.pop_front() {
         let sub_packet = SubPacket { kind: SubPacketKind::Data, payload: request.into() };
-        let packet = Packet { payload: WithLen::from(vec![sub_packet]), ..Default::default() };
+        let packet = Packet { payload: VecWithLen::from(vec![sub_packet]), ..Default::default() };
         packets.push(packet);
     }
     packets
@@ -191,7 +191,7 @@ fn deserialize(packet: Packet) -> Result<Queue<Token>, Error> {
     for sub_packet in packet.payload.into_vec() {
         if sub_packet.kind == SubPacketKind::Data {
             let mut stream = InputStream::from(sub_packet.payload.into_vec());
-            let sub_tokens = match WithoutLen::<Token>::deserialize(&mut stream) {
+            let sub_tokens = match VecWithoutLen::<Token>::deserialize(&mut stream) {
                 Ok(sub_tokens) => sub_tokens,
                 Err(err) => return Err(Error::SerializationFailed(err)),
             };

@@ -12,7 +12,7 @@ use crate::rpc::protocol::{
     SequencingLayer, SyncHostLayer,
 };
 
-pub struct MainSession {
+pub struct TPerSession {
     interface_layer: Arc<dyn InterfaceLayer>,
     mux_hub: MultiplexerHub,
     com_id_session: OnceCell<ComIdSession>,
@@ -20,7 +20,7 @@ pub struct MainSession {
     properties: Properties,
 }
 
-impl MainSession {
+impl TPerSession {
     pub fn new(device: Arc<dyn Device>, com_id: u16, com_id_ext: u16, properties: Properties) -> Self {
         let interface_layer = Arc::new(SyncHostLayer::new(device, properties.clone()));
         let com_packet_layer = ComPacketLayer::new(com_id, com_id_ext, interface_layer.clone(), properties.clone());

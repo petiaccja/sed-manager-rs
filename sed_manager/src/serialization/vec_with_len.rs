@@ -6,15 +6,15 @@ use std::{io::Seek, marker::PhantomData, ops::Deref, ops::DerefMut};
 /// The elements are serialized consecutively, but instead of writing the number
 /// of items as usual serializers, the number of bytes is written in a specific
 /// integer format `L`.
-#[derive(Debug)]
-pub struct WithLen<T, L: TryFrom<usize> + TryInto<usize>> {
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct VecWithLen<T, L: TryFrom<usize> + TryInto<usize>> {
     data: Vec<T>,
     phantom_data: std::marker::PhantomData<L>,
 }
 
-impl<T, L: TryFrom<usize> + TryInto<usize>> WithLen<T, L> {
-    pub fn new(value: Vec<T>) -> Self {
-        Self { data: value, phantom_data: PhantomData }
+impl<T, L: TryFrom<usize> + TryInto<usize>> VecWithLen<T, L> {
+    pub fn new() -> Self {
+        Self { data: Vec::new(), phantom_data: PhantomData }
     }
 
     pub fn into_vec(self) -> Vec<T> {
@@ -22,19 +22,19 @@ impl<T, L: TryFrom<usize> + TryInto<usize>> WithLen<T, L> {
     }
 }
 
-impl<T, L: TryFrom<usize> + TryInto<usize>> From<WithLen<T, L>> for Vec<T> {
-    fn from(value: WithLen<T, L>) -> Self {
-        value.data
+impl<T, L: TryFrom<usize> + TryInto<usize>> From<VecWithLen<T, L>> for Vec<T> {
+    fn from(value: VecWithLen<T, L>) -> Self {
+        value.into_vec()
     }
 }
 
-impl<T, L: TryFrom<usize> + TryInto<usize>> From<Vec<T>> for WithLen<T, L> {
+impl<T, L: TryFrom<usize> + TryInto<usize>> From<Vec<T>> for VecWithLen<T, L> {
     fn from(value: Vec<T>) -> Self {
         Self { data: value, phantom_data: PhantomData }
     }
 }
 
-impl<T, L> Deref for WithLen<T, L>
+impl<T, L> Deref for VecWithLen<T, L>
 where
     L: TryFrom<usize> + TryInto<usize>,
 {
@@ -44,7 +44,7 @@ where
     }
 }
 
-impl<T, L> DerefMut for WithLen<T, L>
+impl<T, L> DerefMut for VecWithLen<T, L>
 where
     L: TryFrom<usize> + TryInto<usize>,
 {
@@ -53,35 +53,7 @@ where
     }
 }
 
-impl<T, L> Clone for WithLen<T, L>
-where
-    L: TryFrom<usize> + TryInto<usize>,
-    T: Clone,
-    L: Clone,
-{
-    fn clone(&self) -> Self {
-        Self { data: self.data.clone(), phantom_data: self.phantom_data }
-    }
-}
-
-impl<T, L> PartialEq for WithLen<T, L>
-where
-    L: TryFrom<usize> + TryInto<usize>,
-    T: Eq,
-{
-    fn eq(&self, other: &Self) -> bool {
-        self.data == other.data
-    }
-}
-
-impl<T, L> Eq for WithLen<T, L>
-where
-    L: TryFrom<usize> + TryInto<usize>,
-    T: PartialEq + Eq,
-{
-}
-
-impl<T, L: TryFrom<usize> + TryInto<usize>> Serialize<u8> for WithLen<T, L>
+impl<T, L: TryFrom<usize> + TryInto<usize>> Serialize<u8> for VecWithLen<T, L>
 where
     T: Serialize<u8>,
     L: Serialize<u8>,
@@ -117,7 +89,7 @@ where
     }
 }
 
-impl<T, L: TryFrom<usize> + TryInto<usize>> Deserialize<u8> for WithLen<T, L>
+impl<T, L: TryFrom<usize> + TryInto<usize>> Deserialize<u8> for VecWithLen<T, L>
 where
     T: Deserialize<u8>,
     L: Deserialize<u8>,
@@ -125,7 +97,7 @@ where
     Error: From<<L as Deserialize<u8>>::Error>,
 {
     type Error = Error;
-    fn deserialize(stream: &mut InputStream<u8>) -> Result<WithLen<T, L>, Self::Error> {
+    fn deserialize(stream: &mut InputStream<u8>) -> Result<VecWithLen<T, L>, Self::Error> {
         let len = annotate_field(L::deserialize(stream), "length".into())?;
         let Ok(len) = TryInto::<usize>::try_into(len) else {
             return annotate_field(Err(Error::InvalidData), "length".into());
@@ -140,7 +112,7 @@ where
         if stream.stream_position().unwrap() != end_pos {
             return annotate_field(Err(Error::InvalidData), "data".into());
         }
-        Ok(WithLen::new(data))
+        Ok(VecWithLen::from(data))
     }
 }
 
@@ -150,12 +122,12 @@ mod tests {
 
     #[test]
     fn serialize_with_len() {
-        let input = WithLen::<u8, u32>::new(vec![0xFF, 0xFF, 0xFF, 0xFF, 0xFF]);
+        let input = VecWithLen::<u8, u32>::from(vec![0xFF, 0xFF, 0xFF, 0xFF, 0xFF]);
         let mut os = OutputStream::<u8>::new();
         input.serialize(&mut os).unwrap();
         0xCCCCCCCCu32.serialize(&mut os).unwrap();
         let mut is = InputStream::from(os.take());
-        let output = WithLen::<u8, u32>::deserialize(&mut is).unwrap();
+        let output = VecWithLen::<u8, u32>::deserialize(&mut is).unwrap();
         assert_eq!(is.stream_position().unwrap(), 9);
         assert_eq!(*output, *input);
     }

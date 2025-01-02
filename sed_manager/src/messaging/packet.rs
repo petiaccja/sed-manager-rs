@@ -1,4 +1,4 @@
-use crate::serialization::{with_len::WithLen, Deserialize, Serialize};
+use crate::serialization::{vec_with_len::VecWithLen, Deserialize, Serialize};
 
 pub const COM_PACKET_HEADER_LEN: usize = 20;
 pub const PACKET_HEADER_LEN: usize = 24;
@@ -26,7 +26,7 @@ pub struct SubPacket {
     #[layout(offset = 6)]
     pub kind: SubPacketKind,
     #[layout(offset = 8, round = 4)]
-    pub payload: WithLen<u8, u32>,
+    pub payload: VecWithLen<u8, u32>,
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
@@ -37,7 +37,7 @@ pub struct Packet {
     #[layout(offset = 14)]
     pub ack_type: AckType,
     pub acknowledgement: u32,
-    pub payload: WithLen<SubPacket, u32>,
+    pub payload: VecWithLen<SubPacket, u32>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -47,7 +47,7 @@ pub struct ComPacket {
     pub com_id_ext: u16,
     pub outstanding_data: u32,
     pub min_transfer: u32,
-    pub payload: WithLen<Packet, u32>,
+    pub payload: VecWithLen<Packet, u32>,
 }
 
 impl Default for Packet {
@@ -58,7 +58,7 @@ impl Default for Packet {
             sequence_number: 0,
             ack_type: AckType::None,
             acknowledgement: 0,
-            payload: WithLen::new(vec![]),
+            payload: VecWithLen::from(vec![]),
         }
     }
 }

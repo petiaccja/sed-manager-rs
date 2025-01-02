@@ -1,4 +1,4 @@
-use crate::serialization::{with_len::WithLen, Deserialize, InputStream, Serialize};
+use crate::serialization::{vec_with_len::VecWithLen, Deserialize, InputStream, Serialize};
 
 /// The transfer length for IF-RECV for HANDLE_COM_ID_REQUESTs that fits the
 /// response for NO_RESPONSE_AVAILABLE, VERIFY_COM_ID_VALID, and STACK_RESET
@@ -46,7 +46,7 @@ pub struct HandleComIdResponse {
     pub com_id_ext: u16,
     pub request_code: ComIdRequestCode,
     #[layout(offset = 10)]
-    pub payload: WithLen<u8, u16>,
+    pub payload: VecWithLen<u8, u16>,
 }
 
 /// See [`HandleComIdResponse`].
