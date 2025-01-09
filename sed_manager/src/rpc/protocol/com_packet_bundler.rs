@@ -3,13 +3,13 @@ use std::collections::VecDeque as Queue;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use super::interface_layer::InterfaceLayer;
-use super::packet_layer::PacketLayer;
+use super::traits::InterfaceLayer;
+use super::traits::PacketLayer;
 use crate::messaging::packet::{ComPacket, Packet};
 use crate::rpc::error::Error;
 use crate::rpc::properties::Properties;
 
-pub struct ComPacketLayer {
+pub struct ComPacketBundler {
     com_id: u16,
     com_id_ext: u16,
     next_layer: Arc<dyn InterfaceLayer>,
@@ -17,14 +17,14 @@ pub struct ComPacketLayer {
     queue: Mutex<Queue<Packet>>,
 }
 
-impl ComPacketLayer {
+impl ComPacketBundler {
     pub fn new(com_id: u16, com_id_ext: u16, interface_layer: Arc<dyn InterfaceLayer>, properties: Properties) -> Self {
         Self { com_id, com_id_ext, next_layer: interface_layer, properties: properties, queue: Queue::new().into() }
     }
 }
 
 #[async_trait]
-impl PacketLayer for ComPacketLayer {
+impl PacketLayer for ComPacketBundler {
     async fn send(&self, packet: Packet) -> Result<(), Error> {
         let com_packet = ComPacket {
             com_id: self.com_id,

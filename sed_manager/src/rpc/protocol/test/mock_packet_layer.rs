@@ -1,23 +1,11 @@
-use std::{collections::VecDeque as Queue, sync::Arc};
-
 use async_trait::async_trait;
+use std::{collections::VecDeque as Queue, sync::Arc};
 use tokio::sync::Mutex;
 
-use crate::{
-    messaging::packet::Packet,
-    rpc::{
-        error::Error,
-        pipeline::{connect, BufferedSend, Connect, PushInput, PushOutput, Receive},
-    },
-};
-
-#[async_trait]
-pub trait PacketLayer: Send + Sync {
-    async fn send(&self, packet: Packet) -> Result<(), Error>;
-    async fn recv(&self) -> Result<Packet, Error>;
-    async fn close(&self);
-    async fn abort(&self);
-}
+use crate::messaging::packet::Packet;
+use crate::rpc::pipeline::{connect, BufferedSend, Connect, PushInput, PushOutput, Receive};
+use crate::rpc::protocol::PacketLayer;
+use crate::rpc::Error;
 
 #[derive(Clone)]
 pub struct MockPacketLayer {

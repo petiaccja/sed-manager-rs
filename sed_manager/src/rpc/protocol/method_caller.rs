@@ -3,7 +3,7 @@ use std::ops::DerefMut;
 use tokio::sync::Mutex;
 use tokio::task::yield_now;
 
-use super::packet_layer::PacketLayer;
+use super::traits::PacketLayer;
 use crate::messaging::packet::{Packet, SubPacket, SubPacketKind, PACKET_HEADER_LEN, SUB_PACKET_HEADER_LEN};
 use crate::messaging::token::{Tag, Token, TokenizeError};
 use crate::messaging::value::Command;
@@ -20,14 +20,14 @@ pub enum PackagedMethod {
     EndOfSession,
 }
 
-pub struct MethodLayer {
+pub struct MethodCaller {
     next_layer: Box<dyn PacketLayer>,
     properties: Properties,
     request_queue: Mutex<Queue<Vec<u8>>>,
     token_queue: Mutex<Queue<Token>>,
 }
 
-impl MethodLayer {
+impl MethodCaller {
     pub fn new(next_layer: Box<dyn PacketLayer>, properties: Properties) -> Self {
         Self {
             next_layer,

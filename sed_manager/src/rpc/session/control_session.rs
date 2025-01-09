@@ -2,15 +2,15 @@ use tokio::sync::Mutex;
 
 use crate::rpc::error::Error;
 use crate::rpc::method::MethodCall;
-use crate::rpc::protocol::{MethodLayer, PackagedMethod};
+use crate::rpc::protocol::{MethodCaller, PackagedMethod};
 
-pub struct ManagementSession {
-    method_layer: Mutex<MethodLayer>,
+pub struct ControlSession {
+    method_caller: Mutex<MethodCaller>,
 }
 
-impl ManagementSession {
-    pub fn new(method_layer: MethodLayer) -> Self {
-        Self { method_layer: method_layer.into() }
+impl ControlSession {
+    pub fn new(method_layer: MethodCaller) -> Self {
+        Self { method_caller: method_layer.into() }
     }
 
     pub async fn call(&self, method: MethodCall) -> Result<MethodCall, Error> {
@@ -21,9 +21,9 @@ impl ManagementSession {
         // Note: matching is still possible by looking into the messages:
         //  - Properties calls can be matched.
         //  - StartSession and SyncSession calls can be matched by HSN.
-        let method_layer = self.method_layer.lock().await;
-        method_layer.send(PackagedMethod::Call(method)).await?;
-        let response = method_layer.recv().await?;
+        let method_caller = self.method_caller.lock().await;
+        method_caller.send(PackagedMethod::Call(method)).await?;
+        let response = method_caller.recv().await?;
         match response {
             PackagedMethod::Call(response) => Ok(response),
             PackagedMethod::Result(_) => Err(Error::MethodCallExpected),
@@ -32,6 +32,6 @@ impl ManagementSession {
     }
 
     pub async fn close(&self) {
-        self.method_layer.lock().await.close().await
+        self.method_caller.lock().await.close().await
     }
 }

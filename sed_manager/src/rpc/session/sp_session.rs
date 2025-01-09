@@ -6,16 +6,16 @@ use tokio::sync::Mutex;
 use crate::messaging::uid::UID;
 use crate::rpc::error::Error;
 use crate::rpc::method::{MethodCall, MethodResult};
-use crate::rpc::protocol::MethodLayer;
+use crate::rpc::protocol::MethodCaller;
 use crate::rpc::protocol::PackagedMethod;
 
 pub struct SPSession {
-    method_layer: Arc<MethodLayer>,
+    method_layer: Arc<MethodCaller>,
     response_queue: Arc<Mutex<Queue<oneshot::Sender<Result<MethodResult, Error>>>>>,
 }
 
 impl SPSession {
-    pub fn new(method_layer: MethodLayer) -> Self {
+    pub fn new(method_layer: MethodCaller) -> Self {
         Self { method_layer: Arc::new(method_layer), response_queue: Arc::new(Queue::new().into()) }
     }
 

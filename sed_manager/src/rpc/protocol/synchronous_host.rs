@@ -5,8 +5,8 @@ use std::time::Duration;
 use async_trait::async_trait;
 use tokio::sync::{mpsc, Mutex};
 
-use super::interface_layer::InterfaceLayer;
 use super::retry::Retry;
+use super::traits::InterfaceLayer;
 use crate::device::Device;
 use crate::messaging::com_id::{
     HandleComIdRequest, HandleComIdResponse, HANDLE_COM_ID_PROTOCOL, HANDLE_COM_ID_RESPONSE_LEN,
@@ -16,7 +16,7 @@ use crate::rpc::error::Error;
 use crate::rpc::properties::Properties;
 use crate::serialization::{Deserialize, InputStream, OutputStream, Serialize};
 
-pub struct SyncHostLayer {
+pub struct SynchronousHost {
     device: Mutex<Arc<dyn Device>>,
     com_id: u16,
     properties: Properties,
@@ -26,7 +26,7 @@ pub struct SyncHostLayer {
     rx_com_packet: Mutex<mpsc::UnboundedReceiver<Result<ComPacket, Error>>>,
 }
 
-impl SyncHostLayer {
+impl SynchronousHost {
     pub fn new(device: Arc<dyn Device>, com_id: u16, properties: Properties) -> Self {
         let (tx_handle_com_id, rx_handle_com_id) = mpsc::unbounded_channel();
         let (tx_com_packet, rx_com_packet) = mpsc::unbounded_channel();
@@ -43,7 +43,7 @@ impl SyncHostLayer {
 }
 
 #[async_trait]
-impl InterfaceLayer for SyncHostLayer {
+impl InterfaceLayer for SynchronousHost {
     async fn send_handle_com_id(&self, request: HandleComIdRequest) -> Result<(), Error> {
         let device = self.device.lock().await;
         security_send_handle_com_id(device.deref().deref(), self.com_id, request)?;

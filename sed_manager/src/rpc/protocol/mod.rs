@@ -1,16 +1,18 @@
-mod com_packet_layer;
-mod interface_layer;
-mod method_layer;
-mod multiplexer;
-mod packet_layer;
+mod com_packet_bundler;
+mod method_caller;
 mod retry;
-mod sync_host_layer;
+mod session_endpoint;
+mod session_router;
+mod synchronous_host;
+mod test;
+mod traits;
 mod with_copy;
 
-pub use com_packet_layer::ComPacketLayer;
-pub use method_layer::{MethodLayer, PackagedMethod};
-pub use multiplexer::{MultiplexerHub, MultiplexerSession};
-pub use sync_host_layer::SyncHostLayer;
+pub use com_packet_bundler::ComPacketBundler;
+pub use method_caller::{MethodCaller, PackagedMethod};
+pub use session_endpoint::SessionEndpoint;
+pub use session_router::SessionRouter;
+pub use synchronous_host::SynchronousHost;
 
-pub use interface_layer::InterfaceLayer;
-pub use packet_layer::PacketLayer;
+pub use traits::InterfaceLayer;
+pub use traits::PacketLayer;
