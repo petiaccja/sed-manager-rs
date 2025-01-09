@@ -1,3 +1,4 @@
+#[allow(unused)]
 macro_rules! with_copy {
     ($object:ident, $action:expr) => {{
         let $object = $object.clone();
@@ -9,4 +10,5 @@ macro_rules! with_copy {
     }};
 }
 
+#[allow(unused)]
 pub(crate) use with_copy;

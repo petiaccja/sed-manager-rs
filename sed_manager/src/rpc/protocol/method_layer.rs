@@ -1,11 +1,8 @@
 use std::collections::VecDeque as Queue;
 use std::ops::DerefMut;
-use std::sync::atomic::AtomicU32;
-use std::sync::atomic::Ordering;
 use tokio::sync::Mutex;
 use tokio::task::yield_now;
 
-use super::buffer::Buffer;
 use super::packet_layer::PacketLayer;
 use crate::messaging::packet::{Packet, SubPacket, SubPacketKind, PACKET_HEADER_LEN, SUB_PACKET_HEADER_LEN};
 use crate::messaging::token::{Tag, Token, TokenizeError};
@@ -16,8 +13,6 @@ use crate::rpc::properties::Properties;
 use crate::serialization::vec_with_len::VecWithLen;
 use crate::serialization::vec_without_len::VecWithoutLen;
 use crate::serialization::{Deserialize, InputStream, ItemRead, OutputStream, Serialize};
-
-const BUFFER_CAPACITY: u32 = 1048576;
 
 pub enum PackagedMethod {
     Call(MethodCall),
@@ -30,21 +25,15 @@ pub struct MethodLayer {
     properties: Properties,
     request_queue: Mutex<Queue<Vec<u8>>>,
     token_queue: Mutex<Queue<Token>>,
-    buffer: Buffer,
-    outstanding_credit: AtomicU32,
 }
 
 impl MethodLayer {
-    pub fn new(next_layer: Box<dyn PacketLayer>, initial_credit_sent: u32, properties: Properties) -> Self {
-        let capacity = std::cmp::max(initial_credit_sent, BUFFER_CAPACITY);
-        let buffer = Buffer::new(capacity);
+    pub fn new(next_layer: Box<dyn PacketLayer>, properties: Properties) -> Self {
         Self {
             next_layer,
             properties: properties,
             request_queue: Queue::new().into(),
             token_queue: Queue::new().into(),
-            buffer,
-            outstanding_credit: (capacity - initial_credit_sent).into(),
         }
     }
 
@@ -57,9 +46,6 @@ impl MethodLayer {
         };
         yield_now().await;
         {
-            if let Some(packet) = self.commit_outstanding_credit() {
-                self.next_layer.send(packet).await?;
-            }
             let request_queue = std::mem::replace(self.request_queue.lock().await.deref_mut(), Queue::new());
             let packets = bundle(request_queue, &self.properties);
             for packet in packets {
@@ -72,7 +58,6 @@ impl MethodLayer {
     pub async fn recv(&self) -> Result<PackagedMethod, Error> {
         let mut token_queue = self.token_queue.lock().await;
         let mut method_parser = MethodParser::new();
-        let mut allocated: u32 = 0;
         let result = 'outer: loop {
             while let Some(token) = token_queue.pop_front() {
                 if let Some(method) = method_parser.feed(token)? {
@@ -80,35 +65,17 @@ impl MethodLayer {
                 }
             }
             let packet = self.next_layer.recv().await?;
-            let credit = packet.credit();
-            if self.buffer.allocate(credit) {
-                allocated += credit;
-            } else {
-                break 'outer Err(Error::OutOfCreditRemote);
-            };
+
             let tokens = deserialize(packet)?;
             for token in tokens {
                 token_queue.push_back(token);
             }
         };
-        self.buffer.deallocate(allocated);
-        self.outstanding_credit.fetch_add(allocated, Ordering::Relaxed);
         result
     }
 
     pub async fn close(&self) {
         self.next_layer.close().await;
-    }
-
-    fn commit_outstanding_credit(&self) -> Option<Packet> {
-        let credit = self.outstanding_credit.swap(0, Ordering::Relaxed);
-        if credit != 0 {
-            let payload = Vec::from(credit.to_be_bytes()).into();
-            let sub_packet = SubPacket { kind: SubPacketKind::CreditControl, payload };
-            Some(Packet { payload: vec![sub_packet].into(), ..Default::default() })
-        } else {
-            None
-        }
     }
 }
 

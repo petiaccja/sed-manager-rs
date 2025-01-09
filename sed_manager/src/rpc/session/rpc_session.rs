@@ -7,10 +7,7 @@ use super::management_session::ManagementSession;
 use super::sp_session::SPSession;
 use crate::device::Device;
 use crate::rpc::properties::Properties;
-use crate::rpc::protocol::{
-    AcknowledgementLayer, BufferingLayer, ComPacketLayer, InterfaceLayer, MethodLayer, MultiplexerHub, PacketLayer,
-    SequencingLayer, SyncHostLayer,
-};
+use crate::rpc::protocol::{ComPacketLayer, InterfaceLayer, MethodLayer, MultiplexerHub, PacketLayer, SyncHostLayer};
 
 pub struct RPCSession {
     interface_layer: Arc<dyn InterfaceLayer>,
@@ -41,52 +38,25 @@ impl RPCSession {
     pub async fn get_management_session(&self) -> &ManagementSession {
         self.mgmt_session
             .get_or_init(|| async {
-                let layer = self.create_session(0, 0, 0, 0).await.unwrap();
+                let layer = self.create_session(0, 0).await.unwrap();
                 ManagementSession::new(layer)
             })
             .await
     }
 
-    pub async fn create_sp_session(
-        &self,
-        host_session_number: u32,
-        tper_session_number: u32,
-        initial_credit: u32,
-        initial_credit_sent: u32,
-    ) -> Option<SPSession> {
-        self.create_session(host_session_number, tper_session_number, initial_credit, initial_credit_sent)
+    pub async fn create_sp_session(&self, host_session_number: u32, tper_session_number: u32) -> Option<SPSession> {
+        self.create_session(host_session_number, tper_session_number)
             .await
             .map(|layer| SPSession::new(layer))
     }
 
-    async fn create_session(
-        &self,
-        host_sn: u32,
-        tper_sn: u32,
-        initial_credit: u32,
-        initial_credit_sent: u32,
-    ) -> Option<MethodLayer> {
+    async fn create_session(&self, host_sn: u32, tper_sn: u32) -> Option<MethodLayer> {
         // Multiplexer.
         let Some(mux_session) = self.mux_hub.create_session(host_sn, tper_sn).await else {
             return None;
         };
-        let mut layer: Box<dyn PacketLayer> = Box::new(mux_session);
+        let layer: Box<dyn PacketLayer> = Box::new(mux_session);
 
-        // ACK/NAK & sequence numbers.
-        if self.properties.ack_nak {
-            let ack_layer = AcknowledgementLayer::new(layer, self.properties.clone());
-            layer = Box::new(ack_layer);
-        } else if self.properties.seq_numbers {
-            let seq_layer = SequencingLayer::new(layer);
-            layer = Box::new(seq_layer);
-        }
-
-        // Credit control.
-        if self.properties.buffer_mgmt {
-            let buffering_layer = BufferingLayer::new(initial_credit, layer);
-            layer = Box::new(buffering_layer);
-        }
-
-        Some(MethodLayer::new(layer, initial_credit_sent, self.properties.clone()))
+        Some(MethodLayer::new(layer, self.properties.clone()))
     }
 }
