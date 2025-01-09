@@ -10,7 +10,7 @@ pub use error::Error;
 
 pub use properties::Properties;
 pub use properties::ASSUMED_PROPERTIES;
-pub use session::ComIdSession;
+pub use session::ComSession;
 pub use session::ManagementSession;
+pub use session::RPCSession;
 pub use session::SPSession;
-pub use session::TPerSession;

@@ -1,6 +1,6 @@
+mod controller;
 mod device;
 mod discovery;
-mod route;
-mod state;
+mod session;
 
 pub use device::FakeDevice;

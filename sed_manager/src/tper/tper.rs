@@ -6,7 +6,7 @@ use crate::messaging::com_id::{
     ComIdState, HandleComIdRequest, StackResetResponsePayload, StackResetStatus, VerifyComIdValidResponsePayload,
 };
 use crate::messaging::discovery::{Discovery, SSCDescriptor};
-use crate::rpc::{Error as RPCError, Properties, TPerSession};
+use crate::rpc::{Error as RPCError, Properties, RPCSession};
 use crate::serialization::{Deserialize, InputStream};
 
 pub struct TPer {
@@ -18,7 +18,7 @@ pub struct TPer {
 struct Stack {
     com_id: u16,
     com_id_ext: u16,
-    main_session: TPerSession,
+    rpc_session: RPCSession,
 }
 
 impl TPer {
@@ -60,9 +60,9 @@ impl TPer {
                 };
                 let com_id = base_com_id;
                 let com_id_ext = 0x0000;
-                let main_session = TPerSession::new(self.device.clone(), com_id, com_id_ext, Properties::default());
+                let main_session = RPCSession::new(self.device.clone(), com_id, com_id_ext, Properties::default());
 
-                Ok(Stack { com_id, com_id_ext, main_session })
+                Ok(Stack { com_id, com_id_ext, rpc_session: main_session })
             })
             .await
     }
@@ -77,7 +77,7 @@ impl TPer {
 
     pub async fn verify_com_id(&self, com_id: u16, com_id_ext: u16) -> Result<ComIdState, RPCError> {
         let stack = self.stack().await?;
-        let com_id_session = stack.main_session.get_com_id_session().await;
+        let com_id_session = stack.rpc_session.get_com_session().await;
         let request = HandleComIdRequest::verify_com_id_valid(com_id, com_id_ext);
         let response = com_id_session.handle_request(request).await?;
         let mut stream = InputStream::from(response.payload.into_vec());
@@ -89,7 +89,7 @@ impl TPer {
 
     pub async fn stack_reset(&self, com_id: u16, com_id_ext: u16) -> Result<StackResetStatus, RPCError> {
         let stack = self.stack().await?;
-        let com_id_session = stack.main_session.get_com_id_session().await;
+        let com_id_session = stack.rpc_session.get_com_session().await;
         let request = HandleComIdRequest::stack_reset(com_id, com_id_ext);
         let response = com_id_session.handle_request(request).await?;
         let mut stream = InputStream::from(response.payload.into_vec());

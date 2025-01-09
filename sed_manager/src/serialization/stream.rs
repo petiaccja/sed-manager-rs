@@ -49,6 +49,15 @@ impl<Item> From<Vec<Item>> for InputStream<Item> {
     }
 }
 
+impl<Item> From<&[Item]> for InputStream<Item>
+where
+    Item: Clone,
+{
+    fn from(value: &[Item]) -> Self {
+        Self { data: value.into(), stream_pos: 0 }
+    }
+}
+
 impl<Item> OutputStream<Item> {
     pub fn new() -> OutputStream<Item> {
         OutputStream { data: vec![], stream_pos: 0 }

@@ -6,12 +6,12 @@ use crate::messaging::com_id::{HandleComIdRequest, HandleComIdResponse};
 use crate::rpc::error::Error;
 use crate::rpc::protocol::InterfaceLayer;
 
-pub struct ComIdSession {
+pub struct ComSession {
     interface_layer: Arc<dyn InterfaceLayer>,
     response_queue: Arc<Mutex<Queue<oneshot::Sender<Result<HandleComIdResponse, Error>>>>>,
 }
 
-impl ComIdSession {
+impl ComSession {
     pub fn new(interface_layer: Arc<dyn InterfaceLayer>) -> Self {
         Self { interface_layer: interface_layer.into(), response_queue: Arc::new(Queue::new().into()) }
     }

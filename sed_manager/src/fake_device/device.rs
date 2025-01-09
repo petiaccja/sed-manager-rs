@@ -1,19 +1,22 @@
-use std::ops::DerefMut;
-use std::sync::Mutex;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
 use crate::device::{Device, Error, Interface};
+use crate::messaging::com_id::HANDLE_COM_ID_PROTOCOL;
+use crate::messaging::packet::PACKETIZED_PROTOCOL;
+use crate::rpc::ASSUMED_PROPERTIES;
 
-use super::discovery::DiscoveryHandler;
-use super::route::Route;
-use super::state::{PersistentState, RoutingState};
+use super::controller::Controller;
+use super::discovery::{get_discovery, write_discovery, BASE_COM_ID, NUM_COM_IDS};
+use super::session::Session;
 
-struct State {
-    routing_state: RoutingState,
-    persistent_state: PersistentState,
-}
+const ROUTE_DISCOVERY: (u8, u16) = (0x01, 0x0001);
+const ROUTE_GET_COMID: (u8, u16) = (0x02, 0x0000);
+const ROUTE_TPER_RESET: (u8, u16) = (0x02, 0x0004);
 
 pub struct FakeDevice {
-    state: Mutex<State>,
+    sessions: Mutex<HashMap<u16, Session>>,
+    controller: Arc<Mutex<Controller>>,
 }
 
 impl Device for FakeDevice {
@@ -34,48 +37,51 @@ impl Device for FakeDevice {
     }
 
     fn security_send(&self, security_protocol: u8, protocol_specific: [u8; 2], data: &[u8]) -> Result<(), Error> {
-        let mut state = self.state.lock().unwrap();
-        let State { routing_state, persistent_state } = state.deref_mut();
-
         let com_id = u16::from_be_bytes(protocol_specific);
-        let route = Route { protocol: security_protocol, com_id: com_id };
-        let Some(handler) = routing_state.get_route(&route) else {
-            return Err(Error::InvalidProtocolOrComID);
-        };
-        let route_modifications = handler.push_request(persistent_state, data)?;
-        for (route, handler) in route_modifications.new_routes {
-            routing_state
-                .add_route_boxed(route, handler)
-                .expect("push_request should not return invalid routes");
+
+        if (security_protocol, com_id) == ROUTE_DISCOVERY {
+            Ok(()) // Discovery on IF-SEND is simply ignored.
+        } else if (security_protocol, com_id) == ROUTE_TPER_RESET {
+            unimplemented!("TPer reset is not implemented for the fake device")
+        } else if let Some(session) = self.sessions.lock().unwrap().get_mut(&com_id) {
+            match security_protocol {
+                HANDLE_COM_ID_PROTOCOL => session.on_security_send_com(data),
+                PACKETIZED_PROTOCOL => session.on_security_send_packet(data),
+                _ => Err(Error::InvalidProtocolOrComID),
+            }
+        } else {
+            Err(Error::InvalidProtocolOrComID)
         }
-        for route in route_modifications.deleted_routes {
-            routing_state.remove_route(route).expect("push_request should not return invalid routes");
-        }
-        Ok(())
     }
 
     fn security_recv(&self, security_protocol: u8, protocol_specific: [u8; 2], len: usize) -> Result<Vec<u8>, Error> {
-        let mut state = self.state.lock().unwrap();
-        let State { routing_state, persistent_state } = state.deref_mut();
-
         let com_id = u16::from_be_bytes(protocol_specific);
-        let route = Route { protocol: security_protocol, com_id: com_id };
-        let Some(handler) = routing_state.get_route(&route) else {
-            return Err(Error::InvalidProtocolOrComID);
-        };
-        handler.pop_response(persistent_state, len)
+
+        if (security_protocol, com_id) == ROUTE_DISCOVERY {
+            write_discovery(&get_discovery(ASSUMED_PROPERTIES), len)
+        } else if (security_protocol, com_id) == ROUTE_GET_COMID {
+            unimplemented!("dynamic com ID management is not implemented for the fake device")
+        } else if let Some(session) = self.sessions.lock().unwrap().get_mut(&com_id) {
+            match security_protocol {
+                HANDLE_COM_ID_PROTOCOL => session.on_security_recv_com(len),
+                PACKETIZED_PROTOCOL => session.on_security_recv_packet(len),
+                _ => Err(Error::InvalidProtocolOrComID),
+            }
+        } else {
+            Err(Error::InvalidProtocolOrComID)
+        }
     }
 }
 
 impl FakeDevice {
     pub fn new() -> FakeDevice {
-        let state = State { routing_state: FakeDevice::default_routes(), persistent_state: PersistentState {} };
-        FakeDevice { state: state.into() }
-    }
-
-    fn default_routes() -> RoutingState {
-        let mut state = RoutingState::new();
-        state.add_route(Route { protocol: 0x01, com_id: 0x0001 }, DiscoveryHandler {}).unwrap();
-        state
+        let controller = Arc::new(Mutex::new(Controller {}));
+        let mut sessions = HashMap::new();
+        for i in 0..NUM_COM_IDS {
+            let com_id = BASE_COM_ID + i;
+            let session = Session::new(com_id, 0x0000, controller.clone());
+            sessions.insert(BASE_COM_ID + i, session);
+        }
+        FakeDevice { controller, sessions: sessions.into() }
     }
 }

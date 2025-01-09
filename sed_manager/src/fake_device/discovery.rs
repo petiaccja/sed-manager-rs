@@ -1,58 +1,41 @@
-use crate::device::Error as DeviceError;
 use crate::messaging::discovery::{
     Discovery, FeatureDescriptor, LockingDescriptor, OpalV2Descriptor, OwnerPasswordState, TPerDescriptor,
 };
+use crate::rpc::Properties;
 use crate::serialization::{OutputStream, Serialize};
 
-use super::route::{RouteHandler, RouteModifications};
-use super::state::PersistentState;
+pub const BASE_COM_ID: u16 = 4100;
+pub const NUM_COM_IDS: u16 = 1;
 
-pub struct DiscoveryHandler {}
-
-impl RouteHandler for DiscoveryHandler {
-    fn push_request(
-        &mut self,
-        _device: &mut PersistentState,
-        _data: &[u8],
-    ) -> Result<RouteModifications, crate::device::Error> {
-        // Using IF-SEND on the discovery protocol and com ID is legal, but it's a noop.
-        Ok(RouteModifications::none())
-    }
-
-    fn pop_response(&mut self, device: &mut PersistentState, len: usize) -> Result<Vec<u8>, crate::device::Error> {
-        let discovery = Discovery::new(vec![
-            get_tper_feature_desc(device),
-            get_locking_feature_desc(device),
-            get_ssc_feature_desc(device),
-        ]);
-        let mut stream = OutputStream::<u8>::new();
-        discovery.serialize(&mut stream).unwrap();
-        let mut buffer = stream.take();
-        if buffer.len() <= len {
-            buffer.resize(len, 0);
-            Ok(buffer)
-        } else {
-            Err(DeviceError::BufferTooShort)
-        }
-    }
+pub fn write_discovery(discovery: &Discovery, len: usize) -> Result<Vec<u8>, crate::device::Error> {
+    let mut stream = OutputStream::<u8>::new();
+    discovery.serialize(&mut stream).unwrap();
+    let mut buffer = stream.take();
+    buffer.resize(len, 0); // If the transfer length is too small, the truncated buffer must be returned.
+    Ok(buffer)
 }
 
-fn get_tper_feature_desc(_device: &PersistentState) -> FeatureDescriptor {
-    // The reason this function (and below ones) take the device as parameter
-    // is because if the device contains some configuration data for testing,
-    // that has to be reflected in the discovery process.
+pub fn get_discovery(properties: Properties) -> Discovery {
+    Discovery::new(vec![
+        get_tper_feature_desc(properties),
+        get_locking_feature_desc(),
+        get_ssc_feature_desc(),
+    ])
+}
+
+fn get_tper_feature_desc(properties: Properties) -> FeatureDescriptor {
     let desc = TPerDescriptor {
         sync_supported: true,
-        async_supported: false,
-        ack_nak_supported: false,
-        buffer_mgmt_supported: false,
-        streaming_supported: false,
+        async_supported: properties.asynchronous,
+        ack_nak_supported: properties.ack_nak,
+        buffer_mgmt_supported: properties.buffer_mgmt,
+        streaming_supported: true,
         com_id_mgmt_supported: false,
     };
     FeatureDescriptor::TPer(desc)
 }
 
-fn get_locking_feature_desc(_device: &PersistentState) -> FeatureDescriptor {
+fn get_locking_feature_desc() -> FeatureDescriptor {
     let desc = LockingDescriptor {
         hw_reset_supported: true,
         locked: false,
@@ -66,10 +49,10 @@ fn get_locking_feature_desc(_device: &PersistentState) -> FeatureDescriptor {
     FeatureDescriptor::Locking(desc)
 }
 
-fn get_ssc_feature_desc(_device: &PersistentState) -> FeatureDescriptor {
+fn get_ssc_feature_desc() -> FeatureDescriptor {
     let desc = OpalV2Descriptor {
-        base_com_id: 4100,
-        num_com_ids: 1,
+        base_com_id: BASE_COM_ID,
+        num_com_ids: NUM_COM_IDS,
         num_locking_admins_supported: 4,
         num_locking_users_supported: 8,
         initial_owner_pw: OwnerPasswordState::SameAsMSID,

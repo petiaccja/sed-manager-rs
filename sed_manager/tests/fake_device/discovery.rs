@@ -25,7 +25,7 @@ fn discovery_normal() -> Result<(), RPCError> {
     assert_eq!(tper_desc.async_supported, false);
     assert_eq!(tper_desc.ack_nak_supported, false);
     assert_eq!(tper_desc.buffer_mgmt_supported, false);
-    assert_eq!(tper_desc.streaming_supported, false);
+    assert_eq!(tper_desc.streaming_supported, true);
     assert_eq!(tper_desc.com_id_mgmt_supported, false);
 
     assert_eq!(locking_desc.locking_supported, true);

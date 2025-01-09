@@ -18,6 +18,7 @@ use crate::serialization::{Deserialize, InputStream, OutputStream, Serialize};
 
 pub struct SyncHostLayer {
     device: Mutex<Arc<dyn Device>>,
+    com_id: u16,
     properties: Properties,
     tx_handle_com_id: Mutex<mpsc::UnboundedSender<Result<HandleComIdResponse, Error>>>,
     rx_handle_com_id: Mutex<mpsc::UnboundedReceiver<Result<HandleComIdResponse, Error>>>,
@@ -26,11 +27,12 @@ pub struct SyncHostLayer {
 }
 
 impl SyncHostLayer {
-    pub fn new(device: Arc<dyn Device>, properties: Properties) -> Self {
+    pub fn new(device: Arc<dyn Device>, com_id: u16, properties: Properties) -> Self {
         let (tx_handle_com_id, rx_handle_com_id) = mpsc::unbounded_channel();
         let (tx_com_packet, rx_com_packet) = mpsc::unbounded_channel();
         Self {
             device: device.into(),
+            com_id,
             properties,
             tx_handle_com_id: tx_handle_com_id.into(),
             rx_handle_com_id: rx_handle_com_id.into(),
@@ -44,10 +46,9 @@ impl SyncHostLayer {
 impl InterfaceLayer for SyncHostLayer {
     async fn send_handle_com_id(&self, request: HandleComIdRequest) -> Result<(), Error> {
         let device = self.device.lock().await;
-        let com_id = request.com_id;
-        security_send_handle_com_id(device.deref().deref(), request)?;
+        security_send_handle_com_id(device.deref().deref(), self.com_id, request)?;
 
-        let result = security_recv_handle_com_id(device.deref().deref(), com_id, self.properties.timeout).await;
+        let result = security_recv_handle_com_id(device.deref().deref(), self.com_id, self.properties.timeout).await;
         let _ = self.tx_handle_com_id.lock().await.send(result);
         Ok(())
     }
@@ -62,12 +63,11 @@ impl InterfaceLayer for SyncHostLayer {
 
     async fn send_com_packet(&self, request: ComPacket) -> Result<(), Error> {
         let device = self.device.lock().await;
-        let com_id = request.com_id;
-        security_send_com_packet(device.deref().deref(), request)?;
+        security_send_com_packet(device.deref().deref(), self.com_id, request)?;
 
         let result = security_recv_com_packet(
             device.deref().deref(),
-            com_id,
+            self.com_id,
             self.properties.timeout,
             self.properties.max_gross_compacket_size as u32,
         )
@@ -89,8 +89,8 @@ impl InterfaceLayer for SyncHostLayer {
     }
 }
 
-fn security_send_handle_com_id(device: &dyn Device, request: HandleComIdRequest) -> Result<(), Error> {
-    let com_id = request.com_id.to_be_bytes();
+fn security_send_handle_com_id(device: &dyn Device, com_id: u16, request: HandleComIdRequest) -> Result<(), Error> {
+    let com_id = com_id.to_be_bytes();
 
     let mut os = OutputStream::<u8>::new();
     if let Err(err) = request.serialize(&mut os) {
@@ -128,8 +128,8 @@ async fn security_recv_handle_com_id(
     }
 }
 
-fn security_send_com_packet(device: &dyn Device, request: ComPacket) -> Result<(), Error> {
-    let com_id = request.com_id.to_be_bytes();
+fn security_send_com_packet(device: &dyn Device, com_id: u16, request: ComPacket) -> Result<(), Error> {
+    let com_id = com_id.to_be_bytes();
 
     let mut os = OutputStream::<u8>::new();
     if let Err(err) = request.serialize(&mut os) {

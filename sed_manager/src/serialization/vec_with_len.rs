@@ -13,7 +13,7 @@ pub struct VecWithLen<T, L: TryFrom<usize> + TryInto<usize>> {
 }
 
 impl<T, L: TryFrom<usize> + TryInto<usize>> VecWithLen<T, L> {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self { data: Vec::new(), phantom_data: PhantomData }
     }
 
