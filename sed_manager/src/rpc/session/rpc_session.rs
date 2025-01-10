@@ -15,7 +15,7 @@ pub struct RPCSession {
     interface_layer: Arc<dyn InterfaceLayer>,
     session_router: Arc<SessionRouter>,
     com_session: OnceCell<ComSession>,
-    mgmt_session: OnceCell<ControlSession>,
+    control_session: OnceCell<ControlSession>,
     properties: Properties,
 }
 
@@ -28,7 +28,7 @@ impl RPCSession {
             interface_layer,
             session_router: session_rounter.into(),
             com_session: OnceCell::new(),
-            mgmt_session: OnceCell::new(),
+            control_session: OnceCell::new(),
             properties,
         }
     }
@@ -37,8 +37,8 @@ impl RPCSession {
         self.com_session.get_or_init(|| async { ComSession::new(self.interface_layer.clone()) }).await
     }
 
-    pub async fn get_management_session(&self) -> &ControlSession {
-        self.mgmt_session
+    pub async fn get_control_session(&self) -> &ControlSession {
+        self.control_session
             .get_or_init(|| async {
                 let layer = self.create_session(0, 0).await.unwrap();
                 ControlSession::new(layer)
@@ -46,14 +46,13 @@ impl RPCSession {
             .await
     }
 
-    pub async fn create_sp_session(&self, host_session_number: u32, tper_session_number: u32) -> Option<SPSession> {
+    pub async fn open_sp_session(&self, host_session_number: u32, tper_session_number: u32) -> Option<SPSession> {
         self.create_session(host_session_number, tper_session_number)
             .await
             .map(|layer| SPSession::new(layer))
     }
 
     async fn create_session(&self, host_sn: u32, tper_sn: u32) -> Option<MethodCaller> {
-        // Multiplexer.
         let Some(session_endpoint) = self.session_router.clone().open(host_sn, tper_sn).await else {
             return None;
         };

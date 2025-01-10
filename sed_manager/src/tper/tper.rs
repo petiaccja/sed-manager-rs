@@ -98,4 +98,8 @@ impl TPer {
             Err(err) => Err(RPCError::SerializationFailed(err)),
         }
     }
+
+    pub async fn properties(&self) {
+        todo!()
+    }
 }
