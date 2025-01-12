@@ -32,6 +32,7 @@ pub struct MethodCall {
     pub invoking_id: UID,
     pub method_id: UID,
     pub args: Vec<Value>,
+    pub status: MethodStatus,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -96,7 +97,7 @@ impl Serialize<Token> for MethodCall {
         Value::from(self.args.clone()).serialize(stream)?;
         Value::from(Command::EndOfData).serialize(stream)?;
         Value::from(vec![
-            Value::from(MethodStatus::Success),
+            Value::from(self.status),
             Value::from(MethodStatus::Success),
             Value::from(MethodStatus::Success),
         ])
@@ -145,13 +146,17 @@ impl Deserialize<Token> for MethodCall {
         if eod != Command::EndOfData {
             return Err(TokenizeError::UnexpectedTag);
         };
-        let Ok(_status_list) = List::try_from(status_value) else {
-            // This check requires the status list to be a list,
-            // but it does not check its contents. Not perfect but good enough.
+        let Ok(status_list) = List::try_from(status_value) else {
             return Err(TokenizeError::ExpectedList);
         };
+        let Some(status_value_0) = status_list.first() else {
+            return Err(TokenizeError::InvalidData);
+        };
+        let Ok(status) = MethodStatus::try_from(status_value_0) else {
+            return Err(TokenizeError::InvalidData);
+        };
 
-        Ok(MethodCall { invoking_id, method_id, args })
+        Ok(MethodCall { invoking_id, method_id, args, status })
     }
 }
 
@@ -197,6 +202,7 @@ mod tests {
             invoking_id: 1_u64.into(),
             method_id: 2_u64.into(),
             args: vec![Value::from(6_u16), Value::from(7_u16)],
+            status: MethodStatus::Fail,
         }
     }
 
@@ -211,7 +217,7 @@ mod tests {
             Token { tag: Tag::EndList, ..Default::default() },
             Token { tag: Tag::EndOfData, ..Default::default() },
             Token { tag: Tag::StartList, ..Default::default() },
-            Token { tag: Tag::ShortAtom, is_byte: false, is_signed: false, data: vec![0] },
+            Token { tag: Tag::ShortAtom, is_byte: false, is_signed: false, data: vec![MethodStatus::Fail as u8] },
             Token { tag: Tag::ShortAtom, is_byte: false, is_signed: false, data: vec![0] },
             Token { tag: Tag::ShortAtom, is_byte: false, is_signed: false, data: vec![0] },
             Token { tag: Tag::EndList, ..Default::default() },

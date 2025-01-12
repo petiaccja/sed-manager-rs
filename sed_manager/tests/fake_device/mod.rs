@@ -1,3 +1,4 @@
+mod control_session;
 mod discovery;
 mod handle_com_id;
 mod stack;

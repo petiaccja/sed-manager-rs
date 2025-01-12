@@ -24,3 +24,9 @@ pub enum Error {
     Unsupported,
     Unspecified,
 }
+
+impl From<MethodStatus> for Error {
+    fn from(value: MethodStatus) -> Self {
+        Self::MethodFailed(value)
+    }
+}

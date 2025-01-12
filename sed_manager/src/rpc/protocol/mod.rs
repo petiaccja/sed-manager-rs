@@ -10,7 +10,6 @@ mod with_copy;
 
 pub use com_packet_bundler::ComPacketBundler;
 pub use method_caller::{MethodCaller, PackagedMethod};
-pub use session_endpoint::SessionEndpoint;
 pub use session_router::SessionRouter;
 pub use synchronous_host::SynchronousHost;
 

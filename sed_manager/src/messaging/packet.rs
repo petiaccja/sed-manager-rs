@@ -1,3 +1,5 @@
+use std::ops::Deref;
+
 use crate::serialization::{vec_with_len::VecWithLen, Deserialize, Serialize};
 
 pub const COM_PACKET_HEADER_LEN: usize = 20;
@@ -84,5 +86,19 @@ impl Packet {
             .map(|s| s.payload.len())
             .reduce(|a, b| a + b);
         credit.unwrap_or(0) as u32
+    }
+}
+
+impl ComPacket {
+    pub fn get_transfer_len(&self) -> u32 {
+        let mut transfer_len = COM_PACKET_HEADER_LEN;
+        for packet in self.payload.deref() {
+            transfer_len += PACKET_HEADER_LEN;
+            for sub_packet in packet.payload.deref() {
+                transfer_len += SUB_PACKET_HEADER_LEN;
+                transfer_len += (sub_packet.payload.len() + 3) / 4 * 4;
+            }
+        }
+        transfer_len as u32
     }
 }

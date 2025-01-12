@@ -6,7 +6,6 @@ use crate::device::shared::string::ToNullTerminated;
 use crate::serialization::{Deserialize, InputStream};
 
 use core::ptr::null_mut;
-use std::cell::OnceCell;
 use std::io::Seek;
 use std::mem::offset_of;
 use std::os::raw::c_void;

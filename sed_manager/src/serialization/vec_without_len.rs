@@ -54,13 +54,13 @@ where
     }
 }
 
-impl<T> Serialize<u8> for VecWithoutLen<T>
+impl<T, Item> Serialize<Item> for VecWithoutLen<T>
 where
-    T: Serialize<u8>,
-    Error: From<<T as Serialize<u8>>::Error>,
+    T: Serialize<Item>,
+    Error: From<<T as Serialize<Item>>::Error>,
 {
     type Error = Error;
-    fn serialize(&self, stream: &mut OutputStream<u8>) -> Result<(), Self::Error> {
+    fn serialize(&self, stream: &mut OutputStream<Item>) -> Result<(), Self::Error> {
         let mut idx = 0_usize;
         for value in &self.data {
             annotate_field(value.serialize(stream), format!("data[{}]", idx))?;
@@ -70,13 +70,13 @@ where
     }
 }
 
-impl<T> Deserialize<u8> for VecWithoutLen<T>
+impl<T, Item> Deserialize<Item> for VecWithoutLen<T>
 where
-    T: Deserialize<u8>,
-    Error: From<<T as Deserialize<u8>>::Error>,
+    T: Deserialize<Item>,
+    Error: From<<T as Deserialize<Item>>::Error>,
 {
     type Error = Error;
-    fn deserialize(stream: &mut InputStream<u8>) -> Result<VecWithoutLen<T>, Self::Error> {
+    fn deserialize(stream: &mut InputStream<Item>) -> Result<VecWithoutLen<T>, Self::Error> {
         let mut data = Vec::<T>::new();
         while stream.pos() != stream.len() {
             let item = annotate_field(T::deserialize(stream), format!("data[{}]", data.len()))?;

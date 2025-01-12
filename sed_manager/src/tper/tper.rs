@@ -6,8 +6,11 @@ use crate::messaging::com_id::{
     ComIdState, HandleComIdRequest, StackResetResponsePayload, StackResetStatus, VerifyComIdValidResponsePayload,
 };
 use crate::messaging::discovery::{Discovery, SSCDescriptor};
-use crate::rpc::{Error as RPCError, Properties, RPCSession};
+use crate::rpc::{decode_args, encode_args, Error as RPCError, MethodCall, MethodStatus, Properties, RPCSession};
 use crate::serialization::{Deserialize, InputStream};
+
+use crate::messaging::types::{List, MaxBytes32, NamedValue};
+use crate::specification::{invokers, methods};
 
 pub struct TPer {
     device: Arc<dyn Device>,
@@ -99,7 +102,27 @@ impl TPer {
         }
     }
 
-    pub async fn properties(&self) {
-        todo!()
+    pub async fn properties(
+        &self,
+        host_properties: Option<List<NamedValue<MaxBytes32, u32>>>,
+    ) -> Result<(List<NamedValue<MaxBytes32, u32>>, Option<List<NamedValue<MaxBytes32, u32>>>), RPCError> {
+        let args = encode_args!(host_properties);
+        let stack = self.stack().await?;
+        let control_session = stack.rpc_session.get_control_session().await;
+        let call = MethodCall {
+            invoking_id: invokers::SMUID,
+            method_id: methods::PROPERTIES,
+            args: args,
+            status: MethodStatus::Success,
+        };
+        let result = control_session.call(call).await?;
+        if result.status != MethodStatus::Success {
+            return Err(RPCError::MethodFailed(result.status));
+        }
+        Ok(decode_args!(
+            result.args,
+            List<NamedValue<MaxBytes32, u32>>,
+            Option<List<NamedValue<MaxBytes32, u32>>>
+        )?)
     }
 }

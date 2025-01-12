@@ -91,13 +91,19 @@ impl From<Named> for Value {
     }
 }
 
+impl<const N: usize> From<[u8; N]> for Value {
+    fn from(value: [u8; N]) -> Self {
+        Self { storage: Storage::Bytes(Bytes::from(value)) }
+    }
+}
+
 macro_rules! impl_value_try_into {
-    { $storage_ty:ty, $enum_variant:pat, $value_expr:ident} => {
+    { $storage_ty:ty, $value_expr:expr, $($enum_variants:pat),+} => {
         impl TryFrom<Value> for $storage_ty {
             type Error = Value;
             fn try_from(value: Value) -> Result<Self, Self::Error> {
                 match value.storage {
-                    $enum_variant => Ok($value_expr),
+                    $($enum_variants => Ok($value_expr),)+
                     _ => Err(value),
                 }
             }
@@ -107,7 +113,7 @@ macro_rules! impl_value_try_into {
             type Error = &'value Value;
             fn try_from(value: &'value Value) -> Result<Self, Self::Error> {
                 match value.storage {
-                    $enum_variant => Ok($value_expr),
+                    $($enum_variants => Ok($value_expr),)+
                     _ => Err(value),
                 }
             }
@@ -115,15 +121,40 @@ macro_rules! impl_value_try_into {
     };
 }
 
-impl_value_try_into!(i8, Storage::Int8(value), value);
-impl_value_try_into!(i16, Storage::Int16(value), value);
-impl_value_try_into!(i32, Storage::Int32(value), value);
-impl_value_try_into!(i64, Storage::Int64(value), value);
-impl_value_try_into!(u8, Storage::Uint8(value), value);
-impl_value_try_into!(u16, Storage::Uint16(value), value);
-impl_value_try_into!(u32, Storage::Uint32(value), value);
-impl_value_try_into!(u64, Storage::Uint64(value), value);
-impl_value_try_into!(Command, Storage::Command(value), value);
+impl_value_try_into!(i8, value.into(), Storage::Int8(value));
+impl_value_try_into!(i16, value.into(), Storage::Int8(value), Storage::Int16(value), Storage::Uint8(value));
+impl_value_try_into!(
+    i32,
+    value.into(),
+    Storage::Int8(value),
+    Storage::Int16(value),
+    Storage::Int32(value),
+    Storage::Uint8(value),
+    Storage::Uint16(value)
+);
+impl_value_try_into!(
+    i64,
+    value.into(),
+    Storage::Int8(value),
+    Storage::Int16(value),
+    Storage::Int32(value),
+    Storage::Int64(value),
+    Storage::Uint8(value),
+    Storage::Uint16(value),
+    Storage::Uint32(value)
+);
+impl_value_try_into!(u8, value.into(), Storage::Uint8(value));
+impl_value_try_into!(u16, value.into(), Storage::Uint8(value), Storage::Uint16(value));
+impl_value_try_into!(u32, value.into(), Storage::Uint8(value), Storage::Uint16(value), Storage::Uint32(value));
+impl_value_try_into!(
+    u64,
+    value.into(),
+    Storage::Uint8(value),
+    Storage::Uint16(value),
+    Storage::Uint32(value),
+    Storage::Uint64(value)
+);
+impl_value_try_into!(Command, value, Storage::Command(value));
 
 impl TryFrom<Value> for Named {
     type Error = Value;
@@ -140,6 +171,19 @@ impl TryFrom<Value> for Bytes {
     fn try_from(value: Value) -> Result<Self, Self::Error> {
         match value.storage {
             Storage::Bytes(value) => Ok(value),
+            _ => Err(value),
+        }
+    }
+}
+
+impl<const N: usize> TryFrom<Value> for [u8; N] {
+    type Error = Value;
+    fn try_from(value: Value) -> Result<Self, Self::Error> {
+        match value.storage {
+            Storage::Bytes(value) => match Self::try_from(value) {
+                Ok(array) => Ok(array),
+                Err(value) => Err(Value::from(value)),
+            },
             _ => Err(value),
         }
     }
@@ -200,6 +244,19 @@ impl<'value> TryFrom<&'value Value> for Bytes {
     fn try_from(value: &'value Value) -> Result<Self, Self::Error> {
         match value.storage {
             Storage::Bytes(ref value) => Ok(value.clone()),
+            _ => Err(value),
+        }
+    }
+}
+
+impl<'value, const N: usize> TryFrom<&'value Value> for [u8; N] {
+    type Error = &'value Value;
+    fn try_from(value: &'value Value) -> Result<Self, Self::Error> {
+        match value.storage {
+            Storage::Bytes(ref items) => match Self::try_from(items.as_slice()) {
+                Ok(array) => Ok(array),
+                Err(_) => Err(value),
+            },
             _ => Err(value),
         }
     }
