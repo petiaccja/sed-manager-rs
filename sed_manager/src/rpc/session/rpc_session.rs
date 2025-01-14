@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use tokio::sync::OnceCell;
+use tokio::sync::{Mutex, OnceCell};
 
 use super::com_session::ComSession;
 use super::control_session::ControlSession;
@@ -16,7 +16,7 @@ pub struct RPCSession {
     session_router: Arc<SessionRouter>,
     com_session: OnceCell<ComSession>,
     control_session: OnceCell<ControlSession>,
-    properties: Properties,
+    properties: Mutex<Properties>,
 }
 
 impl RPCSession {
@@ -29,8 +29,16 @@ impl RPCSession {
             session_router: session_rounter.into(),
             com_session: OnceCell::new(),
             control_session: OnceCell::new(),
-            properties,
+            properties: properties.into(),
         }
+    }
+
+    pub async fn set_properties(&self, properties: Properties) {
+        *self.properties.lock().await = properties;
+    }
+
+    pub async fn get_properties(&self) -> Properties {
+        self.properties.lock().await.clone()
     }
 
     pub async fn get_com_session(&self) -> &ComSession {
@@ -58,6 +66,6 @@ impl RPCSession {
         };
         let layer: Box<dyn PacketLayer> = Box::new(session_endpoint);
 
-        Some(MethodCaller::new(layer, self.properties.clone()))
+        Some(MethodCaller::new(layer, self.properties.lock().await.clone()))
     }
 }

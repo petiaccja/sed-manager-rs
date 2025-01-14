@@ -1,10 +1,12 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
+use std::usize;
 
 use crate::device::{Device, Error, Interface};
 use crate::messaging::com_id::HANDLE_COM_ID_PROTOCOL;
 use crate::messaging::packet::PACKETIZED_PROTOCOL;
-use crate::rpc::ASSUMED_PROPERTIES;
+use crate::rpc::Properties;
 
 use super::controller::Controller;
 use super::discovery::{get_discovery, write_discovery, BASE_COM_ID, NUM_COM_IDS};
@@ -14,7 +16,26 @@ const ROUTE_DISCOVERY: (u8, u16) = (0x01, 0x0001);
 const ROUTE_GET_COMID: (u8, u16) = (0x02, 0x0000);
 const ROUTE_TPER_RESET: (u8, u16) = (0x02, 0x0004);
 
+const CAPABILITIES: Properties = Properties {
+    max_methods: usize::MAX,
+    max_subpackets: usize::MAX,
+    max_packets: usize::MAX,
+    max_gross_packet_size: 65536,
+    max_gross_compacket_size: 65536,
+    max_gross_compacket_response_size: 65536,
+    max_ind_token_size: 65480,
+    max_agg_token_size: 65480,
+    continued_tokens: false,
+    seq_numbers: false,
+    ack_nak: false,
+    asynchronous: true,
+    buffer_mgmt: false,
+    max_retries: 3,
+    trans_timeout: Duration::from_secs(10),
+};
+
 pub struct FakeDevice {
+    capabilities: Properties,
     sessions: Mutex<HashMap<u16, Session>>,
     controller: Arc<Mutex<Controller>>,
 }
@@ -58,7 +79,7 @@ impl Device for FakeDevice {
         let com_id = u16::from_be_bytes(protocol_specific);
 
         if (security_protocol, com_id) == ROUTE_DISCOVERY {
-            write_discovery(&get_discovery(ASSUMED_PROPERTIES), len)
+            write_discovery(&get_discovery(Properties::ASSUMED), len)
         } else if (security_protocol, com_id) == ROUTE_GET_COMID {
             unimplemented!("dynamic com ID management is not implemented for the fake device")
         } else if let Some(session) = self.sessions.lock().unwrap().get_mut(&com_id) {
@@ -76,12 +97,17 @@ impl Device for FakeDevice {
 impl FakeDevice {
     pub fn new() -> FakeDevice {
         let controller = Arc::new(Mutex::new(Controller {}));
+        let capabilities = CAPABILITIES;
         let mut sessions = HashMap::new();
         for i in 0..NUM_COM_IDS {
             let com_id = BASE_COM_ID + i;
-            let session = Session::new(com_id, 0x0000, controller.clone());
+            let session = Session::new(com_id, 0x0000, capabilities.clone(), controller.clone());
             sessions.insert(BASE_COM_ID + i, session);
         }
-        FakeDevice { controller, sessions: sessions.into() }
+        FakeDevice { capabilities, controller, sessions: sessions.into() }
+    }
+
+    pub fn capabilities(&self) -> &Properties {
+        &self.capabilities
     }
 }

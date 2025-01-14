@@ -1,7 +1,6 @@
 use std::collections::{HashMap, VecDeque as Queue};
 use std::ops::Deref;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 
 use crate::device::Error;
 use crate::messaging::com_id::{
@@ -12,31 +11,13 @@ use crate::messaging::packet::{ComPacket, Packet, SubPacket, SubPacketKind};
 use crate::messaging::token::Token;
 use crate::messaging::types::{List, MaxBytes32, NamedValue};
 use crate::messaging::uid::UID;
-use crate::rpc::{decode_args, encode_args, MethodCall, MethodStatus, Properties, ASSUMED_PROPERTIES};
+use crate::rpc::{decode_args, encode_args, MethodCall, MethodStatus, Properties};
 use crate::serialization::vec_with_len::VecWithLen;
 use crate::serialization::vec_without_len::VecWithoutLen;
 use crate::serialization::{Deserialize, DeserializeBinary, InputStream, OutputStream, Serialize, SerializeBinary};
 use crate::specification::{invokers, methods};
 
 use super::controller::Controller;
-
-const CAPABILITIES: Properties = Properties {
-    max_methods: 0,
-    max_subpackets: 0,
-    max_packets: 0,
-    max_gross_packet_size: 65536,
-    max_gross_compacket_size: 65536,
-    max_gross_compacket_response_size: 65536,
-    max_ind_token_size: 65480,
-    max_agg_token_size: 65480,
-    continued_tokens: false,
-    seq_numbers: false,
-    ack_nak: false,
-    asynchronous: true,
-    buffer_mgmt: false,
-    max_retries: 3,
-    timeout: Duration::from_secs(10),
-};
 
 pub struct Session {
     com_id: u16,
@@ -50,12 +31,12 @@ pub struct Session {
 }
 
 impl Session {
-    pub fn new(com_id: u16, com_id_ext: u16, controller: Arc<Mutex<Controller>>) -> Self {
+    pub fn new(com_id: u16, com_id_ext: u16, capabilities: Properties, controller: Arc<Mutex<Controller>>) -> Self {
         Self {
             com_id,
             com_id_ext,
-            capabilities: CAPABILITIES,
-            properties: ASSUMED_PROPERTIES,
+            capabilities,
+            properties: Properties::ASSUMED,
             controller,
             com_queue: Queue::new(),
             packet_queue: Queue::new(),
@@ -249,7 +230,12 @@ impl Session {
         &mut self,
         host_properties: Option<List<NamedValue<MaxBytes32, u32>>>,
     ) -> Result<(List<NamedValue<MaxBytes32, u32>>, Option<List<NamedValue<MaxBytes32, u32>>>), MethodStatus> {
-        Err(MethodStatus::NoSessionsAvailable)
+        let host_properties = host_properties.unwrap_or(List::new());
+        let host_properties = Properties::from_list(host_properties.as_slice());
+        let common_properties = Properties::common(&self.capabilities, &host_properties);
+        let capabilities = self.capabilities.to_list();
+        let common_properties = common_properties.to_list();
+        Ok((capabilities, Some(common_properties)))
     }
 }
 

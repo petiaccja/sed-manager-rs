@@ -10,7 +10,6 @@ pub(crate) use args::encode_args;
 pub use error::Error;
 pub use method::{MethodCall, MethodResult, MethodStatus};
 pub use properties::Properties;
-pub use properties::ASSUMED_PROPERTIES;
 pub use session::ComSession;
 pub use session::ControlSession;
 pub use session::RPCSession;

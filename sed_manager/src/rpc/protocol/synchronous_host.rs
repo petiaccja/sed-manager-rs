@@ -48,7 +48,8 @@ impl InterfaceLayer for SynchronousHost {
         let device = self.device.lock().await;
         security_send_handle_com_id(device.deref().deref(), self.com_id, request)?;
 
-        let result = security_recv_handle_com_id(device.deref().deref(), self.com_id, self.properties.timeout).await;
+        let result =
+            security_recv_handle_com_id(device.deref().deref(), self.com_id, self.properties.trans_timeout).await;
         let _ = self.tx_handle_com_id.lock().await.send(result);
         Ok(())
     }
@@ -68,7 +69,7 @@ impl InterfaceLayer for SynchronousHost {
         let result = security_recv_com_packet(
             device.deref().deref(),
             self.com_id,
-            self.properties.timeout,
+            self.properties.trans_timeout,
             self.properties.max_gross_compacket_size as u32,
         )
         .await;

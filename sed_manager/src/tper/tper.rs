@@ -78,6 +78,14 @@ impl TPer {
         self.stack().await.map(|stack| stack.com_id_ext)
     }
 
+    pub async fn active_properties(&self) -> Properties {
+        if let Ok(stack) = self.stack().await {
+            stack.rpc_session.get_properties().await
+        } else {
+            Properties::ASSUMED
+        }
+    }
+
     pub async fn verify_com_id(&self, com_id: u16, com_id_ext: u16) -> Result<ComIdState, RPCError> {
         let stack = self.stack().await?;
         let com_id_session = stack.rpc_session.get_com_session().await;
@@ -106,23 +114,25 @@ impl TPer {
         &self,
         host_properties: Option<List<NamedValue<MaxBytes32, u32>>>,
     ) -> Result<(List<NamedValue<MaxBytes32, u32>>, Option<List<NamedValue<MaxBytes32, u32>>>), RPCError> {
+        let host_struct = Properties::from_list(host_properties.as_ref().unwrap_or(&List::new()));
         let args = encode_args!(host_properties);
-        let stack = self.stack().await?;
-        let control_session = stack.rpc_session.get_control_session().await;
         let call = MethodCall {
             invoking_id: invokers::SMUID,
             method_id: methods::PROPERTIES,
             args: args,
             status: MethodStatus::Success,
         };
+        let stack = self.stack().await?;
+        let control_session = stack.rpc_session.get_control_session().await;
         let result = control_session.call(call).await?;
         if result.status != MethodStatus::Success {
             return Err(RPCError::MethodFailed(result.status));
         }
-        Ok(decode_args!(
-            result.args,
-            List<NamedValue<MaxBytes32, u32>>,
-            Option<List<NamedValue<MaxBytes32, u32>>>
-        )?)
+        let (tper_properties, common_properties) =
+            decode_args!(result.args, List<NamedValue<MaxBytes32, u32>>, Option<List<NamedValue<MaxBytes32, u32>>>)?;
+        let tper_struct = Properties::from_list(&tper_properties);
+        let stack_properties = Properties::common(&host_struct, &tper_struct);
+        stack.rpc_session.set_properties(stack_properties).await;
+        Ok((tper_properties, common_properties))
     }
 }

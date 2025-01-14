@@ -43,12 +43,19 @@ pub struct ObjectTableReference {
 }
 
 pub struct NamedValue<NameTy, ValueTy> {
-    name: NameTy,
-    value: ValueTy,
+    pub name: NameTy,
+    pub value: ValueTy,
 }
 
 pub struct Set<T> {
     items: HashSet<T>,
+}
+
+impl<const LIMIT: usize> Deref for MaxBytes<LIMIT> {
+    type Target = Vec<u8>;
+    fn deref(&self) -> &Self::Target {
+        &self.bytes
+    }
 }
 
 impl<const LIMIT: usize> From<MaxBytes<LIMIT>> for Vec<u8> {
@@ -89,6 +96,12 @@ impl<const LIMIT: usize> TryFrom<MaxBytes<LIMIT>> for String {
 impl<const LIMIT: usize> From<String> for MaxBytes<LIMIT> {
     fn from(value: String) -> Self {
         Self { bytes: value.into_bytes() }
+    }
+}
+
+impl<const LIMIT: usize> From<&str> for MaxBytes<LIMIT> {
+    fn from(value: &str) -> Self {
+        Self { bytes: value.as_bytes().into() }
     }
 }
 
