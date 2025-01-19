@@ -78,7 +78,7 @@ where
     type Error = Error;
     fn deserialize(stream: &mut InputStream<Item>) -> Result<VecWithoutLen<T>, Self::Error> {
         let mut data = Vec::<T>::new();
-        while stream.pos() != stream.len() {
+        while stream.pos() < stream.len() {
             let item = annotate_field(T::deserialize(stream), format!("data[{}]", data.len()))?;
             data.push(item);
         }

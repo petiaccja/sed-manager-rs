@@ -96,7 +96,7 @@ impl Device for FakeDevice {
 
 impl FakeDevice {
     pub fn new() -> FakeDevice {
-        let controller = Arc::new(Mutex::new(Controller {}));
+        let controller = Arc::new(Mutex::new(Controller::new()));
         let capabilities = CAPABILITIES;
         let mut sessions = HashMap::new();
         for i in 0..NUM_COM_IDS {

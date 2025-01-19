@@ -5,6 +5,7 @@ use std::usize;
 use sed_manager::fake_device::FakeDevice;
 use sed_manager::messaging::types::List;
 use sed_manager::rpc::{Error as RPCError, Properties};
+use sed_manager::specification::sp;
 use sed_manager::tper::TPer;
 
 const HOST_PROPERTIES: Properties = Properties {
@@ -26,7 +27,7 @@ const HOST_PROPERTIES: Properties = Properties {
 };
 
 #[tokio::test]
-async fn properties_none() -> Result<(), RPCError> {
+async fn properties_with_host() -> Result<(), RPCError> {
     let device = FakeDevice::new();
     let device_caps = device.capabilities().clone();
     let tper = TPer::new(Arc::new(device));
@@ -36,5 +37,14 @@ async fn properties_none() -> Result<(), RPCError> {
     assert_eq!(tper_properties, device_caps);
     assert_eq!(host_properties, Properties::common(&device_caps, &HOST_PROPERTIES));
     assert_eq!(tper.active_properties().await, Properties::common(&HOST_PROPERTIES, &tper_properties));
+    Ok(())
+}
+
+#[tokio::test]
+async fn start_session_normal() -> Result<(), RPCError> {
+    let device = FakeDevice::new();
+    let tper = TPer::new(Arc::new(device));
+    let session = tper.start_session(sp::ADMIN.try_into().unwrap()).await?;
+    session.close().await?;
     Ok(())
 }

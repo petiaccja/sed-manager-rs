@@ -14,6 +14,10 @@ impl UID {
         Self { value: value }
     }
 
+    pub const fn value(&self) -> u64 {
+        self.value
+    }
+
     pub const fn to_descriptor(&self) -> Self {
         assert!(self.is_table());
         Self::new((self.value >> 32) | (1_u64 << 32))
@@ -26,16 +30,19 @@ impl UID {
 
     pub const fn containing_table(&self) -> Self {
         assert!(self.is_object() || self.is_descriptor());
-        return Self::new(self.value & 0xFFFF_FFFF_0000_0000);
+        Self::new(self.value & 0xFFFF_FFFF_0000_0000)
     }
 
     pub const fn is_table(&self) -> bool {
-        return (self.value & 0x0000_0000_FFFF_FFFF) == 0;
+        (self.value & 0x0000_0000_FFFF_FFFF) == 0
     }
 
     pub const fn is_descriptor(&self) -> bool {
-        return (self.value & 0xFFFF_FFFF_0000_0000) == 0x0000_0001_0000_0000
-            && (self.value & 0x0000_0000_FFFF_FFFF) != 0;
+        (self.value & 0xFFFF_FFFF_0000_0000) == 0x0000_0001_0000_0000 && (self.value & 0x0000_0000_FFFF_FFFF) != 0
+    }
+
+    pub const fn is_object_or_descriptor(&self) -> bool {
+        self.is_object() || self.is_descriptor()
     }
 
     pub const fn is_object(&self) -> bool {

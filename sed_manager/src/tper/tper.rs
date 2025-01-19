@@ -1,3 +1,4 @@
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, OnceLock};
 use tokio::sync::OnceCell as AsyncOnceCell;
 
@@ -6,16 +7,19 @@ use crate::messaging::com_id::{
     ComIdState, HandleComIdRequest, StackResetResponsePayload, StackResetStatus, VerifyComIdValidResponsePayload,
 };
 use crate::messaging::discovery::{Discovery, SSCDescriptor};
-use crate::rpc::{decode_args, encode_args, Error as RPCError, MethodCall, MethodStatus, Properties, RPCSession};
+use crate::messaging::types::{List, MaxBytes32, NamedValue, RestrictedObjectReference};
+use crate::rpc::args::{DecodeArgs, EncodeArgs};
+use crate::rpc::{Error as RPCError, MethodCall, MethodStatus, Properties, RPCSession};
 use crate::serialization::{Deserialize, InputStream};
+use crate::specification::{invokers, methods, tables};
 
-use crate::messaging::types::{List, MaxBytes32, NamedValue};
-use crate::specification::{invokers, methods};
+use super::session::Session;
 
 pub struct TPer {
     device: Arc<dyn Device>,
     cached_discovery: OnceLock<Discovery>,
     cached_stack: AsyncOnceCell<Stack>,
+    next_hsn: AtomicU32,
 }
 
 struct Stack {
@@ -26,7 +30,12 @@ struct Stack {
 
 impl TPer {
     pub fn new(device: Arc<dyn Device>) -> TPer {
-        TPer { device: device.into(), cached_discovery: OnceLock::new(), cached_stack: AsyncOnceCell::new() }
+        TPer {
+            device: device.into(),
+            cached_discovery: OnceLock::new(),
+            cached_stack: AsyncOnceCell::new(),
+            next_hsn: 1.into(),
+        }
     }
 
     pub fn discovery(&self) -> Result<&Discovery, RPCError> {
@@ -115,11 +124,10 @@ impl TPer {
         host_properties: Option<List<NamedValue<MaxBytes32, u32>>>,
     ) -> Result<(List<NamedValue<MaxBytes32, u32>>, Option<List<NamedValue<MaxBytes32, u32>>>), RPCError> {
         let host_struct = Properties::from_list(host_properties.as_ref().unwrap_or(&List::new()));
-        let args = encode_args!(host_properties);
         let call = MethodCall {
             invoking_id: invokers::SMUID,
             method_id: methods::PROPERTIES,
-            args: args,
+            args: (host_properties,).encode_args(),
             status: MethodStatus::Success,
         };
         let stack = self.stack().await?;
@@ -128,11 +136,47 @@ impl TPer {
         if result.status != MethodStatus::Success {
             return Err(RPCError::MethodFailed(result.status));
         }
-        let (tper_properties, common_properties) =
-            decode_args!(result.args, List<NamedValue<MaxBytes32, u32>>, Option<List<NamedValue<MaxBytes32, u32>>>)?;
+        let (tper_properties, common_properties): (
+            List<NamedValue<MaxBytes32, u32>>,
+            Option<List<NamedValue<MaxBytes32, u32>>>,
+        ) = result.args.decode_args()?;
         let tper_struct = Properties::from_list(&tper_properties);
         let stack_properties = Properties::common(&host_struct, &tper_struct);
         stack.rpc_session.set_properties(stack_properties).await;
         Ok((tper_properties, common_properties))
+    }
+
+    pub async fn start_session(
+        &self,
+        sp: RestrictedObjectReference<{ tables::SP.value() }>,
+    ) -> Result<Session, RPCError> {
+        let hsn = self.next_hsn.fetch_add(1, Ordering::Relaxed);
+        let call = MethodCall {
+            invoking_id: invokers::SMUID,
+            method_id: methods::START_SESSION,
+            args: (hsn, sp, 0u8).encode_args(),
+            status: MethodStatus::Success,
+        };
+        let stack = self.stack().await?;
+        let control_session = stack.rpc_session.get_control_session().await;
+        let result = control_session.call(call).await?;
+        if result.status != MethodStatus::Success {
+            return Err(RPCError::MethodFailed(result.status));
+        }
+        let (hsn_sync, tsn_sync, _, _, _, _, _, _): (
+            u32,
+            u32,
+            Option<Vec<u8>>,
+            Option<Vec<u8>>,
+            Option<Vec<u8>>,
+            Option<u32>,
+            Option<u32>,
+            Option<Vec<u8>>,
+        ) = result.args.decode_args()?;
+        if hsn_sync != hsn {
+            return Err(RPCError::Unspecified);
+        }
+        let sp_session = stack.rpc_session.open_sp_session(hsn, tsn_sync).await.expect("ensure HSN is unique");
+        Ok(Session::new(sp_session))
     }
 }

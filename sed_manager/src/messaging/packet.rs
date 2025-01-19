@@ -42,7 +42,7 @@ pub struct Packet {
     pub payload: VecWithLen<SubPacket, u32>,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct ComPacket {
     #[layout(offset = 4)]
     pub com_id: u16,

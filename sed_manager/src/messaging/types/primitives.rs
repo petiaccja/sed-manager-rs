@@ -169,3 +169,46 @@ impl<NameTy: TryFrom<Value>, ValueTy: TryFrom<Value>> TryFrom<Value> for NamedVa
         }
     }
 }
+
+impl<const TABLE: u64> RestrictedObjectReference<TABLE> {
+    const TABLE: UID = UID::new(TABLE);
+
+    pub fn new(object: UID) -> Result<Self, UID> {
+        if object.is_object_or_descriptor() && object.containing_table() == Self::TABLE {
+            Ok(Self { object })
+        } else {
+            Err(object)
+        }
+    }
+
+    pub fn object(&self) -> UID {
+        self.object
+    }
+}
+
+impl<const TABLE: u64> TryFrom<UID> for RestrictedObjectReference<TABLE> {
+    type Error = UID;
+    fn try_from(value: UID) -> Result<Self, Self::Error> {
+        Self::new(value)
+    }
+}
+
+impl<const TABLE: u64> From<RestrictedObjectReference<TABLE>> for UID {
+    fn from(value: RestrictedObjectReference<TABLE>) -> Self {
+        value.object()
+    }
+}
+
+impl<const TABLE: u64> TryFrom<Value> for RestrictedObjectReference<TABLE> {
+    type Error = Value;
+    fn try_from(value: Value) -> Result<Self, Self::Error> {
+        let uid = UID::try_from(value)?;
+        Self::try_from(uid).map_err(|uid| uid.into())
+    }
+}
+
+impl<const TABLE: u64> From<RestrictedObjectReference<TABLE>> for Value {
+    fn from(value: RestrictedObjectReference<TABLE>) -> Self {
+        value.object().into()
+    }
+}

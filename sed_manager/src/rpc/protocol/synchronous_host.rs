@@ -65,7 +65,6 @@ impl InterfaceLayer for SynchronousHost {
     async fn send_com_packet(&self, request: ComPacket) -> Result<(), Error> {
         let device = self.device.lock().await;
         security_send_com_packet(device.deref().deref(), self.com_id, request)?;
-
         let result = security_recv_com_packet(
             device.deref().deref(),
             self.com_id,
@@ -169,7 +168,11 @@ async fn security_recv_com_packet(
         receive_buffer_len =
             std::cmp::max(response.outstanding_data, std::cmp::min(max_com_packet_size, response.min_transfer));
         if response.outstanding_data == 0 {
-            break Ok(ComPacket { payload: packets.into(), ..response });
+            break if !packets.is_empty() {
+                Ok(ComPacket { payload: packets.into(), ..response })
+            } else {
+                Err(Error::NoResponse)
+            };
         } else if let Err(err) = retry.sleep().await {
             break Err(err);
         };

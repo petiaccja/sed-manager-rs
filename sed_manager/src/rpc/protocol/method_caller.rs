@@ -65,7 +65,6 @@ impl MethodCaller {
                 }
             }
             let packet = self.next_layer.recv().await?;
-
             let tokens = deserialize(packet)?;
             for token in tokens {
                 token_queue.push_back(token);
@@ -93,7 +92,9 @@ impl MethodParser {
     pub fn feed(&mut self, token: Token) -> Result<Option<Vec<Token>>, Error> {
         let tag = token.tag;
         self.tokens.push(token);
-        if !self.end_of_data {
+        if self.tokens.len() == 1 && tag == Tag::EndOfSession {
+            Ok(Some(std::mem::replace(&mut self.tokens, Vec::new())))
+        } else if !self.end_of_data {
             if tag == Tag::EndOfData {
                 self.end_of_data = true;
             }
@@ -198,7 +199,10 @@ impl Deserialize<Token> for PackagedMethod {
         match first.tag {
             Tag::Call => Ok(PackagedMethod::Call(MethodCall::deserialize(stream)?)),
             Tag::StartList => Ok(PackagedMethod::Result(MethodResult::deserialize(stream)?)),
-            Tag::EndOfSession => Ok(PackagedMethod::EndOfSession),
+            Tag::EndOfSession => {
+                let _ = stream.read_one();
+                Ok(PackagedMethod::EndOfSession)
+            }
             _ => Err(TokenizeError::UnexpectedTag),
         }
     }

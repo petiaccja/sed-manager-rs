@@ -1,5 +1,6 @@
 use std::collections::{HashMap, VecDeque as Queue};
 use std::ops::Deref;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 
 use crate::device::Error;
@@ -9,15 +10,22 @@ use crate::messaging::com_id::{
 };
 use crate::messaging::packet::{ComPacket, Packet, SubPacket, SubPacketKind};
 use crate::messaging::token::Token;
-use crate::messaging::types::{List, MaxBytes32, NamedValue};
+use crate::messaging::types::{List, MaxBytes32, NamedValue, RestrictedObjectReference};
 use crate::messaging::uid::UID;
-use crate::rpc::{decode_args, encode_args, MethodCall, MethodStatus, Properties};
+use crate::rpc::args::{DecodeArgs, EncodeArgs};
+use crate::rpc::{MethodCall, MethodStatus, PackagedMethod, Properties};
 use crate::serialization::vec_with_len::VecWithLen;
 use crate::serialization::vec_without_len::VecWithoutLen;
 use crate::serialization::{Deserialize, DeserializeBinary, InputStream, OutputStream, Serialize, SerializeBinary};
-use crate::specification::{invokers, methods};
+use crate::specification::{invokers, methods, tables};
 
 use super::controller::Controller;
+
+pub struct SPSession {
+    sp: UID,
+    write: bool,
+    authorities: Vec<UID>,
+}
 
 pub struct Session {
     com_id: u16,
@@ -27,7 +35,8 @@ pub struct Session {
     controller: Arc<Mutex<Controller>>,
     com_queue: Queue<HandleComIdResponse>,
     packet_queue: Queue<ComPacket>,
-    sp_sessions: HashMap<(u32, u32), Vec<UID>>,
+    sp_sessions: HashMap<(u32, u32), SPSession>,
+    next_tsn: AtomicU32,
 }
 
 impl Session {
@@ -41,6 +50,7 @@ impl Session {
             com_queue: Queue::new(),
             packet_queue: Queue::new(),
             sp_sessions: HashMap::new(),
+            next_tsn: 1.into(),
         }
     }
 
@@ -125,69 +135,76 @@ impl Session {
         if (hsn, tsn) == (0, 0) {
             self.process_control_session_packet(request)
         } else if let Some(_sp_session) = self.sp_sessions.get_mut(&(hsn, tsn)) {
-            todo!()
+            self.process_sp_session_packet(request)
         } else {
             Vec::new()
         }
     }
 
     fn process_control_session_packet(&mut self, request: Packet) -> Vec<Packet> {
+        let (hsn, tsn) = (request.host_session_number, request.tper_session_number);
         if let Ok(calls) = split_packet(&request) {
             let results: Vec<_> =
                 calls.into_iter().filter_map(|call| self.process_control_session_call(call)).collect();
-            let packets: Vec<_> = results
-                .into_iter()
-                .map(|result| -> Vec<Token> {
-                    let mut stream = OutputStream::<Token>::new();
-                    result.serialize(&mut stream).expect("responses should always be valid tokens");
-                    stream.take()
-                })
-                .map(|tokens| -> Vec<u8> {
-                    let mut stream = OutputStream::<u8>::new();
-                    VecWithoutLen::from(tokens)
-                        .serialize(&mut stream)
-                        .expect("responses should always be valid tokens");
-                    stream.take()
-                })
-                .map(|bytes| Packet {
-                    host_session_number: request.host_session_number,
-                    tper_session_number: request.tper_session_number,
-                    payload: vec![SubPacket { kind: SubPacketKind::Data, payload: bytes.into() }].into(),
-                    ..Default::default()
-                })
-                .collect();
+            bundle_methods(hsn, tsn, results.as_slice())
+        } else {
+            Vec::new()
+        }
+    }
+
+    fn process_sp_session_packet(&mut self, request: Packet) -> Vec<Packet> {
+        let (hsn, tsn) = (request.host_session_number, request.tper_session_number);
+        if let Ok(calls) = split_packet(&request) {
+            let num_calls = calls.len();
+            let results: Vec<_> =
+                calls.into_iter().map_while(|call| self.process_sp_session_call(hsn, tsn, call)).collect();
+            let mut packets = bundle_methods(hsn, tsn, results.as_slice());
+            if results.len() != num_calls {
+                if let Some(call) = self.abort_session(hsn, tsn) {
+                    packets.append(&mut bundle_methods(0, 0, &[call]));
+                }
+            }
             packets
         } else {
             Vec::new()
         }
     }
 
-    fn process_control_session_call(&mut self, call: MethodCall) -> Option<MethodCall> {
+    fn process_control_session_call(&mut self, call: PackagedMethod) -> Option<PackagedMethod> {
+        let PackagedMethod::Call(call) = call else {
+            return None;
+        };
         if call.invoking_id != invokers::SMUID {
             return None;
         }
         match call.method_id {
             methods::PROPERTIES => {
-                if let Ok((host_properties,)) = decode_args!(call.args, Option<List<NamedValue<MaxBytes32, u32>>>) {
-                    match self.properties(host_properties) {
-                        Ok(results) => Some(MethodCall {
-                            invoking_id: invokers::SMUID,
-                            method_id: methods::PROPERTIES,
-                            args: encode_args!(results.0, results.1),
-                            status: MethodStatus::Success,
-                        }),
-                        Err(err) => Some(MethodCall {
-                            invoking_id: invokers::SMUID,
-                            method_id: methods::PROPERTIES,
-                            args: vec![],
-                            status: err,
-                        }),
-                    }
+                if let Ok((_1,)) = call.args.decode_args() {
+                    let result = self.properties(_1);
+                    let call = format_response_call(invokers::SMUID, methods::PROPERTIES, result);
+                    Some(PackagedMethod::Call(call))
+                } else {
+                    None
+                }
+            }
+            methods::START_SESSION => {
+                if let Ok((_1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12)) = call.args.decode_args() {
+                    let result = self.start_session(_1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12);
+                    let call = format_response_call(invokers::SMUID, methods::SYNC_SESSION, result);
+                    Some(PackagedMethod::Call(call))
                 } else {
                     None
                 }
             }
             _ => None,
+        }
+    }
+
+    fn process_sp_session_call(&mut self, hsn: u32, tsn: u32, call: PackagedMethod) -> Option<PackagedMethod> {
+        match call {
+            PackagedMethod::Call(_method_call) => None,
+            PackagedMethod::Result(_method_result) => None,
+            PackagedMethod::EndOfSession => self.close_session(hsn, tsn),
         }
     }
 
@@ -237,6 +254,65 @@ impl Session {
         let common_properties = common_properties.to_list();
         Ok((capabilities, Some(common_properties)))
     }
+
+    pub fn start_session(
+        &mut self,
+        hsn: u32,
+        sp: RestrictedObjectReference<{ tables::SP.value() }>,
+        write: u8,
+        _host_challenge: Option<Vec<u8>>,
+        _host_exch_auth: Option<RestrictedObjectReference<{ tables::AUTHORITY.value() }>>,
+        _host_exch_cert: Option<Vec<u8>>,
+        _host_sgn_auth: Option<RestrictedObjectReference<{ tables::AUTHORITY.value() }>>,
+        _host_sgn_cert: Option<Vec<u8>>,
+        _session_timeout: Option<u32>,
+        _trans_timeout: Option<u32>,
+        _initial_credit: Option<u32>,
+        _signed_hash: Option<Vec<u8>>,
+    ) -> Result<
+        (
+            u32,
+            u32,
+            Option<Vec<u8>>,
+            Option<Vec<u8>>,
+            Option<Vec<u8>>,
+            Option<u32>,
+            Option<u32>,
+            Option<Vec<u8>>,
+        ),
+        MethodStatus,
+    > {
+        let tsn = self.next_tsn.fetch_add(1, Ordering::Relaxed);
+        let controller = self.controller.lock().unwrap();
+        if let Some(sp) = controller.get_sp(sp.into()) {
+            let sp_session = SPSession { sp: sp.uid(), write: write != 0, authorities: vec![] };
+            self.sp_sessions.insert((hsn, tsn), sp_session);
+            Ok((hsn, tsn, None, None, None, None, None, None))
+        } else {
+            Err(MethodStatus::InvalidParameter)
+        }
+    }
+
+    fn close_session(&mut self, hsn: u32, tsn: u32) -> Option<PackagedMethod> {
+        if let Some(_sp_session) = self.sp_sessions.remove(&(hsn, tsn)) {
+            Some(PackagedMethod::EndOfSession)
+        } else {
+            None
+        }
+    }
+
+    fn abort_session(&mut self, hsn: u32, tsn: u32) -> Option<PackagedMethod> {
+        if let Some(_eos) = self.close_session(hsn, tsn) {
+            Some(PackagedMethod::Call(MethodCall {
+                invoking_id: invokers::SMUID,
+                method_id: methods::CLOSE_SESSION,
+                args: (hsn, tsn).encode_args(),
+                status: MethodStatus::Success,
+            }))
+        } else {
+            None
+        }
+    }
 }
 
 fn no_com_id_response(com_id: u16, com_id_ext: u16) -> HandleComIdResponse {
@@ -252,7 +328,7 @@ fn no_packet_response(com_id: u16, com_id_ext: u16) -> ComPacket {
     ComPacket { com_id, com_id_ext, min_transfer: 0, outstanding_data: 0, payload: VecWithLen::new() }
 }
 
-fn split_packet(packet: &Packet) -> Result<Vec<MethodCall>, Error> {
+fn split_packet(packet: &Packet) -> Result<Vec<PackagedMethod>, Error> {
     let mut bytes = Vec::<u8>::new();
     for sub_packet in packet.payload.deref() {
         if sub_packet.kind == SubPacketKind::Data {
@@ -265,9 +341,41 @@ fn split_packet(packet: &Packet) -> Result<Vec<MethodCall>, Error> {
         Err(_) => return Err(Error::InvalidArgument),
     };
     let mut token_stream = InputStream::from(tokens);
-    let calls = match VecWithoutLen::<MethodCall>::deserialize(&mut token_stream) {
+    let calls = match VecWithoutLen::<PackagedMethod>::deserialize(&mut token_stream) {
         Ok(calls) => calls.into_vec(),
         Err(_) => return Err(Error::InvalidArgument),
     };
     Ok(calls)
+}
+
+fn format_response_call<Args>(invoking_id: UID, method_id: UID, result: Result<Args, MethodStatus>) -> MethodCall
+where
+    Args: EncodeArgs,
+{
+    match result {
+        Ok(args) => MethodCall { invoking_id, method_id, args: args.encode_args(), status: MethodStatus::Success },
+        Err(status) => MethodCall { invoking_id, method_id, args: vec![], status },
+    }
+}
+
+fn bundle_methods(hsn: u32, tsn: u32, methods: &[PackagedMethod]) -> Vec<Packet> {
+    methods
+        .iter()
+        .map(|result| -> Vec<Token> {
+            let mut stream = OutputStream::<Token>::new();
+            result.serialize(&mut stream).expect("responses should always be valid tokens");
+            stream.take()
+        })
+        .map(|tokens| -> Vec<u8> {
+            let mut stream = OutputStream::<u8>::new();
+            VecWithoutLen::from(tokens).serialize(&mut stream).expect("responses should always be valid tokens");
+            stream.take()
+        })
+        .map(|bytes| Packet {
+            host_session_number: hsn,
+            tper_session_number: tsn,
+            payload: vec![SubPacket { kind: SubPacketKind::Data, payload: bytes.into() }].into(),
+            ..Default::default()
+        })
+        .collect()
 }

@@ -159,47 +159,88 @@ pub fn to_value<T: ToValue>(arg: T) -> Value {
     arg.to_value()
 }
 
-macro_rules! encode_args {
-    ($($args:expr),* ) => {
+pub trait EncodeArgs {
+    fn encode_args(self) -> Vec<Value>;
+}
+
+pub trait FromDecodedArgs: Sized {
+    type Error;
+    fn from_decode_args(args: Vec<Value>) -> Result<Self, Self::Error>;
+}
+
+pub trait DecodeArgs<Output> {
+    type Error;
+    fn decode_args(self) -> Result<Output, Self::Error>;
+}
+
+impl<Output> DecodeArgs<Output> for Vec<Value>
+where
+    Output: FromDecodedArgs,
+{
+    type Error = <Output as FromDecodedArgs>::Error;
+    fn decode_args(self) -> Result<Output, Self::Error> {
+        Output::from_decode_args(self)
+    }
+}
+
+macro_rules! for_all_tuples {
+    ($macro:path) => {
+        $macro!(T1);
+        $macro!(T1, T2);
+        $macro!(T1, T2, T3);
+        $macro!(T1, T2, T3, T4);
+        $macro!(T1, T2, T3, T4, T5);
+        $macro!(T1, T2, T3, T4, T5, T6);
+        $macro!(T1, T2, T3, T4, T5, T6, T7);
+        $macro!(T1, T2, T3, T4, T5, T6, T7, T8);
+        $macro!(T1, T2, T3, T4, T5, T6, T7, T8, T9);
+        $macro!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10);
+        $macro!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11);
+        $macro!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12);
+        $macro!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13);
+        $macro!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14);
+        $macro!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15);
+        $macro!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16);
+    };
+}
+
+macro_rules! impl_encode_args {
+    ($($types:ident),*) => {
+        impl<$($types),*> EncodeArgs for ($($types),*,)
+            where $($types: ToValue),*
         {
-            use crate::rpc::args::to_value;
-            use crate::rpc::args::is_optional_instance;
-            use crate::rpc::args::is_valid;
-            use crate::rpc::args::get_labels;
-            use crate::rpc::args::add_labels;
-            use crate::rpc::args::collapse;
-            assert!(is_valid(&[$(is_optional_instance(&$args),)*]), "optional parameters must be at the end");
-            let predicates = [$(is_optional_instance(&$args),)*];
-            let values = [$(to_value($args),)*];
-            let labels = get_labels(&predicates);
-            let labelled = add_labels(values, labels);
-            collapse(labelled)
+            fn encode_args(self) -> Vec<Value> {
+                #[allow(non_snake_case)]
+                let ($($types),*,) = self;
+                assert!(is_valid(&[$(is_optional_instance(&$types),)*]), "optional parameters must be at the end");
+                let predicates = [$(is_optional_instance(&$types),)*];
+                let values = [$(to_value($types),)*];
+                let labels = get_labels(&predicates);
+                let labelled = add_labels(values, labels);
+                collapse(labelled)
+            }
         }
     };
 }
 
-macro_rules! decode_args {
-    ($args:expr, $($types:ty),*) => {
+macro_rules! impl_decode_args {
+    ($($types:ident),*) => {
+        impl<$($types),*> FromDecodedArgs for ($($types),*,)
+            where $($types: TryFromValue + ToValue),*
         {
-            use crate::rpc::args::to_concrete;
-            use crate::rpc::args::is_valid;
-            use crate::rpc::args::expand_args;
-            use crate::rpc::args::is_optional_associated;
-            use crate::rpc::MethodStatus;
-            use crate::messaging::value::Value;
-            fn decode_args_fn(args: Vec<Value>) -> Result<($($types),*,), MethodStatus> {
+            type Error = MethodStatus;
+            fn from_decode_args(args: Vec<Value>) -> Result<Self, Self::Error> {
                 assert!(is_valid(&[$(is_optional_associated::<$types>(),)*]), "optional parameters must be at the end");
                 let mut idx: usize = 0;
                 let mut expanded = expand_args(args, &[$(is_optional_associated::<$types>(),)*])?;
                 Ok(($(to_concrete::<$types>(&mut expanded, &mut idx).map_err(|_| MethodStatus::InvalidParameter)?,)*))
             }
-            decode_args_fn($args)
         }
     };
 }
 
-pub(crate) use decode_args;
-pub(crate) use encode_args;
+for_all_tuples!(impl_encode_args);
+for_all_tuples!(impl_decode_args);
 
 #[cfg(test)]
 mod tests {
@@ -276,7 +317,7 @@ mod tests {
 
     #[test]
     fn encode_args_mixed() {
-        let result = encode_args!(0_u32, 1_u32, Option::<u32>::None, Some(3_u32), Option::<u32>::None);
+        let result = (0_u32, 1_u32, Option::<u32>::None, Some(3_u32), Option::<u32>::None).encode_args();
         let expected = [
             Value::from(0_u32),
             Value::from(1_u32),
@@ -292,7 +333,7 @@ mod tests {
             Value::from(1_u32),
             Value::from(Named { name: 1_u16.into(), value: 3_u32.into() }),
         ];
-        let result = decode_args!(args, u32, u32, Option<u32>, Option<u32>, Option<u32>)?;
+        let result: (u32, u32, Option<u32>, Option<u32>, Option<u32>) = args.decode_args()?;
         let expected = (0_u32, 1_u32, None, Some(3_u32), None);
         assert_eq!(result, expected);
         Ok(())

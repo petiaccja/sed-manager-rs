@@ -3,36 +3,52 @@ use std::sync::Arc;
 use tokio::sync::oneshot;
 use tokio::sync::Mutex;
 
-use crate::messaging::uid::UID;
 use crate::rpc::error::Error;
 use crate::rpc::method::{MethodCall, MethodResult};
 use crate::rpc::protocol::MethodCaller;
 use crate::rpc::protocol::PackagedMethod;
+use crate::specification::methods;
 
 pub struct SPSession {
-    method_layer: Arc<MethodCaller>,
-    response_queue: Arc<Mutex<Queue<oneshot::Sender<Result<MethodResult, Error>>>>>,
+    method_caller: Arc<MethodCaller>,
+    response_queue: Arc<Mutex<Queue<oneshot::Sender<Result<PackagedMethod, Error>>>>>,
 }
 
 impl SPSession {
     pub fn new(method_layer: MethodCaller) -> Self {
-        Self { method_layer: Arc::new(method_layer), response_queue: Arc::new(Queue::new().into()) }
+        Self { method_caller: Arc::new(method_layer), response_queue: Arc::new(Queue::new().into()) }
     }
 
-    pub async fn call(&self, request: MethodCall) -> Result<MethodResult, Error> {
+    pub async fn call_method(&self, request: MethodCall) -> Result<MethodResult, Error> {
+        if let PackagedMethod::Result(result) = self.call(PackagedMethod::Call(request)).await? {
+            Ok(result)
+        } else {
+            Err(Error::MethodResultExpected)
+        }
+    }
+
+    pub async fn call_eos(&self) -> Result<(), Error> {
+        if let PackagedMethod::EndOfSession = self.call(PackagedMethod::EndOfSession).await? {
+            Ok(())
+        } else {
+            Err(Error::EOSExpected)
+        }
+    }
+
+    pub async fn call(&self, request: PackagedMethod) -> Result<PackagedMethod, Error> {
         let rx = {
             // Sending the request and enqueueing the response sender under the same lock
             // ensures the pairing of the send and recv calls.
             let mut response_queue = self.response_queue.lock().await;
             let (tx, rx) = oneshot::channel();
             response_queue.push_back(tx);
-            self.method_layer.send(PackagedMethod::Call(request)).await?;
+            self.method_caller.send(request).await?;
             rx
         };
-        let interface_layer = self.method_layer.clone();
+        let method_caller = self.method_caller.clone();
         let response_queue = self.response_queue.clone();
         let task = tokio::spawn(async move {
-            let response = interface_layer.recv().await;
+            let response = method_caller.recv().await;
             let mut response_queue = response_queue.lock().await;
             if let Some(tx) = response_queue.pop_front() {
                 let _ = tx.send(decode_response(response));
@@ -46,22 +62,21 @@ impl SPSession {
     }
 
     pub async fn close(&self) {
-        self.method_layer.close().await
+        self.method_caller.close().await
     }
 }
 
-fn decode_response(response: Result<PackagedMethod, Error>) -> Result<MethodResult, Error> {
+fn decode_response(response: Result<PackagedMethod, Error>) -> Result<PackagedMethod, Error> {
     match response {
         Ok(PackagedMethod::Call(call)) => {
-            if call.method_id == UID::from(0xFF06_u64) {
+            if call.method_id == methods::CLOSE_SESSION {
                 // CloseSession
                 Err(Error::AbortedByRemote)
             } else {
                 Err(Error::MethodResultExpected)
             }
         }
-        Ok(PackagedMethod::Result(result)) => Ok(result),
-        Ok(PackagedMethod::EndOfSession) => Err(Error::Closed),
+        Ok(packaged_method) => Ok(packaged_method),
         Err(err) => Err(err),
     }
 }
