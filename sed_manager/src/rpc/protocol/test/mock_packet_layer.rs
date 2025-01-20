@@ -1,12 +1,13 @@
 use async_trait::async_trait;
 use std::ops::Deref;
 use std::{collections::VecDeque as Queue, sync::Arc};
+use tokio::select;
 use tokio::sync::mpsc;
 use tokio::sync::Mutex;
 
 use crate::messaging::packet::Packet;
 use crate::rpc::protocol::PacketLayer;
-use crate::rpc::Error;
+use crate::rpc::{Error, Properties};
 
 #[derive(Clone)]
 pub struct MockPacketLayer {
@@ -14,10 +15,11 @@ pub struct MockPacketLayer {
     enqueue_rx: Arc<Mutex<mpsc::UnboundedReceiver<Packet>>>,
     dequeue_tx: Arc<Mutex<Option<mpsc::UnboundedSender<Packet>>>>,
     dequeue_rx: Arc<Mutex<mpsc::UnboundedReceiver<Packet>>>,
+    properties: Properties,
 }
 
 impl MockPacketLayer {
-    pub fn new() -> Self {
+    pub fn new(properties: Properties) -> Self {
         let (enqueue_tx, enqueue_rx) = mpsc::unbounded_channel();
         let (dequeue_tx, dequeue_rx) = mpsc::unbounded_channel();
         Self {
@@ -25,6 +27,7 @@ impl MockPacketLayer {
             enqueue_rx: Arc::new(Mutex::new(enqueue_rx)),
             dequeue_tx: Arc::new(Mutex::new(Some(dequeue_tx))),
             dequeue_rx: Arc::new(Mutex::new(dequeue_rx)),
+            properties,
         }
     }
 
@@ -59,10 +62,12 @@ impl PacketLayer for MockPacketLayer {
     }
 
     async fn recv(&self) -> Result<Packet, Error> {
-        if let Some(packet) = self.dequeue_rx.lock().await.recv().await {
-            Ok(packet)
-        } else {
-            Err(Error::Closed)
+        let mut dequeue_rx = self.dequeue_rx.lock().await;
+        select! {
+            biased;
+            Some(packet) = dequeue_rx.recv() => Ok(packet),
+            _ = tokio::time::sleep(self.properties.trans_timeout) => Err(Error::TimedOut),
+            else => Err(Error::Closed)
         }
     }
 

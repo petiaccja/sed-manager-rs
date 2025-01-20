@@ -1,4 +1,4 @@
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -85,7 +85,15 @@ impl InterfaceLayer for SynchronousHost {
     }
 
     async fn close(&self) {
-        ()
+        () // No explicit way to close the device.
+    }
+
+    async fn abort(&self) {
+        // Drop the packet senders, which will immediately terminate all receivers.
+        let (dummy_tx_com_packet, _) = mpsc::unbounded_channel();
+        drop(std::mem::replace(self.tx_com_packet.lock().await.deref_mut(), dummy_tx_com_packet));
+        let (dummy_tx_com_id, _) = mpsc::unbounded_channel();
+        drop(std::mem::replace(self.tx_handle_com_id.lock().await.deref_mut(), dummy_tx_com_id));
     }
 }
 

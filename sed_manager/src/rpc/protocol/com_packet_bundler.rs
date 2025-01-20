@@ -55,6 +55,6 @@ impl PacketLayer for ComPacketBundler {
     }
 
     async fn abort(&self) {
-        ()
+        self.next_layer.abort().await;
     }
 }

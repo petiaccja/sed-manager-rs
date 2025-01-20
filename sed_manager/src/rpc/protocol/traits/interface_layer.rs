@@ -11,4 +11,5 @@ pub trait InterfaceLayer: Sync + Send {
     async fn send_com_packet(&self, com_packet: ComPacket) -> Result<(), Error>;
     async fn recv_com_packet(&self) -> Result<ComPacket, Error>;
     async fn close(&self);
+    async fn abort(&self);
 }

@@ -111,10 +111,15 @@ fn make_key(host_session_number: u32, tper_session_number: u32) -> (u32, u32) {
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use crate::rpc::protocol::with_copy::with_copy;
+    use crate::rpc::Properties;
 
     use super::super::test::MockPacketLayer;
     use super::*;
+
+    const PROPERTIES_SHORT: Properties = Properties { trans_timeout: Duration::from_millis(10), ..Properties::ASSUMED };
 
     fn make_session(host_session_number: u32, tper_session_number: u32) -> Packet {
         Packet { host_session_number, tper_session_number, ..Default::default() }
@@ -122,11 +127,11 @@ mod tests {
 
     #[tokio::test]
     async fn send_multiple_sessions() {
-        let next_layer = Box::new(MockPacketLayer::new());
-        let hub = Arc::new(SessionRouter::new(next_layer.clone()));
+        let next_layer = Box::new(MockPacketLayer::new(Properties::ASSUMED));
+        let router = Arc::new(SessionRouter::new(next_layer.clone()));
 
-        let s1 = hub.clone().open(100, 101).await.unwrap();
-        let s2 = hub.clone().open(200, 201).await.unwrap();
+        let s1 = router.clone().open(100, 101).await.unwrap();
+        let s2 = router.clone().open(200, 201).await.unwrap();
 
         s1.send(Packet::default()).await.unwrap();
         s2.send(Packet::default()).await.unwrap();
@@ -146,11 +151,11 @@ mod tests {
 
     #[tokio::test]
     async fn recv_multiple_sessions() {
-        let next_layer = Box::new(MockPacketLayer::new());
-        let hub = Arc::new(SessionRouter::new(next_layer.clone()));
+        let next_layer = Box::new(MockPacketLayer::new(Properties::ASSUMED));
+        let router = Arc::new(SessionRouter::new(next_layer.clone()));
 
-        let s1 = Arc::new(hub.clone().open(100, 101).await.unwrap());
-        let s2 = Arc::new(hub.clone().open(200, 201).await.unwrap());
+        let s1 = Arc::new(router.clone().open(100, 101).await.unwrap());
+        let s2 = Arc::new(router.clone().open(200, 201).await.unwrap());
 
         let mut received = Vec::new();
 
@@ -175,5 +180,32 @@ mod tests {
         assert_eq!(received[1].tper_session_number, 201);
         assert_eq!(received[2].host_session_number, 100);
         assert_eq!(received[2].tper_session_number, 101);
+    }
+
+    #[tokio::test]
+    async fn recv_timeout_other_active() {
+        let next_layer = Box::new(MockPacketLayer::new(PROPERTIES_SHORT));
+        let router = Arc::new(SessionRouter::new(next_layer.clone()));
+
+        let s1 = Arc::new(router.clone().open(100, 101).await.unwrap());
+        let s2 = Arc::new(router.clone().open(200, 201).await.unwrap());
+
+        next_layer.add_dequeue(make_session(100, 101)).await;
+        assert!(s2.recv().await.is_err_and(|err| err == Error::TimedOut));
+        assert!(s1.recv().await.is_ok());
+
+        s1.close().await;
+        s2.close().await;
+    }
+
+    #[tokio::test]
+    async fn recv_timeout_inactive() {
+        let next_layer = Box::new(MockPacketLayer::new(PROPERTIES_SHORT));
+        let router = Arc::new(SessionRouter::new(next_layer.clone()));
+
+        let s2 = Arc::new(router.clone().open(200, 201).await.unwrap());
+        assert!(s2.recv().await.is_err_and(|err| err == Error::TimedOut));
+
+        s2.close().await;
     }
 }

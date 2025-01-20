@@ -27,7 +27,7 @@ pub enum MethodStatus {
     Fail = 0x3F,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MethodCall {
     pub invoking_id: UID,
     pub method_id: UID,
@@ -35,7 +35,7 @@ pub struct MethodCall {
     pub status: MethodStatus,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MethodResult {
     pub results: Vec<Value>,
     pub status: MethodStatus,

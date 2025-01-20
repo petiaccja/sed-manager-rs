@@ -14,6 +14,7 @@ use crate::serialization::vec_with_len::VecWithLen;
 use crate::serialization::vec_without_len::VecWithoutLen;
 use crate::serialization::{Deserialize, InputStream, ItemRead, OutputStream, Serialize};
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PackagedMethod {
     Call(MethodCall),
     Result(MethodResult),
@@ -39,8 +40,8 @@ impl MethodCaller {
 
     pub async fn send(&self, method: PackagedMethod) -> Result<(), Error> {
         {
-            let tokens = tokenize(method)?;
-            let binary = serialize(tokens)?;
+            let tokens = tokenize(&method)?;
+            let binary = serialize(tokens.as_slice())?;
             let validated = validate(binary, &self.properties)?;
             self.request_queue.lock().await.push_back(validated);
         };
@@ -75,6 +76,10 @@ impl MethodCaller {
 
     pub async fn close(&self) {
         self.next_layer.close().await;
+    }
+
+    pub async fn abort(&self) {
+        self.next_layer.abort().await;
     }
 }
 
@@ -118,7 +123,7 @@ impl MethodParser {
     }
 }
 
-fn tokenize(method: PackagedMethod) -> Result<Vec<Token>, Error> {
+fn tokenize(method: &PackagedMethod) -> Result<Vec<Token>, Error> {
     let mut stream = OutputStream::<Token>::new();
     match method.serialize(&mut stream) {
         Ok(_) => Ok(stream.take()),
@@ -126,7 +131,7 @@ fn tokenize(method: PackagedMethod) -> Result<Vec<Token>, Error> {
     }
 }
 
-fn serialize(tokens: Vec<Token>) -> Result<Vec<u8>, Error> {
+fn serialize(tokens: &[Token]) -> Result<Vec<u8>, Error> {
     let mut stream = OutputStream::<u8>::new();
     for token in tokens {
         if let Err(err) = token.serialize(&mut stream) {
@@ -205,5 +210,137 @@ impl Deserialize<Token> for PackagedMethod {
             }
             _ => Err(TokenizeError::UnexpectedTag),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use crate::rpc::{protocol::test::MockPacketLayer, MethodStatus};
+    use crate::serialization::SeekAlways;
+    use crate::serialization::{Error as SerializeError, SerializeBinary};
+
+    use super::*;
+
+    const PROPERTIES_SHORT: Properties = Properties { trans_timeout: Duration::from_millis(10), ..Properties::ASSUMED };
+
+    #[test]
+    fn serialize_packaged_method_call() -> Result<(), SerializeError> {
+        let call = PackagedMethod::Call(MethodCall {
+            invoking_id: 0xFFu64.into(),
+            method_id: 0xEFu64.into(),
+            args: vec![],
+            status: MethodStatus::Fail,
+        });
+        let mut os = OutputStream::<Token>::new();
+        call.serialize(&mut os)?;
+        let stream_len = os.len();
+        let mut is = InputStream::from(os.take());
+        let copy = PackagedMethod::deserialize(&mut is)?;
+        assert_eq!(call, copy);
+        assert_eq!(is.pos(), stream_len);
+        Ok(())
+    }
+
+    #[test]
+    fn serialize_packaged_method_result() -> Result<(), SerializeError> {
+        let call = PackagedMethod::Result(MethodResult { results: vec![], status: MethodStatus::Fail });
+        let mut os = OutputStream::<Token>::new();
+        call.serialize(&mut os)?;
+        let stream_len = os.len();
+        let mut is = InputStream::from(os.take());
+        let copy = PackagedMethod::deserialize(&mut is)?;
+        assert_eq!(call, copy);
+        assert_eq!(is.pos(), stream_len);
+        Ok(())
+    }
+
+    #[test]
+    fn serialize_packaged_method_eos() -> Result<(), SerializeError> {
+        let call = PackagedMethod::EndOfSession;
+        let mut os = OutputStream::<Token>::new();
+        call.serialize(&mut os)?;
+        let stream_len = os.len();
+        let mut is = InputStream::from(os.take());
+        let copy = PackagedMethod::deserialize(&mut is)?;
+        assert_eq!(call, copy);
+        assert_eq!(is.pos(), stream_len);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn send_normal() -> Result<(), Error> {
+        let next_layer = Box::new(MockPacketLayer::new(Properties::ASSUMED));
+        let method_caller = MethodCaller::new(next_layer.clone(), Properties::ASSUMED);
+        method_caller.send(PackagedMethod::EndOfSession).await?;
+        let enqueued = next_layer.take_enqueued().await;
+        assert_eq!(enqueued.len(), 1);
+        assert_eq!(enqueued[0].payload.len(), 1);
+        assert_eq!(enqueued[0].payload[0].payload.len(), 1);
+        method_caller.close().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn recv_normal() -> Result<(), Error> {
+        let next_layer = Box::new(MockPacketLayer::new(Properties::ASSUMED));
+        let method_caller = MethodCaller::new(next_layer.clone(), Properties::ASSUMED);
+
+        let payload = Token { tag: Tag::EndOfSession, ..Default::default() }.to_bytes().unwrap();
+        let sub_packet = SubPacket { kind: SubPacketKind::Data, payload: payload.into() };
+        let packet = Packet { payload: vec![sub_packet].into(), ..Default::default() };
+        next_layer.add_dequeue(packet).await;
+        let message = method_caller.recv().await?;
+
+        assert_eq!(message, PackagedMethod::EndOfSession);
+        method_caller.close().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn recv_half_missing_timeout() {
+        let next_layer = Box::new(MockPacketLayer::new(PROPERTIES_SHORT));
+        let mut method_caller = MethodCaller::new(next_layer.clone(), PROPERTIES_SHORT);
+
+        let payload = Token { tag: Tag::Call, ..Default::default() }.to_bytes().unwrap();
+        let sub_packet = SubPacket { kind: SubPacketKind::Data, payload: payload.into() };
+        let packet = Packet { payload: vec![sub_packet].into(), ..Default::default() };
+        next_layer.add_dequeue(packet).await;
+        let message = method_caller.recv().await;
+
+        assert!(message.is_err_and(|err| err == Error::TimedOut));
+        assert!(method_caller.token_queue.get_mut().is_empty());
+        method_caller.close().await;
+    }
+
+    #[tokio::test]
+    async fn recv_multiple_packets() -> Result<(), Error> {
+        let next_layer = Box::new(MockPacketLayer::new(PROPERTIES_SHORT));
+        let mut method_caller = MethodCaller::new(next_layer.clone(), PROPERTIES_SHORT);
+
+        let call = PackagedMethod::Call(MethodCall {
+            invoking_id: 0xFFu64.into(),
+            method_id: 0xEFu64.into(),
+            args: vec![],
+            status: MethodStatus::Fail,
+        });
+        let tokens = tokenize(&call).unwrap();
+        let tokens_first = &tokens.as_slice()[0..3];
+        let tokens_second = &tokens.as_slice()[3..];
+        let bytes_first = serialize(tokens_first).unwrap();
+        let bytes_second = serialize(tokens_second).unwrap();
+        let sub_packet_first = SubPacket { kind: SubPacketKind::Data, payload: Vec::from(bytes_first).into() };
+        let sub_packet_second = SubPacket { kind: SubPacketKind::Data, payload: Vec::from(bytes_second).into() };
+        let packet_first = Packet { payload: vec![sub_packet_first].into(), ..Default::default() };
+        let packet_second = Packet { payload: vec![sub_packet_second].into(), ..Default::default() };
+        next_layer.add_dequeue(packet_first).await;
+        next_layer.add_dequeue(packet_second).await;
+        let message = method_caller.recv().await?;
+
+        assert_eq!(call, message);
+        assert!(method_caller.token_queue.get_mut().is_empty());
+        method_caller.close().await;
+        Ok(())
     }
 }
