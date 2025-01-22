@@ -1,8 +1,7 @@
 use std::fmt::Display;
 use std::ops::Range;
 
-use crate::parse::EnumDesc;
-
+use super::parse::EnumDesc;
 use super::parse::{FieldDesc, Layout, StructDesc};
 
 pub enum LayoutError {

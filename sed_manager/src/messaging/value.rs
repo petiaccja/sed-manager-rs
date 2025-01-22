@@ -67,12 +67,13 @@ macro_rules! impl_value_from {
     ($storage_ty:ty, $enum_variant:expr) => {
         impl From<$storage_ty> for Value {
             fn from(value: $storage_ty) -> Self {
-                Self { storage: $enum_variant(value) }
+                Self { storage: $enum_variant(value.into()) }
             }
         }
     };
 }
 
+impl_value_from!(bool, Storage::Uint8);
 impl_value_from!(i8, Storage::Int8);
 impl_value_from!(i16, Storage::Int16);
 impl_value_from!(i32, Storage::Int32);
@@ -155,6 +156,38 @@ impl_value_try_into!(
     Storage::Uint64(value)
 );
 impl_value_try_into!(Command, value, Storage::Command(value));
+
+impl TryFrom<Value> for bool {
+    type Error = Value;
+    fn try_from(value: Value) -> Result<Self, Self::Error> {
+        match Self::try_from(&value) {
+            Ok(x) => Ok(x),
+            Err(_) => Err(value),
+        }
+    }
+}
+
+impl<'value> TryFrom<&'value Value> for bool {
+    type Error = &'value Value;
+    fn try_from(value: &'value Value) -> Result<Self, Self::Error> {
+        let n = match value.storage {
+            Storage::Int8(n) => Ok(n as i64),
+            Storage::Int16(n) => Ok(n as i64),
+            Storage::Int32(n) => Ok(n as i64),
+            Storage::Int64(n) => Ok(n as i64),
+            Storage::Uint8(n) => Ok(n as i64),
+            Storage::Uint16(n) => Ok(n as i64),
+            Storage::Uint32(n) => Ok(n as i64),
+            Storage::Uint64(n) => Ok(n as i64),
+            _ => Err(value),
+        }?;
+        match n {
+            0 => Ok(false),
+            1 => Ok(true),
+            _ => Err(value),
+        }
+    }
+}
 
 impl TryFrom<Value> for Named {
     type Error = Value;

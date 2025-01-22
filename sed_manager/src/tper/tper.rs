@@ -2,16 +2,18 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, OnceLock};
 use tokio::sync::OnceCell as AsyncOnceCell;
 
+use crate::async_finalize::{async_finalize, sync_finalize, AsyncFinalize};
 use crate::device::Device;
 use crate::messaging::com_id::{
     ComIdState, HandleComIdRequest, StackResetResponsePayload, StackResetStatus, VerifyComIdValidResponsePayload,
 };
 use crate::messaging::discovery::{Discovery, SSCDescriptor};
-use crate::messaging::types::{List, MaxBytes32, NamedValue, RestrictedObjectReference};
+use crate::messaging::types::{List, MaxBytes32, NamedValue, SPUID};
+use crate::messaging::value::Bytes;
 use crate::rpc::args::{DecodeArgs, EncodeArgs};
 use crate::rpc::{Error as RPCError, MethodCall, MethodStatus, Properties, RPCSession};
 use crate::serialization::{Deserialize, InputStream};
-use crate::specification::{invokers, methods, tables};
+use crate::specification::{invokers, methods};
 
 use super::session::Session;
 
@@ -146,10 +148,7 @@ impl TPer {
         Ok((tper_properties, common_properties))
     }
 
-    pub async fn start_session(
-        &self,
-        sp: RestrictedObjectReference<{ tables::SP.value() }>,
-    ) -> Result<Session, RPCError> {
+    pub async fn start_session(&self, sp: SPUID) -> Result<Session, RPCError> {
         let hsn = self.next_hsn.fetch_add(1, Ordering::Relaxed);
         let call = MethodCall {
             invoking_id: invokers::SMUID,
@@ -166,17 +165,31 @@ impl TPer {
         let (hsn_sync, tsn_sync, _, _, _, _, _, _): (
             u32,
             u32,
-            Option<Vec<u8>>,
-            Option<Vec<u8>>,
-            Option<Vec<u8>>,
+            Option<Bytes>,
+            Option<Bytes>,
+            Option<Bytes>,
             Option<u32>,
             Option<u32>,
-            Option<Vec<u8>>,
+            Option<Bytes>,
         ) = result.args.decode_args()?;
         if hsn_sync != hsn {
             return Err(RPCError::Unspecified);
         }
         let sp_session = stack.rpc_session.open_sp_session(hsn, tsn_sync).await.expect("ensure HSN is unique");
         Ok(Session::new(sp_session))
+    }
+}
+
+impl AsyncFinalize for TPer {
+    async fn finalize(&mut self) {
+        if let Some(stack) = self.cached_stack.get_mut() {
+            async_finalize(&mut stack.rpc_session).await;
+        }
+    }
+}
+
+impl Drop for TPer {
+    fn drop(&mut self) {
+        sync_finalize(self);
     }
 }

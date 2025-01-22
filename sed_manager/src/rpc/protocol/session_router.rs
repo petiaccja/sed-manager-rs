@@ -113,8 +113,8 @@ fn make_key(host_session_number: u32, tper_session_number: u32) -> (u32, u32) {
 mod tests {
     use std::time::Duration;
 
-    use crate::rpc::protocol::with_copy::with_copy;
     use crate::rpc::Properties;
+    use crate::with_copy::with_copy;
 
     use super::super::test::MockPacketLayer;
     use super::*;

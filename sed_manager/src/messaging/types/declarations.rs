@@ -1,5 +1,11 @@
+use sed_manager_macros::AlternativeType;
+
+pub use crate::messaging::value::Bytes;
+use crate::specification::tables;
+
 use super::primitives::MaxBytes;
 use super::traits::declare_type;
+use super::RestrictedObjectReference;
 
 pub type Bytes4 = [u8; 4];
 pub type Bytes12 = [u8; 12];
@@ -10,13 +16,23 @@ pub type Bytes48 = [u8; 48];
 pub type Bytes64 = [u8; 64];
 pub type MaxBytes32 = MaxBytes<32>;
 pub type MaxBytes64 = MaxBytes<64>;
+pub type AuthorityUID = RestrictedObjectReference<{ tables::AUTHORITY.value() }>;
+pub type SPUID = RestrictedObjectReference<{ tables::SP.value() }>;
 
+#[derive(AlternativeType, PartialEq, Eq, Clone, Debug)]
+pub enum BoolOrBytes {
+    Bool(bool),
+    Bytes(Bytes),
+}
+
+declare_type!(bool, 0x0000_0005_0000_0401_u64, "boolean");
 declare_type!(i8, 0x0000_0005_0000_0210_u64, "integer_1");
 declare_type!(i16, 0x0000_0005_0000_0215_u64, "integer_2");
 declare_type!(u8, 0x0000_0005_0000_0211_u64, "uinteger_1");
 declare_type!(u16, 0x0000_0005_0000_0216_u64, "uinteger_2");
 declare_type!(u32, 0x0000_0005_0000_0220_u64, "uinteger_4");
 declare_type!(u64, 0x0000_0005_0000_0225_u64, "uinteger_8");
+declare_type!(Bytes, 0x0000_0005_0000_0002_u64, "bytes");
 declare_type!(Bytes4, 0x0000_0005_0000_0238_u64, "bytes_4");
 declare_type!(Bytes12, 0x0000_0005_0000_0201_u64, "bytes_12");
 declare_type!(Bytes16, 0x0000_0005_0000_0202_u64, "bytes_16");

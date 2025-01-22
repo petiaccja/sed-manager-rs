@@ -1,8 +1,10 @@
 use tokio::sync::Mutex;
 
+use crate::async_finalize::{async_finalize, sync_finalize, AsyncFinalize};
 use crate::rpc::error::Error;
 use crate::rpc::method::MethodCall;
-use crate::rpc::protocol::{MethodCaller, PackagedMethod};
+use crate::rpc::protocol::MethodCaller;
+use crate::rpc::PackagedMethod;
 use crate::specification::methods;
 
 pub struct ControlSession {
@@ -46,8 +48,16 @@ impl ControlSession {
             };
         }
     }
+}
 
-    pub async fn close(&self) {
-        self.method_caller.lock().await.close().await
+impl AsyncFinalize for ControlSession {
+    async fn finalize(&mut self) {
+        async_finalize(self.method_caller.get_mut()).await;
+    }
+}
+
+impl Drop for ControlSession {
+    fn drop(&mut self) {
+        sync_finalize(self);
     }
 }

@@ -104,24 +104,6 @@ fn parse_layout_attr(attr: &syn::Attribute) -> Result<Layout, syn::Error> {
         } else {
             return Err(syn::Error::new(expr.span(), "invalid layout param"));
         };
-
-        // let syn::Expr::Assign(assign) = expr else {
-        //     return Err(syn::Error::new(expr.span(), "expected `param = value`"));
-        // };
-        // let syn::Expr::Path(path) = *assign.left else {
-        //     return Err(syn::Error::new(assign.left.span(), "expected `param = value`"));
-        // };
-        // if path.path.is_ident("offset") {
-        //     layout.offset = Some(parse_literal_usize(&assign.right)?);
-        // } else if path.path.is_ident("bits") {
-        //     layout.bits = Some(parse_literal_range_usize(&assign.right)?);
-        // } else if path.path.is_ident("round") {
-        //     layout.round = Some(parse_literal_usize(&assign.right)?);
-        // } else if path.path.is_ident("fallback") {
-        //     layout.fallback = true;
-        // } else {
-        //     return Err(syn::Error::new(path.span(), "invalid layout param"));
-        // };
     }
     Ok(layout)
 }

@@ -2,6 +2,7 @@ use std::collections::VecDeque as Queue;
 use std::sync::Arc;
 use tokio::sync::{oneshot, Mutex};
 
+use crate::async_finalize::{sync_finalize, AsyncFinalize};
 use crate::messaging::com_id::{HandleComIdRequest, HandleComIdResponse};
 use crate::rpc::error::Error;
 use crate::rpc::protocol::InterfaceLayer;
@@ -42,7 +43,23 @@ impl ComSession {
         }
     }
 
-    pub async fn close(&self) {
-        ()
+    pub async fn close(&mut self) {
+        // Close interface layer if we own it uniquely.
+        // No parts of the stack use weak references.
+        if Arc::strong_count(&self.interface_layer) == 1 {
+            self.interface_layer.close().await;
+        };
+    }
+}
+
+impl AsyncFinalize for ComSession {
+    async fn finalize(&mut self) {
+        self.close().await;
+    }
+}
+
+impl Drop for ComSession {
+    fn drop(&mut self) {
+        sync_finalize(self);
     }
 }

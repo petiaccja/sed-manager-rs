@@ -10,10 +10,11 @@ use crate::messaging::com_id::{
 };
 use crate::messaging::packet::{ComPacket, Packet, SubPacket, SubPacketKind};
 use crate::messaging::token::Token;
-use crate::messaging::types::{List, MaxBytes32, NamedValue, RestrictedObjectReference};
+use crate::messaging::types::{AuthorityUID, BoolOrBytes, List, MaxBytes32, NamedValue, RestrictedObjectReference};
 use crate::messaging::uid::UID;
+use crate::messaging::value::Bytes;
 use crate::rpc::args::{DecodeArgs, EncodeArgs};
-use crate::rpc::{MethodCall, MethodStatus, PackagedMethod, Properties};
+use crate::rpc::{MethodCall, MethodResult, MethodStatus, PackagedMethod, Properties};
 use crate::serialization::vec_with_len::VecWithLen;
 use crate::serialization::vec_without_len::VecWithoutLen;
 use crate::serialization::{Deserialize, DeserializeBinary, InputStream, OutputStream, Serialize, SerializeBinary};
@@ -74,7 +75,7 @@ impl Session {
         Ok(())
     }
 
-    pub fn on_security_recv_com(&mut self, len: usize) -> Result<Vec<u8>, Error> {
+    pub fn on_security_recv_com(&mut self, len: usize) -> Result<Bytes, Error> {
         let response = match self.com_queue.front() {
             Some(response) => response,
             None => &no_com_id_response(self.com_id, self.com_id_ext),
@@ -87,7 +88,7 @@ impl Session {
         Ok(bytes)
     }
 
-    pub fn on_security_recv_packet(&mut self, len: usize) -> Result<Vec<u8>, Error> {
+    pub fn on_security_recv_packet(&mut self, len: usize) -> Result<Bytes, Error> {
         let response =
             if self.packet_queue.front().is_some_and(|com_packet| com_packet.get_transfer_len() as usize <= len) {
                 self.packet_queue.pop_front().unwrap()
@@ -202,8 +203,19 @@ impl Session {
 
     fn process_sp_session_call(&mut self, hsn: u32, tsn: u32, call: PackagedMethod) -> Option<PackagedMethod> {
         match call {
-            PackagedMethod::Call(_method_call) => None,
-            PackagedMethod::Result(_method_result) => None,
+            PackagedMethod::Call(call) => match call.method_id {
+                methods::AUTHENTICATE => {
+                    if let Ok((_1, _2)) = call.args.decode_args() {
+                        let result = self.authenticate(call.invoking_id, _1, _2);
+                        let result = result.map(|x| (x,));
+                        Some(PackagedMethod::Result(format_response_result(result)))
+                    } else {
+                        Some(format_response_failure(MethodStatus::InvalidParameter))
+                    }
+                }
+                _ => Some(format_response_failure(MethodStatus::NotAuthorized)),
+            },
+            PackagedMethod::Result(_method_result) => self.abort_session(hsn, tsn),
             PackagedMethod::EndOfSession => self.close_session(hsn, tsn),
         }
     }
@@ -260,26 +272,17 @@ impl Session {
         hsn: u32,
         sp: RestrictedObjectReference<{ tables::SP.value() }>,
         write: u8,
-        _host_challenge: Option<Vec<u8>>,
+        _host_challenge: Option<Bytes>,
         _host_exch_auth: Option<RestrictedObjectReference<{ tables::AUTHORITY.value() }>>,
-        _host_exch_cert: Option<Vec<u8>>,
+        _host_exch_cert: Option<Bytes>,
         _host_sgn_auth: Option<RestrictedObjectReference<{ tables::AUTHORITY.value() }>>,
-        _host_sgn_cert: Option<Vec<u8>>,
+        _host_sgn_cert: Option<Bytes>,
         _session_timeout: Option<u32>,
         _trans_timeout: Option<u32>,
         _initial_credit: Option<u32>,
-        _signed_hash: Option<Vec<u8>>,
+        _signed_hash: Option<Bytes>,
     ) -> Result<
-        (
-            u32,
-            u32,
-            Option<Vec<u8>>,
-            Option<Vec<u8>>,
-            Option<Vec<u8>>,
-            Option<u32>,
-            Option<u32>,
-            Option<Vec<u8>>,
-        ),
+        (u32, u32, Option<Bytes>, Option<Bytes>, Option<Bytes>, Option<u32>, Option<u32>, Option<Bytes>),
         MethodStatus,
     > {
         let tsn = self.next_tsn.fetch_add(1, Ordering::Relaxed);
@@ -312,6 +315,15 @@ impl Session {
         } else {
             None
         }
+    }
+
+    pub fn authenticate(
+        &self,
+        _invoking_id: UID,
+        _authority: AuthorityUID,
+        _proof: Option<Bytes>,
+    ) -> Result<BoolOrBytes, MethodStatus> {
+        Err(MethodStatus::NotAuthorized)
     }
 }
 
@@ -356,6 +368,20 @@ where
         Ok(args) => MethodCall { invoking_id, method_id, args: args.encode_args(), status: MethodStatus::Success },
         Err(status) => MethodCall { invoking_id, method_id, args: vec![], status },
     }
+}
+
+fn format_response_result<Args>(result: Result<Args, MethodStatus>) -> MethodResult
+where
+    Args: EncodeArgs,
+{
+    match result {
+        Ok(args) => MethodResult { results: args.encode_args(), status: MethodStatus::Success },
+        Err(status) => MethodResult { results: vec![], status },
+    }
+}
+
+fn format_response_failure(status: MethodStatus) -> PackagedMethod {
+    PackagedMethod::Result(MethodResult { results: Vec::new(), status })
 }
 
 fn bundle_methods(hsn: u32, tsn: u32, methods: &[PackagedMethod]) -> Vec<Packet> {

@@ -1,68 +1,75 @@
 use std::collections::VecDeque as Queue;
-use std::sync::Arc;
 use tokio::sync::oneshot;
 use tokio::sync::Mutex;
 
+use crate::async_finalize::async_finalize;
+use crate::async_finalize::{sync_finalize, AsyncFinalize};
 use crate::rpc::error::Error;
 use crate::rpc::method::{MethodCall, MethodResult};
 use crate::rpc::protocol::MethodCaller;
-use crate::rpc::protocol::PackagedMethod;
+use crate::rpc::PackagedMethod;
 use crate::specification::methods;
 
 pub struct SPSession {
-    method_caller: Arc<MethodCaller>,
-    response_queue: Arc<Mutex<Queue<oneshot::Sender<Result<PackagedMethod, Error>>>>>,
+    method_caller: MethodCaller,
+    response_queue: Mutex<Queue<oneshot::Sender<Result<PackagedMethod, Error>>>>,
 }
 
 impl SPSession {
-    pub fn new(method_layer: MethodCaller) -> Self {
-        Self { method_caller: Arc::new(method_layer), response_queue: Arc::new(Queue::new().into()) }
+    pub fn new(method_caller: MethodCaller) -> Self {
+        Self { method_caller, response_queue: Queue::new().into() }
     }
 
-    pub async fn call_method(&self, request: MethodCall) -> Result<MethodResult, Error> {
-        if let PackagedMethod::Result(result) = self.call(PackagedMethod::Call(request)).await? {
+    pub async fn call(&self, request: MethodCall) -> Result<MethodResult, Error> {
+        if let PackagedMethod::Result(result) = self.call_generic(PackagedMethod::Call(request)).await? {
             Ok(result)
         } else {
             Err(Error::MethodResultExpected)
         }
     }
 
-    pub async fn call_eos(&self) -> Result<(), Error> {
-        if let PackagedMethod::EndOfSession = self.call(PackagedMethod::EndOfSession).await? {
+    pub async fn end(&self) -> Result<(), Error> {
+        if let PackagedMethod::EndOfSession = self.call_generic(PackagedMethod::EndOfSession).await? {
             Ok(())
         } else {
             Err(Error::EOSExpected)
         }
     }
+}
 
-    pub async fn call(&self, request: PackagedMethod) -> Result<PackagedMethod, Error> {
-        let rx = {
-            // Sending the request and enqueueing the response sender under the same lock
-            // ensures the pairing of the send and recv calls.
-            let mut response_queue = self.response_queue.lock().await;
-            let (tx, rx) = oneshot::channel();
-            response_queue.push_back(tx);
-            self.method_caller.send(request).await?;
-            rx
-        };
-        let method_caller = self.method_caller.clone();
-        let response_queue = self.response_queue.clone();
-        let task = tokio::spawn(async move {
-            let response = method_caller.recv().await;
-            let mut response_queue = response_queue.lock().await;
-            if let Some(tx) = response_queue.pop_front() {
-                let _ = tx.send(decode_response(response));
-            };
-        });
-        let _ = task.await;
+impl SPSession {
+    async fn call_generic(&self, request: PackagedMethod) -> Result<PackagedMethod, Error> {
+        let rx = self.send_one(request).await?;
+        self.recv_one().await;
         match rx.await {
             Ok(result) => result,
             Err(_) => Err(Error::Closed),
         }
     }
 
-    pub async fn close(&self) {
-        self.method_caller.close().await
+    async fn send_one(
+        &self,
+        request: PackagedMethod,
+    ) -> Result<oneshot::Receiver<Result<PackagedMethod, Error>>, Error> {
+        let mut response_queue = self.response_queue.lock().await;
+        match self.method_caller.send(request).await {
+            Ok(_) => {
+                let (tx, rx) = oneshot::channel();
+                // Must be under the same lock as the call to send!
+                // This ensures the correct pairing between the method call and its result.
+                response_queue.push_back(tx);
+                Ok(rx)
+            }
+            Err(err) => Err(err),
+        }
+    }
+
+    async fn recv_one(&self) {
+        let response = self.method_caller.recv().await;
+        let mut response_queue = self.response_queue.lock().await;
+        if let Some(tx) = response_queue.pop_front() {
+            let _ = tx.send(decode_response(response));
+        };
     }
 }
 
@@ -78,5 +85,17 @@ fn decode_response(response: Result<PackagedMethod, Error>) -> Result<PackagedMe
         }
         Ok(packaged_method) => Ok(packaged_method),
         Err(err) => Err(err),
+    }
+}
+
+impl AsyncFinalize for SPSession {
+    async fn finalize(&mut self) {
+        async_finalize(&mut self.method_caller).await;
+    }
+}
+
+impl Drop for SPSession {
+    fn drop(&mut self) {
+        sync_finalize(self);
     }
 }

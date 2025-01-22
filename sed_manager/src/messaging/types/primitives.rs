@@ -7,7 +7,7 @@ use crate::messaging::{
 };
 
 pub struct MaxBytes<const LIMIT: usize> {
-    bytes: Vec<u8>,
+    bytes: Bytes,
 }
 
 pub struct List<Item> {
@@ -52,20 +52,20 @@ pub struct Set<T> {
 }
 
 impl<const LIMIT: usize> Deref for MaxBytes<LIMIT> {
-    type Target = Vec<u8>;
+    type Target = Bytes;
     fn deref(&self) -> &Self::Target {
         &self.bytes
     }
 }
 
-impl<const LIMIT: usize> From<MaxBytes<LIMIT>> for Vec<u8> {
+impl<const LIMIT: usize> From<MaxBytes<LIMIT>> for Bytes {
     fn from(value: MaxBytes<LIMIT>) -> Self {
         value.bytes
     }
 }
 
-impl<const LIMIT: usize> From<Vec<u8>> for MaxBytes<LIMIT> {
-    fn from(value: Vec<u8>) -> Self {
+impl<const LIMIT: usize> From<Bytes> for MaxBytes<LIMIT> {
+    fn from(value: Bytes) -> Self {
         Self { bytes: value }
     }
 }

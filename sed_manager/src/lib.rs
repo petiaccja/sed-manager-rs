@@ -6,6 +6,10 @@ pub mod messaging;
 pub mod rpc;
 pub mod serialization;
 pub mod specification;
-mod sync;
 pub mod tper;
+
+mod async_finalize;
+mod sync;
+mod with_copy;
+
 extern crate self as sed_manager;

@@ -1,14 +1,15 @@
 pub mod args;
 mod error;
+mod message;
 mod method;
 mod properties;
 mod protocol;
 mod session;
 
 pub use error::Error;
+pub use message::PackagedMethod;
 pub use method::{MethodCall, MethodResult, MethodStatus};
 pub use properties::Properties;
-pub use protocol::PackagedMethod;
 pub use session::ComSession;
 pub use session::ControlSession;
 pub use session::RPCSession;

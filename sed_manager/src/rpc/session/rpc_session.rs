@@ -5,6 +5,7 @@ use tokio::sync::{Mutex, OnceCell};
 use super::com_session::ComSession;
 use super::control_session::ControlSession;
 use super::sp_session::SPSession;
+use crate::async_finalize::{async_finalize, sync_finalize, AsyncFinalize};
 use crate::device::Device;
 use crate::rpc::properties::Properties;
 use crate::rpc::protocol::{
@@ -67,5 +68,22 @@ impl RPCSession {
         let layer: Box<dyn PacketLayer> = Box::new(session_endpoint);
 
         Some(MethodCaller::new(layer, self.properties.lock().await.clone()))
+    }
+}
+
+impl AsyncFinalize for RPCSession {
+    async fn finalize(&mut self) {
+        if let Some(com_session) = self.com_session.get_mut() {
+            async_finalize(com_session).await;
+        }
+        if let Some(control_session) = self.control_session.get_mut() {
+            async_finalize(control_session).await;
+        }
+    }
+}
+
+impl Drop for RPCSession {
+    fn drop(&mut self) {
+        sync_finalize(self);
     }
 }
