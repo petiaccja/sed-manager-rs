@@ -10,7 +10,7 @@ use crate::messaging::com_id::{
 };
 use crate::messaging::packet::{ComPacket, Packet, SubPacket, SubPacketKind};
 use crate::messaging::token::Token;
-use crate::messaging::types::{AuthorityUID, BoolOrBytes, List, MaxBytes32, NamedValue, RestrictedObjectReference};
+use crate::messaging::types::{AuthorityRef, BoolOrBytes, List, MaxBytes32, NamedValue, RestrictedObjectReference};
 use crate::messaging::uid::UID;
 use crate::messaging::value::Bytes;
 use crate::rpc::args::{DecodeArgs, EncodeArgs};
@@ -319,11 +319,15 @@ impl Session {
 
     pub fn authenticate(
         &self,
-        _invoking_id: UID,
-        _authority: AuthorityUID,
+        invoking_id: UID,
+        _authority: AuthorityRef,
         _proof: Option<Bytes>,
     ) -> Result<BoolOrBytes, MethodStatus> {
-        Err(MethodStatus::NotAuthorized)
+        if invoking_id != invokers::THIS_SP {
+            Err(MethodStatus::InvalidParameter)
+        } else {
+            Err(MethodStatus::Fail)
+        }
     }
 }
 

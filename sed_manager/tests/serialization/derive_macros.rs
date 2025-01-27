@@ -51,7 +51,7 @@ enum SimpleEnum {
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 enum FallbackEnum {
     A = 0x01,
-    #[layout(fallback)]
+    #[fallback]
     Fallback = 0xFF,
 }
 

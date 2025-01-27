@@ -1,13 +1,16 @@
 mod declarations;
-mod primitives;
+mod list;
+mod max_bytes;
+mod named_value;
+mod reference;
 mod traits;
 
-pub use primitives::List;
-pub use primitives::NamedValue;
-pub use primitives::RestrictedObjectReference;
+pub use list::List;
+pub use named_value::NamedValue;
+pub use reference::RestrictedObjectReference;
 pub use traits::Type;
 
-pub use declarations::AuthorityUID;
+pub use declarations::AuthorityRef;
 pub use declarations::BoolOrBytes;
 pub use declarations::Bytes12;
 pub use declarations::Bytes16;
@@ -18,4 +21,4 @@ pub use declarations::Bytes48;
 pub use declarations::Bytes64;
 pub use declarations::MaxBytes32;
 pub use declarations::MaxBytes64;
-pub use declarations::SPUID;
+pub use declarations::SPRef;

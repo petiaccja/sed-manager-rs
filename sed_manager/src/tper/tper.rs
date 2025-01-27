@@ -8,7 +8,7 @@ use crate::messaging::com_id::{
     ComIdState, HandleComIdRequest, StackResetResponsePayload, StackResetStatus, VerifyComIdValidResponsePayload,
 };
 use crate::messaging::discovery::{Discovery, SSCDescriptor};
-use crate::messaging::types::{List, MaxBytes32, NamedValue, SPUID};
+use crate::messaging::types::{List, MaxBytes32, NamedValue, SPRef};
 use crate::messaging::value::Bytes;
 use crate::rpc::args::{DecodeArgs, EncodeArgs};
 use crate::rpc::{Error as RPCError, MethodCall, MethodStatus, Properties, RPCSession};
@@ -148,7 +148,7 @@ impl TPer {
         Ok((tper_properties, common_properties))
     }
 
-    pub async fn start_session(&self, sp: SPUID) -> Result<Session, RPCError> {
+    pub async fn start_session(&self, sp: SPRef) -> Result<Session, RPCError> {
         let hsn = self.next_hsn.fetch_add(1, Ordering::Relaxed);
         let call = MethodCall {
             invoking_id: invokers::SMUID,

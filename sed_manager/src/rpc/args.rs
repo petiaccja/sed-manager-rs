@@ -1,6 +1,9 @@
 use std::array::from_fn;
 
-use crate::messaging::value::{Named, Storage, Value};
+use crate::{
+    messaging::value::{Named, Storage, Value},
+    variadics::with_variadic_pack,
+};
 
 use super::method::MethodStatus;
 
@@ -163,9 +166,9 @@ pub trait EncodeArgs {
     fn encode_args(self) -> Vec<Value>;
 }
 
-pub trait FromDecodedArgs: Sized {
+pub trait FromEncodedArgs: Sized {
     type Error;
-    fn from_decode_args(args: Vec<Value>) -> Result<Self, Self::Error>;
+    fn from_encoded_args(args: Vec<Value>) -> Result<Self, Self::Error>;
 }
 
 pub trait DecodeArgs<Output> {
@@ -175,33 +178,12 @@ pub trait DecodeArgs<Output> {
 
 impl<Output> DecodeArgs<Output> for Vec<Value>
 where
-    Output: FromDecodedArgs,
+    Output: FromEncodedArgs,
 {
-    type Error = <Output as FromDecodedArgs>::Error;
+    type Error = <Output as FromEncodedArgs>::Error;
     fn decode_args(self) -> Result<Output, Self::Error> {
-        Output::from_decode_args(self)
+        Output::from_encoded_args(self)
     }
-}
-
-macro_rules! for_all_tuples {
-    ($macro:path) => {
-        $macro!(T1);
-        $macro!(T1, T2);
-        $macro!(T1, T2, T3);
-        $macro!(T1, T2, T3, T4);
-        $macro!(T1, T2, T3, T4, T5);
-        $macro!(T1, T2, T3, T4, T5, T6);
-        $macro!(T1, T2, T3, T4, T5, T6, T7);
-        $macro!(T1, T2, T3, T4, T5, T6, T7, T8);
-        $macro!(T1, T2, T3, T4, T5, T6, T7, T8, T9);
-        $macro!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10);
-        $macro!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11);
-        $macro!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12);
-        $macro!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13);
-        $macro!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14);
-        $macro!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15);
-        $macro!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16);
-    };
 }
 
 macro_rules! impl_encode_args {
@@ -225,11 +207,11 @@ macro_rules! impl_encode_args {
 
 macro_rules! impl_decode_args {
     ($($types:ident),*) => {
-        impl<$($types),*> FromDecodedArgs for ($($types),*,)
+        impl<$($types),*> FromEncodedArgs for ($($types),*,)
             where $($types: TryFromValue + ToValue),*
         {
             type Error = MethodStatus;
-            fn from_decode_args(args: Vec<Value>) -> Result<Self, Self::Error> {
+            fn from_encoded_args(args: Vec<Value>) -> Result<Self, Self::Error> {
                 assert!(is_valid(&[$(is_optional_associated::<$types>(),)*]), "optional parameters must be at the end");
                 let mut idx: usize = 0;
                 let mut expanded = expand_args(args, &[$(is_optional_associated::<$types>(),)*])?;
@@ -239,8 +221,8 @@ macro_rules! impl_decode_args {
     };
 }
 
-for_all_tuples!(impl_encode_args);
-for_all_tuples!(impl_decode_args);
+with_variadic_pack!(impl_encode_args);
+with_variadic_pack!(impl_decode_args);
 
 #[cfg(test)]
 mod tests {

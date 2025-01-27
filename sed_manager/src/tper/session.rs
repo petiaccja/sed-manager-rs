@@ -1,7 +1,7 @@
 use crate::async_finalize::async_finalize;
 use crate::async_finalize::sync_finalize;
 use crate::async_finalize::AsyncFinalize;
-use crate::messaging::types::AuthorityUID;
+use crate::messaging::types::AuthorityRef;
 use crate::messaging::types::BoolOrBytes;
 use crate::messaging::value::Bytes;
 use crate::rpc::args::DecodeArgs;
@@ -27,7 +27,7 @@ impl Session {
         result
     }
 
-    pub async fn authenticate(&self, authority: AuthorityUID, proof: Option<Bytes>) -> Result<BoolOrBytes, RPCError> {
+    pub async fn authenticate(&self, authority: AuthorityRef, proof: Option<Bytes>) -> Result<BoolOrBytes, RPCError> {
         let call = MethodCall {
             invoking_id: invokers::THIS_SP,
             method_id: methods::AUTHENTICATE,
