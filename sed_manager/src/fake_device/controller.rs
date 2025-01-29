@@ -1,4 +1,4 @@
-use crate::{messaging::uid::UID, specification::sp};
+use crate::{messaging::types::SPRef, specification::sp};
 
 use super::security_provider::SecurityProvider;
 
@@ -9,10 +9,13 @@ pub struct Controller {
 
 impl Controller {
     pub fn new() -> Self {
-        Self { admin_sp: SecurityProvider::new(sp::ADMIN), locking_sp: SecurityProvider::new(sp::LOCKING) }
+        Self {
+            admin_sp: SecurityProvider::new(sp::ADMIN.into()),
+            locking_sp: SecurityProvider::new(sp::LOCKING.into()),
+        }
     }
 
-    pub fn get_sp(&self, sp: UID) -> Option<&SecurityProvider> {
+    pub fn get_sp(&self, sp: SPRef) -> Option<&SecurityProvider> {
         if sp == self.admin_sp.uid() {
             Some(&self.admin_sp)
         } else if sp == self.locking_sp.uid() {
@@ -22,7 +25,7 @@ impl Controller {
         }
     }
 
-    pub fn get_sp_mut(&mut self, sp: UID) -> Option<&mut SecurityProvider> {
+    pub fn get_sp_mut(&mut self, sp: SPRef) -> Option<&mut SecurityProvider> {
         if sp == self.admin_sp.uid() {
             Some(&mut self.admin_sp)
         } else if sp == self.locking_sp.uid() {

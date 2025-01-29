@@ -10,7 +10,7 @@ use crate::messaging::com_id::{
 };
 use crate::messaging::packet::{ComPacket, Packet, SubPacket, SubPacketKind};
 use crate::messaging::token::Token;
-use crate::messaging::types::{AuthorityRef, BoolOrBytes, List, MaxBytes32, NamedValue, RestrictedObjectReference};
+use crate::messaging::types::{List, MaxBytes32, NamedValue, RestrictedObjectReference, SPRef};
 use crate::messaging::uid::UID;
 use crate::messaging::value::Bytes;
 use crate::rpc::args::{DecodeArgs, EncodeArgs};
@@ -21,14 +21,9 @@ use crate::serialization::{Deserialize, DeserializeBinary, InputStream, OutputSt
 use crate::specification::{invokers, methods, tables};
 
 use super::controller::Controller;
+use super::sp_session::SPSession;
 
-pub struct SPSession {
-    sp: UID,
-    write: bool,
-    authorities: Vec<UID>,
-}
-
-pub struct Session {
+pub struct ComIDSession {
     com_id: u16,
     com_id_ext: u16,
     capabilities: Properties,
@@ -40,7 +35,7 @@ pub struct Session {
     next_tsn: AtomicU32,
 }
 
-impl Session {
+impl ComIDSession {
     pub fn new(com_id: u16, com_id_ext: u16, capabilities: Properties, controller: Arc<Mutex<Controller>>) -> Self {
         Self {
             com_id,
@@ -202,21 +197,25 @@ impl Session {
     }
 
     fn process_sp_session_call(&mut self, hsn: u32, tsn: u32, call: PackagedMethod) -> Option<PackagedMethod> {
-        match call {
-            PackagedMethod::Call(call) => match call.method_id {
-                methods::AUTHENTICATE => {
-                    if let Ok((_1, _2)) = call.args.decode_args() {
-                        let result = self.authenticate(call.invoking_id, _1, _2);
-                        let result = result.map(|x| (x,));
-                        Some(PackagedMethod::Result(format_response_result(result)))
-                    } else {
-                        Some(format_response_failure(MethodStatus::InvalidParameter))
+        if let Some(sp_session) = self.sp_sessions.get_mut(&(hsn, tsn)) {
+            match call {
+                PackagedMethod::Call(call) => match call.method_id {
+                    methods::AUTHENTICATE => {
+                        if let Ok((_1, _2)) = call.args.decode_args() {
+                            let result = sp_session.authenticate(call.invoking_id, _1, _2);
+                            let result = result.map(|x| (x,));
+                            Some(PackagedMethod::Result(format_response_result(result)))
+                        } else {
+                            Some(format_response_failure(MethodStatus::InvalidParameter))
+                        }
                     }
-                }
-                _ => Some(format_response_failure(MethodStatus::NotAuthorized)),
-            },
-            PackagedMethod::Result(_method_result) => self.abort_session(hsn, tsn),
-            PackagedMethod::EndOfSession => self.close_session(hsn, tsn),
+                    _ => Some(format_response_failure(MethodStatus::NotAuthorized)),
+                },
+                PackagedMethod::Result(_method_result) => self.abort_session(hsn, tsn),
+                PackagedMethod::EndOfSession => self.close_session(hsn, tsn),
+            }
+        } else {
+            None
         }
     }
 
@@ -270,8 +269,8 @@ impl Session {
     pub fn start_session(
         &mut self,
         hsn: u32,
-        sp: RestrictedObjectReference<{ tables::SP.value() }>,
-        write: u8,
+        sp_uid: SPRef,
+        write: bool,
         _host_challenge: Option<Bytes>,
         _host_exch_auth: Option<RestrictedObjectReference<{ tables::AUTHORITY.value() }>>,
         _host_exch_cert: Option<Bytes>,
@@ -287,8 +286,8 @@ impl Session {
     > {
         let tsn = self.next_tsn.fetch_add(1, Ordering::Relaxed);
         let controller = self.controller.lock().unwrap();
-        if let Some(sp) = controller.get_sp(sp.into()) {
-            let sp_session = SPSession { sp: sp.uid(), write: write != 0, authorities: vec![] };
+        if let Some(_sp) = controller.get_sp(sp_uid.into()) {
+            let sp_session = SPSession::new(sp_uid, write, self.controller.clone());
             self.sp_sessions.insert((hsn, tsn), sp_session);
             Ok((hsn, tsn, None, None, None, None, None, None))
         } else {
@@ -314,19 +313,6 @@ impl Session {
             }))
         } else {
             None
-        }
-    }
-
-    pub fn authenticate(
-        &self,
-        invoking_id: UID,
-        _authority: AuthorityRef,
-        _proof: Option<Bytes>,
-    ) -> Result<BoolOrBytes, MethodStatus> {
-        if invoking_id != invokers::THIS_SP {
-            Err(MethodStatus::InvalidParameter)
-        } else {
-            Err(MethodStatus::Fail)
         }
     }
 }

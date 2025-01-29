@@ -8,13 +8,13 @@ use crate::messaging::com_id::HANDLE_COM_ID_PROTOCOL;
 use crate::messaging::packet::PACKETIZED_PROTOCOL;
 use crate::rpc::Properties;
 
+use super::com_id_session::ComIDSession;
 use super::controller::Controller;
 use super::discovery::{get_discovery, write_discovery, BASE_COM_ID, NUM_COM_IDS};
-use super::session::Session;
 
-const ROUTE_DISCOVERY: (u8, u16) = (0x01, 0x0001);
-const ROUTE_GET_COMID: (u8, u16) = (0x02, 0x0000);
-const ROUTE_TPER_RESET: (u8, u16) = (0x02, 0x0004);
+const ROUTE_DISCOVERY: Route = Route { protocol: 0x01, com_id: 0x0001 };
+const ROUTE_GET_COMID: Route = Route { protocol: 0x02, com_id: 0x0000 };
+const ROUTE_TPER_RESET: Route = Route { protocol: 0x02, com_id: 0x0004 };
 
 const CAPABILITIES: Properties = Properties {
     max_methods: usize::MAX,
@@ -36,8 +36,32 @@ const CAPABILITIES: Properties = Properties {
 
 pub struct FakeDevice {
     capabilities: Properties,
-    sessions: Mutex<HashMap<u16, Session>>,
+    sessions: Mutex<HashMap<u16, ComIDSession>>,
     controller: Arc<Mutex<Controller>>,
+}
+
+#[derive(PartialEq, Eq)]
+struct Route {
+    protocol: u8,
+    com_id: u16,
+}
+
+impl FakeDevice {
+    pub fn new() -> FakeDevice {
+        let controller = Arc::new(Mutex::new(Controller::new()));
+        let capabilities = CAPABILITIES;
+        let mut sessions = HashMap::new();
+        for i in 0..NUM_COM_IDS {
+            let com_id = BASE_COM_ID + i;
+            let session = ComIDSession::new(com_id, 0x0000, capabilities.clone(), controller.clone());
+            sessions.insert(BASE_COM_ID + i, session);
+        }
+        FakeDevice { capabilities, controller, sessions: sessions.into() }
+    }
+
+    pub fn capabilities(&self) -> &Properties {
+        &self.capabilities
+    }
 }
 
 impl Device for FakeDevice {
@@ -59,10 +83,11 @@ impl Device for FakeDevice {
 
     fn security_send(&self, security_protocol: u8, protocol_specific: [u8; 2], data: &[u8]) -> Result<(), Error> {
         let com_id = u16::from_be_bytes(protocol_specific);
+        let route = Route { protocol: security_protocol, com_id };
 
-        if (security_protocol, com_id) == ROUTE_DISCOVERY {
+        if route == ROUTE_DISCOVERY {
             Ok(()) // Discovery on IF-SEND is simply ignored.
-        } else if (security_protocol, com_id) == ROUTE_TPER_RESET {
+        } else if route == ROUTE_TPER_RESET {
             unimplemented!("TPer reset is not implemented for the fake device")
         } else if let Some(session) = self.sessions.lock().unwrap().get_mut(&com_id) {
             match security_protocol {
@@ -77,10 +102,11 @@ impl Device for FakeDevice {
 
     fn security_recv(&self, security_protocol: u8, protocol_specific: [u8; 2], len: usize) -> Result<Vec<u8>, Error> {
         let com_id = u16::from_be_bytes(protocol_specific);
+        let route = Route { protocol: security_protocol, com_id };
 
-        if (security_protocol, com_id) == ROUTE_DISCOVERY {
+        if route == ROUTE_DISCOVERY {
             write_discovery(&get_discovery(Properties::ASSUMED), len)
-        } else if (security_protocol, com_id) == ROUTE_GET_COMID {
+        } else if route == ROUTE_GET_COMID {
             unimplemented!("dynamic com ID management is not implemented for the fake device")
         } else if let Some(session) = self.sessions.lock().unwrap().get_mut(&com_id) {
             match security_protocol {
@@ -91,23 +117,5 @@ impl Device for FakeDevice {
         } else {
             Err(Error::InvalidProtocolOrComID)
         }
-    }
-}
-
-impl FakeDevice {
-    pub fn new() -> FakeDevice {
-        let controller = Arc::new(Mutex::new(Controller::new()));
-        let capabilities = CAPABILITIES;
-        let mut sessions = HashMap::new();
-        for i in 0..NUM_COM_IDS {
-            let com_id = BASE_COM_ID + i;
-            let session = Session::new(com_id, 0x0000, capabilities.clone(), controller.clone());
-            sessions.insert(BASE_COM_ID + i, session);
-        }
-        FakeDevice { capabilities, controller, sessions: sessions.into() }
-    }
-
-    pub fn capabilities(&self) -> &Properties {
-        &self.capabilities
     }
 }

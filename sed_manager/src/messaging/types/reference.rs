@@ -1,24 +1,24 @@
 use crate::messaging::{uid::UID, value::Value};
 
-#[derive(PartialEq, Eq, Clone, Debug, Hash, PartialOrd, Ord)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd, Ord)]
 pub struct RowReference(u64);
 
-#[derive(PartialEq, Eq, Clone, Debug, Hash, PartialOrd, Ord)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd, Ord)]
 pub struct RestrictedRowReference<const TABLE: u64>(u64);
 
-#[derive(PartialEq, Eq, Clone, Debug, Hash, PartialOrd, Ord)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd, Ord)]
 pub struct RestrictedObjectReference<const TABLE: u64>(UID);
 
-#[derive(PartialEq, Eq, Clone, Debug, Hash, PartialOrd, Ord)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd, Ord)]
 pub struct ObjectReference(UID);
 
-#[derive(PartialEq, Eq, Clone, Debug, Hash, PartialOrd, Ord)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd, Ord)]
 pub struct TableReference(UID);
 
-#[derive(PartialEq, Eq, Clone, Debug, Hash, PartialOrd, Ord)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd, Ord)]
 pub struct ByteTableReference(UID);
 
-#[derive(PartialEq, Eq, Clone, Debug, Hash, PartialOrd, Ord)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd, Ord)]
 pub struct ObjectTableReference(UID);
 
 macro_rules! impl_uid_reference {

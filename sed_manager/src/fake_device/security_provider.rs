@@ -1,15 +1,15 @@
-use crate::messaging::uid::UID;
+use crate::messaging::types::SPRef;
 
 pub struct SecurityProvider {
-    uid: UID,
+    uid: SPRef,
 }
 
 impl SecurityProvider {
-    pub fn new(uid: UID) -> Self {
+    pub fn new(uid: SPRef) -> Self {
         Self { uid }
     }
 
-    pub fn uid(&self) -> UID {
+    pub fn uid(&self) -> SPRef {
         self.uid
     }
 }
