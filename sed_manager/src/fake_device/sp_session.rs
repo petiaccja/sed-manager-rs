@@ -1,12 +1,13 @@
 use std::sync::{Arc, Mutex};
 
-use crate::messaging::types::{AuthorityRef, BoolOrBytes, BytesOrRowValues, CellBlock, NamedValue, SPRef};
+use crate::messaging::types::{
+    AuthorityRef, BoolOrBytes, BytesOrRowValues, CellBlock, List, NamedValue, ObjectReference, Password, SPRef,
+};
 use crate::messaging::uid::UID;
 use crate::messaging::value::{Bytes, Named, Value};
 use crate::rpc::MethodStatus;
-use crate::specification::invoker;
+use crate::specification::{invoker, table};
 
-use super::data::security_provider;
 use super::data::SSC;
 
 pub struct SPSession {
@@ -26,7 +27,7 @@ impl SPSession {
     }
 
     pub fn authenticate(
-        &mut self,
+        &self,
         invoking_id: UID,
         authority: AuthorityRef,
         proof: Option<Bytes>,
@@ -38,10 +39,32 @@ impl SPSession {
         let Some(sp) = ssc.get_sp(self.sp) else {
             return Err(MethodStatus::TPerMalfunction);
         };
-        security_provider::authenticate(sp, authority, proof)
+        let Some(authority_table) = sp.get_authority_table() else {
+            return Err(MethodStatus::InvalidParameter);
+        };
+        let Some(authority_obj) = authority_table.0.get(&authority) else {
+            return Err(MethodStatus::InvalidParameter);
+        };
+        let Some(credential_ref) = authority_obj.credential else {
+            return Ok(BoolOrBytes::Bool(true));
+        };
+        if credential_ref.containing_table().unwrap() == table::C_PIN {
+            let Some(c_pin_table) = sp.get_c_pin_table() else {
+                return Err(MethodStatus::TPerMalfunction);
+            };
+            if let Some(credential_obj) = c_pin_table.0.get(&credential_ref) {
+                let pw_correct =
+                    credential_obj.pin.as_ref().unwrap_or(&Password::default()).0 == proof.unwrap_or(vec![]);
+                Ok(BoolOrBytes::Bool(pw_correct))
+            } else {
+                Err(MethodStatus::TPerMalfunction)
+            }
+        } else {
+            Err(MethodStatus::TPerMalfunction)
+        }
     }
 
-    pub fn get(&mut self, invoking_id: UID, cell_block: CellBlock) -> Result<BytesOrRowValues, MethodStatus> {
+    pub fn get(&self, invoking_id: UID, cell_block: CellBlock) -> Result<BytesOrRowValues, MethodStatus> {
         if invoking_id.is_table() {
             // FakeDevice only supports calling `Get` on a byte table.
             Err(MethodStatus::InvalidParameter)
@@ -54,7 +77,7 @@ impl SPSession {
             let Some(table) = sp.get_table(table) else {
                 return Err(MethodStatus::InvalidParameter);
             };
-            let Some(object) = table.get_object(invoking_id) else {
+            let Some(object) = table.get_object(invoking_id.into()) else {
                 return Err(MethodStatus::InvalidParameter);
             };
             let first = cell_block.start_column.unwrap_or(0);
@@ -89,7 +112,7 @@ impl SPSession {
             let Some(table) = sp.get_table_mut(table) else {
                 return Err(MethodStatus::InvalidParameter);
             };
-            let Some(object) = table.get_object_mut(invoking_id) else {
+            let Some(object) = table.get_object_mut(invoking_id.into()) else {
                 return Err(MethodStatus::InvalidParameter);
             };
             let BytesOrRowValues::RowValues(row_values) = values.unwrap_or(BytesOrRowValues::RowValues(vec![])) else {
@@ -119,5 +142,26 @@ impl SPSession {
                 Ok(())
             }
         }
+    }
+
+    pub fn next(
+        &self,
+        invoking_id: UID,
+        from: Option<ObjectReference>,
+        count: Option<u64>,
+    ) -> Result<List<ObjectReference>, MethodStatus> {
+        let mut ssc = self.ssc.lock().unwrap();
+        let Some(sp) = ssc.get_sp_mut(self.sp) else {
+            return Err(MethodStatus::TPerMalfunction);
+        };
+        let Some(table) = sp.get_table_mut(invoking_id) else {
+            return Err(MethodStatus::InvalidParameter);
+        };
+
+        let next = (0..=count.unwrap_or(1))
+            .into_iter()
+            .scan(from, |from, _| std::mem::replace(from, table.next_from(*from)))
+            .skip(1);
+        Ok(List(next.collect()))
     }
 }

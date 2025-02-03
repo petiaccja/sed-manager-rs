@@ -230,6 +230,15 @@ impl ComIDSession {
                             Some(format_response_failure(MethodStatus::InvalidParameter))
                         }
                     }
+                    method::NEXT => {
+                        if let Ok((_1, _2)) = call.args.decode_args() {
+                            let result = sp_session.next(call.invoking_id, _1, _2);
+                            let result = result.map(|x| (x,));
+                            Some(PackagedMethod::Result(format_response_result(result)))
+                        } else {
+                            Some(format_response_failure(MethodStatus::InvalidParameter))
+                        }
+                    }
                     _ => Some(format_response_failure(MethodStatus::NotAuthorized)),
                 },
                 PackagedMethod::Result(_method_result) => self.abort_session(hsn, tsn),

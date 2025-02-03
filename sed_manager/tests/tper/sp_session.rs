@@ -114,3 +114,21 @@ async fn set_invalid_type() -> Result<(), RPCError> {
     assert_eq!(result, Err(MethodStatus::InvalidParameter.into()));
     Ok(())
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn next_success() -> Result<(), RPCError> {
+    let device = FakeDevice::new();
+    let tper = TPer::new(Arc::new(device));
+    let session = tper.start_session(sp::ADMIN.try_into().unwrap()).await?;
+    let result = session
+        .next(table::AUTHORITY.into(), Some(opal::admin::authority::ADMIN.n(1).unwrap().into()), Some(2))
+        .await?;
+    assert_eq!(
+        result.0,
+        vec![
+            opal::admin::authority::ADMIN.n(2).unwrap().into(),
+            opal::admin::authority::ADMIN.n(3).unwrap().into()
+        ]
+    );
+    Ok(())
+}

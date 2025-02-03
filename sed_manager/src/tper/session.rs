@@ -3,11 +3,12 @@ use crate::async_finalize::sync_finalize;
 use crate::async_finalize::AsyncFinalize;
 use crate::messaging::types::AuthorityRef;
 use crate::messaging::types::CellBlock;
+use crate::messaging::types::List;
 use crate::messaging::types::NamedValue;
 use crate::messaging::types::ObjectReference;
+use crate::messaging::types::TableReference;
 use crate::messaging::uid::UID;
 use crate::messaging::value::Bytes;
-use crate::messaging::value::List;
 use crate::messaging::value::Value;
 use crate::rpc::args::DecodeArgs;
 use crate::rpc::args::EncodeArgs;
@@ -43,7 +44,7 @@ impl Session {
         let results = get_results(self.sp_session.call(call).await?)?;
         // I'll assume the result is encoded without the typeOr{} NVP.
         // Not clear in spec, no official examples.
-        let (success,): (bool,) = results.decode_args()?;
+        let (success,): (_,) = results.decode_args()?;
         Ok(success)
     }
 
@@ -56,7 +57,7 @@ impl Session {
         };
         let results = get_results(self.sp_session.call(call).await?)?;
         // According to the TCG examples, result is encoded without typeOr{} name-value pair.
-        let (mut column_values,): (List,) = results.decode_args()?;
+        let (mut column_values,): (Vec<Value>,) = results.decode_args()?;
         if let Some(value) = column_values.pop() {
             if let Ok(nvp) = NamedValue::<u64, T>::try_from(value) {
                 Ok(nvp.value)
@@ -81,8 +82,21 @@ impl Session {
         Ok(())
     }
 
-    pub async fn next(&self) {
-        todo!()
+    pub async fn next(
+        &self,
+        table: TableReference,
+        first: Option<ObjectReference>,
+        count: Option<u64>,
+    ) -> Result<List<ObjectReference>, RPCError> {
+        let call = MethodCall {
+            invoking_id: table.into(),
+            method_id: method::NEXT,
+            args: (first, count).encode_args(),
+            status: MethodStatus::Success,
+        };
+        let results = get_results(self.sp_session.call(call).await?)?;
+        let (objects,): (_,) = results.decode_args()?;
+        Ok(objects)
     }
 
     pub async fn get_acl(&self) {
