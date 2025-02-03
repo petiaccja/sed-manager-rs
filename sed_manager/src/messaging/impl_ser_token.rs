@@ -1,5 +1,5 @@
 use super::token::{get_tag, is_data, Tag, Token, TokenizeError};
-use super::value::{Bytes, Command, List, Named, Storage, Value};
+use super::value::{Bytes, Command, List, Named, Value};
 use crate::serialization::{Deserialize, InputStream, ItemRead, ItemWrite, OutputStream, Serialize};
 
 macro_rules! impl_tokenize_integer {
@@ -236,20 +236,20 @@ impl Deserialize<Token> for List {
 impl Serialize<Token> for Value {
     type Error = TokenizeError;
     fn serialize(&self, stream: &mut OutputStream<Token>) -> Result<(), Self::Error> {
-        match self.storage() {
-            Storage::Empty => Ok(()),
-            Storage::Int8(value) => value.serialize(stream),
-            Storage::Int16(value) => value.serialize(stream),
-            Storage::Int32(value) => value.serialize(stream),
-            Storage::Int64(value) => value.serialize(stream),
-            Storage::Uint8(value) => value.serialize(stream),
-            Storage::Uint16(value) => value.serialize(stream),
-            Storage::Uint32(value) => value.serialize(stream),
-            Storage::Uint64(value) => value.serialize(stream),
-            Storage::Command(value) => value.serialize(stream),
-            Storage::Named(value) => value.serialize(stream),
-            Storage::Bytes(value) => value.serialize(stream),
-            Storage::List(value) => value.serialize(stream),
+        match self {
+            Value::Empty => Ok(()),
+            Value::Int8(value) => value.serialize(stream),
+            Value::Int16(value) => value.serialize(stream),
+            Value::Int32(value) => value.serialize(stream),
+            Value::Int64(value) => value.serialize(stream),
+            Value::Uint8(value) => value.serialize(stream),
+            Value::Uint16(value) => value.serialize(stream),
+            Value::Uint32(value) => value.serialize(stream),
+            Value::Uint64(value) => value.serialize(stream),
+            Value::Command(value) => value.serialize(stream),
+            Value::Named(value) => value.serialize(stream),
+            Value::Bytes(value) => value.serialize(stream),
+            Value::List(value) => value.serialize(stream),
         }
     }
 }

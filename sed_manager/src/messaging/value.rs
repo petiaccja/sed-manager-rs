@@ -21,7 +21,7 @@ pub struct Named {
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
-pub enum Storage {
+pub enum Value {
     Empty,
     Int8(i8),
     Int16(i16),
@@ -37,27 +37,20 @@ pub enum Storage {
     List(List),
 }
 
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub struct Value {
-    storage: Storage,
-}
-
 impl Value {
     pub fn empty() -> Self {
-        Self { storage: Storage::Empty }
+        Self::Empty
     }
-    pub fn storage<'value>(&'value self) -> &'value Storage {
-        &self.storage
-    }
+
     pub fn is_empty(&self) -> bool {
-        match &self.storage {
-            Storage::Empty => true,
+        match &self {
+            Self::Empty => true,
             _ => false,
         }
     }
     pub fn is_empty_command(&self) -> bool {
-        match &self.storage {
-            Storage::Command(Command::Empty) => true,
+        match &self {
+            Self::Command(Command::Empty) => true,
             _ => false,
         }
     }
@@ -67,34 +60,34 @@ macro_rules! impl_value_from {
     ($storage_ty:ty, $enum_variant:expr) => {
         impl From<$storage_ty> for Value {
             fn from(value: $storage_ty) -> Self {
-                Self { storage: $enum_variant(value.into()) }
+                $enum_variant(value.into())
             }
         }
     };
 }
 
-impl_value_from!(bool, Storage::Uint8);
-impl_value_from!(i8, Storage::Int8);
-impl_value_from!(i16, Storage::Int16);
-impl_value_from!(i32, Storage::Int32);
-impl_value_from!(i64, Storage::Int64);
-impl_value_from!(u8, Storage::Uint8);
-impl_value_from!(u16, Storage::Uint16);
-impl_value_from!(u32, Storage::Uint32);
-impl_value_from!(u64, Storage::Uint64);
-impl_value_from!(Command, Storage::Command);
-impl_value_from!(Bytes, Storage::Bytes);
-impl_value_from!(List, Storage::List);
+impl_value_from!(bool, Self::Uint8);
+impl_value_from!(i8, Self::Int8);
+impl_value_from!(i16, Self::Int16);
+impl_value_from!(i32, Self::Int32);
+impl_value_from!(i64, Self::Int64);
+impl_value_from!(u8, Self::Uint8);
+impl_value_from!(u16, Self::Uint16);
+impl_value_from!(u32, Self::Uint32);
+impl_value_from!(u64, Self::Uint64);
+impl_value_from!(Command, Self::Command);
+impl_value_from!(Bytes, Self::Bytes);
+impl_value_from!(List, Self::List);
 
 impl From<Named> for Value {
     fn from(value: Named) -> Self {
-        Self { storage: Storage::Named(Box::new(value)) }
+        Self::Named(Box::new(value))
     }
 }
 
 impl<const N: usize> From<[u8; N]> for Value {
     fn from(value: [u8; N]) -> Self {
-        Self { storage: Storage::Bytes(Bytes::from(value)) }
+        Self::Bytes(Bytes::from(value))
     }
 }
 
@@ -103,7 +96,7 @@ macro_rules! impl_value_try_into {
         impl TryFrom<Value> for $storage_ty {
             type Error = Value;
             fn try_from(value: Value) -> Result<Self, Self::Error> {
-                match value.storage {
+                match value {
                     $($enum_variants => Ok($value_expr),)+
                     _ => Err(value),
                 }
@@ -113,7 +106,7 @@ macro_rules! impl_value_try_into {
         impl<'value> TryFrom<&'value Value> for $storage_ty {
             type Error = &'value Value;
             fn try_from(value: &'value Value) -> Result<Self, Self::Error> {
-                match value.storage {
+                match value {
                     $($enum_variants => Ok($value_expr),)+
                     _ => Err(value),
                 }
@@ -122,40 +115,40 @@ macro_rules! impl_value_try_into {
     };
 }
 
-impl_value_try_into!(i8, value.into(), Storage::Int8(value));
-impl_value_try_into!(i16, value.into(), Storage::Int8(value), Storage::Int16(value), Storage::Uint8(value));
+impl_value_try_into!(i8, value.clone().into(), Value::Int8(value));
+impl_value_try_into!(i16, value.clone().into(), Value::Int8(value), Value::Int16(value), Value::Uint8(value));
 impl_value_try_into!(
     i32,
-    value.into(),
-    Storage::Int8(value),
-    Storage::Int16(value),
-    Storage::Int32(value),
-    Storage::Uint8(value),
-    Storage::Uint16(value)
+    value.clone().into(),
+    Value::Int8(value),
+    Value::Int16(value),
+    Value::Int32(value),
+    Value::Uint8(value),
+    Value::Uint16(value)
 );
 impl_value_try_into!(
     i64,
-    value.into(),
-    Storage::Int8(value),
-    Storage::Int16(value),
-    Storage::Int32(value),
-    Storage::Int64(value),
-    Storage::Uint8(value),
-    Storage::Uint16(value),
-    Storage::Uint32(value)
+    value.clone().into(),
+    Value::Int8(value),
+    Value::Int16(value),
+    Value::Int32(value),
+    Value::Int64(value),
+    Value::Uint8(value),
+    Value::Uint16(value),
+    Value::Uint32(value)
 );
-impl_value_try_into!(u8, value.into(), Storage::Uint8(value));
-impl_value_try_into!(u16, value.into(), Storage::Uint8(value), Storage::Uint16(value));
-impl_value_try_into!(u32, value.into(), Storage::Uint8(value), Storage::Uint16(value), Storage::Uint32(value));
+impl_value_try_into!(u8, value.clone().into(), Value::Uint8(value));
+impl_value_try_into!(u16, value.clone().into(), Value::Uint8(value), Value::Uint16(value));
+impl_value_try_into!(u32, value.clone().into(), Value::Uint8(value), Value::Uint16(value), Value::Uint32(value));
 impl_value_try_into!(
     u64,
-    value.into(),
-    Storage::Uint8(value),
-    Storage::Uint16(value),
-    Storage::Uint32(value),
-    Storage::Uint64(value)
+    value.clone().into(),
+    Value::Uint8(value),
+    Value::Uint16(value),
+    Value::Uint32(value),
+    Value::Uint64(value)
 );
-impl_value_try_into!(Command, value, Storage::Command(value));
+impl_value_try_into!(Command, value.clone(), Value::Command(value));
 
 impl TryFrom<Value> for bool {
     type Error = Value;
@@ -170,15 +163,15 @@ impl TryFrom<Value> for bool {
 impl<'value> TryFrom<&'value Value> for bool {
     type Error = &'value Value;
     fn try_from(value: &'value Value) -> Result<Self, Self::Error> {
-        let n = match value.storage {
-            Storage::Int8(n) => Ok(n as i64),
-            Storage::Int16(n) => Ok(n as i64),
-            Storage::Int32(n) => Ok(n as i64),
-            Storage::Int64(n) => Ok(n as i64),
-            Storage::Uint8(n) => Ok(n as i64),
-            Storage::Uint16(n) => Ok(n as i64),
-            Storage::Uint32(n) => Ok(n as i64),
-            Storage::Uint64(n) => Ok(n as i64),
+        let n = match value {
+            Value::Int8(n) => Ok(*n as i64),
+            Value::Int16(n) => Ok(*n as i64),
+            Value::Int32(n) => Ok(*n as i64),
+            Value::Int64(n) => Ok(*n as i64),
+            Value::Uint8(n) => Ok(*n as i64),
+            Value::Uint16(n) => Ok(*n as i64),
+            Value::Uint32(n) => Ok(*n as i64),
+            Value::Uint64(n) => Ok(*n as i64),
             _ => Err(value),
         }?;
         match n {
@@ -192,8 +185,8 @@ impl<'value> TryFrom<&'value Value> for bool {
 impl TryFrom<Value> for Named {
     type Error = Value;
     fn try_from(value: Value) -> Result<Self, Self::Error> {
-        match value.storage {
-            Storage::Named(value) => Ok(*value),
+        match value {
+            Value::Named(value) => Ok(*value),
             _ => Err(value),
         }
     }
@@ -202,8 +195,8 @@ impl TryFrom<Value> for Named {
 impl TryFrom<Value> for Bytes {
     type Error = Value;
     fn try_from(value: Value) -> Result<Self, Self::Error> {
-        match value.storage {
-            Storage::Bytes(value) => Ok(value),
+        match value {
+            Value::Bytes(value) => Ok(value),
             _ => Err(value),
         }
     }
@@ -212,8 +205,8 @@ impl TryFrom<Value> for Bytes {
 impl<const N: usize> TryFrom<Value> for [u8; N] {
     type Error = Value;
     fn try_from(value: Value) -> Result<Self, Self::Error> {
-        match value.storage {
-            Storage::Bytes(value) => match Self::try_from(value) {
+        match value {
+            Value::Bytes(value) => match Self::try_from(value) {
                 Ok(array) => Ok(array),
                 Err(value) => Err(Value::from(value)),
             },
@@ -225,8 +218,8 @@ impl<const N: usize> TryFrom<Value> for [u8; N] {
 impl TryFrom<Value> for List {
     type Error = Value;
     fn try_from(value: Value) -> Result<Self, Self::Error> {
-        match value.storage {
-            Storage::List(value) => Ok(value),
+        match value {
+            Value::List(value) => Ok(value),
             _ => Err(value),
         }
     }
@@ -235,8 +228,8 @@ impl TryFrom<Value> for List {
 impl<'value> TryFrom<&'value Value> for &'value Named {
     type Error = &'value Value;
     fn try_from(value: &'value Value) -> Result<Self, Self::Error> {
-        match value.storage {
-            Storage::Named(ref value) => Ok(&*value),
+        match value {
+            Value::Named(ref value) => Ok(&*value),
             _ => Err(value),
         }
     }
@@ -245,8 +238,8 @@ impl<'value> TryFrom<&'value Value> for &'value Named {
 impl<'value> TryFrom<&'value Value> for &'value Bytes {
     type Error = &'value Value;
     fn try_from(value: &'value Value) -> Result<Self, Self::Error> {
-        match value.storage {
-            Storage::Bytes(ref value) => Ok(value),
+        match value {
+            Value::Bytes(ref value) => Ok(value),
             _ => Err(value),
         }
     }
@@ -255,8 +248,8 @@ impl<'value> TryFrom<&'value Value> for &'value Bytes {
 impl<'value> TryFrom<&'value Value> for &'value List {
     type Error = &'value Value;
     fn try_from(value: &'value Value) -> Result<Self, Self::Error> {
-        match value.storage {
-            Storage::List(ref value) => Ok(value),
+        match value {
+            Value::List(ref value) => Ok(value),
             _ => Err(value),
         }
     }
@@ -265,8 +258,8 @@ impl<'value> TryFrom<&'value Value> for &'value List {
 impl<'value> TryFrom<&'value Value> for Named {
     type Error = &'value Value;
     fn try_from(value: &'value Value) -> Result<Self, Self::Error> {
-        match value.storage {
-            Storage::Named(ref value) => Ok(value.as_ref().clone()),
+        match value {
+            Value::Named(ref value) => Ok(value.as_ref().clone()),
             _ => Err(value),
         }
     }
@@ -275,8 +268,8 @@ impl<'value> TryFrom<&'value Value> for Named {
 impl<'value> TryFrom<&'value Value> for Bytes {
     type Error = &'value Value;
     fn try_from(value: &'value Value) -> Result<Self, Self::Error> {
-        match value.storage {
-            Storage::Bytes(ref value) => Ok(value.clone()),
+        match value {
+            Value::Bytes(ref value) => Ok(value.clone()),
             _ => Err(value),
         }
     }
@@ -285,8 +278,8 @@ impl<'value> TryFrom<&'value Value> for Bytes {
 impl<'value, const N: usize> TryFrom<&'value Value> for [u8; N] {
     type Error = &'value Value;
     fn try_from(value: &'value Value) -> Result<Self, Self::Error> {
-        match value.storage {
-            Storage::Bytes(ref items) => match Self::try_from(items.as_slice()) {
+        match value {
+            Value::Bytes(ref items) => match Self::try_from(items.as_slice()) {
                 Ok(array) => Ok(array),
                 Err(_) => Err(value),
             },
@@ -298,8 +291,8 @@ impl<'value, const N: usize> TryFrom<&'value Value> for [u8; N] {
 impl<'value> TryFrom<&'value Value> for List {
     type Error = &'value Value;
     fn try_from(value: &'value Value) -> Result<Self, Self::Error> {
-        match value.storage {
-            Storage::List(ref value) => Ok(value.clone()),
+        match value {
+            Value::List(ref value) => Ok(value.clone()),
             _ => Err(value),
         }
     }

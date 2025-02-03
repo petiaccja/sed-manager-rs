@@ -1,7 +1,7 @@
 use std::array::from_fn;
 
 use crate::{
-    messaging::value::{Named, Storage, Value},
+    messaging::value::{Named, Value},
     variadics::with_variadic_pack,
 };
 
@@ -56,8 +56,8 @@ where
 {
     type Error = <T as TryFrom<Value>>::Error;
     fn try_from_value(value: Value) -> Result<Self, Self::Error> {
-        match value.storage() {
-            Storage::Empty => Ok(None),
+        match value {
+            Value::Empty => Ok(None),
             _ => Ok(Some(T::try_from(value)?)),
         }
     }
