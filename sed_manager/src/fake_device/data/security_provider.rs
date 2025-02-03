@@ -2,7 +2,7 @@ use crate::messaging::types::{AuthorityRef, BoolOrBytes, Password, SPRef};
 use crate::messaging::uid::UID;
 use crate::messaging::value::{Bytes, Value};
 use crate::rpc::MethodStatus;
-use crate::specification::tables;
+use crate::specification::table;
 
 use super::objects::{AuthorityTable, CPinTable};
 use super::table::BasicTable;
@@ -29,7 +29,7 @@ pub fn authenticate(
     let Some(credential_ref) = authority_obj.credential else {
         return Ok(BoolOrBytes::Bool(true));
     };
-    if credential_ref.containing_table().unwrap() == tables::C_PIN {
+    if credential_ref.containing_table().unwrap() == table::C_PIN {
         let Some(c_pin_table) = sp.get_c_pin_table() else {
             return Err(MethodStatus::TPerMalfunction);
         };

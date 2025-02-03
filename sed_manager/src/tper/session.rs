@@ -16,8 +16,8 @@ use crate::rpc::MethodCall;
 use crate::rpc::MethodResult;
 use crate::rpc::MethodStatus;
 use crate::rpc::SPSession;
-use crate::specification::invokers;
-use crate::specification::methods;
+use crate::specification::invoker;
+use crate::specification::method;
 
 pub struct Session {
     sp_session: SPSession,
@@ -35,8 +35,8 @@ impl Session {
 
     pub async fn authenticate(&self, authority: AuthorityRef, proof: Option<Bytes>) -> Result<bool, RPCError> {
         let call = MethodCall {
-            invoking_id: invokers::THIS_SP,
-            method_id: methods::AUTHENTICATE,
+            invoking_id: invoker::THIS_SP,
+            method_id: method::AUTHENTICATE,
             args: (authority, proof).encode_args(),
             status: MethodStatus::Success,
         };
@@ -50,7 +50,7 @@ impl Session {
     pub async fn get<T: TryFrom<Value>>(&self, object: UID, column: u16) -> Result<T, RPCError> {
         let call = MethodCall {
             invoking_id: object,
-            method_id: methods::GET,
+            method_id: method::GET,
             args: (CellBlock::object(column..=column),).encode_args(),
             status: MethodStatus::Success,
         };
@@ -73,7 +73,7 @@ impl Session {
         let values = Some(vec![Value::from(NamedValue { name: column, value })]); // According to the TCG examples, encoded without typeOr{} name-value pair.
         let call = MethodCall {
             invoking_id: object,
-            method_id: methods::SET,
+            method_id: method::SET,
             args: (where_, values).encode_args(),
             status: MethodStatus::Success,
         };

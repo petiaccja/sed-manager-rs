@@ -3,7 +3,7 @@ use sed_manager_macros::{AliasType, EnumerationType, StructType};
 use crate::messaging::uid::UID;
 pub use crate::messaging::value::Bytes;
 use crate::messaging::value::{List, Value};
-use crate::specification::tables;
+use crate::specification::table;
 
 use super::max_bytes::MaxBytes;
 use super::traits::declare_type;
@@ -19,11 +19,11 @@ pub type Bytes64 = [u8; 64];
 pub type MaxBytes32 = MaxBytes<32>;
 pub type MaxBytes64 = MaxBytes<64>;
 
-pub type AuthorityRef = RestrictedObjectReference<{ tables::AUTHORITY.value() }>;
-pub type SPRef = RestrictedObjectReference<{ tables::SP.value() }>;
-pub type CPinRef = RestrictedObjectReference<{ tables::C_PIN.value() }>;
+pub type AuthorityRef = RestrictedObjectReference<{ table::AUTHORITY.value() }>;
+pub type SPRef = RestrictedObjectReference<{ table::SP.value() }>;
+pub type CPinRef = RestrictedObjectReference<{ table::C_PIN.value() }>;
 pub type CredentialRef = CPinRef; // Should have more tables but it's difficult to express without variadics.
-pub type LogListRef = RestrictedObjectReference<{ tables::LOG_LIST.value() }>;
+pub type LogListRef = RestrictedObjectReference<{ table::LOG_LIST.value() }>;
 
 /// Result returned by the Authenticate method.
 /// I'm guessing it's not encoded as an NVP like regular typeOr{} objects, but simply as plain data.

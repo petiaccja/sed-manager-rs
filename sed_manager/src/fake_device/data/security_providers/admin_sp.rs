@@ -3,7 +3,7 @@ use crate::fake_device::data::table::BasicTable;
 use crate::fake_device::data::Object;
 use crate::messaging::types::{AuthMethod, SPRef};
 use crate::messaging::uid::UID;
-use crate::specification::{opal, sp, tables};
+use crate::specification::{opal, sp, table};
 
 use super::super::SecurityProvider;
 
@@ -33,16 +33,16 @@ impl SecurityProvider for AdminSP {
 
     fn get_table(&self, uid: UID) -> Option<&dyn BasicTable> {
         match uid {
-            tables::AUTHORITY => Some(&self.authorities as &dyn BasicTable),
-            tables::C_PIN => Some(&self.c_pin as &dyn BasicTable),
+            table::AUTHORITY => Some(&self.authorities as &dyn BasicTable),
+            table::C_PIN => Some(&self.c_pin as &dyn BasicTable),
             _ => None,
         }
     }
 
     fn get_table_mut(&mut self, uid: UID) -> Option<&mut dyn BasicTable> {
         match uid {
-            tables::AUTHORITY => Some(&mut self.authorities as &mut dyn BasicTable),
-            tables::C_PIN => Some(&mut self.c_pin as &mut dyn BasicTable),
+            table::AUTHORITY => Some(&mut self.authorities as &mut dyn BasicTable),
+            table::C_PIN => Some(&mut self.c_pin as &mut dyn BasicTable),
             _ => None,
         }
     }
@@ -51,14 +51,14 @@ impl SecurityProvider for AdminSP {
 fn new_authority_table() -> AuthorityTable {
     let mut authorities = AuthorityTable::new();
     let anybody = Authority {
-        uid: opal::admin_authorities::ANYBODY.into(),
+        uid: opal::admin::authority::ANYBODY.into(),
         name: Some("Anybody".into()),
         operation: AuthMethod::None.into(),
         credential: None,
         ..Default::default()
     };
     let admins = Authority {
-        uid: opal::admin_authorities::ADMINS.into(),
+        uid: opal::admin::authority::ADMINS.into(),
         name: Some("Admins".into()),
         enabled: true.into(),
         operation: AuthMethod::None.into(),
@@ -66,7 +66,7 @@ fn new_authority_table() -> AuthorityTable {
         ..Default::default()
     };
     let makers = Authority {
-        uid: opal::admin_authorities::MAKERS.into(),
+        uid: opal::admin::authority::MAKERS.into(),
         name: Some("Makers".into()),
         enabled: true.into(),
         operation: AuthMethod::None.into(),
@@ -74,11 +74,11 @@ fn new_authority_table() -> AuthorityTable {
         ..Default::default()
     };
     let sid = Authority {
-        uid: opal::admin_authorities::SID.into(),
+        uid: opal::admin::authority::SID.into(),
         name: Some("SID".into()),
         enabled: true.into(),
         operation: AuthMethod::Password.into(),
-        credential: Some(opal::admin_c_pins::SID.into()),
+        credential: Some(opal::admin::c_pin::SID.into()),
         ..Default::default()
     };
 
@@ -89,11 +89,11 @@ fn new_authority_table() -> AuthorityTable {
 
     for i in 1..=4 {
         let admin = Authority {
-            uid: opal::admin_authorities::ADMIN.n(i).unwrap().into(),
+            uid: opal::admin::authority::ADMIN.n(i).unwrap().into(),
             name: Some(format!("Admin{}", i).into()),
             enabled: false.into(),
             operation: AuthMethod::None.into(),
-            credential: Some(opal::admin_c_pins::ADMIN.n(i).unwrap().into()),
+            credential: Some(opal::admin::c_pin::ADMIN.n(i).unwrap().into()),
             ..Default::default()
         };
         authorities.0.insert(admin.uid().into(), admin);
@@ -105,15 +105,15 @@ fn new_authority_table() -> AuthorityTable {
 fn new_c_pin_table() -> CPinTable {
     let mut c_pins = CPinTable::new();
 
-    let sid = CPin { uid: opal::admin_c_pins::SID.into(), pin: Some("password".into()), ..Default::default() };
-    let msid = CPin { uid: opal::admin_c_pins::MSID.into(), pin: Some("password".into()), ..Default::default() };
+    let sid = CPin { uid: opal::admin::c_pin::SID.into(), pin: Some("password".into()), ..Default::default() };
+    let msid = CPin { uid: opal::admin::c_pin::MSID.into(), pin: Some("password".into()), ..Default::default() };
 
     c_pins.0.insert(sid.uid().into(), sid);
     c_pins.0.insert(msid.uid().into(), msid);
 
     for i in 1..=4 {
         let admin = CPin {
-            uid: opal::admin_c_pins::ADMIN.n(i).unwrap().into(),
+            uid: opal::admin::c_pin::ADMIN.n(i).unwrap().into(),
             pin: Some("password".into()),
             ..Default::default()
         };

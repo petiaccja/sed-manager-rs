@@ -7,7 +7,7 @@ use sed_manager::rpc::Error as RPCError;
 use sed_manager::rpc::MethodStatus;
 use sed_manager::specification::opal;
 use sed_manager::specification::sp;
-use sed_manager::specification::tables;
+use sed_manager::specification::table;
 use sed_manager::tper::TPer;
 
 #[tokio::test(flavor = "multi_thread")]
@@ -16,7 +16,7 @@ async fn authenticate_success() -> Result<(), RPCError> {
     let tper = TPer::new(Arc::new(device));
     let session = tper.start_session(sp::ADMIN.try_into().unwrap()).await?;
     let result = session
-        .authenticate(opal::admin_authorities::SID.try_into().unwrap(), Some("password".into()))
+        .authenticate(opal::admin::authority::SID.try_into().unwrap(), Some("password".into()))
         .await?;
     assert_eq!(result, true);
     Ok(())
@@ -28,7 +28,7 @@ async fn authenticate_wrong_password() -> Result<(), RPCError> {
     let tper = TPer::new(Arc::new(device));
     let session = tper.start_session(sp::ADMIN.try_into().unwrap()).await?;
     let result = session
-        .authenticate(opal::admin_authorities::SID.try_into().unwrap(), Some("wrong password".into()))
+        .authenticate(opal::admin::authority::SID.try_into().unwrap(), Some("wrong password".into()))
         .await?;
     assert_eq!(result, false);
     Ok(())
@@ -51,7 +51,7 @@ async fn get_success() -> Result<(), RPCError> {
     let device = FakeDevice::new();
     let tper = TPer::new(Arc::new(device));
     let session = tper.start_session(sp::ADMIN.try_into().unwrap()).await?;
-    let result = session.get::<Password>(opal::admin_c_pins::MSID, 3).await?;
+    let result = session.get::<Password>(opal::admin::c_pin::MSID, 3).await?;
     assert_eq!(result, "password".into());
     Ok(())
 }
@@ -61,7 +61,7 @@ async fn get_missing_object() -> Result<(), RPCError> {
     let device = FakeDevice::new();
     let tper = TPer::new(Arc::new(device));
     let session = tper.start_session(sp::ADMIN.try_into().unwrap()).await?;
-    let result = session.get::<Password>(UID::new(tables::C_PIN.value() + 0x2360_4327), 3).await;
+    let result = session.get::<Password>(UID::new(table::C_PIN.value() + 0x2360_4327), 3).await;
     assert_eq!(result, Err(MethodStatus::InvalidParameter.into()));
     Ok(())
 }
@@ -71,7 +71,7 @@ async fn get_invalid_column() -> Result<(), RPCError> {
     let device = FakeDevice::new();
     let tper = TPer::new(Arc::new(device));
     let session = tper.start_session(sp::ADMIN.try_into().unwrap()).await?;
-    let result = session.get::<Password>(UID::new(tables::C_PIN.value() + 0x2360_4327), 57).await;
+    let result = session.get::<Password>(UID::new(table::C_PIN.value() + 0x2360_4327), 57).await;
     assert_eq!(result, Err(MethodStatus::InvalidParameter.into()));
     Ok(())
 }
@@ -81,7 +81,7 @@ async fn set_success() -> Result<(), RPCError> {
     let device = FakeDevice::new();
     let tper = TPer::new(Arc::new(device));
     let session = tper.start_session(sp::ADMIN.try_into().unwrap()).await?;
-    session.set(opal::admin_c_pins::SID, 3, Password::from("1234")).await?;
+    session.set(opal::admin::c_pin::SID, 3, Password::from("1234")).await?;
     Ok(())
 }
 
@@ -90,7 +90,7 @@ async fn set_missing_object() -> Result<(), RPCError> {
     let device = FakeDevice::new();
     let tper = TPer::new(Arc::new(device));
     let session = tper.start_session(sp::ADMIN.try_into().unwrap()).await?;
-    let result = session.set(UID::new(tables::C_PIN.value() + 0x2360_4327), 3, Password::from("1234")).await;
+    let result = session.set(UID::new(table::C_PIN.value() + 0x2360_4327), 3, Password::from("1234")).await;
     assert_eq!(result, Err(MethodStatus::InvalidParameter.into()));
     Ok(())
 }
@@ -100,7 +100,7 @@ async fn set_invalid_column() -> Result<(), RPCError> {
     let device = FakeDevice::new();
     let tper = TPer::new(Arc::new(device));
     let session = tper.start_session(sp::ADMIN.try_into().unwrap()).await?;
-    let result = session.set(UID::new(tables::C_PIN.value() + 0x2360_4327), 57, Password::from("1234")).await;
+    let result = session.set(UID::new(table::C_PIN.value() + 0x2360_4327), 57, Password::from("1234")).await;
     assert_eq!(result, Err(MethodStatus::InvalidParameter.into()));
     Ok(())
 }
@@ -110,7 +110,7 @@ async fn set_invalid_type() -> Result<(), RPCError> {
     let device = FakeDevice::new();
     let tper = TPer::new(Arc::new(device));
     let session = tper.start_session(sp::ADMIN.try_into().unwrap()).await?;
-    let result = session.set(UID::new(tables::C_PIN.value() + 0x2360_4327), 3, 35678u32).await;
+    let result = session.set(UID::new(table::C_PIN.value() + 0x2360_4327), 3, 35678u32).await;
     assert_eq!(result, Err(MethodStatus::InvalidParameter.into()));
     Ok(())
 }

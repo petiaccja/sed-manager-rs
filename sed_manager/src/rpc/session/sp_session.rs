@@ -8,7 +8,7 @@ use crate::rpc::error::Error;
 use crate::rpc::method::{MethodCall, MethodResult};
 use crate::rpc::protocol::MethodCaller;
 use crate::rpc::PackagedMethod;
-use crate::specification::methods;
+use crate::specification::method;
 
 pub struct SPSession {
     method_caller: MethodCaller,
@@ -76,7 +76,7 @@ impl SPSession {
 fn decode_response(response: Result<PackagedMethod, Error>) -> Result<PackagedMethod, Error> {
     match response {
         Ok(PackagedMethod::Call(call)) => {
-            if call.method_id == methods::CLOSE_SESSION {
+            if call.method_id == method::CLOSE_SESSION {
                 // CloseSession
                 Err(Error::AbortedByRemote)
             } else {

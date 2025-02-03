@@ -5,7 +5,7 @@ use crate::rpc::error::Error;
 use crate::rpc::method::MethodCall;
 use crate::rpc::protocol::MethodCaller;
 use crate::rpc::PackagedMethod;
-use crate::specification::methods;
+use crate::specification::method;
 
 pub struct ControlSession {
     method_caller: Mutex<MethodCaller>,
@@ -37,7 +37,7 @@ impl ControlSession {
                     // packets instead of methods. Sometimes I really wonder if *anybody*
                     // tried to implement this specification before they published it.
                     // Doesn't seem like so...
-                    if response.method_id != methods::CLOSE_SESSION {
+                    if response.method_id != method::CLOSE_SESSION {
                         Ok(response)
                     } else {
                         continue;

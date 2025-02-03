@@ -4,7 +4,7 @@ use crate::messaging::types::{AuthorityRef, BoolOrBytes, BytesOrRowValues, CellB
 use crate::messaging::uid::UID;
 use crate::messaging::value::{Bytes, Named, Value};
 use crate::rpc::MethodStatus;
-use crate::specification::invokers;
+use crate::specification::invoker;
 
 use super::data::security_provider;
 use super::data::SSC;
@@ -27,7 +27,7 @@ impl SPSession {
         authority: AuthorityRef,
         proof: Option<Bytes>,
     ) -> Result<BoolOrBytes, MethodStatus> {
-        if invoking_id != invokers::THIS_SP {
+        if invoking_id != invoker::THIS_SP {
             return Err(MethodStatus::InvalidParameter);
         };
         let ssc = self.ssc.lock().unwrap();

@@ -1,5 +1,5 @@
-pub mod invokers;
-pub mod methods;
+pub mod invoker;
+pub mod method;
 pub mod opal;
 pub mod sp;
-pub mod tables;
+pub mod table;

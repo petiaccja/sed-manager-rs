@@ -18,7 +18,7 @@ use crate::rpc::{MethodCall, MethodResult, MethodStatus, PackagedMethod, Propert
 use crate::serialization::vec_with_len::VecWithLen;
 use crate::serialization::vec_without_len::VecWithoutLen;
 use crate::serialization::{Deserialize, DeserializeBinary, InputStream, OutputStream, Serialize, SerializeBinary};
-use crate::specification::{invokers, methods, tables};
+use crate::specification::{invoker, method, table};
 
 use super::data::SSC;
 use super::sp_session::SPSession;
@@ -170,23 +170,23 @@ impl ComIDSession {
         let PackagedMethod::Call(call) = call else {
             return None;
         };
-        if call.invoking_id != invokers::SMUID {
+        if call.invoking_id != invoker::SMUID {
             return None;
         }
         match call.method_id {
-            methods::PROPERTIES => {
+            method::PROPERTIES => {
                 if let Ok((_1,)) = call.args.decode_args() {
                     let result = self.properties(_1);
-                    let call = format_response_call(invokers::SMUID, methods::PROPERTIES, result);
+                    let call = format_response_call(invoker::SMUID, method::PROPERTIES, result);
                     Some(PackagedMethod::Call(call))
                 } else {
                     None
                 }
             }
-            methods::START_SESSION => {
+            method::START_SESSION => {
                 if let Ok((_1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12)) = call.args.decode_args() {
                     let result = self.start_session(_1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12);
-                    let call = format_response_call(invokers::SMUID, methods::SYNC_SESSION, result);
+                    let call = format_response_call(invoker::SMUID, method::SYNC_SESSION, result);
                     Some(PackagedMethod::Call(call))
                 } else {
                     None
@@ -200,7 +200,7 @@ impl ComIDSession {
         if let Some(sp_session) = self.sp_sessions.get_mut(&(hsn, tsn)) {
             match call {
                 PackagedMethod::Call(call) => match call.method_id {
-                    methods::AUTHENTICATE => {
+                    method::AUTHENTICATE => {
                         if let Ok((_1, _2)) = call.args.decode_args() {
                             let result = sp_session.authenticate(call.invoking_id, _1, _2);
                             let result = result.map(|x| (x,));
@@ -209,7 +209,7 @@ impl ComIDSession {
                             Some(format_response_failure(MethodStatus::InvalidParameter))
                         }
                     }
-                    methods::GET => {
+                    method::GET => {
                         if let Ok((_1,)) = call.args.decode_args() {
                             let result = sp_session.get(call.invoking_id, _1);
                             let result = result.map(|x| (x,));
@@ -218,7 +218,7 @@ impl ComIDSession {
                             Some(format_response_failure(MethodStatus::InvalidParameter))
                         }
                     }
-                    methods::SET => {
+                    method::SET => {
                         if let Ok((_1, _2)) = call.args.decode_args() {
                             let result = sp_session.set(call.invoking_id, _1, _2);
                             Some(PackagedMethod::Result(format_response_result(result)))
@@ -289,9 +289,9 @@ impl ComIDSession {
         sp_uid: SPRef,
         write: bool,
         _host_challenge: Option<Bytes>,
-        _host_exch_auth: Option<RestrictedObjectReference<{ tables::AUTHORITY.value() }>>,
+        _host_exch_auth: Option<RestrictedObjectReference<{ table::AUTHORITY.value() }>>,
         _host_exch_cert: Option<Bytes>,
-        _host_sgn_auth: Option<RestrictedObjectReference<{ tables::AUTHORITY.value() }>>,
+        _host_sgn_auth: Option<RestrictedObjectReference<{ table::AUTHORITY.value() }>>,
         _host_sgn_cert: Option<Bytes>,
         _session_timeout: Option<u32>,
         _trans_timeout: Option<u32>,
@@ -323,8 +323,8 @@ impl ComIDSession {
     fn abort_session(&mut self, hsn: u32, tsn: u32) -> Option<PackagedMethod> {
         if let Some(_eos) = self.close_session(hsn, tsn) {
             Some(PackagedMethod::Call(MethodCall {
-                invoking_id: invokers::SMUID,
-                method_id: methods::CLOSE_SESSION,
+                invoking_id: invoker::SMUID,
+                method_id: method::CLOSE_SESSION,
                 args: (hsn, tsn).encode_args(),
                 status: MethodStatus::Success,
             }))

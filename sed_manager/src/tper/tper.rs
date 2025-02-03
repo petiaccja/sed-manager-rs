@@ -13,7 +13,7 @@ use crate::messaging::value::Bytes;
 use crate::rpc::args::{DecodeArgs, EncodeArgs};
 use crate::rpc::{Error as RPCError, MethodCall, MethodStatus, Properties, RPCSession};
 use crate::serialization::{Deserialize, InputStream};
-use crate::specification::{invokers, methods};
+use crate::specification::{invoker, method};
 
 use super::session::Session;
 
@@ -127,8 +127,8 @@ impl TPer {
     ) -> Result<(List<NamedValue<MaxBytes32, u32>>, Option<List<NamedValue<MaxBytes32, u32>>>), RPCError> {
         let host_struct = Properties::from_list(host_properties.as_ref().unwrap_or(&List::new()));
         let call = MethodCall {
-            invoking_id: invokers::SMUID,
-            method_id: methods::PROPERTIES,
+            invoking_id: invoker::SMUID,
+            method_id: method::PROPERTIES,
             args: (host_properties,).encode_args(),
             status: MethodStatus::Success,
         };
@@ -151,8 +151,8 @@ impl TPer {
     pub async fn start_session(&self, sp: SPRef) -> Result<Session, RPCError> {
         let hsn = self.next_hsn.fetch_add(1, Ordering::Relaxed);
         let call = MethodCall {
-            invoking_id: invokers::SMUID,
-            method_id: methods::START_SESSION,
+            invoking_id: invoker::SMUID,
+            method_id: method::START_SESSION,
             args: (hsn, sp, 0u8).encode_args(),
             status: MethodStatus::Success,
         };
