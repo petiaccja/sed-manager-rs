@@ -21,6 +21,10 @@ impl SPSession {
         Self { sp, write, ssc: controller, authentications: Vec::new() }
     }
 
+    pub fn sp(&self) -> SPRef {
+        self.sp
+    }
+
     pub fn authenticate(
         &mut self,
         invoking_id: UID,

@@ -42,8 +42,11 @@ async fn properties_with_host() -> Result<(), RPCError> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn start_session_normal() -> Result<(), RPCError> {
-    let device = FakeDevice::new();
-    let tper = TPer::new(Arc::new(device));
-    let _session = tper.start_session(sp::ADMIN.try_into().unwrap()).await?;
+    let device = Arc::new(FakeDevice::new());
+    {
+        let tper = TPer::new(device.clone());
+        let _session = tper.start_session(sp::ADMIN.try_into().unwrap()).await?;
+    }
+    assert!(device.active_sessions().is_empty());
     Ok(())
 }

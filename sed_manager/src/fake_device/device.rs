@@ -6,6 +6,7 @@ use std::usize;
 use crate::device::{Device, Error, Interface};
 use crate::messaging::com_id::HANDLE_COM_ID_PROTOCOL;
 use crate::messaging::packet::PACKETIZED_PROTOCOL;
+use crate::messaging::types::SPRef;
 use crate::rpc::Properties;
 
 use super::com_id_session::ComIDSession;
@@ -61,6 +62,11 @@ impl FakeDevice {
 
     pub fn capabilities(&self) -> &Properties {
         &self.capabilities
+    }
+
+    pub fn active_sessions(&self) -> Vec<(u32, u32, SPRef)> {
+        let sessions = self.sessions.lock().unwrap();
+        sessions.iter().map(|session| session.1.active_sp_sessions()).flatten().collect()
     }
 }
 

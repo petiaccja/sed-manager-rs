@@ -50,6 +50,10 @@ impl ComIDSession {
         }
     }
 
+    pub fn active_sp_sessions(&self) -> Vec<(u32, u32, SPRef)> {
+        self.sp_sessions.iter().map(|((hsn, tsn), sp_session)| (*hsn, *tsn, sp_session.sp())).collect()
+    }
+
     pub fn on_security_send_com(&mut self, data: &[u8]) -> Result<(), Error> {
         let Ok(request) = HandleComIdRequest::from_bytes(data.into()) else {
             return Ok(());
