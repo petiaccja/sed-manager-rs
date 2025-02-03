@@ -17,6 +17,7 @@ pub enum Error {
     MissingPacket,
     InvalidTokenStream,
     InvalidCreditControl,
+    InvalidColumnType,
     OutOfCreditRemote,
     MethodTooLarge,
     MethodCallExpected,

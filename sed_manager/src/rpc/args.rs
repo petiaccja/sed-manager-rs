@@ -17,10 +17,7 @@ pub trait TryFromValue: Sized {
     fn try_from_value(value: Value) -> Result<Self, Self::Error>;
 }
 
-impl<T> ToValue for T
-where
-    Value: From<T>,
-{
+impl<T: Into<Value>> ToValue for T {
     const OPTIONAL: bool = false;
     fn to_value(self) -> Value {
         self.into()
@@ -223,6 +220,23 @@ macro_rules! impl_decode_args {
 
 with_variadic_pack!(impl_encode_args);
 with_variadic_pack!(impl_decode_args);
+
+impl EncodeArgs for () {
+    fn encode_args(self) -> Vec<Value> {
+        Vec::new()
+    }
+}
+
+impl FromEncodedArgs for () {
+    type Error = MethodStatus;
+    fn from_encoded_args(args: Vec<Value>) -> Result<Self, Self::Error> {
+        if args.is_empty() {
+            Ok(())
+        } else {
+            Err(MethodStatus::InvalidParameter)
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {

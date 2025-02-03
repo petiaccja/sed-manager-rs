@@ -9,7 +9,7 @@ use crate::messaging::packet::PACKETIZED_PROTOCOL;
 use crate::rpc::Properties;
 
 use super::com_id_session::ComIDSession;
-use super::controller::Controller;
+use super::data::SSC;
 use super::discovery::{get_discovery, write_discovery, BASE_COM_ID, NUM_COM_IDS};
 
 const ROUTE_DISCOVERY: Route = Route { protocol: 0x01, com_id: 0x0001 };
@@ -37,7 +37,7 @@ const CAPABILITIES: Properties = Properties {
 pub struct FakeDevice {
     capabilities: Properties,
     sessions: Mutex<HashMap<u16, ComIDSession>>,
-    controller: Arc<Mutex<Controller>>,
+    ssc: Arc<Mutex<SSC>>,
 }
 
 #[derive(PartialEq, Eq)]
@@ -48,7 +48,7 @@ struct Route {
 
 impl FakeDevice {
     pub fn new() -> FakeDevice {
-        let controller = Arc::new(Mutex::new(Controller::new()));
+        let controller = Arc::new(Mutex::new(SSC::new()));
         let capabilities = CAPABILITIES;
         let mut sessions = HashMap::new();
         for i in 0..NUM_COM_IDS {
@@ -56,7 +56,7 @@ impl FakeDevice {
             let session = ComIDSession::new(com_id, 0x0000, capabilities.clone(), controller.clone());
             sessions.insert(BASE_COM_ID + i, session);
         }
-        FakeDevice { capabilities, controller, sessions: sessions.into() }
+        FakeDevice { capabilities, ssc: controller, sessions: sessions.into() }
     }
 
     pub fn capabilities(&self) -> &Properties {

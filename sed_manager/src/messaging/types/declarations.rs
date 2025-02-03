@@ -1,7 +1,8 @@
-use sed_manager_macros::{AliasType, AlternativeType, EnumerationType, StructType};
+use sed_manager_macros::{AliasType, EnumerationType, StructType};
 
 use crate::messaging::uid::UID;
 pub use crate::messaging::value::Bytes;
+use crate::messaging::value::{List, Value};
 use crate::specification::tables;
 
 use super::max_bytes::MaxBytes;
@@ -20,14 +21,24 @@ pub type MaxBytes64 = MaxBytes<64>;
 
 pub type AuthorityRef = RestrictedObjectReference<{ tables::AUTHORITY.value() }>;
 pub type SPRef = RestrictedObjectReference<{ tables::SP.value() }>;
-// Should have 4 more tables aside from C_PIN, but Rust's type system is not powerful enough to express this easily.
-pub type CredentialRef = RestrictedObjectReference<{ tables::C_PIN.value() }>;
+pub type CPinRef = RestrictedObjectReference<{ tables::C_PIN.value() }>;
+pub type CredentialRef = CPinRef; // Should have more tables but it's difficult to express without variadics.
 pub type LogListRef = RestrictedObjectReference<{ tables::LOG_LIST.value() }>;
 
-#[derive(AlternativeType, PartialEq, Eq, Clone, Debug)]
+/// Result returned by the Authenticate method.
+/// I'm guessing it's not encoded as an NVP like regular typeOr{} objects, but simply as plain data.
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub enum BoolOrBytes {
     Bool(bool),
     Bytes(Bytes),
+}
+
+/// Represents the result of the Get method.
+/// According to the TCG examples, it's not encoded as an NVP like regular typeOr{} objects, but simply as plain data.
+#[derive(PartialEq, Eq, Clone, Debug)]
+pub enum BytesOrRowValues {
+    Bytes(Bytes),
+    RowValues(List),
 }
 
 #[allow(non_camel_case_types)]
@@ -101,20 +112,23 @@ pub enum LogSelect {
     LogAlways = 3,
 }
 
-#[derive(AliasType, PartialEq, Eq, Clone, Debug)]
-struct Name(MaxBytes32);
+#[derive(AliasType, PartialEq, Eq, Clone, Debug, Default)]
+pub struct Name(MaxBytes32);
 
-#[derive(AliasType, PartialEq, Eq, Clone, Debug)]
-struct Year(u16);
+#[derive(AliasType, PartialEq, Eq, Clone, Debug, Default)]
+pub struct Password(MaxBytes32);
 
-#[derive(AliasType, PartialEq, Eq, Clone, Debug)]
-struct Month(u8);
+#[derive(AliasType, PartialEq, Eq, Clone, Debug, Default)]
+pub struct Year(u16);
 
-#[derive(AliasType, PartialEq, Eq, Clone, Debug)]
-struct Day(u8);
+#[derive(AliasType, PartialEq, Eq, Clone, Debug, Default)]
+pub struct Month(u8);
 
-#[derive(StructType, PartialEq, Eq, Clone, Debug)]
-struct Date {
+#[derive(AliasType, PartialEq, Eq, Clone, Debug, Default)]
+pub struct Day(u8);
+
+#[derive(StructType, PartialEq, Eq, Clone, Debug, Default)]
+pub struct Date {
     year: Year,
     month: Month,
     day: Day,
@@ -152,3 +166,93 @@ declare_type!(Month, 0x0000_0005_0000_0417_u64, "month_enum");
 declare_type!(Year, 0x0000_0005_0000_0416_u64, "year_enum");
 declare_type!(Date, 0x0000_0005_0000_1804_u64, "date");
 declare_type!(LogSelect, 0x0000_0005_0000_040C_u64, "log_select");
+
+impl From<&str> for Name {
+    fn from(value: &str) -> Self {
+        Self(value.into())
+    }
+}
+
+impl From<&Name> for &str {
+    fn from(value: &Name) -> Self {
+        value.into()
+    }
+}
+
+impl From<String> for Name {
+    fn from(value: String) -> Self {
+        Self(value.into())
+    }
+}
+
+impl From<&Name> for String {
+    fn from(value: &Name) -> Self {
+        value.into()
+    }
+}
+
+impl From<&str> for Password {
+    fn from(value: &str) -> Self {
+        Self(value.into())
+    }
+}
+
+impl From<&Password> for &str {
+    fn from(value: &Password) -> Self {
+        value.into()
+    }
+}
+
+impl From<String> for Password {
+    fn from(value: String) -> Self {
+        Self(value.into())
+    }
+}
+
+impl From<&Password> for String {
+    fn from(value: &Password) -> Self {
+        value.into()
+    }
+}
+
+impl TryFrom<Value> for BoolOrBytes {
+    type Error = Value;
+    fn try_from(value: Value) -> Result<Self, Self::Error> {
+        let maybe_bool = bool::try_from(value).map(|x| BoolOrBytes::Bool(x));
+        let value = match maybe_bool {
+            Ok(x) => return Ok(x),
+            Err(v) => v,
+        };
+        Bytes::try_from(value).map(|x| BoolOrBytes::Bytes(x))
+    }
+}
+
+impl From<BoolOrBytes> for Value {
+    fn from(value: BoolOrBytes) -> Self {
+        match value {
+            BoolOrBytes::Bool(x) => x.into(),
+            BoolOrBytes::Bytes(x) => x.into(),
+        }
+    }
+}
+
+impl TryFrom<Value> for BytesOrRowValues {
+    type Error = Value;
+    fn try_from(value: Value) -> Result<Self, Self::Error> {
+        let maybe_bool = Bytes::try_from(value).map(|x| BytesOrRowValues::Bytes(x));
+        let value = match maybe_bool {
+            Ok(x) => return Ok(x),
+            Err(v) => v,
+        };
+        List::try_from(value).map(|x| BytesOrRowValues::RowValues(x))
+    }
+}
+
+impl From<BytesOrRowValues> for Value {
+    fn from(value: BytesOrRowValues) -> Self {
+        match value {
+            BytesOrRowValues::Bytes(x) => x.into(),
+            BytesOrRowValues::RowValues(x) => x.into(),
+        }
+    }
+}

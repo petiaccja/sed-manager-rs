@@ -6,4 +6,5 @@ pub mod packet;
 pub mod token;
 pub mod types;
 pub mod uid;
+pub mod uid_range;
 pub mod value;

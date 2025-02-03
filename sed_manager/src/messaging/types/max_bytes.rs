@@ -2,7 +2,7 @@ use std::ops::Deref;
 
 use crate::messaging::value::{Bytes, Value};
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug, Default)]
 pub struct MaxBytes<const LIMIT: usize>(pub Bytes);
 
 impl<const LIMIT: usize> Deref for MaxBytes<LIMIT> {

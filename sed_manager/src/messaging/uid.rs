@@ -18,19 +18,28 @@ impl UID {
         self.value
     }
 
-    pub const fn to_descriptor(&self) -> Self {
-        assert!(self.is_table());
-        Self::new((self.value >> 32) | (1_u64 << 32))
+    pub const fn to_descriptor(&self) -> Option<Self> {
+        if self.is_table() {
+            Some(Self::new((self.value >> 32) | (1_u64 << 32)))
+        } else {
+            None
+        }
     }
 
-    pub const fn to_table(&self) -> Self {
-        assert!(self.is_descriptor());
-        Self::new(self.value << 32)
+    pub const fn to_table(&self) -> Option<Self> {
+        if self.is_descriptor() {
+            Some(Self::new(self.value << 32))
+        } else {
+            None
+        }
     }
 
-    pub const fn containing_table(&self) -> Self {
-        assert!(self.is_object() || self.is_descriptor());
-        Self::new(self.value & 0xFFFF_FFFF_0000_0000)
+    pub const fn containing_table(&self) -> Option<Self> {
+        if self.is_object() || self.is_descriptor() {
+            Some(Self::new(self.value & 0xFFFF_FFFF_0000_0000))
+        } else {
+            None
+        }
     }
 
     pub const fn is_table(&self) -> bool {
@@ -41,12 +50,8 @@ impl UID {
         (self.value & 0xFFFF_FFFF_0000_0000) == 0x0000_0001_0000_0000 && (self.value & 0x0000_0000_FFFF_FFFF) != 0
     }
 
-    pub const fn is_object_or_descriptor(&self) -> bool {
-        self.is_object() || self.is_descriptor()
-    }
-
     pub const fn is_object(&self) -> bool {
-        !self.is_table() && !self.is_descriptor()
+        !self.is_table()
     }
 }
 
@@ -99,6 +104,12 @@ impl From<UID> for u64 {
     }
 }
 
+impl Default for UID {
+    fn default() -> Self {
+        UID::null()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -117,7 +128,7 @@ mod tests {
 
         assert!(!DESCRIPTOR.is_table());
         assert!(DESCRIPTOR.is_descriptor());
-        assert!(!DESCRIPTOR.is_object());
+        assert!(DESCRIPTOR.is_object());
 
         assert!(!OBJECT.is_table());
         assert!(!OBJECT.is_descriptor());
@@ -130,13 +141,13 @@ mod tests {
 
     #[test]
     fn convert_table_and_descriptor() {
-        assert_eq!(TABLE.to_descriptor(), DESCRIPTOR);
-        assert_eq!(TABLE, DESCRIPTOR.to_table());
+        assert_eq!(TABLE.to_descriptor().unwrap(), DESCRIPTOR);
+        assert_eq!(TABLE, DESCRIPTOR.to_table().unwrap());
     }
 
     #[test]
     fn get_containing_table() {
-        assert_eq!(OBJECT.containing_table(), CONTAINING);
-        assert_eq!(DESCRIPTOR.containing_table(), TABLE);
+        assert_eq!(OBJECT.containing_table().unwrap(), CONTAINING);
+        assert_eq!(DESCRIPTOR.containing_table().unwrap(), TABLE);
     }
 }

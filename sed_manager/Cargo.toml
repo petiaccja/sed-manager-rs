@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 sed_manager_macros = { path = "../sed_manager_macros" }
 skip_test = { path = "../skip_test" }
+as_array = { path = "../as_array" }
 
 [dependencies.bitvec]
 version = "1"

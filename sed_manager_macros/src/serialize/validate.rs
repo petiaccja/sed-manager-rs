@@ -137,12 +137,12 @@ mod tests {
     fn field_locations_consecutive() {
         let fields = [
             DataField {
-                name: syn::Ident::new("0", Span::call_site()),
+                name: syn::Ident::new("_0", Span::call_site()),
                 ty: syn::Type::Verbatim(quote! {u8}),
                 layout: LayoutAttr { ..Default::default() },
             },
             DataField {
-                name: syn::Ident::new("1", Span::call_site()),
+                name: syn::Ident::new("_1", Span::call_site()),
                 ty: syn::Type::Verbatim(quote! {u8}),
                 layout: LayoutAttr { ..Default::default() },
             },
@@ -156,12 +156,12 @@ mod tests {
     fn field_locations_disjoint_bitfields() {
         let fields = [
             DataField {
-                name: syn::Ident::new("0", Span::call_site()),
+                name: syn::Ident::new("_0", Span::call_site()),
                 ty: syn::Type::Verbatim(quote! {u8}),
                 layout: LayoutAttr { bits: Some(1..2), ..Default::default() },
             },
             DataField {
-                name: syn::Ident::new("1", Span::call_site()),
+                name: syn::Ident::new("_1", Span::call_site()),
                 ty: syn::Type::Verbatim(quote! {u8}),
                 layout: LayoutAttr { bits: Some(3..4), ..Default::default() },
             },
@@ -175,12 +175,12 @@ mod tests {
     fn field_locations_joint_bitfields() {
         let fields = [
             DataField {
-                name: syn::Ident::new("0", Span::call_site()),
+                name: syn::Ident::new("_0", Span::call_site()),
                 ty: syn::Type::Verbatim(quote! {u8}),
                 layout: LayoutAttr { bits: Some(1..2), offset: Some(0), ..Default::default() },
             },
             DataField {
-                name: syn::Ident::new("1", Span::call_site()),
+                name: syn::Ident::new("_1", Span::call_site()),
                 ty: syn::Type::Verbatim(quote! {u8}),
                 layout: LayoutAttr { bits: Some(3..4), offset: Some(0), ..Default::default() },
             },
@@ -194,12 +194,12 @@ mod tests {
     fn field_locations_bitfield_follow() {
         let fields = [
             DataField {
-                name: syn::Ident::new("0", Span::call_site()),
+                name: syn::Ident::new("_0", Span::call_site()),
                 ty: syn::Type::Verbatim(quote! {u8}),
                 layout: LayoutAttr { bits: Some(1..2), offset: Some(0), ..Default::default() },
             },
             DataField {
-                name: syn::Ident::new("1", Span::call_site()),
+                name: syn::Ident::new("_1", Span::call_site()),
                 ty: syn::Type::Verbatim(quote! {u8}),
                 layout: LayoutAttr { ..Default::default() },
             },
@@ -213,12 +213,12 @@ mod tests {
     fn field_locations_offset() {
         let fields = [
             DataField {
-                name: syn::Ident::new("0", Span::call_site()),
+                name: syn::Ident::new("_0", Span::call_site()),
                 ty: syn::Type::Verbatim(quote! {u8}),
                 layout: LayoutAttr { offset: Some(8), ..Default::default() },
             },
             DataField {
-                name: syn::Ident::new("1", Span::call_site()),
+                name: syn::Ident::new("_1", Span::call_site()),
                 ty: syn::Type::Verbatim(quote! {u8}),
                 layout: LayoutAttr { ..Default::default() },
             },
@@ -232,17 +232,17 @@ mod tests {
     fn field_locations_reversed() {
         let fields = [
             DataField {
-                name: syn::Ident::new("0", Span::call_site()),
+                name: syn::Ident::new("_0", Span::call_site()),
                 ty: syn::Type::Verbatim(quote! {u8}),
                 layout: LayoutAttr { offset: Some(8), ..Default::default() },
             },
             DataField {
-                name: syn::Ident::new("1", Span::call_site()),
+                name: syn::Ident::new("_1", Span::call_site()),
                 ty: syn::Type::Verbatim(quote! {u8}),
                 layout: LayoutAttr { offset: Some(6), ..Default::default() },
             },
             DataField {
-                name: syn::Ident::new("2", Span::call_site()),
+                name: syn::Ident::new("_2", Span::call_site()),
                 ty: syn::Type::Verbatim(quote! {u8}),
                 layout: LayoutAttr { ..Default::default() },
             },
@@ -257,20 +257,20 @@ mod tests {
     fn validate_overlap_flagged() {
         let descs = [
             DataField {
-                name: syn::Ident::new("1", Span::call_site()).into(),
+                name: syn::Ident::new("_0", Span::call_site()).into(),
                 ty: syn::Type::Verbatim(quote! {u8}),
                 layout: LayoutAttr { ..Default::default() },
             },
             DataField {
-                name: syn::Ident::new("1", Span::call_site()).into(),
+                name: syn::Ident::new("_1", Span::call_site()).into(),
                 ty: syn::Type::Verbatim(quote! {u8}),
                 layout: LayoutAttr { ..Default::default() },
             },
         ];
         let locs = [0..16, 8..24];
         if let Err(LayoutError::OverlappingFields((a, b))) = validate_location_overlap(&descs, &locs) {
-            assert_eq!(a, "0");
-            assert_eq!(b, "1");
+            assert_eq!(a, "_0");
+            assert_eq!(b, "_1");
         } else {
             assert!(false);
         }
@@ -280,20 +280,20 @@ mod tests {
     fn validate_reversed_flagged() {
         let descs = [
             DataField {
-                name: syn::Ident::new("0", Span::call_site()),
+                name: syn::Ident::new("_0", Span::call_site()),
                 ty: syn::Type::Verbatim(quote! {u8}),
                 layout: LayoutAttr { ..Default::default() },
             },
             DataField {
-                name: syn::Ident::new("1", Span::call_site()),
+                name: syn::Ident::new("_1", Span::call_site()),
                 ty: syn::Type::Verbatim(quote! {u8}),
                 layout: LayoutAttr { ..Default::default() },
             },
         ];
         let locs = [32..40, 0..8];
         if let Err(LayoutError::ReversedFields((a, b))) = validate_location_reversal(&descs, &locs) {
-            assert_eq!(a, "0");
-            assert_eq!(b, "1");
+            assert_eq!(a, "_0");
+            assert_eq!(b, "_1");
         } else {
             assert!(false);
         }

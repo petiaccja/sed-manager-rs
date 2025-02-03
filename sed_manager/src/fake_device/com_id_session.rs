@@ -20,7 +20,7 @@ use crate::serialization::vec_without_len::VecWithoutLen;
 use crate::serialization::{Deserialize, DeserializeBinary, InputStream, OutputStream, Serialize, SerializeBinary};
 use crate::specification::{invokers, methods, tables};
 
-use super::controller::Controller;
+use super::data::SSC;
 use super::sp_session::SPSession;
 
 pub struct ComIDSession {
@@ -28,7 +28,7 @@ pub struct ComIDSession {
     com_id_ext: u16,
     capabilities: Properties,
     properties: Properties,
-    controller: Arc<Mutex<Controller>>,
+    ssc: Arc<Mutex<SSC>>,
     com_queue: Queue<HandleComIdResponse>,
     packet_queue: Queue<ComPacket>,
     sp_sessions: HashMap<(u32, u32), SPSession>,
@@ -36,13 +36,13 @@ pub struct ComIDSession {
 }
 
 impl ComIDSession {
-    pub fn new(com_id: u16, com_id_ext: u16, capabilities: Properties, controller: Arc<Mutex<Controller>>) -> Self {
+    pub fn new(com_id: u16, com_id_ext: u16, capabilities: Properties, controller: Arc<Mutex<SSC>>) -> Self {
         Self {
             com_id,
             com_id_ext,
             capabilities,
             properties: Properties::ASSUMED,
-            controller,
+            ssc: controller,
             com_queue: Queue::new(),
             packet_queue: Queue::new(),
             sp_sessions: HashMap::new(),
@@ -209,6 +209,23 @@ impl ComIDSession {
                             Some(format_response_failure(MethodStatus::InvalidParameter))
                         }
                     }
+                    methods::GET => {
+                        if let Ok((_1,)) = call.args.decode_args() {
+                            let result = sp_session.get(call.invoking_id, _1);
+                            let result = result.map(|x| (x,));
+                            Some(PackagedMethod::Result(format_response_result(result)))
+                        } else {
+                            Some(format_response_failure(MethodStatus::InvalidParameter))
+                        }
+                    }
+                    methods::SET => {
+                        if let Ok((_1, _2)) = call.args.decode_args() {
+                            let result = sp_session.set(call.invoking_id, _1, _2);
+                            Some(PackagedMethod::Result(format_response_result(result)))
+                        } else {
+                            Some(format_response_failure(MethodStatus::InvalidParameter))
+                        }
+                    }
                     _ => Some(format_response_failure(MethodStatus::NotAuthorized)),
                 },
                 PackagedMethod::Result(_method_result) => self.abort_session(hsn, tsn),
@@ -285,9 +302,9 @@ impl ComIDSession {
         MethodStatus,
     > {
         let tsn = self.next_tsn.fetch_add(1, Ordering::Relaxed);
-        let controller = self.controller.lock().unwrap();
+        let controller = self.ssc.lock().unwrap();
         if let Some(_sp) = controller.get_sp(sp_uid.into()) {
-            let sp_session = SPSession::new(sp_uid, write, self.controller.clone());
+            let sp_session = SPSession::new(sp_uid, write, self.ssc.clone());
             self.sp_sessions.insert((hsn, tsn), sp_session);
             Ok((hsn, tsn, None, None, None, None, None, None))
         } else {

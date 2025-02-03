@@ -1,25 +1,25 @@
 use crate::messaging::{uid::UID, value::Value};
 
-#[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd, Ord)]
-pub struct RowReference(u64);
+#[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd, Ord, Default)]
+pub struct RowReference(pub u64);
 
-#[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd, Ord)]
-pub struct RestrictedRowReference<const TABLE: u64>(u64);
+#[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd, Ord, Default)]
+pub struct RestrictedRowReference<const TABLE: u64>(pub u64);
 
-#[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd, Ord)]
-pub struct RestrictedObjectReference<const TABLE: u64>(UID);
+#[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd, Ord, Default)]
+pub struct RestrictedObjectReference<const TABLE: u64>(pub UID);
 
-#[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd, Ord)]
-pub struct ObjectReference(UID);
+#[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd, Ord, Default)]
+pub struct ObjectReference(pub UID);
 
-#[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd, Ord)]
-pub struct TableReference(UID);
+#[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd, Ord, Default)]
+pub struct TableReference(pub UID);
 
-#[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd, Ord)]
-pub struct ByteTableReference(UID);
+#[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd, Ord, Default)]
+pub struct ByteTableReference(pub UID);
 
-#[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd, Ord)]
-pub struct ObjectTableReference(UID);
+#[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd, Ord, Default)]
+pub struct ObjectTableReference(pub UID);
 
 macro_rules! impl_uid_reference {
     ($name:ty $(, $generic_name:ident: $generic_ty:ty)?) => {
@@ -51,6 +51,19 @@ macro_rules! impl_uid_reference {
         impl $(<const $generic_name: $generic_ty>)? From<$name > for Value {
             fn from(value: $name) -> Self {
                 Value::from(value.0)
+            }
+        }
+
+        impl $(<const $generic_name: $generic_ty>)? ::std::ops::Deref for $name {
+            type Target = UID;
+            fn deref(&self) -> &Self::Target {
+                &self.0
+            }
+        }
+
+        impl $(<const $generic_name: $generic_ty>)? ::std::ops::DerefMut for $name {
+            fn deref_mut(&mut self) -> &mut Self::Target {
+                &mut self.0
             }
         }
     };
