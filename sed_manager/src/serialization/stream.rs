@@ -1,4 +1,5 @@
 use std::io::Seek;
+
 pub trait ItemRead<Item> {
     fn read_exact<'me>(&'me mut self, count: usize) -> Result<&'me [Item], std::io::Error>;
     fn read_one<'me>(&'me mut self) -> Result<&'me Item, std::io::Error>;

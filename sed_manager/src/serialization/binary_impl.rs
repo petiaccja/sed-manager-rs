@@ -3,7 +3,7 @@ use super::serialize::{Deserialize, Serialize};
 use super::stream::{InputStream, ItemWrite, OutputStream};
 use super::ItemRead;
 
-macro_rules! impl_serialize_for_int {
+macro_rules! serialize_integer {
     ($int_ty:ty) => {
         impl Serialize<u8> for $int_ty {
             type Error = Error;
@@ -15,25 +15,7 @@ macro_rules! impl_serialize_for_int {
     };
 }
 
-impl_serialize_for_int!(u8);
-impl_serialize_for_int!(u16);
-impl_serialize_for_int!(u32);
-impl_serialize_for_int!(u64);
-impl_serialize_for_int!(i8);
-impl_serialize_for_int!(i16);
-impl_serialize_for_int!(i32);
-impl_serialize_for_int!(i64);
-
-impl Serialize<u8> for bool {
-    type Error = Error;
-    fn serialize(&self, stream: &mut OutputStream<u8>) -> Result<(), Self::Error> {
-        let byte = if *self { 1_u8 } else { 0_u8 };
-        stream.write_one(byte);
-        Ok(())
-    }
-}
-
-macro_rules! impl_deserialize_for_int {
+macro_rules! deserialize_integer {
     ($int_ty:ty) => {
         impl Deserialize<u8> for $int_ty {
             type Error = Error;
@@ -57,14 +39,32 @@ macro_rules! impl_deserialize_for_int {
     };
 }
 
-impl_deserialize_for_int!(u8);
-impl_deserialize_for_int!(u16);
-impl_deserialize_for_int!(u32);
-impl_deserialize_for_int!(u64);
-impl_deserialize_for_int!(i8);
-impl_deserialize_for_int!(i16);
-impl_deserialize_for_int!(i32);
-impl_deserialize_for_int!(i64);
+serialize_integer!(u8);
+serialize_integer!(u16);
+serialize_integer!(u32);
+serialize_integer!(u64);
+serialize_integer!(i8);
+serialize_integer!(i16);
+serialize_integer!(i32);
+serialize_integer!(i64);
+
+deserialize_integer!(u8);
+deserialize_integer!(u16);
+deserialize_integer!(u32);
+deserialize_integer!(u64);
+deserialize_integer!(i8);
+deserialize_integer!(i16);
+deserialize_integer!(i32);
+deserialize_integer!(i64);
+
+impl Serialize<u8> for bool {
+    type Error = Error;
+    fn serialize(&self, stream: &mut OutputStream<u8>) -> Result<(), Self::Error> {
+        let byte = if *self { 1_u8 } else { 0_u8 };
+        stream.write_one(byte);
+        Ok(())
+    }
+}
 
 impl Deserialize<u8> for bool {
     type Error = Error;
@@ -106,32 +106,6 @@ where
             Ok(items) => Ok(items.try_into().unwrap_or_else(|_| panic!("vector must be the right size at this point"))),
             Err(err) => Err(err),
         }
-    }
-}
-
-pub trait SerializeBinary: Sized {
-    type Error;
-    fn to_bytes(&self) -> Result<Vec<u8>, Self::Error>;
-}
-
-pub trait DeserializeBinary: Sized {
-    type Error;
-    fn from_bytes(bytes: Vec<u8>) -> Result<Self, Self::Error>;
-}
-
-impl<T: Serialize<u8>> SerializeBinary for T {
-    type Error = <T as Serialize<u8>>::Error;
-    fn to_bytes(&self) -> Result<Vec<u8>, Self::Error> {
-        let mut stream = OutputStream::<u8>::new();
-        self.serialize(&mut stream).map(|_| stream.take())
-    }
-}
-
-impl<T: Deserialize<u8>> DeserializeBinary for T {
-    type Error = <T as Deserialize<u8>>::Error;
-    fn from_bytes(bytes: Vec<u8>) -> Result<Self, Self::Error> {
-        let mut stream = InputStream::from(bytes);
-        Self::deserialize(&mut stream)
     }
 }
 

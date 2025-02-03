@@ -1,7 +1,5 @@
-use std::{
-    io::{Seek, SeekFrom},
-    ops::Range,
-};
+use std::io::{Seek, SeekFrom};
+use std::ops::Range;
 
 use super::error::Error;
 use super::serialize::{Deserialize, Serialize};
