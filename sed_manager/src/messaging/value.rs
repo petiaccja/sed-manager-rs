@@ -1,5 +1,7 @@
 use std::vec::Vec;
 
+use super::fmt::PrettyPrint;
+
 pub type Bytes = Vec<u8>;
 pub type List = Vec<Value>;
 
@@ -37,6 +39,10 @@ pub enum Value {
     List(List),
 }
 
+//------------------------------------------------------------------------------
+// Implementations for Value.
+//------------------------------------------------------------------------------
+
 impl Value {
     pub fn empty() -> Self {
         Self::Empty
@@ -56,7 +62,96 @@ impl Value {
     }
 }
 
-macro_rules! impl_value_from {
+impl PrettyPrint for Value {
+    fn fmt(&self, f: &mut super::fmt::PrettyFormatter) -> Result<(), std::fmt::Error> {
+        match self {
+            Value::Empty => f.write_str("<>"),
+            Value::Int8(n) => f.write_str(&format!("{n}_u8")),
+            Value::Int16(n) => f.write_str(&format!("{n}_i16")),
+            Value::Int32(n) => f.write_str(&format!("{n}_i32")),
+            Value::Int64(n) => f.write_str(&format!("{n}_i64")),
+            Value::Uint8(n) => f.write_str(&format!("{n}_u8")),
+            Value::Uint16(n) => f.write_str(&format!("{n}_u16")),
+            Value::Uint32(n) => f.write_str(&format!("{n}_u32")),
+            Value::Uint64(n) => f.write_str(&format!("{n}_u64")),
+            Value::Command(command) => command.fmt(f),
+            Value::Named(named) => named.fmt(f),
+            Value::Bytes(bytes) => bytes.fmt(f),
+            Value::List(values) => values.fmt(f),
+        }
+    }
+}
+
+impl PrettyPrint for Command {
+    fn fmt(&self, f: &mut super::fmt::PrettyFormatter<'_>) -> std::fmt::Result {
+        match self {
+            Command::Call => f.write_str("CALL"),
+            Command::EndOfData => f.write_str("EOD"),
+            Command::EndOfSession => f.write_str("EOS"),
+            Command::StartTransaction => f.write_str("ST"),
+            Command::EndTransaction => f.write_str("ET"),
+            Command::Empty => f.write_str("EMPTY"),
+        }
+    }
+}
+
+impl PrettyPrint for Bytes {
+    fn fmt(&self, f: &mut super::fmt::PrettyFormatter<'_>) -> Result<(), std::fmt::Error> {
+        let item_sep = if f.is_indenting_enabled() { '\n' } else { ' ' };
+        f.write_str("b[")?;
+        f.write_char(item_sep)?;
+        f.indented(|f| {
+            for (idx, byte) in self.iter().enumerate() {
+                f.write_str(&format!("{byte:2X}"))?;
+                if idx % 4 == 3 {
+                    f.write_char(item_sep)?;
+                }
+            }
+            Ok(())
+        })?;
+        f.write_char(']')
+    }
+}
+
+impl PrettyPrint for List {
+    fn fmt(&self, f: &mut super::fmt::PrettyFormatter<'_>) -> Result<(), std::fmt::Error> {
+        let item_sep = if f.is_indenting_enabled() { '\n' } else { ' ' };
+        f.write_str("v[")?;
+        f.write_char(item_sep)?;
+        f.indented(|f| {
+            for item in self {
+                item.fmt(f)?;
+                f.write_char(item_sep)?;
+            }
+            Ok(())
+        })?;
+        f.write_char(']')
+    }
+}
+
+impl PrettyPrint for Named {
+    fn fmt(&self, f: &mut super::fmt::PrettyFormatter<'_>) -> Result<(), std::fmt::Error> {
+        let item_sep = if f.is_indenting_enabled() { '\n' } else { ' ' };
+        f.write_str("{")?;
+        f.write_char(item_sep)?;
+        f.indented(|f| {
+            f.write_str("name: ")?;
+            self.name.fmt(f)?;
+            f.write_char(item_sep)?;
+            f.write_str("value: ")?;
+            self.value.fmt(f)?;
+            f.write_char(item_sep)?;
+            Ok(())
+        })?;
+        f.write_char('}')
+    }
+}
+
+//------------------------------------------------------------------------------
+// From trait implementation macros.
+//------------------------------------------------------------------------------
+
+macro_rules! value_from_type {
     ($storage_ty:ty, $enum_variant:expr) => {
         impl From<$storage_ty> for Value {
             fn from(value: $storage_ty) -> Self {
@@ -66,32 +161,7 @@ macro_rules! impl_value_from {
     };
 }
 
-impl_value_from!(bool, Self::Uint8);
-impl_value_from!(i8, Self::Int8);
-impl_value_from!(i16, Self::Int16);
-impl_value_from!(i32, Self::Int32);
-impl_value_from!(i64, Self::Int64);
-impl_value_from!(u8, Self::Uint8);
-impl_value_from!(u16, Self::Uint16);
-impl_value_from!(u32, Self::Uint32);
-impl_value_from!(u64, Self::Uint64);
-impl_value_from!(Command, Self::Command);
-impl_value_from!(Bytes, Self::Bytes);
-impl_value_from!(List, Self::List);
-
-impl From<Named> for Value {
-    fn from(value: Named) -> Self {
-        Self::Named(Box::new(value))
-    }
-}
-
-impl<const N: usize> From<[u8; N]> for Value {
-    fn from(value: [u8; N]) -> Self {
-        Self::Bytes(Bytes::from(value))
-    }
-}
-
-macro_rules! impl_value_try_into {
+macro_rules! type_from_value {
     { $storage_ty:ty, $value_expr:expr, $($enum_variants:pat),+} => {
         impl TryFrom<Value> for $storage_ty {
             type Error = Value;
@@ -115,9 +185,42 @@ macro_rules! impl_value_try_into {
     };
 }
 
-impl_value_try_into!(i8, value.clone().into(), Value::Int8(value));
-impl_value_try_into!(i16, value.clone().into(), Value::Int8(value), Value::Int16(value), Value::Uint8(value));
-impl_value_try_into!(
+//------------------------------------------------------------------------------
+// Value from type implementations.
+//------------------------------------------------------------------------------
+
+value_from_type!(bool, Self::Uint8);
+value_from_type!(i8, Self::Int8);
+value_from_type!(i16, Self::Int16);
+value_from_type!(i32, Self::Int32);
+value_from_type!(i64, Self::Int64);
+value_from_type!(u8, Self::Uint8);
+value_from_type!(u16, Self::Uint16);
+value_from_type!(u32, Self::Uint32);
+value_from_type!(u64, Self::Uint64);
+value_from_type!(Command, Self::Command);
+value_from_type!(Bytes, Self::Bytes);
+value_from_type!(List, Self::List);
+
+impl From<Named> for Value {
+    fn from(value: Named) -> Self {
+        Self::Named(Box::new(value))
+    }
+}
+
+impl<const N: usize> From<[u8; N]> for Value {
+    fn from(value: [u8; N]) -> Self {
+        Self::Bytes(Bytes::from(value))
+    }
+}
+
+//------------------------------------------------------------------------------
+// Type from value implementations.
+//------------------------------------------------------------------------------
+
+type_from_value!(i8, value.clone().into(), Value::Int8(value));
+type_from_value!(i16, value.clone().into(), Value::Int8(value), Value::Int16(value), Value::Uint8(value));
+type_from_value!(
     i32,
     value.clone().into(),
     Value::Int8(value),
@@ -126,7 +229,7 @@ impl_value_try_into!(
     Value::Uint8(value),
     Value::Uint16(value)
 );
-impl_value_try_into!(
+type_from_value!(
     i64,
     value.clone().into(),
     Value::Int8(value),
@@ -137,10 +240,10 @@ impl_value_try_into!(
     Value::Uint16(value),
     Value::Uint32(value)
 );
-impl_value_try_into!(u8, value.clone().into(), Value::Uint8(value));
-impl_value_try_into!(u16, value.clone().into(), Value::Uint8(value), Value::Uint16(value));
-impl_value_try_into!(u32, value.clone().into(), Value::Uint8(value), Value::Uint16(value), Value::Uint32(value));
-impl_value_try_into!(
+type_from_value!(u8, value.clone().into(), Value::Uint8(value));
+type_from_value!(u16, value.clone().into(), Value::Uint8(value), Value::Uint16(value));
+type_from_value!(u32, value.clone().into(), Value::Uint8(value), Value::Uint16(value), Value::Uint32(value));
+type_from_value!(
     u64,
     value.clone().into(),
     Value::Uint8(value),
@@ -148,7 +251,7 @@ impl_value_try_into!(
     Value::Uint32(value),
     Value::Uint64(value)
 );
-impl_value_try_into!(Command, value.clone(), Value::Command(value));
+type_from_value!(Command, value.clone(), Value::Command(value));
 
 impl TryFrom<Value> for bool {
     type Error = Value;
@@ -297,6 +400,10 @@ impl<'value> TryFrom<&'value Value> for List {
         }
     }
 }
+
+//------------------------------------------------------------------------------
+// Unit tests.
+//------------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
