@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::select;
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::{mpsc, Mutex, RwLock};
 
 use crate::messaging::packet::Packet;
 use crate::rpc::error::Error;
@@ -9,35 +8,41 @@ use crate::rpc::error::Error;
 use super::session_endpoint::SessionEndpoint;
 use super::traits::PacketLayer;
 
+#[derive(Debug, Hash, PartialEq, Eq)]
+struct Key {
+    hsn: u32,
+    tsn: u32,
+}
+
+struct Channel {
+    tx: mpsc::UnboundedSender<Packet>,
+    rx: Mutex<mpsc::UnboundedReceiver<Packet>>,
+}
+
 pub struct SessionRouter {
-    routing_table: Mutex<HashMap<(u32, u32), mpsc::UnboundedSender<Packet>>>,
-    recv_table: Mutex<HashMap<(u32, u32), mpsc::UnboundedReceiver<Packet>>>,
+    routing_table: RwLock<HashMap<Key, Channel>>,
     next_layer: Box<dyn PacketLayer>,
 }
 
 impl SessionRouter {
     pub fn new(next_layer: Box<dyn PacketLayer>) -> Self {
-        Self { routing_table: HashMap::new().into(), recv_table: HashMap::new().into(), next_layer }
+        Self { routing_table: HashMap::new().into(), next_layer }
     }
 
     pub async fn open(self: Arc<Self>, host_session_number: u32, tper_session_number: u32) -> Option<SessionEndpoint> {
-        let key = make_key(host_session_number, tper_session_number);
-        let mut routing_table = self.routing_table.lock().await;
+        let key = Key::new(host_session_number, tper_session_number);
+        let mut routing_table = self.routing_table.write().await;
         if routing_table.contains_key(&key) {
             None
         } else {
-            let (tx, rx) = mpsc::unbounded_channel();
-            assert!(routing_table.insert(key, tx).is_none());
-            drop(routing_table); // Release the mutex.
-            self.release_receiver(host_session_number, tper_session_number, rx).await;
+            assert!(routing_table.insert(key, Channel::new()).is_none());
             Some(SessionEndpoint::new(host_session_number, tper_session_number, self.clone()))
         }
     }
 
     pub async fn close(&self, host_session_number: u32, tper_session_number: u32) {
-        let key = make_key(host_session_number, tper_session_number);
-        self.routing_table.lock().await.remove(&key);
-        drop(self.borrow_receiver(host_session_number, tper_session_number));
+        let key = Key::new(host_session_number, tper_session_number);
+        self.routing_table.write().await.remove(&key);
     }
 
     pub async fn send(&self, packet: Packet) -> Result<(), Error> {
@@ -45,68 +50,63 @@ impl SessionRouter {
     }
 
     pub async fn recv(&self, host_session_number: u32, tper_session_number: u32) -> Result<Packet, Error> {
-        async fn retry_loop(
-            instance: &SessionRouter,
-            receiver: &mut mpsc::UnboundedReceiver<Packet>,
-        ) -> Result<Packet, Error> {
-            loop {
-                select! {
-                    biased;
-                    item = receiver.recv() => break match item {
-                        Some(packet) => Ok(packet),
-                        None => Err(Error::Closed),
-                    },
-                    routing_table = instance.routing_table.lock() => {
-                        // Check the receiver just in case someone put a packet in it while we were acquiring the lock.
-                        // I'm not sure this is even possible with select, but better safe than sorry.
-                        if let Ok(packet) = receiver.try_recv() {
-                            break Ok(packet);
-                        }
-                        let packet = instance.next_layer.recv().await?;
-                        let key = make_key(packet.host_session_number, packet.tper_session_number);
-                        if let Some(sender) = routing_table.get(&key) {
-                            let _ = sender.send(packet);
-                        }
-                    },
-                };
+        loop {
+            if let Some(packet) = self.peek(host_session_number, tper_session_number).await? {
+                break Ok(packet);
+            }
+            if let Some(packet) = self.pull(host_session_number, tper_session_number).await? {
+                break Ok(packet);
             }
         }
+    }
 
-        // Make sure the receiver is released!!!
-        if let Some(mut receiver) = self.borrow_receiver(host_session_number, tper_session_number).await {
-            let result = retry_loop(self, &mut receiver).await;
-            self.release_receiver(host_session_number, tper_session_number, receiver).await;
-            result
+    pub async fn peek(&self, host_session_number: u32, tper_session_number: u32) -> Result<Option<Packet>, Error> {
+        let key = Key::new(host_session_number, tper_session_number);
+        let routing_table = self.routing_table.read().await;
+        if let Some(channel) = routing_table.get(&key) {
+            let mut rx = channel.rx.lock().await;
+            if let Ok(packet) = rx.try_recv() {
+                Ok(Some(packet))
+            } else {
+                Ok(None)
+            }
         } else {
             Err(Error::Closed)
         }
     }
 
-    async fn borrow_receiver(
-        &self,
-        host_session_number: u32,
-        tper_session_number: u32,
-    ) -> Option<mpsc::UnboundedReceiver<Packet>> {
-        let key = make_key(host_session_number, tper_session_number);
-        self.recv_table.lock().await.remove(&key)
-    }
-
-    async fn release_receiver(
-        &self,
-        host_session_number: u32,
-        tper_session_number: u32,
-        receiver: mpsc::UnboundedReceiver<Packet>,
-    ) {
-        let key = make_key(host_session_number, tper_session_number);
-        let mut recv_table = self.recv_table.lock().await;
-        if !receiver.is_closed() {
-            recv_table.insert(key, receiver);
+    pub async fn pull(&self, host_session_number: u32, tper_session_number: u32) -> Result<Option<Packet>, Error> {
+        let key = Key::new(host_session_number, tper_session_number);
+        let mut routing_table = self.routing_table.write().await;
+        if let Some(channel) = routing_table.get_mut(&key) {
+            let rx = channel.rx.get_mut();
+            if let Ok(packet) = rx.try_recv() {
+                Ok(Some(packet))
+            } else {
+                let packet = self.next_layer.recv().await?;
+                let key = Key::new(packet.host_session_number, packet.tper_session_number);
+                if let Some(channel) = routing_table.get_mut(&key) {
+                    let _ = channel.tx.send(packet);
+                }
+                Ok(None)
+            }
+        } else {
+            Err(Error::Closed)
         }
     }
 }
 
-fn make_key(host_session_number: u32, tper_session_number: u32) -> (u32, u32) {
-    (host_session_number, tper_session_number)
+impl Key {
+    fn new(hsn: u32, tsn: u32) -> Self {
+        Self { hsn, tsn }
+    }
+}
+
+impl Channel {
+    fn new() -> Self {
+        let (tx, rx) = mpsc::unbounded_channel();
+        Self { tx, rx: rx.into() }
+    }
 }
 
 #[cfg(test)]
