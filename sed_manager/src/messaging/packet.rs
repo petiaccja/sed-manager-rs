@@ -60,8 +60,14 @@ impl Default for Packet {
             sequence_number: 0,
             ack_type: AckType::None,
             acknowledgement: 0,
-            payload: VecWithLen::from(vec![]),
+            payload: VecWithLen::new(),
         }
+    }
+}
+
+impl Default for ComPacket {
+    fn default() -> Self {
+        Self { com_id: 0, com_id_ext: 0, outstanding_data: 0, min_transfer: 0, payload: VecWithLen::new() }
     }
 }
 

@@ -30,7 +30,7 @@ pub enum ComIdRequestCode {
     StackReset = 2,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct HandleComIdRequest {
     pub com_id: u16,
     pub com_id_ext: u16,
@@ -40,7 +40,7 @@ pub struct HandleComIdRequest {
 /// The shared structure for NO_RESPONSE_AVAILABLE, VERIFY_COM_ID_VALID, and
 /// STACK_RESET responses. The payload field contains the payload for one of the above
 /// messages.
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct HandleComIdResponse {
     pub com_id: u16,
     pub com_id_ext: u16,

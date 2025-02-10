@@ -240,6 +240,32 @@ impl Deserialize<u8> for Token {
     }
 }
 
+pub trait SerializeTokens: Sized {
+    type Error;
+    fn to_tokens(&self) -> Result<Vec<Token>, Self::Error>;
+}
+
+pub trait DeserializeTokens: Sized {
+    type Error;
+    fn from_tokens(bytes: Vec<Token>) -> Result<Self, Self::Error>;
+}
+
+impl<T: Serialize<Token>> SerializeTokens for T {
+    type Error = <T as Serialize<Token>>::Error;
+    fn to_tokens(&self) -> Result<Vec<Token>, Self::Error> {
+        let mut stream = crate::serialization::OutputStream::<Token>::new();
+        self.serialize(&mut stream).map(|_| stream.take())
+    }
+}
+
+impl<T: Deserialize<Token>> DeserializeTokens for T {
+    type Error = <T as Deserialize<Token>>::Error;
+    fn from_tokens(bytes: Vec<Token>) -> Result<Self, Self::Error> {
+        let mut stream = crate::serialization::InputStream::from(bytes);
+        Self::deserialize(&mut stream)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::serialization::{InputStream, OutputStream};
@@ -307,5 +333,12 @@ mod tests {
             let output = Token::deserialize(&mut is).unwrap();
             assert_eq!(input, output);
         }
+    }
+
+    #[test]
+    fn deserialize_invalid_tag() {
+        let mut is = InputStream::<u8>::from(vec![0xFD]);
+        let output = Token::deserialize(&mut is);
+        assert!(output.is_err());
     }
 }
