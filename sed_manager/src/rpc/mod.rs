@@ -4,6 +4,7 @@ mod message;
 mod method;
 mod properties;
 mod protocol;
+mod protocol_thread;
 mod session;
 
 pub use error::Error;
