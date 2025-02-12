@@ -8,6 +8,7 @@ use crate::rpc::{Error, PackagedMethod, Properties};
 
 use super::packet_receiver::PacketReceiver;
 use super::session_identifier::SessionIdentifier;
+use super::timeout::Timeout;
 
 type PacketResponse = Result<PackagedMethod, Error>;
 type ComIdResponse = Result<HandleComIdResponse, Error>;
@@ -17,15 +18,15 @@ type ComIdPromise = oneshot::Sender<ComIdResponse>;
 pub struct ReceiverStack {
     packet_receivers: HashMap<SessionIdentifier, PacketReceiver>,
     com_id_promises: VecDeque<ComIdPromise>,
-    com_id_responses: VecDeque<HandleComIdResponse>,
+    com_id_timeout: Timeout<HandleComIdResponse>,
 }
 
 impl ReceiverStack {
-    pub fn new() -> Self {
+    pub fn new(properties: Properties) -> Self {
         Self {
             packet_receivers: HashMap::new(),
             com_id_promises: VecDeque::new(),
-            com_id_responses: VecDeque::new(),
+            com_id_timeout: Timeout::new(properties),
         }
     }
 
@@ -63,7 +64,7 @@ impl ReceiverStack {
     }
 
     pub fn enqueue_com_id_response(&mut self, response: HandleComIdResponse) {
-        self.com_id_responses.push_back(response);
+        self.com_id_timeout.enqueue(Ok(response));
     }
 
     pub fn enqueue_com_id_promise(&mut self, promise: ComIdPromise) {
@@ -80,9 +81,12 @@ impl ReceiverStack {
     }
 
     pub fn poll_com_id(&mut self) -> Option<(ComIdPromise, Result<HandleComIdResponse, Error>)> {
-        if let Some(response) = self.com_id_responses.pop_front() {
-            let promise = self.com_id_promises.pop_front().expect("logic violation: promise must be queued first");
-            Some((promise, Ok(response)))
+        if !self.com_id_promises.is_empty() {
+            if let Some(result) = self.com_id_timeout.poll() {
+                Some((self.com_id_promises.pop_front().unwrap(), result))
+            } else {
+                None
+            }
         } else {
             None
         }

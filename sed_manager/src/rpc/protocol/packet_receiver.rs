@@ -1,5 +1,4 @@
 use std::collections::VecDeque;
-use std::time::Instant;
 use tokio::sync::oneshot;
 
 use crate::messaging::packet::{Packet, SubPacketKind};
@@ -8,13 +7,15 @@ use crate::rpc::{Error, PackagedMethod, Properties};
 use crate::serialization::vec_without_len::VecWithoutLen;
 use crate::serialization::DeserializeBinary;
 
+use super::timeout::Timeout;
+
 type Response = Result<PackagedMethod, Error>;
 type Promise = oneshot::Sender<Response>;
 
 pub struct PacketReceiver {
     deserializer: Deserializer,
     splitter: Splitter,
-    timer: Timer,
+    timer: Timeout<PackagedMethod>,
     promise_buffer: VecDeque<Promise>,
 }
 
@@ -31,13 +32,6 @@ struct Splitter {
     method_buffer: VecDeque<Result<PackagedMethod, Error>>,
 }
 
-struct Timer {
-    properties: Properties,
-    method_buffer: VecDeque<Result<PackagedMethod, Error>>,
-    last_method_time: Instant,
-    error: Option<Error>,
-}
-
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum SplitterState {
     GatheringInvocation,
@@ -50,7 +44,7 @@ impl PacketReceiver {
         Self {
             deserializer: Deserializer::new(),
             splitter: Splitter::new(),
-            timer: Timer::new(properties),
+            timer: Timeout::new(properties),
             promise_buffer: VecDeque::new(),
         }
     }
@@ -75,7 +69,7 @@ impl PacketReceiver {
             }
         }
         while let Some(method) = self.splitter.poll() {
-            self.timer.enqueue_method(method);
+            self.timer.enqueue(method);
         }
         if !self.promise_buffer.is_empty() {
             if let Some(result) = self.timer.poll() {
@@ -190,34 +184,6 @@ impl Splitter {
     fn commit_method(&mut self) {
         let maybe_pm = PackagedMethod::from_tokens(std::mem::replace(&mut self.method_tokens, Vec::new()));
         self.method_buffer.push_back(maybe_pm.map_err(|err| Error::TokenizationFailed(err)));
-    }
-}
-
-impl Timer {
-    pub fn new(properties: Properties) -> Self {
-        Self { properties, method_buffer: VecDeque::new(), last_method_time: Instant::now(), error: None }
-    }
-
-    pub fn enqueue_method(&mut self, method: Result<PackagedMethod, Error>) {
-        self.last_method_time = Instant::now();
-        self.method_buffer.push_back(method);
-    }
-
-    pub fn poll(&mut self) -> Option<Result<PackagedMethod, Error>> {
-        let elapsed = Instant::now() - self.last_method_time;
-
-        if let Some(error) = &self.error {
-            self.method_buffer.clear();
-            Some(Err(error.clone()))
-        } else if let Some(response) = self.method_buffer.pop_front() {
-            Some(response)
-        } else if elapsed > self.properties.trans_timeout {
-            let response = Err(Error::TimedOut);
-            self.error = Some(Error::AbortedByHost);
-            Some(response)
-        } else {
-            None
-        }
     }
 }
 
@@ -353,28 +319,6 @@ mod tests {
         assert!(splitter.poll().is_some_and(|result| result.is_err()));
         assert_eq!(splitter.poll(), Some(Ok(PackagedMethod::EndOfSession)));
         assert_eq!(splitter.poll(), None);
-    }
-
-    #[test]
-    fn timer_empty() {
-        let mut splitter = Timer::new(Properties { trans_timeout: Duration::from_secs(1000), ..Default::default() });
-        std::thread::sleep(Duration::from_millis(50));
-        assert_eq!(splitter.poll(), None);
-    }
-
-    #[test]
-    fn timer_timed_out() {
-        let mut splitter = Timer::new(Properties { trans_timeout: Duration::from_millis(0), ..Default::default() });
-        std::thread::sleep(Duration::from_millis(50));
-        assert_eq!(splitter.poll(), Some(Err(Error::TimedOut)));
-        assert_eq!(splitter.poll(), Some(Err(Error::AbortedByHost))); // Error should be repeated.
-    }
-
-    #[test]
-    fn timer_some() {
-        let mut splitter = Timer::new(Properties { trans_timeout: Duration::from_secs(1000), ..Default::default() });
-        splitter.enqueue_method(Ok(PackagedMethod::EndOfSession));
-        assert_eq!(splitter.poll(), Some(Ok(PackagedMethod::EndOfSession)));
     }
 
     #[test]

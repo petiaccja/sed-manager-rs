@@ -26,10 +26,11 @@ pub struct RPCStack {
 
 impl RPCStack {
     pub fn new(com_id: u16, com_id_ext: u16) -> Self {
+        let properties = Properties::ASSUMED;
         Self {
             com_id,
-            sender_stack: SenderStack::new(com_id, com_id_ext, Properties::ASSUMED),
-            receiver_stack: ReceiverStack::new(),
+            sender_stack: SenderStack::new(com_id, com_id_ext, properties.clone()),
+            receiver_stack: ReceiverStack::new(properties),
             remove_senders: HashSet::new(),
             remove_receivers: HashSet::new(),
         }

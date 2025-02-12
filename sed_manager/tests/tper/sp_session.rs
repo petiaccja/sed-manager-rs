@@ -10,7 +10,7 @@ use sed_manager::specification::sp;
 use sed_manager::specification::table;
 use sed_manager::tper::TPer;
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn authenticate_success() -> Result<(), RPCError> {
     let device = FakeDevice::new();
     let tper = TPer::new(Arc::new(device));
@@ -22,7 +22,7 @@ async fn authenticate_success() -> Result<(), RPCError> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn authenticate_wrong_password() -> Result<(), RPCError> {
     let device = FakeDevice::new();
     let tper = TPer::new(Arc::new(device));
@@ -34,7 +34,7 @@ async fn authenticate_wrong_password() -> Result<(), RPCError> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn authenticate_invalid_authority() -> Result<(), RPCError> {
     let device = FakeDevice::new();
     let tper = TPer::new(Arc::new(device));
@@ -46,7 +46,7 @@ async fn authenticate_invalid_authority() -> Result<(), RPCError> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn get_success() -> Result<(), RPCError> {
     let device = FakeDevice::new();
     let tper = TPer::new(Arc::new(device));
@@ -56,7 +56,7 @@ async fn get_success() -> Result<(), RPCError> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn get_missing_object() -> Result<(), RPCError> {
     let device = FakeDevice::new();
     let tper = TPer::new(Arc::new(device));
@@ -66,7 +66,7 @@ async fn get_missing_object() -> Result<(), RPCError> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn get_invalid_column() -> Result<(), RPCError> {
     let device = FakeDevice::new();
     let tper = TPer::new(Arc::new(device));
@@ -76,7 +76,7 @@ async fn get_invalid_column() -> Result<(), RPCError> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn set_success() -> Result<(), RPCError> {
     let device = FakeDevice::new();
     let tper = TPer::new(Arc::new(device));
@@ -85,7 +85,7 @@ async fn set_success() -> Result<(), RPCError> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn set_missing_object() -> Result<(), RPCError> {
     let device = FakeDevice::new();
     let tper = TPer::new(Arc::new(device));
@@ -95,7 +95,7 @@ async fn set_missing_object() -> Result<(), RPCError> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn set_invalid_column() -> Result<(), RPCError> {
     let device = FakeDevice::new();
     let tper = TPer::new(Arc::new(device));
@@ -105,7 +105,7 @@ async fn set_invalid_column() -> Result<(), RPCError> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn set_invalid_type() -> Result<(), RPCError> {
     let device = FakeDevice::new();
     let tper = TPer::new(Arc::new(device));
@@ -115,7 +115,7 @@ async fn set_invalid_type() -> Result<(), RPCError> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn next_success() -> Result<(), RPCError> {
     let device = FakeDevice::new();
     let tper = TPer::new(Arc::new(device));

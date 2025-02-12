@@ -107,4 +107,10 @@ impl ComPacket {
         }
         transfer_len as u32
     }
+
+    pub fn append(&mut self, other: Self) {
+        self.payload.append(&mut other.payload.into_vec());
+        self.min_transfer = other.min_transfer;
+        self.outstanding_data = other.outstanding_data;
+    }
 }

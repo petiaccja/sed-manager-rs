@@ -1,6 +1,3 @@
-use crate::async_finalize::async_finalize;
-use crate::async_finalize::sync_finalize;
-use crate::async_finalize::AsyncFinalize;
 use crate::messaging::types::AuthorityRef;
 use crate::messaging::types::CellBlock;
 use crate::messaging::types::List;
@@ -121,19 +118,6 @@ impl Session {
 
     pub async fn random(&self) {
         todo!()
-    }
-}
-
-impl AsyncFinalize for Session {
-    async fn finalize(&mut self) {
-        let _ = self.end_session().await;
-        async_finalize(&mut self.sp_session).await;
-    }
-}
-
-impl Drop for Session {
-    fn drop(&mut self) {
-        sync_finalize(self);
     }
 }
 

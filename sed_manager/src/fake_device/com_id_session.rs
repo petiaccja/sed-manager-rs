@@ -111,6 +111,9 @@ impl ComIDSession {
         match request.request_code {
             ComIdRequestCode::VerifyComIdValid => self.verify_com_id_valid(request.com_id, request.com_id_ext),
             ComIdRequestCode::StackReset => self.reset_stack(request.com_id, request.com_id_ext),
+            ComIdRequestCode::NoResponseAvailable => {
+                HandleComIdResponse { com_id: request.com_id, ..Default::default() }
+            }
         }
     }
 

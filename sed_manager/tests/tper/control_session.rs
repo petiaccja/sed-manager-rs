@@ -26,7 +26,7 @@ const HOST_PROPERTIES: Properties = Properties {
     trans_timeout: Duration::from_secs(15),
 };
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn properties_with_host() -> Result<(), RPCError> {
     let device = FakeDevice::new();
     let device_caps = device.capabilities().clone();
@@ -40,7 +40,7 @@ async fn properties_with_host() -> Result<(), RPCError> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn start_session_normal() -> Result<(), RPCError> {
     let device = Arc::new(FakeDevice::new());
     {

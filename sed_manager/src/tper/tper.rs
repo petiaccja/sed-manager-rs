@@ -2,7 +2,6 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, OnceLock};
 use tokio::sync::OnceCell as AsyncOnceCell;
 
-use crate::async_finalize::{async_finalize, sync_finalize, AsyncFinalize};
 use crate::device::Device;
 use crate::messaging::com_id::{
     ComIdState, HandleComIdRequest, StackResetResponsePayload, StackResetStatus, VerifyComIdValidResponsePayload,
@@ -177,19 +176,5 @@ impl TPer {
         }
         let sp_session = stack.rpc_session.open_sp_session(hsn, tsn_sync).await.expect("ensure HSN is unique");
         Ok(Session::new(sp_session))
-    }
-}
-
-impl AsyncFinalize for TPer {
-    async fn finalize(&mut self) {
-        if let Some(stack) = self.cached_stack.get_mut() {
-            async_finalize(&mut stack.rpc_session).await;
-        }
-    }
-}
-
-impl Drop for TPer {
-    fn drop(&mut self) {
-        sync_finalize(self);
     }
 }

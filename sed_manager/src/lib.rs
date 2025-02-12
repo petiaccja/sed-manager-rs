@@ -8,7 +8,6 @@ pub mod serialization;
 pub mod specification;
 pub mod tper;
 
-mod async_finalize;
 mod sync;
 mod variadics;
 mod with_copy;

@@ -26,6 +26,7 @@ pub enum StackResetStatus {
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum ComIdRequestCode {
+    NoResponseAvailable = 0,
     VerifyComIdValid = 1,
     StackReset = 2,
 }
@@ -88,5 +89,11 @@ impl HandleComIdResponse {
         } else {
             None
         }
+    }
+}
+
+impl Default for HandleComIdResponse {
+    fn default() -> Self {
+        Self { com_id: 0, com_id_ext: 0, request_code: ComIdRequestCode::StackReset, payload: VecWithLen::new() }
     }
 }

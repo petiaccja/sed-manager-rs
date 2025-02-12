@@ -1,65 +1,27 @@
-use std::collections::VecDeque as Queue;
-use std::sync::Arc;
+use std::sync::mpsc;
 use tokio::sync::{oneshot, Mutex};
 
-use crate::async_finalize::{sync_finalize, AsyncFinalize};
 use crate::messaging::com_id::{HandleComIdRequest, HandleComIdResponse};
 use crate::rpc::error::Error;
-use crate::rpc::protocol::InterfaceLayer;
+use crate::rpc::protocol::{Message, Tracked};
 
 pub struct ComSession {
-    interface_layer: Arc<dyn InterfaceLayer>,
-    response_queue: Arc<Mutex<Queue<oneshot::Sender<Result<HandleComIdResponse, Error>>>>>,
+    sender: mpsc::Sender<Message>,
+    mutex: Mutex<()>,
 }
 
 impl ComSession {
-    pub fn new(interface_layer: Arc<dyn InterfaceLayer>) -> Self {
-        Self { interface_layer: interface_layer.into(), response_queue: Arc::new(Queue::new().into()) }
+    pub fn new(sender: mpsc::Sender<Message>) -> Self {
+        Self { sender, mutex: ().into() }
     }
 
     pub async fn handle_request(&self, request: HandleComIdRequest) -> Result<HandleComIdResponse, Error> {
-        let rx = {
-            // Sending the request and enqueueing the response sender under the same lock
-            // ensures the pairing of the send and recv calls.
-            let mut response_queue = self.response_queue.lock().await;
-            let (tx, rx) = oneshot::channel();
-            response_queue.push_back(tx);
-            self.interface_layer.send_handle_com_id(request).await?;
-            rx
-        };
-        let interface_layer = self.interface_layer.clone();
-        let response_queue = self.response_queue.clone();
-        let task = tokio::spawn(async move {
-            let result = interface_layer.recv_handle_com_id().await;
-            let mut response_queue = response_queue.lock().await;
-            if let Some(tx) = response_queue.pop_front() {
-                let _ = tx.send(result);
-            };
-        });
-        let _ = task.await;
+        let (tx, rx) = oneshot::channel();
+        let _guard = self.mutex.lock().await;
+        let _ = self.sender.send(Message::HandleComId { content: Tracked { item: request, promises: vec![tx] } });
         match rx.await {
             Ok(result) => result,
             Err(_) => Err(Error::Closed),
         }
-    }
-
-    pub async fn close(&mut self) {
-        // Close interface layer if we own it uniquely.
-        // No parts of the stack use weak references.
-        if Arc::strong_count(&self.interface_layer) == 1 {
-            self.interface_layer.close().await;
-        };
-    }
-}
-
-impl AsyncFinalize for ComSession {
-    async fn finalize(&mut self) {
-        self.close().await;
-    }
-}
-
-impl Drop for ComSession {
-    fn drop(&mut self) {
-        sync_finalize(self);
     }
 }
