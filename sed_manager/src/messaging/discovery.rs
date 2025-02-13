@@ -19,7 +19,7 @@ pub enum FeatureCode {
     PyriteV2 = 0x0303,
     Ruby = 0x0304,
     KeyPerIO = 0x0305,
-    #[layout(fallback)]
+    #[fallback]
     Unrecognized = 0xFFFF,
 }
 
@@ -49,7 +49,7 @@ pub trait Feature {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[layout(round = 12)]
 pub struct TPerDescriptor {
     #[layout(offset = 0, bits = 0..=0)]
@@ -66,7 +66,7 @@ pub struct TPerDescriptor {
     pub com_id_mgmt_supported: bool,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[layout(round = 12)]
 pub struct LockingDescriptor {
     #[layout(offset = 0, bits = 0..=0)]
@@ -87,7 +87,7 @@ pub struct LockingDescriptor {
     pub hw_reset_supported: bool,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct GeometryDescriptor {
     #[layout(offset = 0, bits = 0..=0)]
     pub align: bool,
@@ -97,7 +97,7 @@ pub struct GeometryDescriptor {
     pub lowest_aligned_lba: u64,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct DataRemovalMechanism {
     #[layout(offset = 2, bits = 0..=0)]
     pub overwrite: bool,
@@ -109,7 +109,7 @@ pub struct DataRemovalMechanism {
     pub vendor_erase: bool,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct DataRemovalTime {
     #[layout(offset = 0, bits = 0..=0)]
     pub overwrite_unit: bool,
@@ -129,7 +129,7 @@ pub struct DataRemovalTime {
     pub vendor_erase_amount: u16,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[layout(round = 32)]
 pub struct DataRemovalDescriptor {
     #[layout(offset = 1, bits = 0..=0)]
@@ -141,11 +141,31 @@ pub struct DataRemovalDescriptor {
     pub erase_time_unit: DataRemovalMechanism,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[layout(round = 16)]
+pub struct EnterpriseDescriptor {
+    pub base_com_id: u16,
+    pub num_com_ids: u16,
+    #[layout(offset = 4, bits = 0..=0)]
+    pub no_range_crossing: bool,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[layout(round = 16)]
+pub struct OpalV1Descriptor {
+    pub base_com_id: u16,
+    pub num_com_ids: u16,
+    #[layout(offset = 4, bits = 0..=0)]
+    pub no_range_crossing: bool,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[layout(round = 16)]
 pub struct OpalV2Descriptor {
     pub base_com_id: u16,
     pub num_com_ids: u16,
+    #[layout(offset = 4, bits = 0..=0)]
+    pub no_range_crossing: bool,
     #[layout(offset = 5)]
     pub num_locking_admins_supported: u16,
     pub num_locking_users_supported: u16,
@@ -153,26 +173,131 @@ pub struct OpalV2Descriptor {
     pub reverted_owner_pw: OwnerPasswordState,
 }
 
-#[derive(Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[layout(round = 16)]
+pub struct OpaliteDescriptor {
+    pub base_com_id: u16,
+    pub num_com_ids: u16,
+    #[layout(offset = 9)]
+    pub initial_owner_pw: OwnerPasswordState,
+    pub reverted_owner_pw: OwnerPasswordState,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[layout(round = 16)]
+pub struct PyriteV1Descriptor {
+    pub base_com_id: u16,
+    pub num_com_ids: u16,
+    #[layout(offset = 9)]
+    pub initial_owner_pw: OwnerPasswordState,
+    pub reverted_owner_pw: OwnerPasswordState,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[layout(round = 16)]
+pub struct PyriteV2Descriptor {
+    pub base_com_id: u16,
+    pub num_com_ids: u16,
+    #[layout(offset = 9)]
+    pub initial_owner_pw: OwnerPasswordState,
+    pub reverted_owner_pw: OwnerPasswordState,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[layout(round = 16)]
+pub struct RubyDescriptor {
+    pub base_com_id: u16,
+    pub num_com_ids: u16,
+    #[layout(offset = 4, bits = 0..=0)]
+    pub no_range_crossing: bool,
+    #[layout(offset = 5)]
+    pub num_locking_admins_supported: u16,
+    pub num_locking_users_supported: u16,
+    pub initial_owner_pw: OwnerPasswordState,
+    pub reverted_owner_pw: OwnerPasswordState,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[layout(round = 48)]
+pub struct KeyPerIODescriptor {
+    pub base_com_id_p1: u16,
+    pub num_com_ids_p1: u16,
+    pub base_com_id_p3: u16,
+    pub num_com_ids_p3: u16,
+    #[layout(offset = 8)]
+    pub initial_owner_pw: OwnerPasswordState,
+    pub reverted_owner_pw: OwnerPasswordState,
+    pub num_kpio_admins_supported: u16,
+    #[layout(offset = 12, bits = 0..=0)]
+    pub kpio_enabled: bool,
+    #[layout(offset = 12, bits = 1..=1)]
+    pub kpio_scope: bool,
+    #[layout(offset = 12, bits = 2..=2)]
+    pub tweak_key_required: bool,
+    #[layout(offset = 12, bits = 3..=3)]
+    pub incorrect_key_detection_supported: bool,
+    #[layout(offset = 12, bits = 4..=4)]
+    pub replay_protection_supported: bool,
+    #[layout(offset = 12, bits = 5..=5)]
+    pub replay_protection_enabled: bool,
+    #[layout(offset = 13)]
+    pub max_key_uid_len: u16,
+    #[layout(offset = 15, bits = 0..=0)]
+    pub kmip_key_injection_supported: bool,
+    #[layout(offset = 17, bits = 0..=0)]
+    pub nist_aes_kw_supported: bool,
+    #[layout(offset = 17, bits = 1..=1)]
+    pub nist_aes_gcm_supported: bool,
+    #[layout(offset = 17, bits = 2..=2)]
+    pub nist_rsa_oaep_supported: bool,
+    #[layout(offset = 19, bits = 0..=0)]
+    pub aes256_wrapping_supported: bool,
+    #[layout(offset = 21, bits = 0..=0)]
+    pub rsa2k_wrapping_supported: bool,
+    #[layout(offset = 21, bits = 1..=1)]
+    pub rsa3k_wrapping_supported: bool,
+    #[layout(offset = 21, bits = 2..=2)]
+    pub rsa4k_wrapping_supported: bool,
+    #[layout(offset = 23, bits = 0..=0)]
+    pub plaintext_kek_prov_supported: bool,
+    #[layout(offset = 23, bits = 1..=1)]
+    pub pki_kek_transport_supported: bool,
+    #[layout(offset = 28)]
+    pub num_keks_supported: u32,
+    pub total_key_tags_supported: u32,
+    pub max_key_tags_per_namespace: u16,
+    pub get_nonce_cmd_nonce_len: u8,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum FeatureDescriptor {
     TPer(TPerDescriptor),
     Locking(LockingDescriptor),
     Geometry(GeometryDescriptor),
     DataRemoval(DataRemovalDescriptor),
+    Enterprise(EnterpriseDescriptor),
+    OpalV1(OpalV1Descriptor),
     OpalV2(OpalV2Descriptor),
+    Opalite(OpaliteDescriptor),
+    PyriteV1(PyriteV1Descriptor),
+    PyriteV2(PyriteV2Descriptor),
+    Ruby(RubyDescriptor),
+    KeyPerIO(KeyPerIODescriptor),
     Unrecognized,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
+#[layout(round = 4)]
 struct RawFeatureDescriptor {
     feature_code: FeatureCode,
     #[layout(offset = 2, bits = 4..=7)]
     version: u8,
-    #[layout(offset = 3, round = 4)]
+    #[layout(offset = 3)]
     payload: VecWithLen<u8, u8>,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[layout(round = 48)]
 pub struct DiscoveryHeader {
     pub length_of_data: u32,
     pub major_version: u16,
@@ -181,7 +306,7 @@ pub struct DiscoveryHeader {
     pub vendor_unique: [u8; 32],
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct Discovery {
     pub descriptors: VecWithLen<FeatureDescriptor, DiscoveryHeader>,
 }
@@ -235,7 +360,25 @@ impl_feature!(TPerDescriptor, FeatureCode::TPer, 1);
 impl_feature!(LockingDescriptor, FeatureCode::Locking, 1);
 impl_feature!(GeometryDescriptor, FeatureCode::Geometry, 1);
 impl_feature!(DataRemovalDescriptor, FeatureCode::DataRemoval, 1);
+impl_ssc_feature!(EnterpriseDescriptor, FeatureCode::Enterprise, 1);
+impl_ssc_feature!(OpalV1Descriptor, FeatureCode::OpalV1, 1);
 impl_ssc_feature!(OpalV2Descriptor, FeatureCode::OpalV2, 1);
+impl_ssc_feature!(OpaliteDescriptor, FeatureCode::Opalite, 1);
+impl_ssc_feature!(PyriteV1Descriptor, FeatureCode::PyriteV1, 1);
+impl_ssc_feature!(PyriteV2Descriptor, FeatureCode::PyriteV2, 1);
+impl_ssc_feature!(RubyDescriptor, FeatureCode::Ruby, 1);
+
+impl Feature for KeyPerIODescriptor {
+    fn static_feature_code() -> FeatureCode {
+        FeatureCode::KeyPerIO
+    }
+    fn static_version() -> u8 {
+        1
+    }
+    fn ssc_desc(&self) -> Option<SSCDescriptor> {
+        Some(SSCDescriptor { base_com_id: self.base_com_id_p1, num_com_ids: self.num_com_ids_p1 })
+    }
+}
 
 impl FeatureDescriptor {
     pub fn feature_code(&self) -> FeatureCode {
@@ -246,6 +389,13 @@ impl FeatureDescriptor {
             FeatureDescriptor::DataRemoval(desc) => desc.feature_code(),
             FeatureDescriptor::OpalV2(desc) => desc.feature_code(),
             FeatureDescriptor::Unrecognized => FeatureCode::Unrecognized,
+            FeatureDescriptor::Enterprise(desc) => desc.feature_code(),
+            FeatureDescriptor::OpalV1(desc) => desc.feature_code(),
+            FeatureDescriptor::Opalite(desc) => desc.feature_code(),
+            FeatureDescriptor::PyriteV1(desc) => desc.feature_code(),
+            FeatureDescriptor::PyriteV2(desc) => desc.feature_code(),
+            FeatureDescriptor::Ruby(desc) => desc.feature_code(),
+            FeatureDescriptor::KeyPerIO(desc) => desc.feature_code(),
         }
     }
     pub fn version(&self) -> u8 {
@@ -256,6 +406,13 @@ impl FeatureDescriptor {
             FeatureDescriptor::DataRemoval(desc) => desc.version(),
             FeatureDescriptor::OpalV2(desc) => desc.version(),
             FeatureDescriptor::Unrecognized => 1,
+            FeatureDescriptor::Enterprise(desc) => desc.version(),
+            FeatureDescriptor::OpalV1(desc) => desc.version(),
+            FeatureDescriptor::Opalite(desc) => desc.version(),
+            FeatureDescriptor::PyriteV1(desc) => desc.version(),
+            FeatureDescriptor::PyriteV2(desc) => desc.version(),
+            FeatureDescriptor::Ruby(desc) => desc.version(),
+            FeatureDescriptor::KeyPerIO(desc) => desc.version(),
         }
     }
     pub fn ssc_desc(&self) -> Option<SSCDescriptor> {
@@ -266,6 +423,13 @@ impl FeatureDescriptor {
             FeatureDescriptor::DataRemoval(desc) => desc.ssc_desc(),
             FeatureDescriptor::OpalV2(desc) => desc.ssc_desc(),
             FeatureDescriptor::Unrecognized => None,
+            FeatureDescriptor::Enterprise(desc) => desc.ssc_desc(),
+            FeatureDescriptor::OpalV1(desc) => desc.ssc_desc(),
+            FeatureDescriptor::Opalite(desc) => desc.ssc_desc(),
+            FeatureDescriptor::PyriteV1(desc) => desc.ssc_desc(),
+            FeatureDescriptor::PyriteV2(desc) => desc.ssc_desc(),
+            FeatureDescriptor::Ruby(desc) => desc.ssc_desc(),
+            FeatureDescriptor::KeyPerIO(desc) => desc.ssc_desc(),
         }
     }
 }
@@ -309,6 +473,13 @@ impl Serialize<u8> for FeatureDescriptor {
             FeatureDescriptor::DataRemoval(desc) => desc.serialize(&mut raw_stream),
             FeatureDescriptor::OpalV2(desc) => desc.serialize(&mut raw_stream),
             FeatureDescriptor::Unrecognized => Ok(()),
+            FeatureDescriptor::Enterprise(desc) => desc.serialize(&mut raw_stream),
+            FeatureDescriptor::OpalV1(desc) => desc.serialize(&mut raw_stream),
+            FeatureDescriptor::Opalite(desc) => desc.serialize(&mut raw_stream),
+            FeatureDescriptor::PyriteV1(desc) => desc.serialize(&mut raw_stream),
+            FeatureDescriptor::PyriteV2(desc) => desc.serialize(&mut raw_stream),
+            FeatureDescriptor::Ruby(desc) => desc.serialize(&mut raw_stream),
+            FeatureDescriptor::KeyPerIO(desc) => desc.serialize(&mut raw_stream),
         }?;
         let raw = RawFeatureDescriptor {
             feature_code: self.feature_code(),
@@ -332,6 +503,15 @@ impl Deserialize<u8> for FeatureDescriptor {
                 FeatureDescriptor::DataRemoval(DataRemovalDescriptor::deserialize(&mut raw_stream)?)
             }
             FeatureCode::OpalV2 => FeatureDescriptor::OpalV2(OpalV2Descriptor::deserialize(&mut raw_stream)?),
+            FeatureCode::Enterprise => {
+                FeatureDescriptor::Enterprise(EnterpriseDescriptor::deserialize(&mut raw_stream)?)
+            }
+            FeatureCode::OpalV1 => FeatureDescriptor::OpalV1(OpalV1Descriptor::deserialize(&mut raw_stream)?),
+            FeatureCode::Opalite => FeatureDescriptor::Opalite(OpaliteDescriptor::deserialize(&mut raw_stream)?),
+            FeatureCode::PyriteV1 => FeatureDescriptor::PyriteV1(PyriteV1Descriptor::deserialize(&mut raw_stream)?),
+            FeatureCode::PyriteV2 => FeatureDescriptor::PyriteV2(PyriteV2Descriptor::deserialize(&mut raw_stream)?),
+            FeatureCode::Ruby => FeatureDescriptor::Ruby(RubyDescriptor::deserialize(&mut raw_stream)?),
+            FeatureCode::KeyPerIO => FeatureDescriptor::KeyPerIO(KeyPerIODescriptor::deserialize(&mut raw_stream)?),
             _ => FeatureDescriptor::Unrecognized,
         };
         Ok(desc)
@@ -351,8 +531,8 @@ impl TryFrom<usize> for DiscoveryHeader {
         let length_of_data: u32 = value.try_into()?;
         Ok(DiscoveryHeader {
             length_of_data: length_of_data,
-            major_version: 1,
-            minor_version: 0,
+            major_version: 0,
+            minor_version: 1,
             vendor_unique: [0; 32],
         })
     }

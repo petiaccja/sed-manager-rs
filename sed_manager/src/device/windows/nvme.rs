@@ -61,13 +61,13 @@ impl Device for NVMeDevice {
         Interface::NVMe
     }
     fn model_number(&self) -> Result<String, device::Error> {
-        Ok(self.identify_controller()?.model_number_as_str())
+        Ok(self.identify_controller()?.model_number_as_str().trim().to_string())
     }
     fn serial_number(&self) -> Result<String, device::Error> {
-        Ok(self.identify_controller()?.serial_number_as_str())
+        Ok(self.identify_controller()?.serial_number_as_str().trim().to_string())
     }
     fn firmware_revision(&self) -> Result<String, device::Error> {
-        Ok(self.identify_controller()?.firmware_revision_as_str())
+        Ok(self.identify_controller()?.firmware_revision_as_str().trim().to_string())
     }
     fn security_send(
         &self,
@@ -229,8 +229,8 @@ fn nvme_scsi_passthrough(
             _ => panic!("opcode not supported with SCSI passthrough"),
         },
         security_protocol,
-        protocol_specific[1],
         protocol_specific[0],
+        protocol_specific[1],
         0,
         0,
         ((data.len() >> 24) & 0xFF) as u8,

@@ -15,6 +15,6 @@ use windows as os;
 #[cfg(target_os = "linux")]
 use linux as os;
 
-pub use device::{Device, Interface};
+pub use device::{open_device, Device, Interface};
 pub use error::Error;
 pub use os::{get_drive_interface, list_physical_drives, NVMeDevice};

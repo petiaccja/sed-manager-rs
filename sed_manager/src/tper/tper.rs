@@ -11,7 +11,7 @@ use crate::messaging::types::{List, MaxBytes32, NamedValue, SPRef};
 use crate::messaging::value::Bytes;
 use crate::rpc::args::{DecodeArgs, EncodeArgs};
 use crate::rpc::{Error as RPCError, MethodCall, MethodStatus, Properties, RPCSession};
-use crate::serialization::{Deserialize, InputStream};
+use crate::serialization::{Deserialize, DeserializeBinary, InputStream};
 use crate::specification::{invoker, method};
 
 use super::session::Session;
@@ -27,6 +27,13 @@ struct Stack {
     com_id: u16,
     com_id_ext: u16,
     rpc_session: RPCSession,
+}
+
+pub fn discover(device: &dyn Device) -> Result<Discovery, RPCError> {
+    let data = device
+        .security_recv(0x01, 0x0001_u16.to_be_bytes(), 4096)
+        .map_err(|err| RPCError::SecurityReceiveFailed(err))?;
+    Discovery::from_bytes(data).map_err(|err| RPCError::SerializationFailed(err))
 }
 
 impl TPer {
@@ -45,15 +52,7 @@ impl TPer {
         match self.cached_discovery.get() {
             Some(discovery) => Ok(discovery),
             None => {
-                let data = match self.device.security_recv(0x01, 0x0001_u16.to_be_bytes(), 4096) {
-                    Ok(data) => data,
-                    Err(err) => return Err(RPCError::SecurityReceiveFailed(err)),
-                };
-                let mut stream = InputStream::from(data);
-                let discovery = match Discovery::deserialize(&mut stream) {
-                    Ok(discovery) => discovery,
-                    Err(err) => return Err(RPCError::SerializationFailed(err)),
-                };
+                let discovery = discover(self.device.as_ref())?;
                 // Performance problem:
                 // The above code and IF-RECV may be invoked concurrently on multiple threads.
                 // This will work correctly, but may be wasteful with performance.

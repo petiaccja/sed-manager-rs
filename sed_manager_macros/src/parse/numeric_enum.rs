@@ -22,6 +22,7 @@ impl NumericEnum {
         let name = ast.ident.clone();
         let variants: Result<Vec<_>, _> =
             enum_ast.variants.iter().map(|variant| NumericVariant::parse(variant)).collect();
+        check_invalid_attrs(enum_ast.variants.iter())?;
         let fallback = get_fallback(enum_ast.variants.iter());
         Ok(NumericEnum { name, repr, variants: variants?, fallback })
     }
@@ -58,6 +59,15 @@ fn get_fallback<'a>(variants: impl Iterator<Item = &'a syn::Variant>) -> Option<
         }
     }
     None
+}
+
+fn check_invalid_attrs<'a>(variants: impl Iterator<Item = &'a syn::Variant>) -> Result<(), syn::Error> {
+    for variant in variants {
+        if variant.attrs.iter().any(|attr| attr.path().is_ident("layout")) {
+            return Err(syn::Error::new(variant.span(), "invalid attribute: `layout`"));
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]

@@ -53,6 +53,7 @@ fn get_ssc_feature_desc() -> FeatureDescriptor {
     let desc = OpalV2Descriptor {
         base_com_id: BASE_COM_ID,
         num_com_ids: NUM_COM_IDS,
+        no_range_crossing: false,
         num_locking_admins_supported: 4,
         num_locking_users_supported: 8,
         initial_owner_pw: OwnerPasswordState::SameAsMSID,
