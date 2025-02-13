@@ -1,0 +1,14 @@
+[package]
+name = "sed-manager-gui"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+sed-manager = { path = "../sed_manager" }
+
+[dependencies.slint]
+version = "1.9.2"
+features = ["backend-winit", "renderer-winit-software"]
+
+[build-dependencies]
+slint-build = "1.9.2"

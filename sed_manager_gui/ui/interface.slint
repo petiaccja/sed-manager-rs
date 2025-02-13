@@ -1,0 +1,31 @@
+
+export enum Interface {
+    ata,
+    sata,
+    scsi,
+    nvme,
+    sd,
+    mmc,
+    unknown,
+}
+
+
+export global InterfaceProperties {
+    public pure function name(interface: Interface) -> string {
+        if interface == Interface.ata {
+            "ATA"
+        } else if interface == Interface.sata {
+            "SATA"
+        } else if interface == Interface.scsi {
+            "SCSI"
+        } else if interface == Interface.nvme {
+            "NVMe"
+        } else if interface == Interface.sd {
+            "SD"
+        } else if interface == Interface.mmc {
+            "MMC"
+        } else {
+            "Unknown"
+        }
+    }
+}

@@ -1,0 +1,75 @@
+import { Button, Palette, ScrollView } from "std-widgets.slint";
+import { DeviceModel } from "device_model.slint";
+
+export component DeviceTab inherits Rectangle {
+    in property <string> name;
+    width: 240px;
+    height: 32px;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+    background: Palette.background.brighter(0.3);
+    callback clicked <=> area.clicked;
+    area := TouchArea {
+        width: parent.width;
+        height: parent.height;
+    }
+
+    Text {
+        text: name;
+    }
+}
+
+export component DeviceView inherits Rectangle {
+    in property <string> name;
+    Text {
+        text: name;
+    }
+}
+
+export component DeviceTabWidget inherits Window {
+    in-out property <int> active-tab: 0;
+    in property <[DeviceModel]> devices: [
+        { name: "device #1" },
+        { name: "device #2" },
+        { name: "device #3" },
+    ];
+    VerticalLayout {
+        alignment: stretch;
+        ScrollView {
+            height: 46px;
+            vertical-scrollbar-policy: always-off;
+            VerticalLayout {
+                HorizontalLayout {
+                    spacing: 3px;
+                    for device[i] in devices: DeviceTab {
+                        name: device.name;
+                        clicked => {
+                            root.active-tab = i;
+                        }
+                    }
+                }
+
+                Rectangle {
+                    width: 100%;
+                    height: 14px;
+                    background: Palette.background.brighter(0.3);
+                }
+            }
+        }
+
+        Rectangle {
+            clip: true;
+            horizontal-stretch: 1.0;
+            vertical-stretch: 1.0;
+            for device[i] in devices: DeviceView {
+                name: device.name;
+                x: root.active-tab == i ? 0 : root.active-tab < i ? - self.width - 1px : parent.width + 1px;
+                background: #005e00;
+                animate x {
+                    duration: 125ms;
+                    easing: ease;
+                }
+            }
+        }
+    }
+}

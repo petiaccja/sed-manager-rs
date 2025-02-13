@@ -1,0 +1,35 @@
+import { Button, VerticalBox, ScrollView, Palette, HorizontalBox, TabWidget } from "std-widgets.slint";
+import {DeviceCard, CardLayoutSize} from "device_card.slint";
+import {SSC} from "ssc.slint";
+import {Interface} from "interface.slint";
+import {DeviceTabWidget} from "device_tab_widget.slint";
+import {DeviceModel} from "device_model.slint";
+
+
+export component MainWindow inherits Window {
+    title: "SED Manager";
+    icon: @image-url("../logo/temporary_logo.png");
+    preferred-width: CardLayoutSize.width * 3 + CardLayoutSize.spacing * 4;
+    preferred-height: CardLayoutSize.height * 4 + CardLayoutSize.spacing * 5;
+    min-width: CardLayoutSize.width + CardLayoutSize.spacing * 2;
+    min-height: CardLayoutSize.height + CardLayoutSize.spacing * 2;
+    in property <[DeviceModel]> devices;
+    property <int> num_columns: Math.floor((self.width - CardLayoutSize.spacing) / (CardLayoutSize.width + CardLayoutSize.spacing));
+    // ScrollView {
+    //     for device[i] in devices: DeviceCard {
+    //         x: CardLayoutSize.spacing + (CardLayoutSize.width + CardLayoutSize.spacing) * Math.mod(i, num_columns);
+    //         y: CardLayoutSize.spacing + (CardLayoutSize.height + CardLayoutSize.spacing) * Math.floor(i / num_columns);
+    //         name: device.name;
+    //         ssc: device.ssc;
+    //         interface: device.interface;
+    //         serial: device.serial;
+    //         firmware: device.firmware;
+    //     }
+    // }
+
+    DeviceTabWidget {
+        devices: parent.devices;
+        width: 100%;
+        height: 100%;
+    }
+}
