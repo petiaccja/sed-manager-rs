@@ -1,0 +1,32 @@
+import { Palette } from "std-widgets.slint";
+
+export enum ContentStatus {
+    loading,
+    success,
+    error,
+}
+
+export component TextLoadingIndicator inherits Rectangle {
+    in-out property <duration> time;
+    in property <bool> use-external-time;
+    in property <color> base-color: Palette.control-background;
+    in property <color> highlight-color: Palette.control-foreground.mix(base-color, 0.25);
+    in property <length> wavelength: self.width;
+    in property <duration> period: 1.5s;
+    border-radius: 6px;
+    background: @linear-gradient(90deg, color-at(phase() - 0.00) 0%, color-at(phase() - 0.10) 10%, color-at(phase() - 0.15) 15%, color-at(phase() - 0.20) 20%, color-at(phase() - 0.25) 25%, color-at(phase() - 0.30) 30%, color-at(phase() - 0.35) 35%, color-at(phase() - 0.40) 40%, color-at(phase() - 0.45) 45%, color-at(phase() - 0.50) 50%, color-at(phase() - 0.55) 55%, color-at(phase() - 0.60) 60%, color-at(phase() - 0.65) 65%, color-at(phase() - 0.70) 70%, color-at(phase() - 0.75) 75%, color-at(phase() - 0.80) 80%, color-at(phase() - 0.85) 85%, color-at(phase() - 0.90) 90%, color-at(phase() - 0.95) 95%, color-at(phase() - 1.00) 100%);
+    Timer {
+        interval: 16.667ms;
+        running: !use-external-time;
+        triggered => {
+            root.time += self.interval;
+        }
+    }
+
+    pure function phase() -> float {
+        time / period
+    }
+    pure function color-at(phase: float) -> color {
+        base-color.mix(highlight-color, 0.5 + 0.5 * Math.cos(360deg * phase * (self.width / wavelength)))
+    }
+}

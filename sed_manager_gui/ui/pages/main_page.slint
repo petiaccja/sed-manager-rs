@@ -1,0 +1,98 @@
+import { SummaryModel, SummaryPage, LivePreviewData as LivePreviewSummaryData } from "summary_page.slint";
+import { AdditionalDrivesPage, AdditionalDrivesModel } from "additional_drives_page.slint";
+import { ScrollView, Palette, Button } from "std-widgets.slint";
+import { ContentStatus } from "../widgets/loading.slint";
+
+
+component Tab inherits Rectangle {
+    in property <string> name;
+    in property <bool> selected;
+    width: 240px;
+    height: 32px;
+    border-radius: 6px;
+    background: selected ? Palette.control-background : area.has-hover ? Palette.control-background.with-alpha(0.5) : Palette.background;
+    callback clicked <=> area.clicked;
+    area := TouchArea {
+        width: parent.width;
+        height: parent.height;
+    }
+
+    Text {
+        text: name;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        font-weight: 600;
+        color: selected ? Palette.control-foreground : Palette.foreground;
+    }
+}
+
+export component MainPage inherits Window {
+    in-out property <int> active-tab: 0;
+    in property <[SummaryModel]> summaries;
+    in property <AdditionalDrivesModel> additional-drives;
+    callback update-device-list();
+    callback update-device-details(device-idx: int);
+    function on-tab-selected(tab: int) {
+        self.active-tab = tab;
+        update-device-details(tab);
+    }
+    VerticalLayout {
+        alignment: stretch;
+        HorizontalLayout {
+            ScrollView {
+                vertical-scrollbar-policy: always-off;
+                preferred-height: tabs.preferred-height;
+                horizontal-stretch: 1.0;
+                vertical-stretch: 0.0;
+                tabs := HorizontalLayout {
+                    spacing: 4px;
+                    padding: 4px;
+                    for summary[i] in summaries: Tab {
+                        name: summary.name;
+                        selected: root.active-tab == i;
+                        clicked => {
+                            on-tab-selected(i);
+                        }
+                    }
+                    if additional-drives.status != ContentStatus.success || additional-drives.drives.length != 0: Tab {
+                        name: "Additional drives";
+                        selected: root.active-tab == summaries.length;
+                        clicked => {
+                            on-tab-selected(summaries.length);
+                        }
+                    }
+                }
+            }
+
+            HorizontalLayout {
+                padding: 4px;
+                Button {
+                    height: 32px;
+                    icon: @image-url("../../logo/icon_refresh.svg");
+                    colorize-icon: true;
+                    clicked => {
+                        update-device-list();
+                    }
+                }
+            }
+        }
+
+        HorizontalLayout {
+            padding: 8px;
+            max-height: 100000px; // Otherwise it assumes max-height == min-height
+            vertical-stretch: 1.0;
+            for summary[i] in root.summaries: HorizontalLayout {
+                if i == active-tab: SummaryPage {
+                    summary: summary;
+                }
+            }
+            if root.summaries.length == active-tab: AdditionalDrivesPage {
+                additional-drives: root.additional-drives;
+            }
+        }
+    }
+}
+
+export component LivePreviewTest inherits MainPage {
+    summaries: [LivePreviewSummaryData.summary, LivePreviewSummaryData.summary];
+}

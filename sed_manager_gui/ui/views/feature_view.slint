@@ -1,0 +1,105 @@
+import { ScrollView, GridBox, HorizontalBox } from "std-widgets.slint";
+import { VerticalSeparator } from "../widgets/visual.slint";
+import { CollapsibleView } from "../widgets/collapsible_view.slint";
+import { NameValueListView } from "../widgets/name_value_list_view.slint";
+
+export struct FeatureModel {
+    name: string,
+    nvps: [{name: string, value: string}],    
+}
+
+component EmptyView {
+    VerticalLayout {
+        alignment: center;
+        spacing: 8px;
+        Image {
+            source: @image-url("../../logo/broken_lock.png");
+            height: 50%;
+            opacity: 25%;
+            rotation-angle: -20deg;
+        }
+
+        Text {
+            text: "The device has no encryption features";
+            font-size: 16px;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+            opacity: 80%;
+        }
+    }
+}
+
+component SplitView {
+    in property <[FeatureModel]> common-features;
+    in property <[FeatureModel]> ssc-features;
+    HorizontalLayout {
+        alignment: stretch;
+        spacing: 16px;
+        preferred-width: 100%;
+        if root.common-features.length != 0: ScrollView {
+            horizontal-scrollbar-policy: always-off;
+            min-width: common_feature_view.min-width;
+            viewport-height: common_feature_view.min-height;
+            common_feature_view := VerticalLayout {
+                preferred-width: 100%;
+                spacing: 8px;
+                for feature in root.common-features: CollapsibleView {
+                    title: feature.name;
+                    NameValueListView {
+                        name_value_pairs: feature.nvps;
+                    }
+                }
+            }
+        }
+        if root.ssc-features.length != 0: ScrollView {
+            horizontal-scrollbar-policy: always-off;
+            min-width: ssc_feature_view.min-width;
+            viewport-height: ssc_feature_view.min-height;
+            ssc_feature_view := VerticalLayout {
+                preferred-width: 100%;
+                spacing: 8px;
+                for feature in root.ssc-features: CollapsibleView {
+                    title: feature.name;
+                    NameValueListView {
+                        name_value_pairs: feature.nvps;
+                    }
+                }
+            }
+        }
+    }
+}
+
+export component FeatureView {
+    in property <[FeatureModel]> common-features;
+    in property <[FeatureModel]> ssc-features;
+    HorizontalLayout {
+        if common-features.length == 0 && ssc-features.length == 0: empty-view := EmptyView { }
+        if common-features.length != 0 || ssc-features.length != 0: split-view := SplitView {
+            preferred-width: 100%;
+            preferred-height: 100%;
+            common-features: root.common-features;
+            ssc-features: root.ssc-features;
+        }
+    }
+}
+
+export component LivePreviewTest_Filled inherits FeatureView {
+    common-features: [
+        {
+            name: "TPer",
+            nvps: [{ name: "Sync supported", value: "Yes" }, { name: "Async supported", value: "No" }],
+        },
+        {
+            name: "Locking",
+            nvps: [
+                { name: "Locked", value: "No" },
+            ],
+        }
+    ];
+    ssc-features: [
+        {
+            name: "Opal 2.0",
+            nvps: [{ name: "Num admins supported", value: "4" }],
+        },
+    ];
+}

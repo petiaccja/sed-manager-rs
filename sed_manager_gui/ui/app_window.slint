@@ -1,0 +1,19 @@
+import {MainPage} from "pages/main_page.slint";
+import {SummaryModel} from "pages/summary_page.slint";
+import {AdditionalDrivesModel} from "pages/additional_drives_page.slint";
+
+
+export component AppWindow inherits Window {
+    title: "SED Manager";
+    icon: @image-url("../logo/temporary_logo.png");
+    preferred-width: 960px;
+    preferred-height: 600px;
+    in property <[SummaryModel]> summaries <=> main-page.summaries;
+    in property <AdditionalDrivesModel> additional-drives <=> main-page.additional-drives;
+    callback update-device-list <=> main-page.update-device-list;
+    callback update-device-details <=> main-page.update-device-details;
+    main-page := MainPage {
+        width: 100%;
+        height: 100%;
+    }
+}

@@ -8,7 +8,12 @@ sed-manager = { path = "../sed_manager" }
 
 [dependencies.slint]
 version = "1.9.2"
-features = ["backend-winit", "renderer-winit-software"]
+features = ["backend-winit", "renderer-winit-software", "renderer-skia"]
+
+[dependencies.tokio]
+version = "1.41.0"
+default-features = false
+features = ["rt", "sync", "macros"]
 
 [build-dependencies]
 slint-build = "1.9.2"

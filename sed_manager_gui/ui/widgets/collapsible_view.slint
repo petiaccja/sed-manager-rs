@@ -1,0 +1,79 @@
+import { Palette } from "std-widgets.slint";
+import { HorizontalSeparator } from "visual.slint";
+
+component TitleBar {
+    in property <string> title;
+    in-out property <bool> collaped: false;
+    area := TouchArea {
+        clicked => {
+            root.collaped = !root.collaped;
+        }
+    }
+
+    HorizontalLayout {
+        padding: 8px;
+        Text {
+            horizontal-stretch: 1.0;
+            text: root.title;
+            font-weight: 600;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+            color: Palette.control-foreground;
+        }
+
+        Text {
+            horizontal-stretch: 0.0;
+            text: root.collaped ? "\u{25BC}" : "\u{25B2}";
+            font-weight: 600;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+            color: Palette.control-foreground;
+        }
+    }
+}
+
+component Content {
+    in property <bool> collaped;
+    visible: !collaped;
+    min-height: collaped ? 0px : container.min-height;
+    preferred-height: self.min-height;
+    container := VerticalLayout {
+        alignment: start;
+        @children
+    }
+}
+
+export component CollapsibleView {
+    in property <string> title;
+    in property <bool> collaped: title-bar.collaped;
+    Rectangle {
+        background: Palette.control-background;
+        border-radius: 8px;
+    }
+
+    VerticalLayout {
+        title-bar := TitleBar {
+            title: title;
+            height: 32px;
+        }
+
+        if !root.collaped: HorizontalSeparator {
+            background: Palette.background;
+        }
+        Content {
+            collaped: title-bar.collaped;
+            @children
+        }
+    }
+}
+
+export component LivePreviewTest inherits CollapsibleView {
+    title: "Title";
+    Text {
+        text: "Some text for you";
+    }
+
+    Text {
+        text: "And some more";
+    }
+}

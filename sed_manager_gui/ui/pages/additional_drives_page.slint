@@ -1,0 +1,115 @@
+import { NameValueListView } from "../widgets/name_value_list_view.slint";
+import { TextLoadingIndicator, ContentStatus } from "../widgets/loading.slint";
+import { HorizontalBox, Palette } from "std-widgets.slint";
+
+export struct AdditionalDrivesModel {
+    status: ContentStatus,
+    error: string,
+    drives: [{name: string, value: string}] // (<path>, <error>) -- used directly in NVP view.
+}
+
+component LoadingView {
+    VerticalLayout {
+        alignment: start;
+        spacing: 5px;
+        padding-left: 6px;
+        padding-right: 6px;
+        padding-top: 5px;
+        padding-bottom: 5px;
+        title-box := Rectangle {
+            max-height: self.min-height;
+            TextLoadingIndicator {
+                min-width: 60px;
+                height: 100%;
+            }
+
+            Text {
+                text: "";
+            }
+        }
+
+        for i in [0, 1, 2]: TextLoadingIndicator {
+            min-height: title-box.min-height;
+            max-height: title-box.min-height;
+        }
+    }
+}
+
+component DataView {
+    in property <[{ name: string, value: string}]> drives;
+    VerticalLayout {
+        alignment: start;
+        padding-left: 6px;
+        padding-right: 6px;
+        padding-top: 5px;
+        padding-bottom: 5px;
+        NameValueListView {
+            name_value_pairs: drives;
+        }
+    }
+}
+
+component ErrorView {
+    in property <string> error;
+    VerticalLayout {
+        alignment: start;
+        padding: 5px;
+        spacing: 5px;
+        Text {
+            text: "Loading the list of drives failed with the following error:";
+        }
+
+        Text {
+            text: error;
+            color: Palette.foreground.mix(#FF0000, 0.3);
+        }
+    }
+}
+
+export component AdditionalDrivesPage {
+    in property <AdditionalDrivesModel> additional-drives: {
+        status: ContentStatus.loading,
+    };
+    HorizontalLayout {
+        alignment: start;
+        if additional-drives.status == ContentStatus.loading: LoadingView {
+            width: 100%;
+        }
+        if additional-drives.status == ContentStatus.error: ErrorView {
+            error: additional-drives.error;
+        }
+        if additional-drives.status == ContentStatus.success: DataView {
+            drives: additional-drives.drives;
+        }
+    }
+}
+
+export component LivePreviewTest_Loading inherits AdditionalDrivesPage {
+    additional-drives: {
+        status: ContentStatus.loading,
+    };
+}
+
+export component LivePreviewTest_Error inherits AdditionalDrivesPage {
+    additional-drives: {
+        status: ContentStatus.error,
+        error: "failed",
+    };
+}
+
+export component LivePreviewTest_Data inherits AdditionalDrivesPage {
+    additional-drives: {
+        status: ContentStatus.success,
+        drives: [
+            { name: "/dev/drive1", value: "error 1" },
+            { name: "/dev/drive2", value: "error 2" },
+        ]
+    };
+}
+
+export component LivePreviewTest_DataView inherits DataView {
+    drives: [
+        { name: "/dev/drive1", value: "error 1" },
+        { name: "/dev/drive2", value: "error 2" },
+    ];
+}

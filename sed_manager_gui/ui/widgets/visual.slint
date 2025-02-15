@@ -1,0 +1,16 @@
+import { Palette } from "std-widgets.slint";
+
+
+export global PaletteExtra {
+    in property <color> separator: Palette.foreground.mix(Palette.background, 0.27);
+}
+
+export component HorizontalSeparator inherits Rectangle {
+    height: 1px;
+    background: @linear-gradient(90deg, Palette.background 0%, PaletteExtra.separator 5%, PaletteExtra.separator 95%, Palette.background);
+}
+
+export component VerticalSeparator inherits Rectangle {
+    width: 1px;
+    background: @linear-gradient(0deg, Palette.background 0%, PaletteExtra.separator 5%, PaletteExtra.separator 95%, Palette.background);
+}

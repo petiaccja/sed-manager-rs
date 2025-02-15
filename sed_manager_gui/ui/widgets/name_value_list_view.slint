@@ -1,0 +1,64 @@
+import { VerticalSeparator } from "visual.slint";
+import { Palette, HorizontalBox } from "std-widgets.slint";
+
+enum CellType {
+    name,
+    value,
+}
+
+component Cell {
+    in property <string> content;
+    in property <int> row-number;
+    in property <CellType> cell-type;
+    out property <color> row-color: Math.mod(row-number, 2) == 0 ? Palette.accent-background.with-alpha(0.16) : #00000000;
+    height: text-box.min-height;
+    min-width: Math.min(60px, text-box.min-width + 12px);
+    Rectangle {
+        border-radius: 8px;
+        background: row-color;
+    }
+
+    text-box := HorizontalBox {
+        padding-left: 6px;
+        padding-right: 6px;
+        padding-top: 5px;
+        padding-bottom: 5px;
+        Text {
+            text: content;
+            overflow: elide;
+            horizontal-alignment: cell-type == CellType.name ? left : right;
+        }
+    }
+}
+
+export component NameValueListView {
+    in property <[{name: string, value: string}]> name_value_pairs;
+    HorizontalLayout {
+        alignment: stretch;
+        VerticalLayout {
+            horizontal-stretch: 1;
+            for nvp[i] in root.name_value_pairs: Cell {
+                content: nvp.name;
+                row-number: i;
+                cell-type: CellType.name;
+            }
+        }
+
+        VerticalSeparator {
+            background: Palette.background;
+        }
+
+        VerticalLayout {
+            horizontal-stretch: 1;
+            for nvp[i] in root.name_value_pairs: Cell {
+                content: nvp.value;
+                row-number: i;
+                cell-type: CellType.value;
+            }
+        }
+    }
+}
+
+export component LivePreviewTest inherits NameValueListView {
+    name_value_pairs: [{ name: "pi", value: "3.14159" }, { name: "e", value: "2.71828182845904" }];
+}

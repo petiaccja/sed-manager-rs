@@ -1,0 +1,200 @@
+import { FeatureModel, FeatureView } from "../views/feature_view.slint";
+import { LineEdit, GroupBox, Button, Palette } from "std-widgets.slint";
+
+export struct SummaryModel {
+    name: string,
+    serial: string,
+    path: string,
+    firmware: string,
+    interface: string,
+    security-subsystem-classes: [string],
+    security-providers: [string],
+    common-features: [FeatureModel],
+    ssc-features: [FeatureModel],    
+}
+
+component HeaderView {
+    in property <SummaryModel> summary;
+    property <length> parameter-height: 20px;
+    property <length> parameter-spacing: 8px;
+    HorizontalLayout {
+        spacing: 12px;
+        alignment: stretch;
+        VerticalLayout {
+            alignment: start;
+            spacing: 8px;
+            width: Math.max(name-view.min-width, serial-view.min-width);
+            name-view := Text {
+                text: summary.name;
+                font-weight: 800;
+                font-size: 28px;
+            }
+
+            serial-view := HorizontalLayout {
+                alignment: space-between;
+                Text {
+                    text: "Serial: ";
+                    font-size: 16px;
+                }
+
+                Text {
+                    text: summary.serial;
+                    font-size: 16px;
+                }
+            }
+        }
+
+        Rectangle {
+            horizontal-stretch: 0.001;
+        }
+
+        VerticalLayout {
+            max-width: 400px;
+            horizontal-stretch: 1.0;
+            HorizontalLayout {
+                height: root.parameter-height;
+                spacing: 2 * root.parameter-spacing;
+                Text {
+                    text: "Path:";
+                    vertical-alignment: center;
+                }
+
+                LineEdit {
+                    width: 100%;
+                    horizontal-alignment: right;
+                    read-only: true;
+                    text: summary.path;
+                }
+            }
+
+            for parameter in [
+                { name: "Firmware revision:", values: [summary.firmware] },
+                { name: "Hardware interface:", values: [summary.interface] },
+                { name: "Security subsystem classes:", values: summary.security-subsystem-classes },
+            ]: HorizontalLayout {
+                height: root.parameter-height;
+                spacing: root.parameter-spacing;
+                alignment: space-between;
+                Text {
+                    text: parameter.name;
+                    vertical-alignment: center;
+                }
+
+                for value in parameter.values: Text {
+                    text: value;
+                    vertical-alignment: center;
+                }
+            }
+        }
+    }
+}
+
+component ActionView {
+    in property <[string]> security-providers;
+    VerticalLayout {
+        alignment: start;
+        spacing: 4px;
+        GroupBox {
+            title: "Configuration";
+            VerticalLayout {
+                alignment: start;
+                spacing: 4px;
+                Button {
+                    text: "Configure locking  \u{25B6}";
+                    width: 140px;
+                    height: 32px;
+                }
+
+                Button {
+                    text: "Change password";
+                    width: 140px;
+                    height: 32px;
+                }
+
+                Button {
+                    text: "Stack reset";
+                    width: 140px;
+                    height: 32px;
+                }
+
+                Button {
+                    text: "Factory reset";
+                    width: 140px;
+                    height: 32px;
+                }
+            }
+        }
+
+        if root.security_providers.length > 0: GroupBox {
+            title: "Table editor";
+            VerticalLayout {
+                spacing: 4px;
+                for sp[i] in root.security-providers: Button {
+                    text: sp + " SP  \u{25B6}";
+                    width: 140px;
+                    height: 32px;
+                }
+            }
+        }
+    }
+}
+
+export component SummaryPage {
+    in property <SummaryModel> summary;
+    VerticalLayout {
+        spacing: 20px;
+        HeaderView {
+            summary: root.summary;
+        }
+
+        HorizontalLayout {
+            spacing: 32px;
+            FeatureView {
+                common-features: summary.common-features;
+                ssc-features: summary.ssc-features;
+            }
+
+            ActionView {
+                security-providers: summary.security-providers;
+            }
+        }
+    }
+}
+
+export global LivePreviewData {
+    out property <SummaryModel> summary: {
+        name: "Test Storage Device",
+        serial: "0123456ABCDEF",
+        path: "/dev/this/may/actually/be/a/very/long/path/on/windows/nvme0",
+        firmware: "FW1.0",
+        interface: "NVMe",
+        security-subsystem-classes: ["Opal 2.0"],
+        security-providers: ["Admin", "Locking"],
+        common-features: [
+            {
+                name: "TPer features",
+                nvps: [{ name: "Sync supported", value: "Yes" }, { name: "Async supported", value: "No" }],
+            },
+            {
+                name: "Locking features",
+                nvps: [
+                    { name: "Locked", value: "No" },
+                ],
+            }
+        ],
+        ssc-features: [
+            {
+                name: "Opal 2.0 features",
+                nvps: [{ name: "Num admins supported", value: "4" }],
+            },
+        ],
+    };
+}
+
+export component LivePreviewTest_Header inherits HeaderView {
+    summary: LivePreviewData.summary;
+}
+
+export component LivePreviewTest_Page inherits SummaryPage {
+    summary: LivePreviewData.summary;
+}
