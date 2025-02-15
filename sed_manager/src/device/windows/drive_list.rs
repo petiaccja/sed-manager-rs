@@ -20,16 +20,13 @@ use winapi::{
     },
 };
 
-use crate::device::device::Interface;
-use crate::device::{self, windows::com_interface::COM_INTERFACE};
+use crate::device::shared::string::{FromNullTerminated, ToNullTerminated};
+use crate::device::Error as DeviceError;
 
-use super::super::shared::string::{FromNullTerminated, ToNullTerminated};
-use super::{
-    com_ptr::ComPtr,
-    error::{check_hresult, Error},
-};
+use super::error::{check_hresult, Error as WindowsError};
+use super::utility::{com_interface::COM_INTERFACE, com_ptr::ComPtr};
 
-fn co_create_instance<T: Deref<Target = IUnknown>>(clsid: &GUID, riid: &GUID) -> Result<ComPtr<T>, Error> {
+fn co_create_instance<T: Deref<Target = IUnknown>>(clsid: &GUID, riid: &GUID) -> Result<ComPtr<T>, WindowsError> {
     let mut ptr = ComPtr::<T>::null();
     let result = unsafe {
         check_hresult(CoCreateInstance(
@@ -46,7 +43,10 @@ fn co_create_instance<T: Deref<Target = IUnknown>>(clsid: &GUID, riid: &GUID) ->
     }
 }
 
-fn get_wbem_services(wbem_locator: *mut IWbemLocator, network_resource: &str) -> Result<ComPtr<IWbemServices>, Error> {
+fn get_wbem_services(
+    wbem_locator: *mut IWbemLocator,
+    network_resource: &str,
+) -> Result<ComPtr<IWbemServices>, WindowsError> {
     let mut network_resource_utf16: Vec<_> = network_resource.to_null_terminated_utf16();
     let mut ptr = ComPtr::<IWbemServices>::null();
     let result = unsafe {
@@ -67,7 +67,7 @@ fn get_wbem_services(wbem_locator: *mut IWbemLocator, network_resource: &str) ->
     }
 }
 
-fn co_set_proxy_blanket(wbem_services: *mut IWbemServices) -> Result<(), Error> {
+fn co_set_proxy_blanket(wbem_services: *mut IWbemServices) -> Result<(), WindowsError> {
     unsafe {
         check_hresult(CoSetProxyBlanket(
             wbem_services as *mut IUnknown,
@@ -82,7 +82,7 @@ fn co_set_proxy_blanket(wbem_services: *mut IWbemServices) -> Result<(), Error> 
     }
 }
 
-fn exec_query(wbem_services: *mut IWbemServices, query: &str) -> Result<ComPtr<IEnumWbemClassObject>, Error> {
+fn exec_query(wbem_services: *mut IWbemServices, query: &str) -> Result<ComPtr<IEnumWbemClassObject>, WindowsError> {
     let mut language_utf16: Vec<_> = "WQL".to_null_terminated_utf16();
     let mut query_utf16: Vec<_> = query.to_null_terminated_utf16();
     let mut ptr = ComPtr::<IEnumWbemClassObject>::null();
@@ -118,8 +118,7 @@ fn map_enumerator(
     })
 }
 
-fn get_drive_properties(object: *mut IWbemClassObject) -> Result<(String, Interface), Error> {
-    let mut bus_type_utf16: Vec<_> = "BusType".to_null_terminated_utf16();
+fn get_drive_path(object: *mut IWbemClassObject) -> Result<String, WindowsError> {
     let mut path_utf16: Vec<_> = "Path".to_null_terminated_utf16();
     let path = unsafe {
         // Do not return within this unsafe block.
@@ -137,7 +136,7 @@ fn get_drive_properties(object: *mut IWbemClassObject) -> Result<(String, Interf
                 let s = property.n1.n2().n3.bstrVal();
                 match String::from_null_terminated_utf16(*s) {
                     Some(path) => Ok(path),
-                    None => Err(Error::COM(E_FAIL)),
+                    None => Err(WindowsError::COM(E_FAIL)),
                 }
             }
             Err(err) => Err(err),
@@ -146,90 +145,37 @@ fn get_drive_properties(object: *mut IWbemClassObject) -> Result<(String, Interf
         VariantClear(&mut property as *mut VARIANT);
         path
     }?;
-    let bus_type = unsafe {
-        // Do not return within this unsafe block.
-        let mut property: VARIANT = zeroed();
-        VariantInit(&mut property as *mut VARIANT);
-        let result = check_hresult((*object).Get(
-            bus_type_utf16.as_mut_ptr(),
-            0,
-            &mut property as *mut VARIANT,
-            null_mut(),
-            null_mut(),
-        ));
-        let bus_type = match result {
-            Ok(_) => Ok(*property.n1.n2().n3.uiVal()),
-            Err(err) => Err(err),
-        };
-        // This must be called to clean up resources.
-        VariantClear(&mut property as *mut VARIANT);
-        bus_type
-    }?;
-    let interface = match bus_type {
-        1 => Interface::SCSI,
-        3 => Interface::ATA,
-        11 => Interface::SATA,
-        12 => Interface::SD,
-        13 => Interface::MMC,
-        17 => Interface::NVMe,
-        _ => Interface::Other,
-    };
-    Ok((path, interface))
+    Ok(path)
 }
 
-fn get_physical_drives_and_interfaces() -> Result<Vec<(String, Interface)>, device::Error> {
-    COM_INTERFACE.with(|com_interface| -> Result<(), Error> { com_interface.init() })?;
+pub fn list_physical_drives() -> Result<Vec<String>, DeviceError> {
+    COM_INTERFACE.with(|com_interface| -> Result<(), WindowsError> { com_interface.init() })?;
 
     let wbem_locator = co_create_instance::<IWbemLocator>(&CLSID_WbemLocator, &IID_IWbemLocator)?;
     let wbem_services = get_wbem_services(wbem_locator.get(), r"ROOT\Microsoft\Windows\Storage")?;
     co_set_proxy_blanket(wbem_services.get())?;
     let enumerator = exec_query(wbem_services.get(), r"SELECT * FROM MSFT_Disk")?;
     Ok(map_enumerator(enumerator.get())
-        .map(|object| -> Result<(String, Interface), Error> { get_drive_properties(object.get()) })
-        .filter_map(|result| -> Option<(String, Interface)> { result.ok() })
+        .map(|object| -> Result<String, WindowsError> { get_drive_path(object.get()) })
+        .filter_map(|result| -> Option<String> { result.ok() })
         .collect::<Vec<_>>())
-}
-
-pub fn list_physical_drives() -> Result<Vec<String>, device::Error> {
-    Ok(get_physical_drives_and_interfaces()?.into_iter().map(|d| d.0).collect())
-}
-
-pub fn get_drive_interface(drive_path: &str) -> Result<Interface, device::Error> {
-    for drive in get_physical_drives_and_interfaces()? {
-        if drive.0 == drive_path {
-            return Ok(drive.1);
-        }
-    }
-    Err(device::Error::DeviceNotFound)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use skip_test::{may_skip, skip, skip_or_unwrap};
+    use skip_test::{may_skip, skip};
 
     #[test]
     #[may_skip]
-    fn test_get_physical_drives() -> Result<(), device::Error> {
+    fn test_get_physical_drives() -> Result<(), DeviceError> {
         // There must be at least one physical drive, so this test should pass.
         match list_physical_drives() {
             Ok(physical_drives) => {
                 assert!(!physical_drives.is_empty());
                 Ok(())
             }
-            Err(device::Error::PermissionDenied) => skip!(),
-            Err(err) => Err(err),
-        }
-    }
-
-    #[test]
-    #[may_skip]
-    fn test_get_physical_drive_interface() -> Result<(), device::Error> {
-        let drives = skip_or_unwrap!(list_physical_drives());
-        let first = skip_or_unwrap!(drives.first());
-        match get_drive_interface(first) {
-            Ok(_) => Ok(()),
-            Err(device::Error::PermissionDenied) => skip!(),
+            Err(DeviceError::PermissionDenied) => skip!(),
             Err(err) => Err(err),
         }
     }

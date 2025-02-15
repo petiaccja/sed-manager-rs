@@ -71,12 +71,16 @@ impl FakeDevice {
 }
 
 impl Device for FakeDevice {
-    fn interface(&self) -> Interface {
-        Interface::Other
+    fn path(&self) -> Option<String> {
+        None
+    }
+
+    fn interface(&self) -> Result<Interface, Error> {
+        Ok(Interface::Other)
     }
 
     fn model_number(&self) -> Result<String, Error> {
-        Ok(String::from("FAKE-DEV-OPAL-2"))
+        Ok(String::from("Fake Device 3000"))
     }
 
     fn serial_number(&self) -> Result<String, Error> {

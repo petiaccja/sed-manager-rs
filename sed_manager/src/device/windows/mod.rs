@@ -1,9 +1,8 @@
-mod com_interface;
-mod com_ptr;
+mod devices;
 mod drive_list;
 mod error;
-mod nvme;
+mod utility;
 
-pub use drive_list::{get_drive_interface, list_physical_drives};
+pub use devices::open_device;
+pub use drive_list::list_physical_drives;
 pub use error::Error;
-pub use nvme::NVMeDevice;

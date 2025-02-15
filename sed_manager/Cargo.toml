@@ -26,8 +26,5 @@ version = "1.41.0"
 default-features = false
 features = ["rt", "sync", "macros"]
 
-[dependencies.tokio-util]
-version = "0.7.12"
-
-[dependencies.async-trait]
-version = "0.1.83"
+[dependencies.enum_dispatch]
+version = "0.3.13"

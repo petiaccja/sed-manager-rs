@@ -6,7 +6,7 @@ use crate::device::Device;
 use crate::messaging::com_id::{
     ComIdState, HandleComIdRequest, StackResetResponsePayload, StackResetStatus, VerifyComIdValidResponsePayload,
 };
-use crate::messaging::discovery::{Discovery, SSCDescriptor};
+use crate::messaging::discovery::{Discovery, FeatureDescriptor, UnrecognizedDescriptor};
 use crate::messaging::types::{List, MaxBytes32, NamedValue, SPRef};
 use crate::messaging::value::Bytes;
 use crate::rpc::args::{DecodeArgs, EncodeArgs};
@@ -33,7 +33,17 @@ pub fn discover(device: &dyn Device) -> Result<Discovery, RPCError> {
     let data = device
         .security_recv(0x01, 0x0001_u16.to_be_bytes(), 4096)
         .map_err(|err| RPCError::SecurityReceiveFailed(err))?;
-    Discovery::from_bytes(data).map_err(|err| RPCError::SerializationFailed(err))
+    let discovery = Discovery::from_bytes(data).map_err(|err| RPCError::SerializationFailed(err))?;
+    let descs: Vec<_> = discovery
+        .descriptors
+        .into_vec()
+        .into_iter()
+        .filter(|desc| match desc {
+            FeatureDescriptor::Unrecognized(UnrecognizedDescriptor { feature_code: 0, length: 0, version: 0 }) => false,
+            _ => true,
+        })
+        .collect();
+    Ok(Discovery { descriptors: descs.into() })
 }
 
 impl TPer {
@@ -66,11 +76,11 @@ impl TPer {
         self.cached_stack
             .get_or_try_init(|| async {
                 let discovery = self.discovery()?;
-                let ssc_desc = discovery.descriptors.iter().find_map(|desc| desc.ssc_desc());
-                let Some(SSCDescriptor { base_com_id, num_com_ids: _ }) = ssc_desc else {
+                let ssc = discovery.descriptors.iter().find_map(|desc| desc.security_subsystem_class());
+                let maybe_com_id = ssc.map(|ssc| ssc.base_com_id());
+                let Some(com_id) = maybe_com_id else {
                     return Err(RPCError::Unsupported);
                 };
-                let com_id = base_com_id;
                 let com_id_ext = 0x0000;
                 let main_session = RPCSession::new(self.device.clone(), com_id, com_id_ext, Properties::default());
 

@@ -1,4 +1,4 @@
-use super::error::{check_hresult, Error};
+use crate::device::windows::error::{check_hresult, Error};
 use std::{cell::OnceCell, ptr::null_mut, sync::OnceLock};
 
 use winapi::{

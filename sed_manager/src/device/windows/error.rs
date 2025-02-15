@@ -29,10 +29,10 @@ impl Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Error::Win32(code) => match format_win32_error(*code) {
-                Some(text) => f.write_fmt(format_args!("{}", text)),
-                None => f.write_fmt(format_args!("Win32 error: {}", code)),
+                Some(text) => write!(f, "{text}"),
+                None => f.write_fmt(format_args!("WinAPI operation failed: {code}")),
             },
-            Error::COM(hr) => f.write_fmt(format_args!("COM error: {}", hr)),
+            Error::COM(hr) => f.write_fmt(format_args!("COM operation failed: {hr:10x}")),
         }
     }
 }

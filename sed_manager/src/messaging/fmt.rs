@@ -1,5 +1,6 @@
 use std::fmt::Write;
 
+#[allow(unused)]
 macro_rules! format_flat {
     ($value:expr) => {{
         let mut s = String::new();
@@ -9,6 +10,7 @@ macro_rules! format_flat {
     }};
 }
 
+#[allow(unused)]
 macro_rules! format_indented {
     ($value:expr, $indent:expr) => {{
         let mut s = String::new();
@@ -18,7 +20,9 @@ macro_rules! format_indented {
     }};
 }
 
+#[allow(unused)]
 pub(crate) use format_flat;
+#[allow(unused)]
 pub(crate) use format_indented;
 
 pub struct PrettyFormatter<'a> {

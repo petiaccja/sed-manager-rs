@@ -3,15 +3,15 @@ use crate::serialization::{Deserialize, Serialize};
 // NVMe specification:
 // https://nvmexpress.org/wp-content/uploads/NVM-Express-Base-Specification-2_0-2021.06.02-Ratified-5.pdf
 
-pub enum NVMeOpcode {
-    #[allow(unused)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Opcode {
     IdentifyController = 0x06,
     SecuritySend = 0x81,
     SecurityReceive = 0x82,
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct NVMeIdentifyController {
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct IdentifyController {
     pub vendor_id: u16,
     pub subsystem_vendor_id: u16,
     pub serial_number: [u8; 20],
@@ -21,7 +21,7 @@ pub struct NVMeIdentifyController {
     pub ieee_oui_identifier: [u8; 3],
 }
 
-impl NVMeIdentifyController {
+impl IdentifyController {
     pub fn serial_number_as_str(&self) -> String {
         String::from_utf8_lossy(&self.serial_number).to_string()
     }

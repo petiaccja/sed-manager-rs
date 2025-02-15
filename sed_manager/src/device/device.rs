@@ -1,6 +1,6 @@
-use super::{error::Error, get_drive_interface, NVMeDevice};
+use super::error::Error;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Interface {
     ATA,
     SATA,
@@ -12,7 +12,8 @@ pub enum Interface {
 }
 
 pub trait Device: Send + Sync {
-    fn interface(&self) -> Interface;
+    fn path(&self) -> Option<String>;
+    fn interface(&self) -> Result<Interface, Error>;
     fn model_number(&self) -> Result<String, Error>;
     fn serial_number(&self) -> Result<String, Error>;
     fn firmware_revision(&self) -> Result<String, Error>;
@@ -21,15 +22,16 @@ pub trait Device: Send + Sync {
     fn security_recv(&self, security_protocol: u8, protocol_specific: [u8; 2], len: usize) -> Result<Vec<u8>, Error>;
 }
 
-pub fn open_device(drive_path: &str) -> Result<Box<dyn Device>, Error> {
-    let interface = get_drive_interface(drive_path)?;
-    match interface {
-        Interface::ATA => Err(Error::NotSupported),
-        Interface::SATA => Err(Error::NotSupported),
-        Interface::SCSI => Err(Error::NotSupported),
-        Interface::NVMe => NVMeDevice::open(drive_path).map(|device| Box::<dyn Device>::from(Box::from(device))),
-        Interface::SD => Err(Error::NotSupported),
-        Interface::MMC => Err(Error::NotSupported),
-        Interface::Other => Err(Error::NotSupported),
+impl std::fmt::Display for Interface {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Interface::ATA => write!(f, "ATA"),
+            Interface::SATA => write!(f, "SATA"),
+            Interface::SCSI => write!(f, "SCSI"),
+            Interface::NVMe => write!(f, "NVMe"),
+            Interface::SD => write!(f, "SD"),
+            Interface::MMC => write!(f, "MMC"),
+            Interface::Other => write!(f, "Other"),
+        }
     }
 }
