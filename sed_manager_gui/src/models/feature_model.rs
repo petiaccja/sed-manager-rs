@@ -1,9 +1,10 @@
 use std::{rc::Rc, time::Duration};
 
 use sed_manager::messaging::discovery::{
-    DataRemovalDescriptor, EnterpriseDescriptor, Feature, FeatureDescriptor, GeometryDescriptor, KeyPerIODescriptor,
-    LockingDescriptor, OpalV1Descriptor, OpalV2Descriptor, OpaliteDescriptor, OwnerPasswordState, PyriteV1Descriptor,
-    PyriteV2Descriptor, RubyDescriptor, TPerDescriptor, UnrecognizedDescriptor,
+    AdditionalDataStoreTablesDescriptor, BlockSIDAuthDescriptor, DataRemovalDescriptor, EnterpriseDescriptor, Feature,
+    FeatureDescriptor, GeometryDescriptor, KeyPerIODescriptor, LockingDescriptor, OpalV1Descriptor, OpalV2Descriptor,
+    OpaliteDescriptor, OwnerPasswordState, PyriteV1Descriptor, PyriteV2Descriptor, RubyDescriptor, TPerDescriptor,
+    UnrecognizedDescriptor,
 };
 
 use crate::generated::FeatureModel;
@@ -113,6 +114,33 @@ impl From<&DataRemovalDescriptor> for FeatureModel {
                 "Vendor erase time".into(),
                 value.removal_time.vendor_erase().map(|d| duration(d)).unwrap_or("-".into()),
             ),
+        ];
+        Self::new(name, nvps)
+    }
+}
+
+impl From<&BlockSIDAuthDescriptor> for FeatureModel {
+    fn from(value: &BlockSIDAuthDescriptor) -> Self {
+        let name = format!("{} features", value.feature_code());
+
+        let nvps = vec![
+            ("SID's PIN same as MSID".into(), yes_or_no(value.sid_pin_same_as_msid).into()),
+            ("SID's authentication blocked".into(), yes_or_no(value.sid_authentication_blocked).into()),
+            ("Locking SP freeze supported".into(), yes_or_no(value.locking_sp_freeze_supported).into()),
+            ("Locking SP frozen".into(), yes_or_no(value.locking_sp_frozen).into()),
+        ];
+        Self::new(name, nvps)
+    }
+}
+
+impl From<&AdditionalDataStoreTablesDescriptor> for FeatureModel {
+    fn from(value: &AdditionalDataStoreTablesDescriptor) -> Self {
+        let name = format!("{} features", value.feature_code());
+
+        let nvps = vec![
+            ("Max. nr. of DataStore tables".into(), value.max_num_tables.to_string()),
+            ("Max. total size of DataStore tables".into(), value.max_total_size_of_tables.to_string()),
+            ("DataStore table size alignment".into(), value.table_size_alignment.to_string()),
         ];
         Self::new(name, nvps)
     }
@@ -281,6 +309,8 @@ impl From<&FeatureDescriptor> for FeatureModel {
             FeatureDescriptor::Locking(desc) => desc.into(),
             FeatureDescriptor::Geometry(desc) => desc.into(),
             FeatureDescriptor::DataRemoval(desc) => desc.into(),
+            FeatureDescriptor::BlockSIDAuth(desc) => desc.into(),
+            FeatureDescriptor::AdditionalDataStoreTables(desc) => desc.into(),
             FeatureDescriptor::Enterprise(desc) => desc.into(),
             FeatureDescriptor::OpalV1(desc) => desc.into(),
             FeatureDescriptor::OpalV2(desc) => desc.into(),
