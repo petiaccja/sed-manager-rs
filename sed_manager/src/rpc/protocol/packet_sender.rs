@@ -2,6 +2,7 @@ use std::collections::VecDeque;
 
 use crate::messaging::packet::{Packet, SubPacket, SubPacketKind, PACKET_HEADER_LEN, SUB_PACKET_HEADER_LEN};
 use crate::messaging::token::SerializeTokens;
+use crate::rpc::error::{ErrorEvent, ErrorEventExt};
 use crate::rpc::{Error, PackagedMethod, Properties};
 use crate::serialization::vec_without_len::VecWithoutLen;
 use crate::serialization::SerializeBinary;
@@ -12,8 +13,6 @@ use super::tracked::Tracked;
 type Response = Result<PackagedMethod, Error>;
 
 pub struct PacketSender {
-    session: SessionIdentifier,
-    properties: Properties,
     serializer: Serializer,
     bundler: Bundler,
     labeler: Labeler,
@@ -25,7 +24,8 @@ struct Serializer {
 }
 
 struct Bundler {
-    properties: Properties,
+    #[allow(unused)]
+    properties: Properties, // Needed for packet limits, which is not implemented yet.
     buffer: VecDeque<Tracked<Packet, Response>>,
 }
 
@@ -37,8 +37,6 @@ struct Labeler {
 impl PacketSender {
     pub fn new(session: SessionIdentifier, properties: Properties) -> Self {
         Self {
-            session,
-            properties: properties.clone(),
             serializer: Serializer::new(properties.clone()),
             bundler: Bundler::new(properties),
             labeler: Labeler::new(session),
@@ -91,17 +89,16 @@ impl Serializer {
     }
 
     fn try_serialize(&self, method: Tracked<PackagedMethod, Response>) -> Option<Tracked<Packet, Response>> {
-        let tokenized = method.try_map(|value| value.to_tokens().map_err(|err| Err(Error::TokenizationFailed(err))))?;
-        let serialized = tokenized.try_map(|value| {
-            VecWithoutLen::from(value).to_bytes().map_err(|err| Err(Error::SerializationFailed(err)))
-        })?;
+        let tokenized = method.try_map(|value| value.to_tokens().map_err(|err| Err(err.while_sending())))?;
+        let serialized =
+            tokenized.try_map(|value| VecWithoutLen::from(value).to_bytes().map_err(|err| Err(err.while_sending())))?;
         serialized.try_map(|value| {
             let limit = self.properties.max_gross_packet_size - PACKET_HEADER_LEN - SUB_PACKET_HEADER_LEN;
             if value.len() <= limit {
                 let sub_packet = SubPacket { kind: SubPacketKind::Data, payload: value.into() };
                 Ok(Packet { payload: vec![sub_packet].into(), ..Default::default() })
             } else {
-                Err(Err(Error::MethodTooLarge))
+                Err(Err(ErrorEvent::MethodTooLarge.while_sending()))
             }
         })
     }
@@ -152,7 +149,7 @@ impl Labeler {
 impl Drop for PacketSender {
     fn drop(&mut self) {
         while let Some(tracked) = self.poll() {
-            tracked.close(Err(Error::AbortedByHost));
+            tracked.close(Err(ErrorEvent::Aborted.while_sending()));
         }
     }
 }

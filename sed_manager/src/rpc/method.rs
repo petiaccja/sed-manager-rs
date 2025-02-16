@@ -1,4 +1,4 @@
-use crate::messaging::token::{Token, TokenizeError};
+use crate::messaging::token::{Token, TokenStreamError};
 use crate::messaging::uid::UID;
 use crate::messaging::value::{Command, List, Value};
 use crate::serialization::{Deserialize, Serialize};
@@ -108,7 +108,7 @@ impl TryFrom<Value> for MethodStatus {
 }
 
 impl Serialize<Token> for MethodCall {
-    type Error = TokenizeError;
+    type Error = TokenStreamError;
     fn serialize(&self, stream: &mut crate::serialization::OutputStream<Token>) -> Result<(), Self::Error> {
         Value::from(Command::Call).serialize(stream)?;
         Value::from(self.invoking_id).serialize(stream)?;
@@ -126,7 +126,7 @@ impl Serialize<Token> for MethodCall {
 }
 
 impl Serialize<Token> for MethodResult {
-    type Error = TokenizeError;
+    type Error = TokenStreamError;
     fn serialize(&self, stream: &mut crate::serialization::OutputStream<Token>) -> Result<(), Self::Error> {
         Value::from(self.results.clone()).serialize(stream)?;
         Value::from(Command::EndOfData).serialize(stream)?;
@@ -141,7 +141,7 @@ impl Serialize<Token> for MethodResult {
 }
 
 impl Deserialize<Token> for MethodCall {
-    type Error = TokenizeError;
+    type Error = TokenStreamError;
     fn deserialize(stream: &mut crate::serialization::InputStream<Token>) -> Result<Self, Self::Error> {
         let call = Command::deserialize(stream)?;
         let invoking_id_value = Value::deserialize(stream)?;
@@ -151,28 +151,28 @@ impl Deserialize<Token> for MethodCall {
         let status_value = Value::deserialize(stream)?;
 
         if call != Command::Call {
-            return Err(TokenizeError::UnexpectedTag);
+            return Err(TokenStreamError::UnexpectedTag);
         };
         let Ok(invoking_id) = UID::try_from(invoking_id_value) else {
-            return Err(TokenizeError::ExpectedBytes);
+            return Err(TokenStreamError::ExpectedBytes);
         };
         let Ok(method_id) = UID::try_from(method_id_value) else {
-            return Err(TokenizeError::ExpectedBytes);
+            return Err(TokenStreamError::ExpectedBytes);
         };
         let Ok(args) = List::try_from(args_value) else {
-            return Err(TokenizeError::ExpectedList);
+            return Err(TokenStreamError::ExpectedList);
         };
         if eod != Command::EndOfData {
-            return Err(TokenizeError::UnexpectedTag);
+            return Err(TokenStreamError::UnexpectedTag);
         };
         let Ok(status_list) = List::try_from(status_value) else {
-            return Err(TokenizeError::ExpectedList);
+            return Err(TokenStreamError::ExpectedList);
         };
         let Some(status_value_0) = status_list.first() else {
-            return Err(TokenizeError::InvalidData);
+            return Err(TokenStreamError::InvalidData);
         };
         let Ok(status) = MethodStatus::try_from(status_value_0) else {
-            return Err(TokenizeError::InvalidData);
+            return Err(TokenStreamError::InvalidData);
         };
 
         Ok(MethodCall { invoking_id, method_id, args, status })
@@ -180,28 +180,28 @@ impl Deserialize<Token> for MethodCall {
 }
 
 impl Deserialize<Token> for MethodResult {
-    type Error = TokenizeError;
+    type Error = TokenStreamError;
     fn deserialize(stream: &mut crate::serialization::InputStream<Token>) -> Result<Self, Self::Error> {
         let results_value = Value::deserialize(stream)?;
         let eod = Command::deserialize(stream)?;
         let status_value = Value::deserialize(stream)?;
 
         let Ok(results) = List::try_from(results_value) else {
-            return Err(TokenizeError::ExpectedList);
+            return Err(TokenStreamError::ExpectedList);
         };
         if eod != Command::EndOfData {
-            return Err(TokenizeError::UnexpectedTag);
+            return Err(TokenStreamError::UnexpectedTag);
         };
         let Ok(status_list) = List::try_from(status_value) else {
             // This check requires the status list to be a list,
             // but it does not check its contents. Not perfect but good enough.
-            return Err(TokenizeError::ExpectedList);
+            return Err(TokenStreamError::ExpectedList);
         };
         if status_list.len() != 3 {
-            return Err(TokenizeError::InvalidData);
+            return Err(TokenStreamError::InvalidData);
         }
         let Ok(status) = MethodStatus::try_from(&status_list[0]) else {
-            return Err(TokenizeError::InvalidData);
+            return Err(TokenStreamError::InvalidData);
         };
         Ok(MethodResult { results, status })
     }

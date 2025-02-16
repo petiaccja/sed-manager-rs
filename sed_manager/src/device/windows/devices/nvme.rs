@@ -24,6 +24,7 @@ pub struct NVMeDevice {
 }
 
 impl NVMeDevice {
+    #[allow(unused)]
     pub fn open(path: &str) -> Result<Self, DeviceError> {
         let file = FileHandle::open(path)?;
         Ok(Self { file, cached_identity: OnceLock::new() })

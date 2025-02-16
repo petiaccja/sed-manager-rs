@@ -1,6 +1,9 @@
 use std::{collections::VecDeque, time::Instant};
 
-use crate::rpc::{Error, Properties};
+use crate::rpc::{
+    error::{ErrorEvent, ErrorEventExt as _},
+    Error, Properties,
+};
 
 pub struct Timeout<T> {
     properties: Properties,
@@ -28,8 +31,8 @@ impl<T> Timeout<T> {
         } else if let Some(response) = self.buffer.pop_front() {
             Some(response)
         } else if elapsed > self.properties.trans_timeout {
-            let response = Err(Error::TimedOut);
-            self.error = Some(Error::AbortedByHost);
+            let response = Err(ErrorEvent::TimedOut.while_receiving());
+            self.error = Some(ErrorEvent::Aborted.while_receiving());
             Some(response)
         } else {
             None
@@ -56,8 +59,9 @@ mod tests {
         let mut timeout =
             Timeout::<i32>::new(Properties { trans_timeout: Duration::from_millis(0), ..Default::default() });
         std::thread::sleep(Duration::from_millis(50));
-        assert_eq!(timeout.poll(), Some(Err(Error::TimedOut)));
-        assert_eq!(timeout.poll(), Some(Err(Error::AbortedByHost))); // Error should be repeated.
+        assert_eq!(timeout.poll(), Some(Err(ErrorEvent::TimedOut.while_receiving())));
+        assert_eq!(timeout.poll(), Some(Err(ErrorEvent::Aborted.while_receiving())));
+        // Error should be repeated.
     }
 
     #[test]

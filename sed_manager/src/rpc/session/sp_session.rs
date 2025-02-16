@@ -1,7 +1,7 @@
 use std::sync::mpsc;
 use tokio::sync::oneshot;
 
-use crate::rpc::error::Error;
+use crate::rpc::error::{Error, ErrorEvent, ErrorEventExt};
 use crate::rpc::method::MethodCall;
 use crate::rpc::protocol::{Message, SessionIdentifier, Tracked};
 use crate::rpc::{MethodResult, PackagedMethod, Properties};
@@ -24,9 +24,9 @@ impl SPSession {
         let _ = self.sender.send(Message::Method { session: self.session, content });
         match rx.await {
             Ok(Ok(PackagedMethod::Result(result))) => Ok(result),
-            Ok(Ok(_)) => Err(Error::MethodResultExpected),
+            Ok(Ok(_)) => Err(ErrorEvent::MethodResultExpected.while_receiving()),
             Ok(Err(err)) => Err(err),
-            Err(_) => Err(Error::Closed),
+            Err(_) => Err(ErrorEvent::Closed.while_receiving()),
         }
     }
 
@@ -36,9 +36,9 @@ impl SPSession {
         let _ = self.sender.send(Message::Method { session: self.session, content });
         match rx.await {
             Ok(Ok(PackagedMethod::EndOfSession)) => Ok(()),
-            Ok(Ok(_)) => Err(Error::EOSExpected),
+            Ok(Ok(_)) => Err(ErrorEvent::EOSExpected.while_receiving()),
             Ok(Err(err)) => Err(err),
-            Err(_) => Err(Error::Closed),
+            Err(_) => Err(ErrorEvent::Closed.while_receiving()),
         }
     }
 }

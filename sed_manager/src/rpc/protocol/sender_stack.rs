@@ -2,6 +2,7 @@ use std::collections::{HashMap, VecDeque};
 
 use crate::messaging::com_id::{HandleComIdRequest, HandleComIdResponse};
 use crate::messaging::packet::{ComPacket, Packet};
+use crate::rpc::error::{ErrorEvent, ErrorEventExt as _};
 use crate::rpc::{Error, PackagedMethod, Properties};
 
 use super::packet_sender::PacketSender;
@@ -20,7 +21,8 @@ pub struct SenderStack {
 struct Bundler {
     com_id: u16,
     com_id_ext: u16,
-    properties: Properties,
+    #[allow(unused)]
+    properties: Properties, // Needed for packet limits, which is not implemented yet.
     buffer: VecDeque<Tracked<Packet, PacketResponse>>,
 }
 
@@ -55,7 +57,7 @@ impl SenderStack {
         if let Some(sender) = self.packet_senders.get_mut(&session) {
             sender.enqueue(method);
         } else {
-            method.close(Err(Error::Closed));
+            method.close(Err(ErrorEvent::Closed.while_sending()));
         }
     }
 
@@ -105,7 +107,7 @@ impl Bundler {
 impl Drop for SenderStack {
     fn drop(&mut self) {
         for tracked in std::mem::replace(&mut self.com_id_buffer, VecDeque::new()) {
-            tracked.close(Err(Error::AbortedByHost));
+            tracked.close(Err(ErrorEvent::Aborted.while_sending()));
         }
     }
 }

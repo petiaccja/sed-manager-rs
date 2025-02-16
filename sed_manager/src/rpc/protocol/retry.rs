@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 
-use crate::rpc::error::Error;
+use crate::rpc::error::{Error, ErrorEvent};
 
 pub struct Retry {
     start_time: Instant,
@@ -19,7 +19,7 @@ impl Retry {
     pub fn sleep(&mut self) -> Result<(), Error> {
         let current_time = Instant::now();
         if self.deadline <= current_time {
-            Err(Error::TimedOut)
+            Err(ErrorEvent::TimedOut.into())
         } else {
             sleep(self.sleep_duration);
             self.sleep_duration = std::cmp::min(self.sleep_duration, (self.deadline - self.start_time) / 7);

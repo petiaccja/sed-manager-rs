@@ -29,7 +29,7 @@ pub struct Token {
 }
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq, Clone)]
-pub enum TokenizeError {
+pub enum TokenStreamError {
     #[error("end of stream")]
     EndOfStream,
     #[error("end of tokens")]
@@ -84,8 +84,8 @@ impl TryFrom<u8> for Tag {
     }
 }
 
-impl From<TokenizeError> for SerializeError {
-    fn from(_: TokenizeError) -> Self {
+impl From<TokenStreamError> for SerializeError {
+    fn from(_: TokenStreamError) -> Self {
         SerializeError::field("tokens".into(), SerializeError::Unspecified)
     }
 }

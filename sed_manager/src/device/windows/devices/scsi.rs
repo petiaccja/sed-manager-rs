@@ -35,40 +35,6 @@ fn convert_direction(direction: SCSIPassthroughDirection) -> u8 {
     }
 }
 
-fn make_scsi_passthrough_structure<const CDB_LEN: usize>(
-    sense_length: u8,
-    sense_offset: u32,
-    command_descriptor_block: [u8; CDB_LEN],
-    direction: SCSIPassthroughDirection,
-    data: &mut [u8],
-) -> SCSI_PASS_THROUGH_DIRECT {
-    assert!(CDB_LEN < 16);
-
-    let mut extended_cbd = [0; 16];
-    extended_cbd[..command_descriptor_block.len()].copy_from_slice(&command_descriptor_block);
-
-    let direction = match direction {
-        SCSIPassthroughDirection::In => SCSI_IOCTL_DATA_IN,
-        SCSIPassthroughDirection::Out => SCSI_IOCTL_DATA_OUT,
-    };
-
-    SCSI_PASS_THROUGH_DIRECT {
-        Length: size_of::<SCSI_PASS_THROUGH_DIRECT>() as u16,
-        ScsiStatus: 0,
-        PathId: 0,
-        TargetId: 1,
-        Lun: 0,
-        CdbLength: 12,
-        SenseInfoLength: sense_length,
-        DataIn: direction,
-        DataTransferLength: data.len() as u32,
-        TimeOutValue: 2,
-        DataBuffer: data.as_mut_ptr() as *mut c_void,
-        SenseInfoOffset: sense_offset,
-        Cdb: extended_cbd,
-    }
-}
-
 pub fn ioctl_scsi_passthrough_direct<const CDB_LEN: usize>(
     device: HANDLE,
     data: &mut [u8],

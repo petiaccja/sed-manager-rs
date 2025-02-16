@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 mod com_id_session;
 mod data;
 mod device;

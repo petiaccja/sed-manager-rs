@@ -1,21 +1,11 @@
-use crate::messaging::types::AuthorityRef;
-use crate::messaging::types::CellBlock;
-use crate::messaging::types::List;
-use crate::messaging::types::NamedValue;
-use crate::messaging::types::ObjectReference;
-use crate::messaging::types::TableReference;
+use crate::messaging::types::{AuthorityRef, CellBlock, List, NamedValue, ObjectReference, TableReference};
 use crate::messaging::uid::UID;
-use crate::messaging::value::Bytes;
-use crate::messaging::value::Value;
-use crate::rpc::args::DecodeArgs;
-use crate::rpc::args::EncodeArgs;
-use crate::rpc::Error as RPCError;
-use crate::rpc::MethodCall;
-use crate::rpc::MethodResult;
-use crate::rpc::MethodStatus;
-use crate::rpc::SPSession;
-use crate::specification::invoker;
-use crate::specification::method;
+use crate::messaging::value::{Bytes, Value};
+use crate::rpc::args::{DecodeArgs, EncodeArgs};
+use crate::rpc::{Error as RPCError, ErrorEvent as RPCErrorEvent};
+use crate::rpc::{ErrorEventExt as _, SPSession};
+use crate::rpc::{MethodCall, MethodResult, MethodStatus};
+use crate::specification::{invoker, method};
 
 pub struct Session {
     sp_session: SPSession,
@@ -41,7 +31,7 @@ impl Session {
         let results = get_results(self.sp_session.call(call).await?)?;
         // I'll assume the result is encoded without the typeOr{} NVP.
         // Not clear in spec, no official examples.
-        let (success,): (_,) = results.decode_args()?;
+        let (success,): (_,) = results.decode_args().map_err(|err: MethodStatus| err.while_receiving())?;
         Ok(success)
     }
 
@@ -54,15 +44,16 @@ impl Session {
         };
         let results = get_results(self.sp_session.call(call).await?)?;
         // According to the TCG examples, result is encoded without typeOr{} name-value pair.
-        let (mut column_values,): (Vec<Value>,) = results.decode_args()?;
+        let (mut column_values,): (Vec<Value>,) =
+            results.decode_args().map_err(|err: MethodStatus| err.while_receiving())?;
         if let Some(value) = column_values.pop() {
             if let Ok(nvp) = NamedValue::<u64, T>::try_from(value) {
                 Ok(nvp.value)
             } else {
-                Err(RPCError::InvalidColumnType)
+                Err(RPCErrorEvent::InvalidColumnType.while_receiving())
             }
         } else {
-            Err(MethodStatus::NotAuthorized.into())
+            Err(MethodStatus::NotAuthorized.while_receiving())
         }
     }
 
@@ -92,7 +83,7 @@ impl Session {
             status: MethodStatus::Success,
         };
         let results = get_results(self.sp_session.call(call).await?)?;
-        let (objects,): (_,) = results.decode_args()?;
+        let (objects,): (_,) = results.decode_args().map_err(|err: MethodStatus| err.while_receiving())?;
         Ok(objects)
     }
 
@@ -125,6 +116,6 @@ fn get_results(method_result: MethodResult) -> Result<Vec<Value>, RPCError> {
     if method_result.status == MethodStatus::Success {
         Ok(method_result.results)
     } else {
-        Err(method_result.status.into())
+        Err(method_result.status.while_receiving())
     }
 }

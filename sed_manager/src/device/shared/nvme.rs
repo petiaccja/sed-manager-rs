@@ -5,7 +5,8 @@ use crate::serialization::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Opcode {
-    IdentifyController = 0x06,
+    #[allow(unused)]
+    IdentifyController = 0x06, // Not needed for Windows due to specific IOCTL.
     SecuritySend = 0x81,
     SecurityReceive = 0x82,
 }

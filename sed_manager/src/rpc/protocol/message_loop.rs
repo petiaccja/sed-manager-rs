@@ -2,13 +2,12 @@ use std::sync::mpsc::TryRecvError;
 use std::sync::Arc;
 use std::time::Duration;
 
-use tokio::sync::oneshot;
-
 use crate::device::Device;
 use crate::messaging::com_id::{
     HandleComIdRequest, HandleComIdResponse, HANDLE_COM_ID_PROTOCOL, HANDLE_COM_ID_RESPONSE_LEN,
 };
 use crate::messaging::packet::{ComPacket, PACKETIZED_PROTOCOL};
+use crate::rpc::error::ErrorEventExt;
 use crate::rpc::{Error, PackagedMethod, Properties};
 use crate::serialization::{DeserializeBinary, SerializeBinary};
 
@@ -19,8 +18,6 @@ use super::tracked::Tracked;
 
 type PacketResponse = Result<PackagedMethod, Error>;
 type ComIdResponse = Result<HandleComIdResponse, Error>;
-type PacketPromise = oneshot::Sender<PacketResponse>;
-type ComIdPromise = oneshot::Sender<ComIdResponse>;
 
 pub enum Message {
     Method { session: SessionIdentifier, content: Tracked<PackagedMethod, PacketResponse> },
@@ -109,7 +106,7 @@ impl MessageLoop {
         com_packet: ComPacket,
         promise_groups: Vec<Tracked<SessionIdentifier, Result<PackagedMethod, Error>>>,
     ) -> Result<(), Error> {
-        let data = com_packet.to_bytes().map_err(|err| Error::SerializationFailed(err))?;
+        let data = com_packet.to_bytes().map_err(|err| err.while_sending())?;
         let result = self.device.security_send(PACKETIZED_PROTOCOL, self.stack.com_id().to_be_bytes(), &data);
         match result {
             Ok(_) => {
@@ -122,16 +119,16 @@ impl MessageLoop {
             }
             Err(err) => {
                 for tracked in promise_groups {
-                    tracked.close(Err(Error::SecuritySendFailed(err.clone())));
+                    tracked.close(Err(err.clone().while_sending()));
                 }
-                Err(Error::SecuritySendFailed(err))
+                Err(err.while_sending())
             }
         }
     }
 
     fn send_com_id(&mut self, request: Tracked<HandleComIdRequest, ComIdResponse>) -> Result<(), Error> {
         let Tracked { item: request, promises } = request;
-        let data = request.to_bytes().map_err(|err| Error::SerializationFailed(err))?;
+        let data = request.to_bytes().map_err(|err| err.while_sending())?;
         let result = self.device.security_send(HANDLE_COM_ID_PROTOCOL, self.stack.com_id().to_be_bytes(), &data);
         match result {
             Ok(_) => {
@@ -141,8 +138,8 @@ impl MessageLoop {
                 Ok(())
             }
             Err(err) => {
-                Tracked { item: (), promises }.close(Err(Error::SecuritySendFailed(err.clone())));
-                Err(Error::SecuritySendFailed(err.clone()))
+                Tracked { item: (), promises }.close(Err(err.clone().while_sending()));
+                Err(err.while_sending())
             }
         }
     }
@@ -159,7 +156,7 @@ impl MessageLoop {
             if com_packet.outstanding_data != 0 {
                 match retry.sleep() {
                     Ok(_) => (),
-                    Err(err) => break Err(err),
+                    Err(err) => break Err(err.while_receiving()),
                 }
             } else {
                 break Ok(com_packet);
@@ -172,8 +169,8 @@ impl MessageLoop {
         let data = self
             .device
             .security_recv(PACKETIZED_PROTOCOL, protocol_specific, transfer_len)
-            .map_err(|err| Error::SecurityReceiveFailed(err))?;
-        ComPacket::from_bytes(data).map_err(|err| Error::SerializationFailed(err))
+            .map_err(|err| err.while_receiving())?;
+        ComPacket::from_bytes(data).map_err(|err| err.while_receiving())
     }
 
     fn optimal_transfer_len(&self, min_transfer: u32, outstanding_data: u32) -> usize {
@@ -190,12 +187,12 @@ impl MessageLoop {
             let data = self
                 .device
                 .security_recv(HANDLE_COM_ID_PROTOCOL, protocol_specific, transfer_len)
-                .map_err(|err| Error::SecurityReceiveFailed(err))?;
-            let response = HandleComIdResponse::from_bytes(data).map_err(|err| Error::SerializationFailed(err))?;
+                .map_err(|err| err.while_receiving())?;
+            let response = HandleComIdResponse::from_bytes(data).map_err(|err| err.while_receiving())?;
             if response.payload.is_empty() {
                 match retry.sleep() {
                     Ok(_) => (),
-                    Err(err) => break Err(err),
+                    Err(err) => break Err(err.while_receiving()),
                 }
             } else {
                 break Ok(response);

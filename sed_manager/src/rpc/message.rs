@@ -1,4 +1,4 @@
-use crate::messaging::token::{Tag, Token, TokenizeError};
+use crate::messaging::token::{Tag, Token, TokenStreamError};
 use crate::messaging::value::Command;
 use crate::serialization::{Deserialize, InputStream, ItemRead, OutputStream, Serialize};
 
@@ -12,7 +12,7 @@ pub enum PackagedMethod {
 }
 
 impl Serialize<Token> for PackagedMethod {
-    type Error = TokenizeError;
+    type Error = TokenStreamError;
     fn serialize(&self, stream: &mut OutputStream<Token>) -> Result<(), Self::Error> {
         match self {
             PackagedMethod::Call(method_call) => method_call.serialize(stream),
@@ -23,10 +23,10 @@ impl Serialize<Token> for PackagedMethod {
 }
 
 impl Deserialize<Token> for PackagedMethod {
-    type Error = TokenizeError;
+    type Error = TokenStreamError;
     fn deserialize(stream: &mut InputStream<Token>) -> Result<Self, Self::Error> {
         let Ok(first) = stream.peek_one() else {
-            return Err(TokenizeError::EndOfStream);
+            return Err(TokenStreamError::EndOfStream);
         };
         match first.tag {
             Tag::Call => Ok(PackagedMethod::Call(MethodCall::deserialize(stream)?)),
@@ -35,7 +35,7 @@ impl Deserialize<Token> for PackagedMethod {
                 let _ = stream.read_one();
                 Ok(PackagedMethod::EndOfSession)
             }
-            _ => Err(TokenizeError::UnexpectedTag),
+            _ => Err(TokenStreamError::UnexpectedTag),
         }
     }
 }

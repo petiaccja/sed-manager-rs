@@ -1,7 +1,7 @@
 use std::sync::mpsc;
 use tokio::sync::{oneshot, Mutex};
 
-use crate::rpc::error::Error;
+use crate::rpc::error::{Error, ErrorEvent, ErrorEventExt};
 use crate::rpc::method::MethodCall;
 use crate::rpc::protocol::{Message, SessionIdentifier, Tracked};
 use crate::rpc::{PackagedMethod, Properties};
@@ -26,9 +26,9 @@ impl ControlSession {
         let _ = self.sender.send(Message::Method { session: CONTROL_SESSION_ID, content });
         match rx.await {
             Ok(Ok(PackagedMethod::Call(result))) => Ok(result),
-            Ok(Ok(_)) => Err(Error::MethodCallExpected),
+            Ok(Ok(_)) => Err(ErrorEvent::MethodCallExpected.while_receiving()),
             Ok(Err(err)) => Err(err),
-            Err(_) => Err(Error::Closed),
+            Err(_) => Err(ErrorEvent::Closed.while_receiving()),
         }
     }
 }

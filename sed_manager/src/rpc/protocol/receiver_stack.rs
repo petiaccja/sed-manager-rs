@@ -4,6 +4,7 @@ use tokio::sync::oneshot;
 
 use crate::messaging::com_id::HandleComIdResponse;
 use crate::messaging::packet::ComPacket;
+use crate::rpc::error::{ErrorEvent, ErrorEventExt as _};
 use crate::rpc::{Error, PackagedMethod, Properties};
 
 use super::packet_receiver::PacketReceiver;
@@ -96,7 +97,7 @@ impl ReceiverStack {
 impl Drop for ReceiverStack {
     fn drop(&mut self) {
         for promise in std::mem::replace(&mut self.com_id_promises, VecDeque::new()) {
-            let _ = promise.send(Err(Error::AbortedByHost));
+            let _ = promise.send(Err(ErrorEvent::Aborted.while_receiving()));
         }
     }
 }

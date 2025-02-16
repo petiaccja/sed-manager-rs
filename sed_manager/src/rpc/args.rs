@@ -240,8 +240,6 @@ impl FromEncodedArgs for () {
 
 #[cfg(test)]
 mod tests {
-    use crate::rpc::Error;
-
     use super::*;
 
     #[test]
@@ -323,7 +321,7 @@ mod tests {
     }
 
     #[test]
-    fn decode_args_mixed() -> Result<(), Error> {
+    fn decode_args_mixed() -> Result<(), MethodStatus> {
         let args = vec![
             Value::from(0_u32),
             Value::from(1_u32),

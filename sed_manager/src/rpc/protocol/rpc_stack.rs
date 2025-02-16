@@ -123,6 +123,7 @@ mod tests {
             packet::{Packet, SubPacket, SubPacketKind},
             token::Tag,
         },
+        rpc::error::{ErrorEvent, ErrorEventExt},
         serialization::vec_with_len::VecWithLen,
     };
 
@@ -208,7 +209,7 @@ mod tests {
         let (tx, mut rx) = oneshot::channel();
         stack.send_packet(session, Tracked { item: request.clone(), promises: vec![tx] });
         assert!(stack.poll_packet().is_none());
-        assert_eq!(rx.try_recv(), Ok(Err(Error::Closed)));
+        assert_eq!(rx.try_recv(), Ok(Err(ErrorEvent::Closed.while_sending())));
     }
 
     #[test]

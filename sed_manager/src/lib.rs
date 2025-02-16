@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 pub mod device;
 pub mod fake_device;
 pub mod messaging;
@@ -8,7 +6,6 @@ pub mod serialization;
 pub mod specification;
 pub mod tper;
 
-mod sync;
 mod variadics;
 mod with_copy;
 

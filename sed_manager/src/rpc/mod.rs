@@ -6,7 +6,7 @@ mod properties;
 mod protocol;
 mod session;
 
-pub use error::Error;
+pub use error::{Error, ErrorAction, ErrorEvent, ErrorEventExt};
 pub use message::PackagedMethod;
 pub use method::{MethodCall, MethodResult, MethodStatus};
 pub use properties::Properties;

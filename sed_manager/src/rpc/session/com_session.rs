@@ -2,7 +2,7 @@ use std::sync::mpsc;
 use tokio::sync::{oneshot, Mutex};
 
 use crate::messaging::com_id::{HandleComIdRequest, HandleComIdResponse};
-use crate::rpc::error::Error;
+use crate::rpc::error::{Error, ErrorEvent, ErrorEventExt as _};
 use crate::rpc::protocol::{Message, Tracked};
 
 pub struct ComSession {
@@ -21,7 +21,7 @@ impl ComSession {
         let _ = self.sender.send(Message::HandleComId { content: Tracked { item: request, promises: vec![tx] } });
         match rx.await {
             Ok(result) => result,
-            Err(_) => Err(Error::Closed),
+            Err(_) => Err(ErrorEvent::Closed.while_receiving()),
         }
     }
 }

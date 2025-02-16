@@ -3,6 +3,7 @@ use tokio::sync::oneshot;
 
 use crate::messaging::packet::{Packet, SubPacketKind};
 use crate::messaging::token::{DeserializeTokens, Tag, Token};
+use crate::rpc::error::{ErrorEvent, ErrorEventExt};
 use crate::rpc::{Error, PackagedMethod, Properties};
 use crate::serialization::vec_without_len::VecWithoutLen;
 use crate::serialization::DeserializeBinary;
@@ -119,7 +120,7 @@ impl Deserializer {
                 .map_while(|maybe_tokens| match maybe_tokens {
                     Ok(tokens) => Some(tokens.into_vec()),
                     Err(err) => {
-                        self.error.replace(Error::SerializationFailed(err));
+                        self.error.replace(err.while_receiving());
                         None
                     }
                 })
@@ -183,14 +184,14 @@ impl Splitter {
 
     fn commit_method(&mut self) {
         let maybe_pm = PackagedMethod::from_tokens(std::mem::replace(&mut self.method_tokens, Vec::new()));
-        self.method_buffer.push_back(maybe_pm.map_err(|err| Error::TokenizationFailed(err)));
+        self.method_buffer.push_back(maybe_pm.map_err(|err| err.while_receiving()));
     }
 }
 
 impl Drop for PacketReceiver {
     fn drop(&mut self) {
         for promise in std::mem::replace(&mut self.promise_buffer, VecDeque::new()) {
-            let _ = promise.send(Err(Error::AbortedByHost));
+            let _ = promise.send(Err(ErrorEvent::Aborted.while_receiving()));
         }
     }
 }
@@ -360,11 +361,11 @@ mod tests {
         let (tx, _rx) = oneshot::channel();
         receiver.enqueue_promise(tx);
         std::thread::sleep(Duration::from_millis(50));
-        assert!(receiver.poll().is_some_and(|result| result.1 == Err(Error::TimedOut)));
+        assert!(receiver.poll().is_some_and(|result| result.1 == Err(ErrorEvent::TimedOut.while_receiving())));
         receiver.enqueue_packet(packet);
         assert!(receiver.poll().is_none());
         let (tx, _rx) = oneshot::channel();
         receiver.enqueue_promise(tx);
-        assert!(receiver.poll().is_some_and(|result| result.1 == Err(Error::AbortedByHost)));
+        assert!(receiver.poll().is_some_and(|result| result.1 == Err(ErrorEvent::Aborted.while_receiving())));
     }
 }
