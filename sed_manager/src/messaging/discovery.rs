@@ -13,6 +13,8 @@ pub enum FeatureCode {
     Locking = 0x0002,
     Geometry = 0x0003,
     DataRemoval = 0x0404,
+    BlockSIDAuth = 0x0402,
+    AdditionalDataStoreTables = 0x0202,
     Enterprise = 0x0100,
     OpalV1 = 0x0200,
     OpalV2 = 0x0203,
@@ -145,6 +147,30 @@ pub struct DataRemovalDescriptor {
     #[layout(offset = 2)]
     pub supported_mechanism: DataRemovalMechanism,
     pub removal_time: DataRemovalTime,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[layout(round = 12)]
+pub struct BlockSIDAuthDescriptor {
+    #[layout(offset = 0, bits = 4..=4)]
+    pub locking_sp_frozen: bool,
+    #[layout(offset = 0, bits = 5..=5)]
+    pub locking_sp_freeze_supported: bool,
+    #[layout(offset = 0, bits = 6..=6)]
+    pub sid_authentication_blocked: bool,
+    #[layout(offset = 0, bits = 7..=7)]
+    pub sid_pin_same_as_msid: bool,
+    #[layout(offset = 1, bits = 7..=7)]
+    pub hw_reset_unblocks: bool,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[layout(round = 12)]
+pub struct AdditionalDataStoreTablesDescriptor {
+    #[layout(offset = 2)]
+    pub max_num_tables: u16,
+    pub max_total_size_of_tables: u32,
+    pub table_size_alignment: u32,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -288,6 +314,8 @@ pub enum FeatureDescriptor {
     Locking(LockingDescriptor),
     Geometry(GeometryDescriptor),
     DataRemoval(DataRemovalDescriptor),
+    BlockSIDAuth(BlockSIDAuthDescriptor),
+    AdditionalDataStoreTables(AdditionalDataStoreTablesDescriptor),
     Enterprise(EnterpriseDescriptor),
     OpalV1(OpalV1Descriptor),
     OpalV2(OpalV2Descriptor),
@@ -366,6 +394,8 @@ impl_feature!(TPerDescriptor, FeatureCode::TPer, 1);
 impl_feature!(LockingDescriptor, FeatureCode::Locking, 1);
 impl_feature!(GeometryDescriptor, FeatureCode::Geometry, 1);
 impl_feature!(DataRemovalDescriptor, FeatureCode::DataRemoval, 1);
+impl_feature!(BlockSIDAuthDescriptor, FeatureCode::BlockSIDAuth, 1);
+impl_feature!(AdditionalDataStoreTablesDescriptor, FeatureCode::AdditionalDataStoreTables, 1);
 impl_feature!(EnterpriseDescriptor, FeatureCode::Enterprise, 1);
 impl_feature!(KeyPerIODescriptor, FeatureCode::KeyPerIO, 1);
 impl_feature!(OpalV1Descriptor, FeatureCode::OpalV1, 1);
@@ -407,6 +437,8 @@ impl Feature for FeatureDescriptor {
             FeatureDescriptor::Locking(desc) => desc.feature_code(),
             FeatureDescriptor::Geometry(desc) => desc.feature_code(),
             FeatureDescriptor::DataRemoval(desc) => desc.feature_code(),
+            FeatureDescriptor::BlockSIDAuth(desc) => desc.feature_code(),
+            FeatureDescriptor::AdditionalDataStoreTables(desc) => desc.feature_code(),
             FeatureDescriptor::Enterprise(desc) => desc.feature_code(),
             FeatureDescriptor::OpalV1(desc) => desc.feature_code(),
             FeatureDescriptor::OpalV2(desc) => desc.feature_code(),
@@ -424,6 +456,8 @@ impl Feature for FeatureDescriptor {
             FeatureDescriptor::Locking(desc) => desc.version(),
             FeatureDescriptor::Geometry(desc) => desc.version(),
             FeatureDescriptor::DataRemoval(desc) => desc.version(),
+            FeatureDescriptor::BlockSIDAuth(desc) => desc.version(),
+            FeatureDescriptor::AdditionalDataStoreTables(desc) => desc.version(),
             FeatureDescriptor::Enterprise(desc) => desc.version(),
             FeatureDescriptor::OpalV1(desc) => desc.version(),
             FeatureDescriptor::OpalV2(desc) => desc.version(),
@@ -490,6 +524,8 @@ impl Serialize<u8> for FeatureDescriptor {
             FeatureDescriptor::Locking(desc) => desc.serialize(&mut raw_stream),
             FeatureDescriptor::Geometry(desc) => desc.serialize(&mut raw_stream),
             FeatureDescriptor::DataRemoval(desc) => desc.serialize(&mut raw_stream),
+            FeatureDescriptor::BlockSIDAuth(desc) => desc.serialize(&mut raw_stream),
+            FeatureDescriptor::AdditionalDataStoreTables(desc) => desc.serialize(&mut raw_stream),
             FeatureDescriptor::OpalV2(desc) => desc.serialize(&mut raw_stream),
             FeatureDescriptor::Enterprise(desc) => desc.serialize(&mut raw_stream),
             FeatureDescriptor::OpalV1(desc) => desc.serialize(&mut raw_stream),
@@ -523,6 +559,12 @@ impl Deserialize<u8> for FeatureDescriptor {
             FeatureCode::DataRemoval => {
                 FeatureDescriptor::DataRemoval(DataRemovalDescriptor::deserialize(&mut raw_stream)?)
             }
+            FeatureCode::BlockSIDAuth => {
+                FeatureDescriptor::BlockSIDAuth(BlockSIDAuthDescriptor::deserialize(&mut raw_stream)?)
+            }
+            FeatureCode::AdditionalDataStoreTables => FeatureDescriptor::AdditionalDataStoreTables(
+                AdditionalDataStoreTablesDescriptor::deserialize(&mut raw_stream)?,
+            ),
             FeatureCode::OpalV2 => FeatureDescriptor::OpalV2(OpalV2Descriptor::deserialize(&mut raw_stream)?),
             FeatureCode::Enterprise => {
                 FeatureDescriptor::Enterprise(EnterpriseDescriptor::deserialize(&mut raw_stream)?)
@@ -533,7 +575,7 @@ impl Deserialize<u8> for FeatureDescriptor {
             FeatureCode::PyriteV2 => FeatureDescriptor::PyriteV2(PyriteV2Descriptor::deserialize(&mut raw_stream)?),
             FeatureCode::Ruby => FeatureDescriptor::Ruby(RubyDescriptor::deserialize(&mut raw_stream)?),
             FeatureCode::KeyPerIO => FeatureDescriptor::KeyPerIO(KeyPerIODescriptor::deserialize(&mut raw_stream)?),
-            _ => FeatureDescriptor::Unrecognized(UnrecognizedDescriptor {
+            FeatureCode::Unrecognized => FeatureDescriptor::Unrecognized(UnrecognizedDescriptor {
                 feature_code: raw_feature_code.unwrap_or(FeatureCode::Unrecognized as u16),
                 version: raw.version,
                 length: len as u8,
@@ -597,6 +639,8 @@ impl std::fmt::Display for FeatureCode {
             FeatureCode::Locking => write!(f, "Locking"),
             FeatureCode::Geometry => write!(f, "Geometry"),
             FeatureCode::DataRemoval => write!(f, "Data removal"),
+            FeatureCode::BlockSIDAuth => write!(f, "Block SID authentication"),
+            FeatureCode::AdditionalDataStoreTables => write!(f, "Additional DataStore tables"),
             FeatureCode::Enterprise => write!(f, "Enterprise"),
             FeatureCode::OpalV1 => write!(f, "Opal 1.0"),
             FeatureCode::OpalV2 => write!(f, "Opal 2.0"),
