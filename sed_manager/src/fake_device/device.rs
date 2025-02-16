@@ -33,6 +33,7 @@ const CAPABILITIES: Properties = Properties {
     buffer_mgmt: false,
     max_retries: 3,
     trans_timeout: Duration::from_secs(10),
+    def_trans_timeout: Duration::from_secs(10),
 };
 
 pub struct FakeDevice {

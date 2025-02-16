@@ -1,34 +1,35 @@
+use std::ops::{Deref, DerefMut};
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::{Arc, OnceLock};
-use tokio::sync::OnceCell as AsyncOnceCell;
+use std::sync::Arc;
+use std::time::Duration;
+use tokio::sync::Mutex;
 
 use crate::device::Device;
-use crate::messaging::com_id::{
-    ComIdState, HandleComIdRequest, StackResetResponsePayload, StackResetStatus, VerifyComIdValidResponsePayload,
-};
+use crate::messaging::com_id::{ComIdState, StackResetStatus};
 use crate::messaging::discovery::{Discovery, FeatureDescriptor, UnrecognizedDescriptor};
-use crate::messaging::types::{List, MaxBytes32, NamedValue, SPRef};
-use crate::messaging::value::Bytes;
-use crate::rpc::args::{DecodeArgs, EncodeArgs};
+use crate::messaging::types::SPRef;
 use crate::rpc::{
-    Error as RPCError, ErrorEvent as RPCErrorEvent, ErrorEventExt, MethodCall, MethodStatus, Properties, RPCSession,
+    Error as RPCError, ErrorEvent as RPCErrorEvent, ErrorEventExt, MessageSender, MessageStack, Properties,
+    SessionIdentifier, ThreadedMessageLoop,
 };
-use crate::serialization::{Deserialize, DeserializeBinary, InputStream};
-use crate::specification::{invoker, method};
+use crate::serialization::DeserializeBinary;
 
-use super::session::Session;
+use super::com_session::ComSession;
+use super::control_session::ControlSession;
+use super::sp_session::SPSession;
 
 pub struct TPer {
     device: Arc<dyn Device>,
-    cached_discovery: OnceLock<Discovery>,
-    cached_stack: AsyncOnceCell<Stack>,
-    next_hsn: AtomicU32,
-}
-
-struct Stack {
     com_id: u16,
     com_id_ext: u16,
-    rpc_session: RPCSession,
+    next_hsn: AtomicU32,
+    capabilities: Properties,
+    properties: Mutex<Option<Properties>>,
+    message_sender: MessageSender,
+    com_session: ComSession,
+    control_session: ControlSession,
+    #[allow(unused)]
+    message_loop: ThreadedMessageLoop, // Drop last! Needs all the senders to be dropped first for thread join.
 }
 
 pub fn discover(device: &dyn Device) -> Result<Discovery, RPCError> {
@@ -46,144 +47,116 @@ pub fn discover(device: &dyn Device) -> Result<Discovery, RPCError> {
     Ok(Discovery { descriptors: descs.into() })
 }
 
+pub fn default_com_id(discovery: &Discovery) -> Option<(u16, u16)> {
+    discovery
+        .descriptors
+        .iter()
+        .find_map(|desc| desc.security_subsystem_class())
+        .map(|ssc| (ssc.base_com_id(), 0))
+}
+
 impl TPer {
-    pub fn new(device: Arc<dyn Device>) -> TPer {
-        TPer {
-            device: device.into(),
-            cached_discovery: OnceLock::new(),
-            cached_stack: AsyncOnceCell::new(),
+    pub fn new(device: Arc<dyn Device>, com_id: u16, com_id_ext: u16) -> Self {
+        let message_stack = MessageStack::new(com_id, com_id_ext);
+        let capabilities = message_stack.capabilities();
+        let (message_loop, message_sender) = ThreadedMessageLoop::new(device.clone(), message_stack);
+        Self {
+            device,
+            com_id,
+            com_id_ext,
             next_hsn: 1.into(),
+            capabilities,
+            properties: None.into(),
+            message_loop,
+            message_sender: message_sender.clone(),
+            com_session: ComSession::new(message_sender.clone()),
+            control_session: ControlSession::new(message_sender.clone()),
         }
     }
 
-    pub fn discovery(&self) -> Result<&Discovery, RPCError> {
-        // - The device MAY allow level 0 discovery at any point in time.
-        // - The data MUST either be truncated or padded by the device if the transfer length is not exact.
-        match self.cached_discovery.get() {
-            Some(discovery) => Ok(discovery),
-            None => {
-                let discovery = discover(self.device.as_ref())?;
-                // Performance problem:
-                // The above code and IF-RECV may be invoked concurrently on multiple threads.
-                // This will work correctly, but may be wasteful with performance.
-                // The solution is to use `get_or_try_init` which is as of yet only nightly.
-                Ok(self.cached_discovery.get_or_init(|| discovery))
-            }
-        }
-    }
-
-    async fn stack(&self) -> Result<&Stack, RPCError> {
-        self.cached_stack
-            .get_or_try_init(|| async {
-                let discovery = self.discovery()?;
-                let ssc = discovery.descriptors.iter().find_map(|desc| desc.security_subsystem_class());
-                let maybe_com_id = ssc.map(|ssc| ssc.base_com_id());
-                let Some(com_id) = maybe_com_id else {
-                    return Err(RPCErrorEvent::NotSupported.as_error());
-                };
-                let com_id_ext = 0x0000;
-                let main_session = RPCSession::new(self.device.clone(), com_id, com_id_ext, Properties::default());
-
-                Ok(Stack { com_id, com_id_ext, rpc_session: main_session })
-            })
-            .await
-    }
-
-    pub async fn com_id(&self) -> Result<u16, RPCError> {
-        self.stack().await.map(|stack| stack.com_id)
-    }
-
-    pub async fn com_id_ext(&self) -> Result<u16, RPCError> {
-        self.stack().await.map(|stack| stack.com_id_ext)
-    }
-
-    pub async fn active_properties(&self) -> Properties {
-        if let Ok(stack) = self.stack().await {
-            stack.rpc_session.get_properties().await
+    pub fn new_on_default_com_id(device: Arc<dyn Device>) -> Result<Self, RPCError> {
+        let discovery = discover(&*device)?;
+        if let Some((com_id, com_id_ext)) = default_com_id(&discovery) {
+            Ok(Self::new(device, com_id, com_id_ext))
         } else {
-            Properties::ASSUMED
+            Err(RPCErrorEvent::NotSupported.as_error())
         }
+    }
+
+    pub fn com_id(&self) -> u16 {
+        self.com_id
+    }
+
+    pub fn com_id_ext(&self) -> u16 {
+        self.com_id_ext
+    }
+
+    pub fn capabilities(&self) -> &Properties {
+        &self.capabilities
+    }
+
+    pub fn discover(&self) -> Result<Discovery, RPCError> {
+        discover(self.device.as_ref())
+    }
+
+    pub async fn current_properties(&self) -> Properties {
+        let mut maybe_properties = self.properties.lock().await;
+        if let Some(properties) = maybe_properties.deref() {
+            properties.clone()
+        } else {
+            self.change_properties_with_lock(maybe_properties.deref_mut(), &self.capabilities).await
+        }
+    }
+
+    pub async fn change_properties(&self, properties: &Properties) -> Properties {
+        // The caller might give something that exceeds our own capabilities.
+        let properties = Properties::common(properties, &self.capabilities);
+        let mut output = self.properties.lock().await;
+        self.change_properties_with_lock(output.deref_mut(), &properties).await
+    }
+
+    async fn change_properties_with_lock(&self, output: &mut Option<Properties>, requested: &Properties) -> Properties {
+        let properties = match self.control_session.properties(Some(requested.to_list())).await {
+            Ok((tper_capabilities, tper_properties)) => {
+                let tper_properties = Properties::from_list(&tper_properties.unwrap_or(tper_capabilities));
+                Properties::common(&self.capabilities, &tper_properties)
+            }
+            Err(_) => Properties::ASSUMED,
+        };
+        output.replace(properties.clone());
+        properties
+    }
+
+    pub async fn start_session(&self, sp: SPRef) -> Result<SPSession, RPCError> {
+        let hsn = self.next_hsn.fetch_add(1, Ordering::Relaxed);
+        let properties = self.current_properties().await;
+        let sync_session = self.control_session.start_session(sp, hsn).await?;
+        if sync_session.hsn != hsn {
+            return Err(RPCErrorEvent::Unspecified.as_error());
+        };
+        let trans_timeout = sync_session
+            .trans_timeout
+            .map(|ms| Duration::from_millis(ms as u64))
+            .unwrap_or(properties.def_trans_timeout);
+        let properties = Properties { trans_timeout, ..properties };
+        Ok(SPSession::new(
+            SessionIdentifier { hsn, tsn: sync_session.tsn },
+            self.message_sender.clone(),
+            properties,
+        ))
     }
 
     pub async fn verify_com_id(&self, com_id: u16, com_id_ext: u16) -> Result<ComIdState, RPCError> {
-        let stack = self.stack().await?;
-        let com_id_session = stack.rpc_session.get_com_session().await;
-        let request = HandleComIdRequest::verify_com_id_valid(com_id, com_id_ext);
-        let response = com_id_session.handle_request(request).await?;
-        let mut stream = InputStream::from(response.payload.into_vec());
-        match VerifyComIdValidResponsePayload::deserialize(&mut stream) {
-            Ok(response) => Ok(response.com_id_state),
-            Err(err) => Err(err.while_receiving()),
-        }
+        self.com_session.verify_com_id(com_id, com_id_ext).await
     }
 
     pub async fn stack_reset(&self, com_id: u16, com_id_ext: u16) -> Result<StackResetStatus, RPCError> {
-        let stack = self.stack().await?;
-        let com_id_session = stack.rpc_session.get_com_session().await;
-        let request = HandleComIdRequest::stack_reset(com_id, com_id_ext);
-        let response = com_id_session.handle_request(request).await?;
-        let mut stream = InputStream::from(response.payload.into_vec());
-        match StackResetResponsePayload::deserialize(&mut stream) {
-            Ok(response) => Ok(response.stack_reset_status),
-            Err(err) => Err(err.while_receiving()),
+        let status = self.com_session.stack_reset(com_id, com_id_ext).await;
+        let success = status.as_ref().is_ok_and(|status| status == &StackResetStatus::Success);
+        let same = (com_id, com_id_ext) == (self.com_id, self.com_id_ext);
+        if success && same {
+            let _ = self.properties.lock().await.take();
         }
-    }
-
-    pub async fn properties(
-        &self,
-        host_properties: Option<List<NamedValue<MaxBytes32, u32>>>,
-    ) -> Result<(List<NamedValue<MaxBytes32, u32>>, Option<List<NamedValue<MaxBytes32, u32>>>), RPCError> {
-        let host_struct = Properties::from_list(host_properties.as_ref().unwrap_or(&List::new()));
-        let call = MethodCall {
-            invoking_id: invoker::SMUID,
-            method_id: method::PROPERTIES,
-            args: (host_properties,).encode_args(),
-            status: MethodStatus::Success,
-        };
-        let stack = self.stack().await?;
-        let control_session = stack.rpc_session.get_control_session().await;
-        let result = control_session.call(call).await?;
-        if result.status != MethodStatus::Success {
-            return Err(result.status.while_receiving());
-        }
-        let (tper_properties, common_properties): (
-            List<NamedValue<MaxBytes32, u32>>,
-            Option<List<NamedValue<MaxBytes32, u32>>>,
-        ) = result.args.decode_args().map_err(|err: MethodStatus| err.while_receiving())?;
-        let tper_struct = Properties::from_list(&tper_properties);
-        let stack_properties = Properties::common(&host_struct, &tper_struct);
-        stack.rpc_session.set_properties(stack_properties).await;
-        Ok((tper_properties, common_properties))
-    }
-
-    pub async fn start_session(&self, sp: SPRef) -> Result<Session, RPCError> {
-        let hsn = self.next_hsn.fetch_add(1, Ordering::Relaxed);
-        let call = MethodCall {
-            invoking_id: invoker::SMUID,
-            method_id: method::START_SESSION,
-            args: (hsn, sp, 0u8).encode_args(),
-            status: MethodStatus::Success,
-        };
-        let stack = self.stack().await?;
-        let control_session = stack.rpc_session.get_control_session().await;
-        let result = control_session.call(call).await?;
-        if result.status != MethodStatus::Success {
-            return Err(result.status.while_receiving());
-        }
-        let (hsn_sync, tsn_sync, _, _, _, _, _, _): (
-            u32,
-            u32,
-            Option<Bytes>,
-            Option<Bytes>,
-            Option<Bytes>,
-            Option<u32>,
-            Option<u32>,
-            Option<Bytes>,
-        ) = result.args.decode_args().map_err(|err: MethodStatus| err.while_receiving())?;
-        if hsn_sync != hsn {
-            return Err(MethodStatus::InvalidParameter.while_receiving());
-        }
-        let sp_session = stack.rpc_session.open_sp_session(hsn, tsn_sync).await.expect("ensure HSN is unique");
-        Ok(Session::new(sp_session))
+        status
     }
 }

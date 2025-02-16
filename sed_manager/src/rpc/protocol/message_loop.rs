@@ -11,8 +11,8 @@ use crate::rpc::error::ErrorEventExt;
 use crate::rpc::{Error, PackagedMethod, Properties};
 use crate::serialization::{DeserializeBinary, SerializeBinary};
 
+use super::message_stack::MessageStack;
 use super::retry::Retry;
-use super::rpc_stack::RPCStack;
 use super::session_identifier::SessionIdentifier;
 use super::tracked::Tracked;
 
@@ -24,20 +24,43 @@ pub enum Message {
     HandleComId { content: Tracked<HandleComIdRequest, ComIdResponse> },
     StartSession { session: SessionIdentifier, properties: Properties },
     EndSession { session: SessionIdentifier },
+    AbortSession { session: SessionIdentifier },
 }
 
-pub struct MessageLoop {
-    messages: std::sync::mpsc::Receiver<Message>,
+pub type MessageSender = std::sync::mpsc::Sender<Message>;
+
+pub struct ThreadedMessageLoop {
+    thread: Option<std::thread::JoinHandle<()>>,
+}
+
+impl ThreadedMessageLoop {
+    pub fn new(device: Arc<dyn Device>, stack: MessageStack) -> (Self, MessageSender) {
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let thread = std::thread::spawn(|| {
+            LocalMessageLoop::new(device, stack, receiver, Properties::ASSUMED).run();
+        });
+        (Self { thread: Some(thread) }, sender)
+    }
+}
+
+impl Drop for ThreadedMessageLoop {
+    fn drop(&mut self) {
+        let _ = self.thread.take().expect("drop should be called only once").join();
+    }
+}
+
+struct LocalMessageLoop {
     device: Arc<dyn Device>,
-    stack: RPCStack,
+    stack: MessageStack,
+    messages: std::sync::mpsc::Receiver<Message>,
     properties: Properties,
 }
 
-impl MessageLoop {
+impl LocalMessageLoop {
     pub fn new(
-        messages: std::sync::mpsc::Receiver<Message>,
         device: Arc<dyn Device>,
-        stack: RPCStack,
+        stack: MessageStack,
+        messages: std::sync::mpsc::Receiver<Message>,
         properties: Properties,
     ) -> Self {
         Self { messages, device, stack, properties }
@@ -80,6 +103,7 @@ impl MessageLoop {
             Message::HandleComId { content } => self.stack.send_com_id(content),
             Message::StartSession { session, properties } => self.stack.insert_session(session, properties),
             Message::EndSession { session } => self.stack.remove_session(session),
+            Message::AbortSession { session } => self.stack.abort_session(session),
         }
     }
 
@@ -199,8 +223,4 @@ impl MessageLoop {
             }
         }
     }
-}
-
-pub fn message_loop(messages: std::sync::mpsc::Receiver<Message>, device: Arc<dyn Device>, stack: RPCStack) {
-    MessageLoop::new(messages, device, stack, Properties::ASSUMED).run();
 }

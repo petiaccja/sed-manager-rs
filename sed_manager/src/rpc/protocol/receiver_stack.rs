@@ -49,6 +49,10 @@ impl ReceiverStack {
         }
     }
 
+    pub fn abort_session(&mut self, session: SessionIdentifier) {
+        drop(self.packet_receivers.remove(&session));
+    }
+
     pub fn enqueue_packet_response(&mut self, com_packet: ComPacket) {
         for packet in com_packet.payload.into_vec() {
             let session = SessionIdentifier::from(&packet);

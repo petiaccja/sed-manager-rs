@@ -53,6 +53,10 @@ impl SenderStack {
         }
     }
 
+    pub fn abort_session(&mut self, session: SessionIdentifier) {
+        drop(self.packet_senders.remove(&session));
+    }
+
     pub fn enqueue_method(&mut self, session: SessionIdentifier, method: Tracked<PackagedMethod, PacketResponse>) {
         if let Some(sender) = self.packet_senders.get_mut(&session) {
             sender.enqueue(method);

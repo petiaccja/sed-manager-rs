@@ -1,15 +1,12 @@
-use std::sync::Arc;
-
 use sed_manager::fake_device::FakeDevice;
 use sed_manager::messaging::discovery::{LockingDescriptor, OpalV2Descriptor, OwnerPasswordState, TPerDescriptor};
 use sed_manager::rpc::Error as RPCError;
-use sed_manager::tper::TPer;
+use sed_manager::tper::discover;
 
 #[test]
 fn discovery_normal() -> Result<(), RPCError> {
     let device = FakeDevice::new();
-    let tper = TPer::new(Arc::new(device));
-    let discovery = tper.discovery()?;
+    let discovery = discover(&device)?;
 
     let Some(tper_desc) = discovery.get::<TPerDescriptor>() else {
         panic!("expected a TPer feature descriptor");

@@ -60,6 +60,28 @@ pub struct MethodResult {
     pub status: MethodStatus,
 }
 
+impl MethodCall {
+    pub fn new_success(invoking_id: UID, method_id: UID, args: Vec<Value>) -> Self {
+        Self { invoking_id, method_id, args, status: MethodStatus::Success }
+    }
+
+    pub fn take_args(self) -> Result<Vec<Value>, MethodStatus> {
+        match self.status {
+            MethodStatus::Success => Ok(self.args),
+            status => Err(status),
+        }
+    }
+}
+
+impl MethodResult {
+    pub fn take_results(self) -> Result<Vec<Value>, MethodStatus> {
+        match self.status {
+            MethodStatus::Success => Ok(self.results),
+            status => Err(status),
+        }
+    }
+}
+
 impl From<MethodStatus> for Value {
     fn from(value: MethodStatus) -> Self {
         Value::from(value as u8)

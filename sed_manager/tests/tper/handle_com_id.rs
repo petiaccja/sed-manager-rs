@@ -8,10 +8,9 @@ use sed_manager::tper::TPer;
 #[tokio::test]
 async fn verify_com_id_associated() -> Result<(), RPCError> {
     let device = FakeDevice::new();
-    let tper = TPer::new(Arc::new(device));
-    let com_id = tper.com_id().await?;
-    let com_id_ext = tper.com_id_ext().await?;
-
+    let tper = TPer::new_on_default_com_id(Arc::new(device))?;
+    let com_id = tper.com_id();
+    let com_id_ext = tper.com_id_ext();
     assert_eq!(tper.verify_com_id(com_id, com_id_ext).await?, ComIdState::Associated);
     Ok(())
 }
@@ -19,8 +18,7 @@ async fn verify_com_id_associated() -> Result<(), RPCError> {
 #[tokio::test]
 async fn verify_com_id_invalid() -> Result<(), RPCError> {
     let device = FakeDevice::new();
-    let tper = TPer::new(Arc::new(device));
-
+    let tper = TPer::new_on_default_com_id(Arc::new(device))?;
     assert_eq!(tper.verify_com_id(0x0600, 0x0000).await?, ComIdState::Invalid);
     Ok(())
 }

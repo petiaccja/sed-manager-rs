@@ -95,6 +95,12 @@ impl From<MethodStatus> for ErrorEvent {
     }
 }
 
+impl From<MethodStatus> for Error {
+    fn from(value: MethodStatus) -> Self {
+        value.as_error()
+    }
+}
+
 impl From<ErrorEvent> for Error {
     fn from(value: ErrorEvent) -> Self {
         value.as_error()

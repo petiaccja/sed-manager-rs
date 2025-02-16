@@ -19,6 +19,7 @@ pub struct Properties {
     pub buffer_mgmt: bool,
     pub max_retries: u32,
     pub trans_timeout: Duration,
+    pub def_trans_timeout: Duration,
 }
 
 impl Properties {
@@ -37,7 +38,8 @@ impl Properties {
         asynchronous: false,
         buffer_mgmt: false,
         max_retries: 3,
-        trans_timeout: Duration::from_secs(5),
+        trans_timeout: Duration::from_secs(10),
+        def_trans_timeout: Duration::from_secs(10),
     };
 
     pub fn to_list(&self) -> List<NamedValue<MaxBytes32, u32>> {
@@ -54,7 +56,7 @@ impl Properties {
             ("SequenceNumbers", self.seq_numbers as u32),
             ("AckNak", self.ack_nak as u32),
             ("Asynchronous", self.asynchronous as u32),
-            ("DefTransTimeout", self.trans_timeout.as_millis() as u32),
+            ("DefTransTimeout", self.def_trans_timeout.as_millis() as u32),
         ];
         list.into_iter()
             .map(|(name, value)| NamedValue { name: name.into(), value: value })
@@ -92,7 +94,8 @@ impl Properties {
             } else if name == "Asynchronous".as_bytes() {
                 parsed.asynchronous = value != 0;
             } else if name == "DefTransTimeout".as_bytes() {
-                parsed.trans_timeout = Duration::from_millis(value as u64)
+                parsed.trans_timeout = Duration::from_millis(value as u64);
+                parsed.def_trans_timeout = Duration::from_millis(value as u64);
             };
         }
         parsed
@@ -117,7 +120,8 @@ impl Properties {
             asynchronous: lhs.asynchronous && rhs.asynchronous,
             buffer_mgmt: lhs.buffer_mgmt && rhs.buffer_mgmt,
             max_retries: std::cmp::min(lhs.max_retries, rhs.max_retries),
-            trans_timeout: std::cmp::min(lhs.trans_timeout, rhs.trans_timeout),
+            trans_timeout: std::cmp::min(lhs.def_trans_timeout, rhs.def_trans_timeout), // Not a typo.
+            def_trans_timeout: std::cmp::min(lhs.def_trans_timeout, rhs.def_trans_timeout),
         }
     }
 }

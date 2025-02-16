@@ -1,9 +1,11 @@
 use std::collections::HashSet;
+use std::time::Duration;
+use std::usize;
 
 use tokio::sync::oneshot;
 
 use crate::messaging::com_id::{HandleComIdRequest, HandleComIdResponse};
-use crate::messaging::packet::ComPacket;
+use crate::messaging::packet::{ComPacket, COM_PACKET_HEADER_LEN, PACKET_HEADER_LEN, SUB_PACKET_HEADER_LEN};
 use crate::rpc::{Error, PackagedMethod, Properties};
 
 use super::receiver_stack::ReceiverStack;
@@ -16,7 +18,7 @@ type ComIdResponse = Result<HandleComIdResponse, Error>;
 type PacketPromise = oneshot::Sender<PacketResponse>;
 type ComIdPromise = oneshot::Sender<ComIdResponse>;
 
-pub struct RPCStack {
+pub struct MessageStack {
     com_id: u16,
     sender_stack: SenderStack,
     receiver_stack: ReceiverStack,
@@ -24,7 +26,7 @@ pub struct RPCStack {
     remove_receivers: HashSet<SessionIdentifier>,
 }
 
-impl RPCStack {
+impl MessageStack {
     pub fn new(com_id: u16, com_id_ext: u16) -> Self {
         let properties = Properties::ASSUMED;
         Self {
@@ -40,6 +42,28 @@ impl RPCStack {
         self.com_id
     }
 
+    pub fn capabilities(&self) -> Properties {
+        let max_transfer_len = 1048576;
+        Properties {
+            max_methods: usize::MAX,
+            max_subpackets: usize::MAX,
+            max_gross_packet_size: max_transfer_len - COM_PACKET_HEADER_LEN,
+            max_packets: usize::MAX,
+            max_gross_compacket_size: max_transfer_len,
+            max_gross_compacket_response_size: max_transfer_len,
+            max_ind_token_size: max_transfer_len - COM_PACKET_HEADER_LEN - PACKET_HEADER_LEN - SUB_PACKET_HEADER_LEN,
+            max_agg_token_size: max_transfer_len - COM_PACKET_HEADER_LEN - PACKET_HEADER_LEN - SUB_PACKET_HEADER_LEN,
+            continued_tokens: false,
+            seq_numbers: false,
+            ack_nak: false,
+            asynchronous: true,
+            buffer_mgmt: false,
+            max_retries: 3,
+            trans_timeout: Duration::from_secs(10),
+            def_trans_timeout: Duration::from_secs(10),
+        }
+    }
+
     pub fn insert_session(&mut self, session: SessionIdentifier, properties: Properties) {
         self.sender_stack.insert_session(session, properties.clone());
         self.receiver_stack.insert_session(session, properties);
@@ -47,6 +71,11 @@ impl RPCStack {
 
     pub fn remove_session(&mut self, session: SessionIdentifier) {
         self.remove_senders.insert(session);
+    }
+
+    pub fn abort_session(&mut self, session: SessionIdentifier) {
+        self.sender_stack.abort_session(session);
+        self.receiver_stack.abort_session(session);
     }
 
     pub fn send_packet(&mut self, session: SessionIdentifier, method: Tracked<PackagedMethod, PacketResponse>) {
@@ -131,7 +160,7 @@ mod tests {
 
     #[test]
     fn send_com_id() {
-        let mut stack = RPCStack::new(0x4000, 0);
+        let mut stack = MessageStack::new(0x4000, 0);
         let request = HandleComIdRequest::stack_reset(0x4000, 0);
         let (tx, _rx) = oneshot::channel();
         stack.send_com_id(Tracked { item: request.clone(), promises: vec![tx] });
@@ -146,7 +175,7 @@ mod tests {
 
     #[test]
     fn recv_com_id() {
-        let mut stack = RPCStack::new(0x4000, 0);
+        let mut stack = MessageStack::new(0x4000, 0);
         let response = HandleComIdResponse {
             com_id: 0x4000,
             com_id_ext: 0,
@@ -162,7 +191,7 @@ mod tests {
 
     #[test]
     fn send_packet() {
-        let mut stack = RPCStack::new(0x4000, 0);
+        let mut stack = MessageStack::new(0x4000, 0);
         let session = SessionIdentifier { hsn: 1, tsn: 1 };
         let request = PackagedMethod::EndOfSession;
         let (tx, _rx) = oneshot::channel();
@@ -180,7 +209,7 @@ mod tests {
 
     #[test]
     fn recv_packet() {
-        let mut stack = RPCStack::new(0x4000, 0);
+        let mut stack = MessageStack::new(0x4000, 0);
         let session = SessionIdentifier { hsn: 1, tsn: 1 };
         let com_packet = ComPacket {
             payload: vec![Packet {
@@ -203,7 +232,7 @@ mod tests {
 
     #[test]
     fn send_packet_invalid_session() {
-        let mut stack = RPCStack::new(0x4000, 0);
+        let mut stack = MessageStack::new(0x4000, 0);
         let session = SessionIdentifier { hsn: 1, tsn: 1 };
         let request = PackagedMethod::EndOfSession;
         let (tx, mut rx) = oneshot::channel();
@@ -214,7 +243,7 @@ mod tests {
 
     #[test]
     fn remove_session_empty() {
-        let mut stack = RPCStack::new(0x4000, 0);
+        let mut stack = MessageStack::new(0x4000, 0);
         let session = SessionIdentifier { hsn: 1, tsn: 1 };
         stack.insert_session(session, Properties::ASSUMED);
         stack.remove_session(session);
@@ -227,7 +256,7 @@ mod tests {
 
     #[test]
     fn remove_session_pending_send() {
-        let mut stack = RPCStack::new(0x4000, 0);
+        let mut stack = MessageStack::new(0x4000, 0);
         let session = SessionIdentifier { hsn: 1, tsn: 1 };
         stack.insert_session(session, Properties::ASSUMED);
         let (tx, mut rx) = oneshot::channel();
@@ -243,7 +272,7 @@ mod tests {
 
     #[test]
     fn remove_session_pending_receive() {
-        let mut stack = RPCStack::new(0x4000, 0);
+        let mut stack = MessageStack::new(0x4000, 0);
         let session = SessionIdentifier { hsn: 1, tsn: 1 };
         stack.insert_session(session, Properties::ASSUMED);
         let (tx, mut rx) = oneshot::channel();
