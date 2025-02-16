@@ -18,11 +18,11 @@ pub enum Error {
     InvalidArgument,
     #[error("the provided protocol or com ID for IF-SEND/IF-RECV was invalid")]
     InvalidProtocolOrComID,
-    #[error("the feature is not supported by the implementation")]
+    #[error("the feature is not supported by the application")]
     NotImplemented,
     #[error("the feature is not supported by the device")]
     NotSupported,
-    #[error("permission denied, try running with elevated privileges")]
+    #[error("permission denied (are you root/admin?)")]
     PermissionDenied,
     #[error("an unspecified error occured (the source could not be determined)")]
     Unspecified,

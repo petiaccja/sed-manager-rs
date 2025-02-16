@@ -4,26 +4,45 @@ use crate::messaging::value::{Command, List, Value};
 use crate::serialization::{Deserialize, Serialize};
 
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum MethodStatus {
+    #[error("success")]
     Success = 0x00,
+    #[error("permission denied")]
     NotAuthorized = 0x01,
+    #[error("obsolete status code #0")]
     Obsolete0 = 0x02,
+    #[error("security provider is busy")]
     SPBusy = 0x03,
+    #[error("security provider has failed")]
     SPFailed = 0x04,
+    #[error("security provider is disabled")]
     SPDisabled = 0x05,
+    #[error("security provider is frozen")]
     SPFrozen = 0x06,
+    #[error("no more sessions are available")]
     NoSessionsAvailable = 0x07,
+    #[error("uniqueness conflict")]
     UniquenessConflict = 0x08,
+    #[error("no more space is available")]
     InsufficientSpace = 0x09,
+    #[error("no more rows are available")]
     InsufficientRows = 0x0A,
+    #[error("invalid parameter")]
     InvalidParameter = 0x0C,
+    #[error("obsolete status code #1")]
     Obsolete1 = 0x0D,
+    #[error("obsolete status code #2")]
     Obsolete2 = 0x0E,
+    #[error("the TPer experienced a malfunction")]
     TPerMalfunction = 0x0F,
+    #[error("the transaction has failed")]
     TransactionFailure = 0x10,
+    #[error("response overflow")]
     ResponseOverflow = 0x11,
+    #[error("the authority is locked out")]
     AuthorityLockedOut = 0x12,
+    #[error("unspecified failure")]
     Fail = 0x3F,
 }
 
