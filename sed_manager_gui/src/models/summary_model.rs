@@ -1,6 +1,7 @@
 use slint::{SharedString, VecModel};
 use std::rc::Rc;
 
+use crate::generated::ContentStatus;
 use crate::generated::FeatureModel;
 use crate::generated::SummaryModel;
 
@@ -11,6 +12,8 @@ impl SummaryModel {
         path: String,
         firmware: String,
         interface: String,
+        discovery_status: ContentStatus,
+        discovery_error: String,
         security_subsystem_classes: Vec<String>,
         security_providers: Vec<String>,
         common_features: Vec<FeatureModel>,
@@ -25,6 +28,8 @@ impl SummaryModel {
             path: path.into(),
             firmware: firmware.into(),
             interface: interface.into(),
+            discovery_status,
+            discovery_error: discovery_error.into(),
             security_subsystem_classes: Rc::new(VecModel::from(security_subsystem_classes)).into(),
             security_providers: Rc::new(VecModel::from(security_providers)).into(),
             common_features: Rc::new(VecModel::from(common_features)).into(),
@@ -38,6 +43,8 @@ impl SummaryModel {
             String::new(),
             String::new(),
             String::new(),
+            String::new(),
+            ContentStatus::Loading,
             String::new(),
             Vec::new(),
             Vec::new(),

@@ -1,35 +1,54 @@
 import { Palette } from "std-widgets.slint";
-import { HorizontalSeparator } from "visual.slint";
+import { HorizontalSeparator, Island } from "visual.slint";
 
 component TitleBar {
     in property <string> title;
     in-out property <bool> collaped: false;
+    property <length> internal-padding: 6px;
+    min-width: title.min-width + 4 * internal-padding + 2 * toggle.min-width;
+    min-height: Math.max(title.min-height, toggle.min-height);
+    preferred-height: self.min-height;
     area := TouchArea {
         clicked => {
             root.collaped = !root.collaped;
         }
     }
 
-    HorizontalLayout {
-        padding: 8px;
-        Text {
-            horizontal-stretch: 1.0;
-            text: root.title;
-            font-weight: 600;
-            horizontal-alignment: center;
-            vertical-alignment: center;
-            color: Palette.control-foreground;
-        }
-
-        Text {
-            horizontal-stretch: 0.0;
-            text: root.collaped ? "\u{25BC}" : "\u{25B2}";
-            font-weight: 600;
-            horizontal-alignment: center;
-            vertical-alignment: center;
-            color: Palette.control-foreground;
-        }
+    title := Text {
+        text: root.title;
+        font-weight: 600;
+        vertical-alignment: center;
+        color: Palette.control-foreground;
     }
+
+    toggle := Text {
+        text: root.collaped ? "\u{25BC}" : "\u{25B2}";
+        font-weight: 600;
+        x: root.width - self.width - root.internal-padding;
+        vertical-alignment: center;
+        color: Palette.control-foreground;
+    }
+
+    // HorizontalLayout {
+    //     padding: 8px;
+    //     Text {
+    //         horizontal-stretch: 1.0;
+    //         text: root.title;
+    //         font-weight: 600;
+    //         horizontal-alignment: center;
+    //         vertical-alignment: center;
+    //         color: Palette.control-foreground;
+    //     }
+
+    //     Text {
+    //         horizontal-stretch: 0.0;
+    //         text: root.collaped ? "\u{25BC}" : "\u{25B2}";
+    //         font-weight: 600;
+    //         horizontal-alignment: center;
+    //         vertical-alignment: center;
+    //         color: Palette.control-foreground;
+    //     }
+    // }
 }
 
 component Content {
@@ -43,15 +62,11 @@ component Content {
     }
 }
 
-export component CollapsibleView {
+export component CollapsibleView inherits Island {
     in property <string> title;
     in property <bool> collaped: title-bar.collaped;
-    Rectangle {
-        background: Palette.control-background;
-        border-radius: 8px;
-    }
-
     VerticalLayout {
+        alignment: start;
         title-bar := TitleBar {
             title: title;
             height: 32px;

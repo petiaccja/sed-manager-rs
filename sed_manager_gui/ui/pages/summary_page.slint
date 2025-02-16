@@ -1,5 +1,7 @@
 import { FeatureModel, FeatureView } from "../views/feature_view.slint";
 import { LineEdit, GroupBox, Button, Palette } from "std-widgets.slint";
+import { Island } from "../widgets/visual.slint";
+import { ContentStatus } from "../widgets/loading.slint";
 
 export struct SummaryModel {
     name: string,
@@ -7,6 +9,8 @@ export struct SummaryModel {
     path: string,
     firmware: string,
     interface: string,
+    discovery-status: ContentStatus,
+    discovery-error: string,
     security-subsystem-classes: [string],
     security-providers: [string],
     common-features: [FeatureModel],
@@ -17,72 +21,75 @@ component HeaderView {
     in property <SummaryModel> summary;
     property <length> parameter-height: 20px;
     property <length> parameter-spacing: 8px;
-    HorizontalLayout {
-        spacing: 12px;
-        alignment: stretch;
-        VerticalLayout {
-            alignment: start;
-            spacing: 8px;
-            width: Math.max(name-view.min-width, serial-view.min-width);
-            name-view := Text {
-                text: summary.name;
-                font-weight: 800;
-                font-size: 28px;
-            }
-
-            serial-view := HorizontalLayout {
-                alignment: space-between;
-                Text {
-                    text: "Serial: ";
-                    font-size: 16px;
+    island := Island {
+        HorizontalLayout {
+            spacing: 12px;
+            padding: 6px;
+            alignment: stretch;
+            VerticalLayout {
+                alignment: start;
+                spacing: 8px;
+                width: Math.max(name-view.min-width, serial-view.min-width);
+                name-view := Text {
+                    text: summary.name;
+                    font-weight: 800;
+                    font-size: 28px;
+                    color: Palette.accent-background.mix(Palette.foreground, 0.8);
                 }
 
-                Text {
-                    text: summary.serial;
-                    font-size: 16px;
-                }
-            }
-        }
+                serial-view := HorizontalLayout {
+                    alignment: space-between;
+                    Text {
+                        text: summary.interface;
+                        font-size: 16px;
+                    }
 
-        Rectangle {
-            horizontal-stretch: 0.001;
-        }
-
-        VerticalLayout {
-            max-width: 400px;
-            horizontal-stretch: 1.0;
-            HorizontalLayout {
-                height: root.parameter-height;
-                spacing: 2 * root.parameter-spacing;
-                Text {
-                    text: "Path:";
-                    vertical-alignment: center;
-                }
-
-                LineEdit {
-                    width: 100%;
-                    horizontal-alignment: right;
-                    read-only: true;
-                    text: summary.path;
+                    Text {
+                        text: summary.serial;
+                        font-size: 16px;
+                    }
                 }
             }
 
-            for parameter in [
-                { name: "Firmware revision:", values: [summary.firmware] },
-                { name: "Hardware interface:", values: [summary.interface] },
-                { name: "Security subsystem classes:", values: summary.security-subsystem-classes },
-            ]: HorizontalLayout {
-                height: root.parameter-height;
-                spacing: root.parameter-spacing;
-                alignment: space-between;
-                Text {
-                    text: parameter.name;
-                    vertical-alignment: center;
+            Rectangle {
+                horizontal-stretch: 0.001;
+            }
+
+            VerticalLayout {
+                max-width: 400px;
+                horizontal-stretch: 1.0;
+                HorizontalLayout {
+                    height: root.parameter-height;
+                    spacing: 2 * root.parameter-spacing;
+                    Text {
+                        text: "Path:";
+                        vertical-alignment: center;
+                    }
+
+                    LineEdit {
+                        horizontal-stretch: 1.0;
+                        horizontal-alignment: right;
+                        read-only: true;
+                        text: summary.path;
+                    }
                 }
 
-                for value in parameter.values: Text {
-                    text: value;
-                    vertical-alignment: center;
+                for parameter in [
+                    { name: "Firmware revision:", values: [summary.firmware] },
+                    { name: "Security subsystem classes:", values: summary.security-subsystem-classes },
+                ]: HorizontalLayout {
+                    height: root.parameter-height;
+                    spacing: root.parameter-spacing;
+                    alignment: space-between;
+                    Text {
+                        text: parameter.name;
+                        vertical-alignment: center;
+                    }
+
+                    for value in parameter.values: Text {
+                        text: value;
+                        vertical-alignment: center;
+                    }
                 }
             }
         }
@@ -150,6 +157,8 @@ export component SummaryPage {
         HorizontalLayout {
             spacing: 32px;
             FeatureView {
+                status: summary.discovery-status;
+                error: summary.discovery-error;
                 common-features: summary.common-features;
                 ssc-features: summary.ssc-features;
             }

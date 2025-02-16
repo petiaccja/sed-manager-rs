@@ -11,7 +11,7 @@ export component AppWindow inherits Window {
     in property <[SummaryModel]> summaries <=> main-page.summaries;
     in property <AdditionalDrivesModel> additional-drives <=> main-page.additional-drives;
     callback update-device-list <=> main-page.update-device-list;
-    callback update-device-details <=> main-page.update-device-details;
+    callback update-device-discovery <=> main-page.update-device-discovery;
     main-page := MainPage {
         width: 100%;
         height: 100%;

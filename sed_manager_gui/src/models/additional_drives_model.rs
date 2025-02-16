@@ -14,7 +14,7 @@ impl AdditionalDrivesModel {
     pub fn new(drives: Vec<(String, String)>, error: String, status: ContentStatus) -> Self {
         Self {
             drives: ModelRc::new(VecModel::from(
-                drives.into_iter().map(|(x, y)| (x.into(), y.into())).collect::<Vec<_>>(),
+                drives.into_iter().map(|(path, error)| (error.into(), path.into())).collect::<Vec<_>>(),
             )),
             error: error.into(),
             status,

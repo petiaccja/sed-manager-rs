@@ -1,30 +1,74 @@
-import { ScrollView, GridBox, HorizontalBox } from "std-widgets.slint";
-import { VerticalSeparator } from "../widgets/visual.slint";
+import { ScrollView, GridBox, HorizontalBox, Palette } from "std-widgets.slint";
+import { VerticalSeparator, PaletteExtra } from "../widgets/visual.slint";
 import { CollapsibleView } from "../widgets/collapsible_view.slint";
 import { NameValueListView } from "../widgets/name_value_list_view.slint";
+import { ContentStatus, TextLoadingIndicator } from "../widgets/loading.slint";
 
 export struct FeatureModel {
     name: string,
     nvps: [{name: string, value: string}],    
 }
 
-component EmptyView {
+component LoadingView {
+    property <length> spacing: 16px;
+    min-width: 16px + 2 * Math.max(common-view.min-width, ssc-view.min-width);
+    min-height: Math.max(common-view.min-height, ssc-view.min-height);
+    common-view := CollapsibleView {
+        x: 0;
+        y: 0;
+        width: (root.width - root.spacing) / 2;
+        title: "Common features";
+        height: self.min-height;
+        VerticalLayout {
+            padding: 6px;
+            alignment: start;
+            TextLoadingIndicator {
+                min-width: 60px;
+                height: 16px;
+            }
+        }
+    }
+
+    ssc-view := CollapsibleView {
+        x: common-view.width + root.spacing;
+        y: 0;
+        width: common-view.width;
+        title: "SSC features";
+        height: self.min-height;
+        VerticalLayout {
+            padding: 6px;
+            alignment: start;
+            TextLoadingIndicator {
+                min-width: 60px;
+                height: 16px;
+            }
+        }
+    }
+}
+
+component ErrorView {
+    in property <string> error;
     VerticalLayout {
         alignment: center;
+        padding: 12px;
         spacing: 8px;
         Image {
-            source: @image-url("../../logo/broken_lock.png");
-            height: 50%;
-            opacity: 25%;
-            rotation-angle: -20deg;
+            source: @image-url("../../logo/icon_no_lock.svg");
+            preferred-height: 200px;
+            min-height: 80px;
+            colorize: PaletteExtra.action-foreground.with-alpha(0.6);
         }
 
         Text {
-            text: "The device has no encryption features";
-            font-size: 16px;
+            text: "No encryption features found";
+            font-size: 14px;
             horizontal-alignment: center;
-            vertical-alignment: center;
-            opacity: 80%;
+        }
+
+        Text {
+            text: root.error;
+            font-size: 14px;
+            horizontal-alignment: center;
         }
     }
 }
@@ -42,7 +86,7 @@ component SplitView {
             viewport-height: common_feature_view.min-height;
             common_feature_view := VerticalLayout {
                 preferred-width: 100%;
-                spacing: 8px;
+                spacing: 16px;
                 for feature in root.common-features: CollapsibleView {
                     title: feature.name;
                     NameValueListView {
@@ -57,7 +101,7 @@ component SplitView {
             viewport-height: ssc_feature_view.min-height;
             ssc_feature_view := VerticalLayout {
                 preferred-width: 100%;
-                spacing: 8px;
+                spacing: 16px;
                 for feature in root.ssc-features: CollapsibleView {
                     title: feature.name;
                     NameValueListView {
@@ -70,11 +114,16 @@ component SplitView {
 }
 
 export component FeatureView {
+    in property <ContentStatus> status: ContentStatus.loading;
+    in property <string> error;
     in property <[FeatureModel]> common-features;
     in property <[FeatureModel]> ssc-features;
     HorizontalLayout {
-        if common-features.length == 0 && ssc-features.length == 0: empty-view := EmptyView { }
-        if common-features.length != 0 || ssc-features.length != 0: split-view := SplitView {
+        if root.status == ContentStatus.loading: LoadingView { }
+        if root.status == ContentStatus.error: ErrorView {
+            error: root.error;
+        }
+        if root.status == ContentStatus.success: SplitView {
             preferred-width: 100%;
             preferred-height: 100%;
             common-features: root.common-features;
