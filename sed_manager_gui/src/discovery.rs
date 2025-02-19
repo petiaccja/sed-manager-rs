@@ -16,16 +16,16 @@ async fn get_discovery(device: Arc<dyn Device>) -> Result<Discovery, RPCError> {
     run_in_thread(move || discover(&*device)).await
 }
 
-fn get_security_providers(ssc: &FeatureCode) -> Vec<String> {
+fn get_security_providers(ssc: &FeatureCode) -> Vec<&str> {
     match ssc {
-        FeatureCode::Enterprise => vec!["Bandmaster?".into(), "Dunno".into()],
-        FeatureCode::OpalV1 => vec!["Admin".into(), "Locking".into()],
-        FeatureCode::OpalV2 => vec!["Admin".into(), "Locking".into()],
-        FeatureCode::Opalite => vec!["Admin".into(), "Locking".into()],
-        FeatureCode::PyriteV1 => vec!["Admin".into(), "Locking".into()],
-        FeatureCode::PyriteV2 => vec!["Admin".into(), "Locking".into()],
-        FeatureCode::Ruby => vec!["Admin".into(), "Locking".into()],
-        FeatureCode::KeyPerIO => vec!["Admin".into(), "KPIO".into()],
+        FeatureCode::Enterprise => vec!["Admin", "Locking"],
+        FeatureCode::OpalV1 => vec!["Admin", "Locking"],
+        FeatureCode::OpalV2 => vec!["Admin", "Locking"],
+        FeatureCode::Opalite => vec!["Admin", "Locking"],
+        FeatureCode::PyriteV1 => vec!["Admin", "Locking"],
+        FeatureCode::PyriteV2 => vec!["Admin", "Locking"],
+        FeatureCode::Ruby => vec!["Admin", "Locking"],
+        FeatureCode::KeyPerIO => vec!["Admin", "KeyPerIO"],
         _ => vec![],
     }
 }
