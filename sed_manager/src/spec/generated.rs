@@ -11,8 +11,8 @@
 // introducing any modifications to the code generator.
 use crate::messaging::uid::UID;
 use crate::messaging::uid_range::UIDRange;
-use crate::specification::generated as root;
-use crate::specification::lookup;
+use crate::spec::generated as root;
+use crate::spec::lookup;
 
 // This inlines the generated code.
 include!(concat!(env!("OUT_DIR"), "/specification.rs"));
@@ -20,7 +20,7 @@ include!(concat!(env!("OUT_DIR"), "/specification.rs"));
 #[cfg(test)]
 mod tests {
     use super::core::all::table_id::TABLE_LOOKUP;
-    use crate::specification::{lookup::TableLookup, ObjectLookup};
+    use crate::spec::{lookup::TableLookup, ObjectLookup};
 
     use super::*;
 

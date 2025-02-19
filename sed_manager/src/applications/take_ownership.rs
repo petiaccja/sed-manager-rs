@@ -1,8 +1,8 @@
 use crate::messaging::discovery::Feature;
 use crate::messaging::discovery::{Discovery, FeatureCode, FeatureDescriptor};
 use crate::rpc::Error as RPCError;
-use crate::specification;
-use crate::specification::column_types::SPRef;
+use crate::spec;
+use crate::spec::column_types::SPRef;
 use crate::tper::TPer;
 
 #[allow(unused)]
@@ -39,14 +39,14 @@ fn get_default_ssc(discovery: &Discovery) -> Result<&FeatureDescriptor, Error> {
 
 fn get_admin_sp(ssc: FeatureCode) -> Result<SPRef, Error> {
     match ssc {
-        FeatureCode::Enterprise => Ok(specification::enterprise::admin::sp::ADMIN.into()),
-        FeatureCode::OpalV1 => Ok(specification::opal::admin::sp::ADMIN.into()),
-        FeatureCode::OpalV2 => Ok(specification::opal::admin::sp::ADMIN.into()),
-        FeatureCode::Opalite => Ok(specification::opalite::admin::sp::ADMIN.into()),
-        FeatureCode::PyriteV1 => Ok(specification::pyrite::admin::sp::ADMIN.into()),
-        FeatureCode::PyriteV2 => Ok(specification::pyrite::admin::sp::ADMIN.into()),
-        FeatureCode::Ruby => Ok(specification::ruby::admin::sp::ADMIN.into()),
-        FeatureCode::KeyPerIO => Ok(specification::kpio::admin::sp::ADMIN.into()),
+        FeatureCode::Enterprise => Ok(spec::enterprise::admin::sp::ADMIN.into()),
+        FeatureCode::OpalV1 => Ok(spec::opal::admin::sp::ADMIN.into()),
+        FeatureCode::OpalV2 => Ok(spec::opal::admin::sp::ADMIN.into()),
+        FeatureCode::Opalite => Ok(spec::opalite::admin::sp::ADMIN.into()),
+        FeatureCode::PyriteV1 => Ok(spec::pyrite::admin::sp::ADMIN.into()),
+        FeatureCode::PyriteV2 => Ok(spec::pyrite::admin::sp::ADMIN.into()),
+        FeatureCode::Ruby => Ok(spec::ruby::admin::sp::ADMIN.into()),
+        FeatureCode::KeyPerIO => Ok(spec::kpio::admin::sp::ADMIN.into()),
         _ => Err(Error::IncompatibleSSC),
     }
 }

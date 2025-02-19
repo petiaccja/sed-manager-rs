@@ -419,7 +419,7 @@ fn generate(features: &[Feature]) -> TokenStream2 {
 }
 
 fn main() -> Result<(), ()> {
-    let spec_path = "src/specification/specification.json";
+    let spec_path = "src/spec/spec.json";
     let spec_file = File::open(spec_path).unwrap();
     let spec_json: Value = serde_json::from_reader(spec_file).unwrap();
     let spec_data = parse(&spec_json).unwrap();
@@ -427,7 +427,7 @@ fn main() -> Result<(), ()> {
     let content = generate(&spec_data);
 
     let mut out_path = PathBuf::from(std::env::var("OUT_DIR").unwrap());
-    out_path.push("specification.rs");
+    out_path.push("spec.rs");
     let mut out_file = File::create(out_path).unwrap();
     out_file.write_all(content.to_string().as_bytes()).unwrap();
     println!("cargo::rerun-if-changed={spec_path}");

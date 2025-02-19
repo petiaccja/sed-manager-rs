@@ -1,6 +1,6 @@
 use sed_manager_macros::AliasType;
 
-use crate::{messaging::value::Bytes, specification::basic_types::MaxBytes};
+use crate::{messaging::value::Bytes, spec::basic_types::MaxBytes};
 
 use super::define_column_type;
 

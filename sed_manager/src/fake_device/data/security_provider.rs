@@ -1,5 +1,5 @@
 use crate::messaging::uid::UID;
-use crate::specification::column_types::SPRef;
+use crate::spec::column_types::SPRef;
 
 use super::objects::{AuthorityTable, CPinTable};
 use super::table::BasicTable;

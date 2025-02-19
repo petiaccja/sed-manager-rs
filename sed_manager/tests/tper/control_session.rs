@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use sed_manager::fake_device::FakeDevice;
 use sed_manager::rpc::{Error as RPCError, Properties};
-use sed_manager::specification::opal;
+use sed_manager::spec::opal;
 use sed_manager::tper::TPer;
 
 #[tokio::test]

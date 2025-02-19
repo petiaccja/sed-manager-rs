@@ -4,7 +4,7 @@ pub mod fake_device;
 pub mod messaging;
 pub mod rpc;
 pub mod serialization;
-pub mod specification;
+pub mod spec;
 pub mod tper;
 
 mod variadics;

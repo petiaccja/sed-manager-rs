@@ -17,9 +17,9 @@ use crate::rpc::{MethodCall, MethodResult, MethodStatus, PackagedMethod, Propert
 use crate::serialization::vec_with_len::VecWithLen;
 use crate::serialization::vec_without_len::VecWithoutLen;
 use crate::serialization::{Deserialize, DeserializeBinary, InputStream, OutputStream, Serialize, SerializeBinary};
-use crate::specification::basic_types::{List, NamedValue, RestrictedObjectReference};
-use crate::specification::column_types::{MaxBytes32, SPRef};
-use crate::specification::{invoking_id, method_id, table_id};
+use crate::spec::basic_types::{List, NamedValue, RestrictedObjectReference};
+use crate::spec::column_types::{MaxBytes32, SPRef};
+use crate::spec::{invoking_id, method_id, table_id};
 
 use super::data::SSC;
 use super::sp_session::SPSession;

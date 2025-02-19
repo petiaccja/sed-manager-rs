@@ -12,7 +12,7 @@ use crate::rpc::{
     SessionIdentifier, ThreadedMessageLoop,
 };
 use crate::serialization::DeserializeBinary;
-use crate::specification::column_types::SPRef;
+use crate::spec::column_types::SPRef;
 
 use super::com_session::ComSession;
 use super::control_session::ControlSession;

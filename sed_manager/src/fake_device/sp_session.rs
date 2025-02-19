@@ -3,9 +3,9 @@ use std::sync::{Arc, Mutex};
 use crate::messaging::uid::UID;
 use crate::messaging::value::{Bytes, Named, Value};
 use crate::rpc::MethodStatus;
-use crate::specification::basic_types::{List, NamedValue, ObjectReference};
-use crate::specification::column_types::{AuthorityRef, BoolOrBytes, BytesOrRowValues, CellBlock, Password, SPRef};
-use crate::specification::{invoking_id, table_id};
+use crate::spec::basic_types::{List, NamedValue, ObjectReference};
+use crate::spec::column_types::{AuthorityRef, BoolOrBytes, BytesOrRowValues, CellBlock, Password, SPRef};
+use crate::spec::{invoking_id, table_id};
 
 use super::data::SSC;
 

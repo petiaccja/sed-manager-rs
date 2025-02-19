@@ -2,7 +2,7 @@ use as_array::AsArray;
 
 use crate::messaging::uid::UID;
 use crate::messaging::value::Value;
-use crate::specification::column_types::{
+use crate::spec::column_types::{
     AuthMethod, AuthorityRef, CredentialRef, Date, HashProtocol, LogListRef, LogSelect, MessagingType, Name,
 };
 

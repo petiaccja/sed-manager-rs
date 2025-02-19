@@ -2,7 +2,7 @@ mod authority;
 mod c_pin;
 
 use super::Table;
-use crate::specification::table_id;
+use crate::spec::table_id;
 
 pub use authority::Authority;
 pub use c_pin::CPin;

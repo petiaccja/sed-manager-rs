@@ -2,7 +2,7 @@ use sed_manager_macros::StructType;
 use std::ops::{Add, Bound, RangeBounds, Sub};
 
 use crate::messaging::value::{Bytes, List, Value};
-use crate::specification::basic_types::{ByteTableReference, TableReference};
+use crate::spec::basic_types::{ByteTableReference, TableReference};
 
 #[derive(StructType, PartialEq, Eq, Clone, Debug, Default)]
 pub struct CellBlock {

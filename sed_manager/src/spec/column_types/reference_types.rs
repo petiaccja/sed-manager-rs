@@ -1,5 +1,5 @@
-use crate::specification::basic_types::RestrictedObjectReference;
-use crate::specification::table_id;
+use crate::spec::basic_types::RestrictedObjectReference;
+use crate::spec::table_id;
 
 use super::define_column_type;
 

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-use crate::specification::column_types::SPRef;
-use crate::specification::opal;
+use crate::spec::column_types::SPRef;
+use crate::spec::opal;
 
 use super::security_providers::{AdminSP, LockingSP};
 use super::SecurityProvider;

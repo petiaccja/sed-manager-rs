@@ -5,9 +5,9 @@ use sed_manager::messaging::uid::UID;
 use sed_manager::rpc::Error as RPCError;
 use sed_manager::rpc::ErrorEventExt;
 use sed_manager::rpc::MethodStatus;
-use sed_manager::specification::column_types::Password;
-use sed_manager::specification::opal;
-use sed_manager::specification::table_id;
+use sed_manager::spec::column_types::Password;
+use sed_manager::spec::opal;
+use sed_manager::spec::table_id;
 use sed_manager::tper::TPer;
 
 use opal::admin::sp::ADMIN;

@@ -6,7 +6,7 @@ mod struct_types;
 
 macro_rules! define_column_type {
     ($type:ty, $uid:expr, $name:expr) => {
-        impl<'me> crate::specification::basic_types::Type for $type {
+        impl<'me> crate::spec::basic_types::Type for $type {
             fn uid() -> crate::messaging::uid::UID {
                 $uid.into()
             }

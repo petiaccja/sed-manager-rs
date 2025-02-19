@@ -1,7 +1,7 @@
 use std::{time::Duration, usize};
 
-use crate::specification::basic_types::{List, NamedValue};
-use crate::specification::column_types::MaxBytes32;
+use crate::spec::basic_types::{List, NamedValue};
+use crate::spec::column_types::MaxBytes32;
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Properties {

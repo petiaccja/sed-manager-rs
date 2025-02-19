@@ -6,9 +6,9 @@ use crate::rpc::{
     Error as RPCError, ErrorEvent as RPCErrorEvent, ErrorEventExt as _, Message, MessageSender, MethodCall,
     MethodStatus, PackagedMethod, Properties, SessionIdentifier, Tracked,
 };
-use crate::specification::basic_types::{List, NamedValue};
-use crate::specification::column_types::{MaxBytes32, SPRef};
-use crate::specification::{invoking_id, method_id};
+use crate::spec::basic_types::{List, NamedValue};
+use crate::spec::column_types::{MaxBytes32, SPRef};
+use crate::spec::{invoking_id, method_id};
 
 const CONTROL_SESSION_ID: SessionIdentifier = SessionIdentifier { hsn: 0, tsn: 0 };
 
