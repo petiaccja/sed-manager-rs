@@ -1,7 +1,5 @@
-use sed_manager::messaging::{
-    types::Type,
-    value::{Bytes, Named, Value},
-};
+use sed_manager::messaging::value::{Bytes, Named, Value};
+use sed_manager::specification::basic_types::Type;
 use sed_manager_macros::AlternativeType;
 
 #[derive(AlternativeType, PartialEq, Eq, Clone, Debug)]

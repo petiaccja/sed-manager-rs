@@ -1,3 +1,5 @@
+pub mod basic_types;
+pub mod column_types;
 mod generated;
 mod lookup;
 

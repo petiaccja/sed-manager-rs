@@ -1,7 +1,7 @@
 use crate::fake_device::data::objects::{AuthorityTable, CPinTable};
 use crate::fake_device::data::table::BasicTable;
-use crate::messaging::types::SPRef;
 use crate::messaging::uid::UID;
+use crate::specification::column_types::SPRef;
 use crate::specification::{opal, table_id};
 
 use super::super::SecurityProvider;

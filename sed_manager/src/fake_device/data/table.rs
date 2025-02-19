@@ -1,9 +1,7 @@
 use std::collections::BTreeMap;
 
-use crate::messaging::{
-    types::{ObjectReference, RestrictedObjectReference},
-    uid::UID,
-};
+use crate::messaging::uid::UID;
+use crate::specification::basic_types::{ObjectReference, RestrictedObjectReference};
 
 use super::object::Object;
 

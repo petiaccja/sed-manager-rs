@@ -11,8 +11,7 @@ fn gen_uid_patterns(declaration: &DataEnum) -> TokenStream2 {
     for variant in &declaration.variants {
         let variant_name = &variant.name;
         let variant_type = &variant.ty;
-        let pattern =
-            quote! { #name::#variant_name(value) => <#variant_type as ::sed_manager::messaging::types::Type>::uid(), };
+        let pattern = quote! { #name::#variant_name(value) => <#variant_type as ::sed_manager::specification::basic_types::Type>::uid(), };
         uid_patterns.append_all(pattern);
     }
     uid_patterns
@@ -36,7 +35,7 @@ fn gen_parse_patterns(declaration: &DataEnum) -> TokenStream2 {
         let variant_name = &variant.name;
         let variant_type = &variant.ty;
         let pattern = quote! {
-            x if x == <#variant_type as ::sed_manager::messaging::types::Type>::uid() => {
+            x if x == <#variant_type as ::sed_manager::specification::basic_types::Type>::uid() => {
                 match #variant_type::try_from(named.value) {
                     Ok(alt) => Ok(#name::#variant_name(alt)),
                     Err(named_val) => Err(::sed_manager::messaging::value::Value::from(

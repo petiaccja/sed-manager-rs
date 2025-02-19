@@ -1,8 +1,8 @@
 use crate::fake_device::data::objects::{Authority, AuthorityTable, CPin, CPinTable};
 use crate::fake_device::data::table::BasicTable;
 use crate::fake_device::data::Object;
-use crate::messaging::types::{AuthMethod, SPRef};
 use crate::messaging::uid::UID;
+use crate::specification::column_types::{AuthMethod, SPRef};
 use crate::specification::{opal, table_id};
 
 use super::super::SecurityProvider;

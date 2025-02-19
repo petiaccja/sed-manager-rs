@@ -1,9 +1,10 @@
 use as_array::AsArray;
 
 use crate::fake_device::data::{Field, Object};
-use crate::messaging::types::{ByteTableReference, CPinRef, Name, Password};
 use crate::messaging::uid::UID;
 use crate::messaging::value::Value;
+use crate::specification::basic_types::ByteTableReference;
+use crate::specification::column_types::{CPinRef, Name, Password};
 
 #[derive(AsArray, Default)]
 #[as_array_traits(Field)]

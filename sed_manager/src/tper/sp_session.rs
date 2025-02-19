@@ -1,6 +1,5 @@
 use tokio::sync::oneshot;
 
-use crate::messaging::types::{AuthorityRef, CellBlock, List, NamedValue, ObjectReference, TableReference};
 use crate::messaging::uid::UID;
 use crate::messaging::value::{Bytes, Value};
 use crate::rpc::args::{DecodeArgs, EncodeArgs};
@@ -8,6 +7,8 @@ use crate::rpc::{
     Error as RPCError, ErrorAction as RPCErrorAction, ErrorEvent as RPCErrorEvent, ErrorEventExt as _, Message,
     MessageSender, MethodCall, MethodResult, MethodStatus, PackagedMethod, Properties, SessionIdentifier, Tracked,
 };
+use crate::specification::basic_types::{List, NamedValue, ObjectReference, TableReference};
+use crate::specification::column_types::{AuthorityRef, CellBlock};
 use crate::specification::{invoking_id, method_id};
 
 pub struct SPSession {

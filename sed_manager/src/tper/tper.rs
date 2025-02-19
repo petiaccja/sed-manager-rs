@@ -7,12 +7,12 @@ use tokio::sync::Mutex;
 use crate::device::Device;
 use crate::messaging::com_id::{ComIdState, StackResetStatus};
 use crate::messaging::discovery::{Discovery, FeatureDescriptor, UnrecognizedDescriptor};
-use crate::messaging::types::SPRef;
 use crate::rpc::{
     Error as RPCError, ErrorEvent as RPCErrorEvent, ErrorEventExt, MessageSender, MessageStack, Properties,
     SessionIdentifier, ThreadedMessageLoop,
 };
 use crate::serialization::DeserializeBinary;
+use crate::specification::column_types::SPRef;
 
 use super::com_session::ComSession;
 use super::control_session::ControlSession;

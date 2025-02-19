@@ -1,15 +1,13 @@
 use crate::messaging::discovery::Feature;
-use crate::messaging::types::SPRef;
+use crate::messaging::discovery::{Discovery, FeatureCode, FeatureDescriptor};
 use crate::rpc::Error as RPCError;
 use crate::specification;
-use crate::{
-    messaging::discovery::{Discovery, FeatureCode, FeatureDescriptor},
-    tper::TPer,
-};
+use crate::specification::column_types::SPRef;
+use crate::tper::TPer;
 
 #[allow(unused)]
 const SUPPORTED_SSCS: [FeatureCode; 8] = [
-    FeatureCode::Enterprise, // How?
+    FeatureCode::Enterprise,
     FeatureCode::OpalV1,
     FeatureCode::OpalV2,
     FeatureCode::Opalite,

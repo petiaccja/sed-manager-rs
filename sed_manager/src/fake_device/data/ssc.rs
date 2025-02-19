@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::messaging::types::SPRef;
+use crate::specification::column_types::SPRef;
 use crate::specification::opal;
 
 use super::security_providers::{AdminSP, LockingSP};

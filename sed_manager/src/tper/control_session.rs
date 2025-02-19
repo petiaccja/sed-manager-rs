@@ -1,12 +1,13 @@
 use tokio::sync::{oneshot, Mutex};
 
-use crate::messaging::types::{List, MaxBytes32, NamedValue, SPRef};
 use crate::messaging::value::Bytes;
 use crate::rpc::args::{DecodeArgs as _, EncodeArgs as _};
 use crate::rpc::{
     Error as RPCError, ErrorEvent as RPCErrorEvent, ErrorEventExt as _, Message, MessageSender, MethodCall,
     MethodStatus, PackagedMethod, Properties, SessionIdentifier, Tracked,
 };
+use crate::specification::basic_types::{List, NamedValue};
+use crate::specification::column_types::{MaxBytes32, SPRef};
 use crate::specification::{invoking_id, method_id};
 
 const CONTROL_SESSION_ID: SessionIdentifier = SessionIdentifier { hsn: 0, tsn: 0 };

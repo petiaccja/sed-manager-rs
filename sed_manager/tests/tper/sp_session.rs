@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
 use sed_manager::fake_device::FakeDevice;
-use sed_manager::messaging::types::Password;
 use sed_manager::messaging::uid::UID;
 use sed_manager::rpc::Error as RPCError;
 use sed_manager::rpc::ErrorEventExt;
 use sed_manager::rpc::MethodStatus;
+use sed_manager::specification::column_types::Password;
 use sed_manager::specification::opal;
 use sed_manager::specification::table_id;
 use sed_manager::tper::TPer;

@@ -1,10 +1,10 @@
 use as_array::AsArray;
 
-use crate::messaging::types::{
-    AuthMethod, AuthorityRef, CredentialRef, Date, HashProtocol, LogListRef, LogSelect, MessagingType, Name,
-};
 use crate::messaging::uid::UID;
 use crate::messaging::value::Value;
+use crate::specification::column_types::{
+    AuthMethod, AuthorityRef, CredentialRef, Date, HashProtocol, LogListRef, LogSelect, MessagingType, Name,
+};
 
 use super::super::{Field, Object};
 

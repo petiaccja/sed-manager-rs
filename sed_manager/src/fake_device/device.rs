@@ -6,8 +6,8 @@ use std::usize;
 use crate::device::{Device, Error, Interface};
 use crate::messaging::com_id::HANDLE_COM_ID_PROTOCOL;
 use crate::messaging::packet::PACKETIZED_PROTOCOL;
-use crate::messaging::types::SPRef;
 use crate::rpc::Properties;
+use crate::specification::column_types::SPRef;
 
 use super::com_id_session::ComIDSession;
 use super::data::SSC;

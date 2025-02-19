@@ -10,7 +10,6 @@ use crate::messaging::com_id::{
 };
 use crate::messaging::packet::{ComPacket, Packet, SubPacket, SubPacketKind};
 use crate::messaging::token::Token;
-use crate::messaging::types::{List, MaxBytes32, NamedValue, RestrictedObjectReference, SPRef};
 use crate::messaging::uid::UID;
 use crate::messaging::value::Bytes;
 use crate::rpc::args::{DecodeArgs, EncodeArgs};
@@ -18,6 +17,8 @@ use crate::rpc::{MethodCall, MethodResult, MethodStatus, PackagedMethod, Propert
 use crate::serialization::vec_with_len::VecWithLen;
 use crate::serialization::vec_without_len::VecWithoutLen;
 use crate::serialization::{Deserialize, DeserializeBinary, InputStream, OutputStream, Serialize, SerializeBinary};
+use crate::specification::basic_types::{List, NamedValue, RestrictedObjectReference};
+use crate::specification::column_types::{MaxBytes32, SPRef};
 use crate::specification::{invoking_id, method_id, table_id};
 
 use super::data::SSC;
