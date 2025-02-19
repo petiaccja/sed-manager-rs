@@ -1,7 +1,5 @@
 use std::time::Duration;
 
-use enum_dispatch::enum_dispatch;
-
 use crate::serialization::{
     vec_with_len::VecWithLen, Deserialize, Error as SerializeError, InputStream, ItemRead, OutputStream, Serialize,
 };
@@ -34,7 +32,6 @@ pub enum OwnerPasswordState {
     VendorSpecified = 0xFF,
 }
 
-#[enum_dispatch]
 pub trait Feature {
     const FEATURE_CODE: FeatureCode;
     const VERSION: u8;

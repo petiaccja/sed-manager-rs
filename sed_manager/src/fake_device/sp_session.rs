@@ -6,7 +6,7 @@ use crate::messaging::types::{
 use crate::messaging::uid::UID;
 use crate::messaging::value::{Bytes, Named, Value};
 use crate::rpc::MethodStatus;
-use crate::specification::{invoker, table};
+use crate::specification::{invoking_id, table_id};
 
 use super::data::SSC;
 
@@ -32,7 +32,7 @@ impl SPSession {
         authority: AuthorityRef,
         proof: Option<Bytes>,
     ) -> Result<BoolOrBytes, MethodStatus> {
-        if invoking_id != invoker::THIS_SP {
+        if invoking_id != invoking_id::THIS_SP {
             return Err(MethodStatus::InvalidParameter);
         };
         let ssc = self.ssc.lock().unwrap();
@@ -48,7 +48,7 @@ impl SPSession {
         let Some(credential_ref) = authority_obj.credential else {
             return Ok(BoolOrBytes::Bool(true));
         };
-        if credential_ref.containing_table().unwrap() == table::C_PIN {
+        if credential_ref.containing_table().unwrap() == table_id::C_PIN {
             let Some(c_pin_table) = sp.get_c_pin_table() else {
                 return Err(MethodStatus::TPerMalfunction);
             };

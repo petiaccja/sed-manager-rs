@@ -8,7 +8,7 @@ use crate::rpc::{
     Error as RPCError, ErrorAction as RPCErrorAction, ErrorEvent as RPCErrorEvent, ErrorEventExt as _, Message,
     MessageSender, MethodCall, MethodResult, MethodStatus, PackagedMethod, Properties, SessionIdentifier, Tracked,
 };
-use crate::specification::{invoker, method};
+use crate::specification::{invoking_id, method_id};
 
 pub struct SPSession {
     session: SessionIdentifier,
@@ -76,7 +76,8 @@ impl SPSession {
     }
 
     pub async fn authenticate(&self, authority: AuthorityRef, proof: Option<Bytes>) -> Result<bool, RPCError> {
-        let call = MethodCall::new_success(invoker::THIS_SP, method::AUTHENTICATE, (authority, proof).encode_args());
+        let call =
+            MethodCall::new_success(invoking_id::THIS_SP, method_id::AUTHENTICATE, (authority, proof).encode_args());
         let results = self.do_method_call(call).await?.take_results()?;
         // I'll assume the result is encoded without the typeOr{} NVP.
         // Not clear in spec, no official examples.
@@ -85,7 +86,7 @@ impl SPSession {
     }
 
     pub async fn get<T: TryFrom<Value>>(&self, object: UID, column: u16) -> Result<T, RPCError> {
-        let call = MethodCall::new_success(object, method::GET, (CellBlock::object(column..=column),).encode_args());
+        let call = MethodCall::new_success(object, method_id::GET, (CellBlock::object(column..=column),).encode_args());
         let results = self.do_method_call(call).await?.take_results()?;
         // According to the TCG examples, result is encoded without typeOr{} name-value pair.
         let (mut column_values,): (Vec<Value>,) = results.decode_args()?;
@@ -103,7 +104,7 @@ impl SPSession {
     pub async fn set<T: Into<Value>>(&self, object: UID, column: u16, value: T) -> Result<(), RPCError> {
         let where_ = Option::<ObjectReference>::None; // According to the TCG examples, encoded without typeOr{} name-value pair.
         let values = Some(vec![Value::from(NamedValue { name: column, value })]); // According to the TCG examples, encoded without typeOr{} name-value pair.
-        let call = MethodCall::new_success(object, method::SET, (where_, values).encode_args());
+        let call = MethodCall::new_success(object, method_id::SET, (where_, values).encode_args());
         let _ = self.do_method_call(call).await?.take_results()?; // `Set` returns nothing.
         Ok(())
     }
@@ -114,7 +115,7 @@ impl SPSession {
         first: Option<ObjectReference>,
         count: Option<u64>,
     ) -> Result<List<ObjectReference>, RPCError> {
-        let call = MethodCall::new_success(table.into(), method::NEXT, (first, count).encode_args());
+        let call = MethodCall::new_success(table.into(), method_id::NEXT, (first, count).encode_args());
         let results = self.do_method_call(call).await?.take_results()?;
         let (objects,) = results.decode_args().map_err(|err: MethodStatus| err.while_receiving())?;
         Ok(objects)

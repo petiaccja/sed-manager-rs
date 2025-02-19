@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::messaging::types::SPRef;
-use crate::specification::sp;
+use crate::specification::opal;
 
 use super::security_providers::{AdminSP, LockingSP};
 use super::SecurityProvider;
@@ -15,8 +15,8 @@ pub struct SSC {
 impl SSC {
     pub fn new() -> Self {
         let mut security_providers = HashMap::new();
-        security_providers.insert(sp::ADMIN.into(), BoxedSSC::from(Box::new(AdminSP::new())));
-        security_providers.insert(sp::LOCKING.into(), BoxedSSC::from(Box::new(LockingSP::new())));
+        security_providers.insert(opal::admin::sp::ADMIN.into(), BoxedSSC::from(Box::new(AdminSP::new())));
+        security_providers.insert(opal::admin::sp::LOCKING.into(), BoxedSSC::from(Box::new(LockingSP::new())));
         Self { security_providers }
     }
 

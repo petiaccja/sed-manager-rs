@@ -3,12 +3,16 @@ name = "sed-manager-gui"
 version = "0.1.0"
 edition = "2021"
 
+[package.metadata]
+build = "build.rs"
+
 [dependencies]
 sed-manager = { path = "../sed_manager" }
 
 [dependencies.slint]
 version = "1.9.2"
-features = ["backend-winit", "renderer-winit-software", "renderer-skia"]
+default-features = false
+features = ["std", "compat-1-2", "backend-winit", "renderer-skia", "renderer-femtovg"]
 
 [dependencies.tokio]
 version = "1.41.0"

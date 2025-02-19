@@ -1,3 +1,4 @@
+pub mod applications;
 pub mod device;
 pub mod fake_device;
 pub mod messaging;

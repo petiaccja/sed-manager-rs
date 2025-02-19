@@ -3,7 +3,7 @@ use sed_manager_macros::{AliasType, EnumerationType, StructType};
 use crate::messaging::uid::UID;
 pub use crate::messaging::value::Bytes;
 use crate::messaging::value::{List, Value};
-use crate::specification::table;
+use crate::specification::table_id;
 
 use super::max_bytes::MaxBytes;
 use super::traits::declare_type;
@@ -19,11 +19,11 @@ pub type Bytes64 = [u8; 64];
 pub type MaxBytes32 = MaxBytes<32>;
 pub type MaxBytes64 = MaxBytes<64>;
 
-pub type AuthorityRef = RestrictedObjectReference<{ table::AUTHORITY.value() }>;
-pub type SPRef = RestrictedObjectReference<{ table::SP.value() }>;
-pub type CPinRef = RestrictedObjectReference<{ table::C_PIN.value() }>;
-pub type CredentialRef = CPinRef; // Should have more tables but it's difficult to express without variadics.
-pub type LogListRef = RestrictedObjectReference<{ table::LOG_LIST.value() }>;
+pub type AuthorityRef = RestrictedObjectReference<{ table_id::AUTHORITY.value() }>;
+pub type SPRef = RestrictedObjectReference<{ table_id::SP.value() }>;
+pub type CPinRef = RestrictedObjectReference<{ table_id::C_PIN.value() }>;
+pub type CredentialRef = CPinRef; // Should have more table_id but it's difficult to express without variadics.
+pub type LogListRef = RestrictedObjectReference<{ table_id::LOG_LIST.value() }>;
 
 /// Result returned by the Authenticate method.
 /// I'm guessing it's not encoded as an NVP like regular typeOr{} objects, but simply as plain data.

@@ -1,0 +1,682 @@
+{
+    "Core": {
+        "*": {
+            "Authority": {
+                "Anybody": "0000000900000001",
+                "Admins": "0000000900000002",
+                "Makers": "0000000900000003",
+                "MakerSymK": "0000000900000004",
+                "MakerPuK": "0000000900000005",
+                "SID": "0000000900000006",
+                "TPerSign": "0000000900000007",
+                "TPerExch": "0000000900000008",
+                "AdminExch": "0000000900000009",
+                "Issuers": "0000000900000201",
+                "Editors": "0000000900000202",
+                "Deleters": "0000000900000203",
+                "Servers": "0000000900000204",
+                "Reserve0": "0000000900000205",
+                "Reserve1": "0000000900000206",
+                "Reserve2": "0000000900000207",
+                "Reserve3": "0000000900000208"
+            },
+            "General": {
+                "Null": "0000000000000000",
+                "CharSetUnrestricted": "0000000B00000001"
+            },
+            "InvokingID": {
+                "ThisSP": "0000000000000001",
+                "SessionManager": "00000000000000FF"
+            },
+            "LockingInfo": {
+                "LockingInfo": "0000080100000001"
+            },
+            "MBRControl": {
+                "MBRControl": "0000080300000001"
+            },
+            "MethodID": {
+                "Properties": "000000000000FF01",
+                "StartSession": "000000000000FF02",
+                "SyncSession": "000000000000FF03",
+                "StartTrustedSession": "000000000000FF04",
+                "SyncTrustedSession": "000000000000FF05",
+                "CloseSession": "000000000000FF06",
+                "DeleteSP": "0000000600000001",
+                "CreateTable": "0000000600000002",
+                "Delete": "0000000600000003",
+                "CreateRow": "0000000600000004",
+                "DeleteRow": "0000000600000005",
+                "OBSOLETE_0006": "0000000600000006",
+                "OBSOLETE_0007": "0000000600000007",
+                "Next": "0000000600000008",
+                "GetFreeSpace": "0000000600000009",
+                "GetFreeRows": "000000060000000A",
+                "DeleteMethod": "000000060000000B",
+                "OBSOLETE": "000000060000000C",
+                "GetACL": "000000060000000D",
+                "AddACE": "000000060000000E",
+                "RemoveACE": "000000060000000F",
+                "GenKey": "0000000600000010",
+                "Reserved_0011": "0000000600000011",
+                "GetPackage": "0000000600000012",
+                "SetPackage": "0000000600000013",
+                "Get": "0000000600000016",
+                "Set": "0000000600000017",
+                "Authenticate": "000000060000001C",
+                "IssueSP": "0000000600000201",
+                "Reserved_0202": "0000000600000202",
+                "Reserved_0203": "0000000600000203",
+                "GetClock": "0000000600000401",
+                "ResetClock": "0000000600000402",
+                "SetClockHigh": "0000000600000403",
+                "SetLagHigh": "0000000600000404",
+                "SetClockLow": "0000000600000405",
+                "SetLagLow": "0000000600000406",
+                "IncrementCounter": "0000000600000407",
+                "Random": "0000000600000601",
+                "Salt": "0000000600000602",
+                "DecryptInit": "0000000600000603",
+                "Decrypt": "0000000600000604",
+                "DecryptFinalize": "0000000600000605",
+                "EncryptInit": "0000000600000606",
+                "Encrypt": "0000000600000607",
+                "EncryptFinalize": "0000000600000608",
+                "HMACInit": "0000000600000609",
+                "HMAC": "000000060000060A",
+                "HMACFinalize": "000000060000060B",
+                "HashInit": "000000060000060C",
+                "Hash": "000000060000060D",
+                "HashFinalize": "000000060000060E",
+                "Sign": "000000060000060F",
+                "Verify": "0000000600000610",
+                "XOR": "0000000600000611",
+                "AddLog": "0000000600000A01",
+                "CreateLog": "0000000600000A02",
+                "ClearLog": "0000000600000A03",
+                "FlushLog": "0000000600000A04",
+                "Reserved_0803": "0000000600000803",
+                "Revert": "0000000600000202",
+                "RevertSP": "0000000600000011",
+                "Activate": "0000000600000203",
+                "Reactivate": "0000000600000801",
+                "Erase": "0000000600000803"
+            },
+            "SecretProtect": {
+                "C_PIN": "0000001D00000001",
+                "C_RSA_1024_6": "0000001D00000002",
+                "C_RSA_1024_7": "0000001D00000003",
+                "C_RSA_1024_8": "0000001D00000004",
+                "C_RSA_1024_9": "0000001D00000005",
+                "C_RSA_1024_A": "0000001D00000006",
+                "C_RSA_1024_B": "0000001D00000007",
+                "C_RSA_2048_6": "0000001D00000008",
+                "C_RSA_2048_7": "0000001D00000009",
+                "C_RSA_2048_8": "0000001D0000000A",
+                "C_RSA_2048_9": "0000001D0000000B",
+                "C_RSA_2048_A": "0000001D0000000C",
+                "C_RSA_2048_B": "0000001D0000000D",
+                "C_AES_128": "0000001D0000000E",
+                "C_AES_256": "0000001D0000000F",
+                "C_EC_160": "0000001D00000010",
+                "C_EC_192": "0000001D00000011",
+                "C_EC_224": "0000001D00000012",
+                "C_EC_256": "0000001D00000013",
+                "C_EC_384": "0000001D00000014",
+                "C_EC_521": "0000001D00000015",
+                "C_EC_163": "0000001D00000016",
+                "C_EC_233": "0000001D00000017",
+                "C_EC_283": "0000001D00000018",
+                "C_HMAC_160": "0000001D00000019",
+                "C_HMAC_256": "0000001D0000001A",
+                "C_HMAC_384": "0000001D0000001B",
+                "C_HMAC_512": "0000001D0000001C",
+                "K_AES_128": "0000001D0000001D",
+                "K_AES_256": "0000001D0000001E"
+            },
+            "SPInfo": {
+                "SPInfo": "0000000200000001"
+            },
+            "SPTemplates": {
+                "Base": "0000000300000001",
+                "Admin": "0000000300000002",
+                "Clock": "0000000300000003",
+                "Crypto": "0000000300000004",
+                "Log": "0000000300000005",
+                "Locking": "0000000300000006",
+                "Reserved": "0000000300000007"
+            },
+            "Table": {
+                "Table": "0000000100000001",
+                "SPInfo": "0000000100000002",
+                "SPTemplates": "0000000100000003",
+                "Column": "0000000100000004",
+                "Type": "0000000100000005",
+                "MethodID": "0000000100000006",
+                "AccessControl": "0000000100000007",
+                "ACE": "0000000100000008",
+                "Authority": "0000000100000009",
+                "Certificates": "000000010000000A",
+                "C_PIN": "000000010000000B",
+                "C_RSA_1024": "000000010000000C",
+                "C_RSA_2048": "000000010000000D",
+                "C_AES_128": "000000010000000E",
+                "C_AES_256": "000000010000000F",
+                "C_EC_160": "0000000100000010",
+                "C_EC_192": "0000000100000011",
+                "C_EC_224": "0000000100000012",
+                "C_EC_256": "0000000100000013",
+                "C_EC_384": "0000000100000014",
+                "C_EC_521": "0000000100000015",
+                "C_EC_163": "0000000100000016",
+                "C_EC_233": "0000000100000017",
+                "C_EC_283": "0000000100000018",
+                "C_HMAC_160": "0000000100000019",
+                "C_HMAC_256": "000000010000001A",
+                "C_HMAC_384": "000000010000001B",
+                "C_HMAC_512": "000000010000001C",
+                "SecretProtect": "000000010000001D",
+                "TPerInfo": "0000000100000201",
+                "CryptoSuite": "0000000100000203",
+                "Template": "0000000100000204",
+                "SP": "0000000100000205",
+                "ClockTime": "0000000100000401",
+                "H_SHA_1": "0000000100000601",
+                "H_SHA_256": "0000000100000602",
+                "H_SHA_384": "0000000100000603",
+                "H_SHA_512": "0000000100000604",
+                "Log": "0000000100000A01",
+                "LogList": "0000000100000A02",
+                "LockingInfo": "0000000100000801",
+                "Locking": "0000000100000802",
+                "MBRControl": "0000000100000803",
+                "MBR": "0000000100000804",
+                "K_AES_128": "0000000100000805",
+                "K_AES_256": "0000000100000806"
+            },
+            "TableID": {
+                "Table": "0000000100000000",
+                "SPInfo": "0000000200000000",
+                "SPTemplates": "0000000300000000",
+                "Column": "0000000400000000",
+                "Type": "0000000500000000",
+                "MethodID": "0000000600000000",
+                "AccessControl": "0000000700000000",
+                "ACE": "0000000800000000",
+                "Authority": "0000000900000000",
+                "Certificates": "0000000A00000000",
+                "C_PIN": "0000000B00000000",
+                "C_RSA_1024": "0000000C00000000",
+                "C_RSA_2048": "0000000D00000000",
+                "C_AES_128": "0000000E00000000",
+                "C_AES_256": "0000000F00000000",
+                "C_EC_160": "0000001000000000",
+                "C_EC_192": "0000001100000000",
+                "C_EC_224": "0000001200000000",
+                "C_EC_256": "0000001300000000",
+                "C_EC_384": "0000001400000000",
+                "C_EC_521": "0000001500000000",
+                "C_EC_163": "0000001600000000",
+                "C_EC_233": "0000001700000000",
+                "C_EC_283": "0000001800000000",
+                "C_HMAC_160": "0000001900000000",
+                "C_HMAC_256": "0000001A00000000",
+                "C_HMAC_384": "0000001B00000000",
+                "C_HMAC_512": "0000001C00000000",
+                "SecretProtect": "0000001D00000000",
+                "TPerInfo": "0000020100000000",
+                "CryptoSuite": "0000020300000000",
+                "Template": "0000020400000000",
+                "SP": "0000020500000000",
+                "ClockTime": "0000040100000000",
+                "H_SHA_1": "0000060100000000",
+                "H_SHA_256": "0000060200000000",
+                "H_SHA_384": "0000060300000000",
+                "H_SHA_512": "0000060400000000",
+                "Log": "00000A0100000000",
+                "LogList": "00000A0200000000",
+                "LockingInfo": "0000080100000000",
+                "Locking": "0000080200000000",
+                "MBRControl": "0000080300000000",
+                "MBR": "0000080400000000",
+                "K_AES_128": "0000080500000000",
+                "K_AES_256": "0000080600000000"
+            },
+            "Template": {
+                "Base": "0000020400000001",
+                "Admin": "0000020400000002",
+                "Clock": "0000020400000003",
+                "Crypto": "0000020400000004",
+                "Log": "0000020400000005",
+                "Locking": "0000020400000006",
+                "Reserved": "0000020400000007"
+            },
+            "TPerInfo": {
+                "TPerInfo": "0000020100000001"
+            }
+        }
+    },
+    "DataStore": {
+        "Admin": {
+            "SP": {
+                "Admin": "0000020500000001",
+                "Locking": "0000020500000002"
+            }
+        },
+        "Locking": {
+            "ACE": {
+                "DataStore{n}_Get_All": "000000080003FC00-2048-2",
+                "DataStore{n}_Set_All": "000000080003FC01-2048-2"
+            }
+        }
+    },
+    "Enterprise": {
+        "Admin": {
+            "ACE": {
+                "Anybody": "0000000800000001",
+                "Makers": "0000000800000003",
+                "SID": "0000000800000201",
+                "SID_SetSelf": "0000000800008C03",
+                "MSID_Get": "0000000800008C04",
+                "SID_SetMakers": "0000000800008C05"
+            },
+            "Authority": {
+                "Anybody": "0000000900000001",
+                "Makers": "0000000900000003",
+                "MakerSymK": "0000000900000004",
+                "SID": "0000000900000006"
+            },
+            "C_PIN": {
+                "SID": "0000000B00000001",
+                "MSID": "0000000B00008402"
+            },
+            "SP": {
+                "Admin": "0000020500000001",
+                "Locking": "0000020500000002"
+            }
+        },
+        "Locking": {
+            "ACE": {
+                "Anybody": "0000000800000001",
+                "BandMaster{n}": "0000000800008001-1024",
+                "BandMaster{n}_SetSelf": "0000000800008401-1024",
+                "BandMaster{n}_SetBand": "0000000800008801-1024",
+                "EraseMaster": "0000000800008C01",
+                "EraseMaster_SetSelf": "0000000800008C02",
+                "AnyMaster": "0000000800008C05",
+                "BandMasters": "0000000800008C06",
+                "Anybody_GetBand": "0000000800020001",
+                "Get_K_AES_Mode": "000000080003BFFF"
+            },
+            "Authority": {
+                "Anybody": "0000000900000001",
+                "BandMaster{n}": "0000000900008001-1024",
+                "EraseMaster": "0000000900008401",
+                "BandMasters": "0000000900008403"
+            },
+            "C_PIN": {
+                "BandMaster{n}": "0000000B00008001-1024",
+                "EraseMaster": "0000000B00008401"
+            }
+        }
+    },
+    "KPIO": {
+        "Admin": {
+            "ACE": {
+                "Anybody": "0000000800000001",
+                "Admin": "0000000800000002",
+                "Set_Enabled": "0000000800030001",
+                "C_PIN_SID_Get_NOPIN": "0000000800008C02",
+                "C_PIN_SID_Set_PIN": "0000000800008C03",
+                "C_PIN_MSID_Get_PIN": "0000000800008C04",
+                "C_PIN_Admins_Set_PIN": "000000080003A001",
+                "TPerInfo_Set_ProgrammaticResetEnable": "0000000800030003",
+                "SP_SID": "0000000800030002",
+                "DataRemovalMechanism_Set_ActiveDataRemovalMechanism": "0000000800050001"
+            },
+            "Authority": {
+                "Anybody": "0000000900000001",
+                "Admins": "0000000900000002",
+                "Makers": "0000000900000003",
+                "SID": "0000000900000006",
+                "Admin{n}": "0000000900000200-256"
+            },
+            "C_PIN": {
+                "SID": "0000000B00000001",
+                "MSID": "0000000B00008402",
+                "Admin{n}": "0000000B00000200-256"
+            },
+            "SP": {
+                "Admin": "0000020500000001",
+                "KeyPerIO": "0000020500000003"
+            }
+        },
+        "KeyPerIO": {
+            "ACE": {
+                "Anybody": "0000000800000001",
+                "Admin": "0000000800000002",
+                "Anybody_Get_CommonName": "0000000800000003",
+                "Admins_Set_CommonName": "0000000800000004",
+                "ACE_Get_All": "0000000800038000",
+                "ACE_Set_BooleanExpression": "0000000800038001",
+                "Authority_Get_All": "0000000800039000",
+                "Authority_Set_Enabled": "0000000800039001",
+                "C_PIN_Admins_Get_All_NOPIN": "000000080003A000",
+                "C_PIN_Admins_Set_PIN": "000000080003A001",
+                "KPIOPolicies_Admin_Set": "0000000800060001",
+                "KPIOPolicies_Admin_Get": "0000000800060002",
+                "KeyTagAllocation_Admin_Set": "0000000800061001",
+                "KeyTagAllocation_Admin_Get": "0000000800061002",
+                "KeyEncryptionKey_Admin_Set": "0000000800062001",
+                "KeyEncryptionKey_Admin_Get": "0000000800062002",
+                "DataStore_Get_All": "000000080003FC00",
+                "DataStore_Set_All": "000000080003FC01"
+            },
+            "Authority": {
+                "Anybody": "0000000900000001",
+                "Admins": "0000000900000002",
+                "Admin{n}": "0000000900010000-2048"
+            },
+            "C_PIN": {
+                "Admin{n}": "0000000B00010000-2048"
+            }
+        }
+    },
+    "Opalite": {
+        "Admin": {
+            "ACE": {
+                "Anybody": "0000000800000001",
+                "C_PIN_SID_Get_NOPIN": "0000000800008C02",
+                "C_PIN_SID_Set_PIN": "0000000800008C03",
+                "C_PIN_MSID_Get_PIN": "0000000800008C04",
+                "TPerInfo_Set_ProgrammaticResetEnable": "0000000800030003",
+                "SP_SID": "0000000800030002"
+            },
+            "Authority": {
+                "Anybody": "0000000900000001",
+                "Admins": "0000000900000002",
+                "SID": "0000000900000006"
+            },
+            "C_PIN": {
+                "SID": "0000000B00000001",
+                "MSID": "0000000B00008402"
+            },
+            "SP": {
+                "Admin": "0000020500000001",
+                "Locking": "0000020500000002"
+            }
+        },
+        "Locking": {
+            "ACE": {
+                "Anybody": "0000000800000001",
+                "Admin": "0000000800000002",
+                "ACE_Get_All": "0000000800038000",
+                "ACE_Set_BooleanExpression": "0000000800038001",
+                "Authority_Get_All": "0000000800039000",
+                "Authority_Set_Enabled": "0000000800039001",
+                "C_PIN_Admins_Get_All_NOPIN": "000000080003A000",
+                "C_PIN_Admins_Set_PIN": "000000080003A001",
+                "C_PIN_User1_Set_PIN": "000000080003A801",
+                "C_PIN_User2_Set_PIN": "000000080003A802",
+                "K_AES_Mode": "000000080003BFFF",
+                "K_AES_128_GlobalRange_GenKey": "000000080003B000",
+                "K_AES_256_GlobalRange_GenKey": "000000080003B800",
+                "Locking_GlobalRange_Get_RangeStartToActiveKey": "000000080003D000",
+                "Locking_GlobalRange_Set_RdLocked": "000000080003E000",
+                "Locking_GlobalRange_Set_WrLocked": "000000080003E800",
+                "Locking_GlblRng_Admins_Set": "000000080003F000",
+                "MBRControl_Admins_Set": "000000080003F800",
+                "MBRControl_Set_DoneToDOR": "000000080003F801",
+                "DataStore_Get_All": "000000080003FC00",
+                "DataStore_Set_All": "000000080003FC01"
+            },
+            "Authority": {
+                "Anybody": "0000000900000001",
+                "Admins": "0000000900000002",
+                "Admin1": "0000000900010001",
+                "Users": "0000000900030000",
+                "User1": "0000000900030001",
+                "User2": "0000000900030002"
+            },
+            "C_PIN": {
+                "Admin1": "0000000B00010001",
+                "User1": "0000000B00030001",
+                "User2": "0000000B00030002"
+            }
+        }
+    },
+    "Opal_2": {
+        "Admin": {
+            "ACE": {
+                "Anybody": "0000000800000001",
+                "Admin": "0000000800000002",
+                "Set_Enabled": "0000000800030001",
+                "C_PIN_SID_Get_NOPIN": "0000000800008C02",
+                "C_PIN_SID_Set_PIN": "0000000800008C03",
+                "C_PIN_MSID_Get_PIN": "0000000800008C04",
+                "C_PIN_Admins_Set_PIN": "000000080003A001",
+                "TPerInfo_Set_ProgrammaticResetEnable": "0000000800030003",
+                "SP_SID": "0000000800030002",
+                "DataRemovalMechanism_Set_ActiveDataRemovalMechanism": "0000000800050001"
+            },
+            "Authority": {
+                "Anybody": "0000000900000001",
+                "Admins": "0000000900000002",
+                "Makers": "0000000900000003",
+                "SID": "0000000900000006",
+                "Admin{n}": "0000000900000200-256"
+            },
+            "C_PIN": {
+                "SID": "0000000B00000001",
+                "MSID": "0000000B00008402",
+                "Admin{n}": "0000000B00000200-256"
+            },
+            "SP": {
+                "Admin": "0000020500000001",
+                "Locking": "0000020500000002"
+            }
+        },
+        "Locking": {
+            "ACE": {
+                "Anybody": "0000000800000001",
+                "Admin": "0000000800000002",
+                "Anybody_Get_CommonName": "0000000800000003",
+                "Admins_Set_CommonName": "0000000800000004",
+                "ACE_Get_All": "0000000800038000",
+                "ACE_Set_BooleanExpression": "0000000800038001",
+                "Authority_Get_All": "0000000800039000",
+                "Authority_Set_Enabled": "0000000800039001",
+                "User{n}_Set_CommonName": "0000000800044000-256",
+                "C_PIN_Admins_Get_All_NOPIN": "000000080003A000",
+                "C_PIN_Admins_Set_PIN": "000000080003A001",
+                "C_PIN_User{n}_Set_PIN": "000000080003A800-256",
+                "K_AES_Mode": "000000080003BFFF",
+                "K_AES_128_GlobalRange_GenKey": "000000080003B000",
+                "K_AES_128_Range{n}_GenKey": "000000080003B000-256",
+                "K_AES_256_GlobalRange_GenKey": "000000080003B800",
+                "K_AES_256_Range{n}_GenKey": "000000080003B800-256",
+                "Locking_GlobalRange_Get_RangeStartToActiveKey": "000000080003D000",
+                "Locking_Range{n}_Get_RangeStartToActiveKey": "000000080003D000-256",
+                "Locking_GlobalRange_Set_RdLocked": "000000080003E000",
+                "Locking_Range{n}_Set_RdLocked": "000000080003E000-256",
+                "Locking_GlobalRange_Set_WrLocked": "000000080003E800",
+                "Locking_Range{n}_Set_WrLocked": "000000080003E800-256",
+                "Locking_GlblRng_Admins_Set": "000000080003F000",
+                "Locking_Admins_RangeStartToLOR": "000000080003F001",
+                "MBRControl_Admins_Set": "000000080003F800",
+                "MBRControl_Set_DoneToDOR": "000000080003F801",
+                "DataStore_Get_All": "000000080003FC00",
+                "DataStore_Set_All": "000000080003FC01"
+            },
+            "Authority": {
+                "Anybody": "0000000900000001",
+                "Admins": "0000000900000002",
+                "Admin{n}": "0000000900010000-2048",
+                "Users": "0000000900030000",
+                "User{n}": "0000000900030000-2048"
+            },
+            "C_PIN": {
+                "Admin{n}": "0000000B00010000-2048",
+                "User{n}": "0000000B00030000-2048"
+            }
+        }
+    },
+    "PSID": {
+        "Admin": {
+            "ACE": {
+                "C_PIN_Get_PSID_NoPIN": "00000008000100E1",
+                "SP_PSID": "00000008000100E0"
+            },
+            "Authority": {
+                "PSID": "000000090001FF01"
+            },
+            "C_PIN": {
+                "PSID": "0000000B0001FF01"
+            },
+            "SP": {
+                "Admin": "0000020500000001",
+                "Locking": "0000020500000002"
+            }
+        }
+    },
+    "Pyrite_2": {
+        "Admin": {
+            "ACE": {
+                "Anybody": "0000000800000001",
+                "Admin": "0000000800000002",
+                "Set_Enabled": "0000000800030001",
+                "C_PIN_SID_Get_NOPIN": "0000000800008C02",
+                "C_PIN_SID_Set_PIN": "0000000800008C03",
+                "C_PIN_MSID_Get_PIN": "0000000800008C04",
+                "C_PIN_Admins_Set_PIN": "000000080003A001",
+                "TPerInfo_Set_ProgrammaticResetEnable": "0000000800030003",
+                "SP_SID": "0000000800030002",
+                "DataRemovalMechanism_Set_ActiveDataRemovalMechanism": "0000000800050001"
+            },
+            "Authority": {
+                "Anybody": "0000000900000001",
+                "Admins": "0000000900000002",
+                "SID": "0000000900000006",
+                "Admin{n}": "0000000900000200-256"
+            },
+            "C_PIN": {
+                "SID": "0000000B00000001",
+                "MSID": "0000000B00008402",
+                "Admin{n}": "0000000B00000200-256"
+            },
+            "SP": {
+                "Admin": "0000020500000001",
+                "Locking": "0000020500000002"
+            }
+        },
+        "Locking": {
+            "ACE": {
+                "Anybody": "0000000800000001",
+                "Admin": "0000000800000002",
+                "ACE_Get_All": "0000000800038000",
+                "ACE_Set_BooleanExpression": "0000000800038001",
+                "Authority_Get_All": "0000000800039000",
+                "Authority_Set_Enabled": "0000000800039001",
+                "C_PIN_Admins_Get_All_NOPIN": "000000080003A000",
+                "C_PIN_Admins_Set_PIN": "000000080003A001",
+                "C_PIN_User1_Set_PIN": "000000080003A801",
+                "C_PIN_User2_Set_PIN": "000000080003A802",
+                "Locking_GlobalRange_Get_RangeStartToActiveKey": "000000080003D000",
+                "Locking_GlobalRange_Set_RdLocked": "000000080003E000",
+                "Locking_GlobalRange_Set_WrLocked": "000000080003E800",
+                "Locking_GlblRng_Admins_Set": "000000080003F000",
+                "MBRControl_Admins_Set": "000000080003F800",
+                "MBRControl_Set_DoneToDOR": "000000080003F801",
+                "DataStore_Get_All": "000000080003FC00",
+                "DataStore_Set_All": "000000080003FC01"
+            },
+            "Authority": {
+                "Anybody": "0000000900000001",
+                "Admins": "0000000900000002",
+                "Admin{n}": "0000000900010000-2048",
+                "Users": "0000000900030000",
+                "User1": "0000000900030001",
+                "User2": "0000000900030002"
+            },
+            "C_PIN": {
+                "Admin{n}": "0000000B00010000-2048",
+                "User1": "0000000B00030001",
+                "User2": "0000000B00030002"
+            }
+        }
+    },
+    "Ruby": {
+        "Admin": {
+            "ACE": {
+                "Anybody": "0000000800000001",
+                "Admin": "0000000800000002",
+                "Set_Enabled": "0000000800030001",
+                "C_PIN_SID_Get_NOPIN": "0000000800008C02",
+                "C_PIN_SID_Set_PIN": "0000000800008C03",
+                "C_PIN_MSID_Get_PIN": "0000000800008C04",
+                "C_PIN_Admins_Set_PIN": "000000080003A001",
+                "TPerInfo_Set_ProgrammaticResetEnable": "0000000800030003",
+                "SP_SID": "0000000800030002"
+            },
+            "Authority": {
+                "Anybody": "0000000900000001",
+                "Admins": "0000000900000002",
+                "Makers": "0000000900000003",
+                "SID": "0000000900000006",
+                "Admin{n}": "0000000900000200-256"
+            },
+            "C_PIN": {
+                "SID": "0000000B00000001",
+                "MSID": "0000000B00008402",
+                "Admin{n}": "0000000B00000200-256"
+            },
+            "SP": {
+                "Admin": "0000020500000001",
+                "Locking": "0000020500000002"
+            }
+        },
+        "Locking": {
+            "ACE": {
+                "Anybody": "0000000800000001",
+                "Admin": "0000000800000002",
+                "Anybody_Get_CommonName": "0000000800000003",
+                "Admins_Set_CommonName": "0000000800000004",
+                "ACE_Get_All": "0000000800038000",
+                "ACE_Set_BooleanExpression": "0000000800038001",
+                "Authority_Get_All": "0000000800039000",
+                "Authority_Set_Enabled": "0000000800039001",
+                "User{n}_Set_CommonName": "0000000800044000-256",
+                "C_PIN_Admins_Get_All_NOPIN": "000000080003A000",
+                "C_PIN_Admins_Set_PIN": "000000080003A001",
+                "C_PIN_User{n}_Set_PIN": "000000080003A800-256",
+                "K_AES_Mode": "000000080003BFFF",
+                "K_AES_128_GlobalRange_GenKey": "000000080003B000",
+                "K_AES_128_Range{n}_GenKey": "000000080003B000-256",
+                "K_AES_256_GlobalRange_GenKey": "000000080003B800",
+                "K_AES_256_Range{n}_GenKey": "000000080003B800-256",
+                "Locking_GlobalRange_Get_RangeStartToActiveKey": "000000080003D000",
+                "Locking_Range{n}_Get_RangeStartToActiveKey": "000000080003D000-256",
+                "Locking_GlobalRange_Set_RdLocked": "000000080003E000",
+                "Locking_Range{n}_Set_RdLocked": "000000080003E000-256",
+                "Locking_GlobalRange_Set_WrLocked": "000000080003E800",
+                "Locking_Range{n}_Set_WrLocked": "000000080003E800-256",
+                "Locking_GlblRng_Admins_Set": "000000080003F000",
+                "Locking_Admins_RangeStartToLOR": "000000080003F001",
+                "MBRControl_Admins_Set": "000000080003F800",
+                "MBRControl_Set_DoneToDOR": "000000080003F801",
+                "DataStore_Get_All": "000000080003FC00",
+                "DataStore_Set_All": "000000080003FC01"
+            },
+            "Authority": {
+                "Anybody": "0000000900000001",
+                "Admins": "0000000900000002",
+                "Admin{n}": "0000000900010000-2048",
+                "Users": "0000000900030000",
+                "User{n}": "0000000900030000-2048"
+            },
+            "C_PIN": {
+                "Admin{n}": "0000000B00010000-2048",
+                "User{n}": "0000000B00030000-2048"
+            }
+        }
+    }
+}

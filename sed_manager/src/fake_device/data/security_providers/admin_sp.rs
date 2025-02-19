@@ -3,7 +3,7 @@ use crate::fake_device::data::table::BasicTable;
 use crate::fake_device::data::Object;
 use crate::messaging::types::{AuthMethod, SPRef};
 use crate::messaging::uid::UID;
-use crate::specification::{opal, sp, table};
+use crate::specification::{opal, table_id};
 
 use super::super::SecurityProvider;
 
@@ -20,7 +20,7 @@ impl AdminSP {
 
 impl SecurityProvider for AdminSP {
     fn uid(&self) -> SPRef {
-        sp::ADMIN.into()
+        opal::admin::sp::ADMIN.into()
     }
 
     fn get_authority_table(&self) -> Option<&AuthorityTable> {
@@ -33,16 +33,16 @@ impl SecurityProvider for AdminSP {
 
     fn get_table(&self, uid: UID) -> Option<&dyn BasicTable> {
         match uid {
-            table::AUTHORITY => Some(&self.authorities as &dyn BasicTable),
-            table::C_PIN => Some(&self.c_pin as &dyn BasicTable),
+            table_id::AUTHORITY => Some(&self.authorities as &dyn BasicTable),
+            table_id::C_PIN => Some(&self.c_pin as &dyn BasicTable),
             _ => None,
         }
     }
 
     fn get_table_mut(&mut self, uid: UID) -> Option<&mut dyn BasicTable> {
         match uid {
-            table::AUTHORITY => Some(&mut self.authorities as &mut dyn BasicTable),
-            table::C_PIN => Some(&mut self.c_pin as &mut dyn BasicTable),
+            table_id::AUTHORITY => Some(&mut self.authorities as &mut dyn BasicTable),
+            table_id::C_PIN => Some(&mut self.c_pin as &mut dyn BasicTable),
             _ => None,
         }
     }
@@ -89,11 +89,11 @@ fn new_authority_table() -> AuthorityTable {
 
     for i in 1..=4 {
         let admin = Authority {
-            uid: opal::admin::authority::ADMIN.n(i).unwrap().into(),
+            uid: opal::admin::authority::ADMIN.nth(i).unwrap().into(),
             name: Some(format!("Admin{}", i).into()),
             enabled: false.into(),
             operation: AuthMethod::None.into(),
-            credential: Some(opal::admin::c_pin::ADMIN.n(i).unwrap().into()),
+            credential: Some(opal::admin::c_pin::ADMIN.nth(i).unwrap().into()),
             ..Default::default()
         };
         authorities.0.insert(admin.uid().into(), admin);
@@ -113,7 +113,7 @@ fn new_c_pin_table() -> CPinTable {
 
     for i in 1..=4 {
         let admin = CPin {
-            uid: opal::admin::c_pin::ADMIN.n(i).unwrap().into(),
+            uid: opal::admin::c_pin::ADMIN.nth(i).unwrap().into(),
             pin: Some("password".into()),
             ..Default::default()
         };
