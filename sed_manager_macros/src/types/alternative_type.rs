@@ -60,7 +60,7 @@ fn gen_to_value(declaration: &DataEnum) -> TokenStream2 {
                 let uid = match &value {
                     #uid_patterns
                 };
-                let name = ::sed_manager::messaging::value::Value::from(::std::vec::Vec::from(&uid.value().to_be_bytes()[4..]));
+                let name = ::sed_manager::messaging::value::Value::from(::std::vec::Vec::from(&uid.as_u64().to_be_bytes()[4..]));
                 let value = match value {
                     #value_patterns
                 };

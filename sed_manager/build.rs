@@ -170,7 +170,7 @@ impl SecurityProvider {
     fn generate_lookup(&self) -> TokenStream2 {
         let id = to_const_identifier(self.canonical_name());
         let sp = if self.name != "*" {
-            quote! { self::super::admin::sp::#id.value() }
+            quote! { self::super::admin::sp::#id.as_u64() }
         } else {
             quote! { 0 + 0 } // This is silly, but otherwise there is a warning for unnecessary curly braces.
         };
@@ -279,7 +279,7 @@ impl Table {
             quote! {
                 use root::lookup::ListObjectLookup;
                 pub const THIS_TABLE: UID = #this_table;
-                pub const OBJECT_LOOKUP: ListObjectLookup<{THIS_TABLE.value()}, #num_uids, #num_uid_ranges> = ListObjectLookup {
+                pub const OBJECT_LOOKUP: ListObjectLookup<{THIS_TABLE.as_u64()}, #num_uids, #num_uid_ranges> = ListObjectLookup {
                     table_lookup: &root::core::all::table_id::TABLE_LOOKUP,
                     uids_by_value: [ #(#uids_by_value),* ],
                     uids_by_name: [ #(#uids_by_name),* ],

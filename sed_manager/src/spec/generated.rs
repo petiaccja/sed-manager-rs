@@ -15,7 +15,7 @@ use crate::spec::generated as root;
 use crate::spec::lookup;
 
 // This inlines the generated code.
-include!(concat!(env!("OUT_DIR"), "/specification.rs"));
+include!(concat!(env!("OUT_DIR"), "/spec.rs"));
 
 #[cfg(test)]
 mod tests {

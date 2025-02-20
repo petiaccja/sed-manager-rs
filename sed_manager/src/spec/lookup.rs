@@ -134,7 +134,7 @@ impl<const TABLE: u64, const UID_COUNT: usize, const RANGE_COUNT: usize> ObjectL
     }
 
     fn has_table(&self, table: UID) -> bool {
-        TABLE == 0 || table.value() == TABLE
+        TABLE == 0 || table.as_u64() == TABLE
     }
 }
 

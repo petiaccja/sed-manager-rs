@@ -13,11 +13,11 @@ impl UIDRange {
     }
 
     pub const fn new_count(start: UID, count: u64, step: u64) -> Self {
-        Self { start, end: UID::new(start.value() + count * step), step }
+        Self { start, end: UID::new(start.as_u64() + count * step), step }
     }
 
     pub const fn nth(&self, offset: u64) -> Option<UID> {
-        let (start, step) = (self.start.value(), self.step);
+        let (start, step) = (self.start.as_u64(), self.step);
         let uid = UID::new(start + offset * step);
         match self.contains(uid) {
             true => Some(uid),
@@ -26,14 +26,14 @@ impl UIDRange {
     }
 
     pub const fn contains(&self, uid: UID) -> bool {
-        let (start, end, step) = (self.start.value(), self.end.value(), self.step);
-        let value = uid.value();
+        let (start, end, step) = (self.start.as_u64(), self.end.as_u64(), self.step);
+        let value = uid.as_u64();
         start <= value && value < end && (value - start) % step == 0
     }
 
     pub const fn index_of(&self, uid: UID) -> Option<u64> {
         match self.contains(uid) {
-            true => Some((uid.value() - self.start.value()) / self.step),
+            true => Some((uid.as_u64() - self.start.as_u64()) / self.step),
             false => None,
         }
     }
@@ -56,7 +56,7 @@ mod tests {
     fn nth() {
         let range = UIDRange::new_count(BASE, 10, 1);
         assert_eq!(range.nth(0), Some(BASE));
-        assert_eq!(range.nth(9), Some(UID::new(BASE.value() + 9)));
+        assert_eq!(range.nth(9), Some(UID::new(BASE.as_u64() + 9)));
         assert_eq!(range.nth(10), None);
     }
 
@@ -64,51 +64,51 @@ mod tests {
     fn nth_stepped() {
         let range = UIDRange::new_count(BASE, 10, 3);
         assert_eq!(range.nth(0), Some(BASE));
-        assert_eq!(range.nth(9), Some(UID::new(BASE.value() + 27)));
+        assert_eq!(range.nth(9), Some(UID::new(BASE.as_u64() + 27)));
         assert_eq!(range.nth(10), None);
     }
 
     #[test]
     fn contains() {
         let range = UIDRange::new_count(BASE, 10, 1);
-        assert_eq!(range.contains(UID::new(BASE.value() - 1)), false);
-        assert_eq!(range.contains(UID::new(BASE.value() + 0)), true);
-        assert_eq!(range.contains(UID::new(BASE.value() + 9)), true);
-        assert_eq!(range.contains(UID::new(BASE.value() + 10)), false);
+        assert_eq!(range.contains(UID::new(BASE.as_u64() - 1)), false);
+        assert_eq!(range.contains(UID::new(BASE.as_u64() + 0)), true);
+        assert_eq!(range.contains(UID::new(BASE.as_u64() + 9)), true);
+        assert_eq!(range.contains(UID::new(BASE.as_u64() + 10)), false);
     }
 
     #[test]
     fn contains_stepped() {
         let range = UIDRange::new_count(BASE, 10, 3);
-        assert_eq!(range.contains(UID::new(BASE.value() - 3)), false);
-        assert_eq!(range.contains(UID::new(BASE.value() - 1)), false);
-        assert_eq!(range.contains(UID::new(BASE.value() + 0)), true);
-        assert_eq!(range.contains(UID::new(BASE.value() + 1)), false);
-        assert_eq!(range.contains(UID::new(BASE.value() + 3)), true);
-        assert_eq!(range.contains(UID::new(BASE.value() + 27)), true);
-        assert_eq!(range.contains(UID::new(BASE.value() + 28)), false);
-        assert_eq!(range.contains(UID::new(BASE.value() + 30)), false);
+        assert_eq!(range.contains(UID::new(BASE.as_u64() - 3)), false);
+        assert_eq!(range.contains(UID::new(BASE.as_u64() - 1)), false);
+        assert_eq!(range.contains(UID::new(BASE.as_u64() + 0)), true);
+        assert_eq!(range.contains(UID::new(BASE.as_u64() + 1)), false);
+        assert_eq!(range.contains(UID::new(BASE.as_u64() + 3)), true);
+        assert_eq!(range.contains(UID::new(BASE.as_u64() + 27)), true);
+        assert_eq!(range.contains(UID::new(BASE.as_u64() + 28)), false);
+        assert_eq!(range.contains(UID::new(BASE.as_u64() + 30)), false);
     }
 
     #[test]
     fn index_of() {
         let range = UIDRange::new_count(BASE, 10, 1);
-        assert_eq!(range.index_of(UID::new(BASE.value() - 1)), None);
-        assert_eq!(range.index_of(UID::new(BASE.value() + 0)), Some(0));
-        assert_eq!(range.index_of(UID::new(BASE.value() + 9)), Some(9));
-        assert_eq!(range.index_of(UID::new(BASE.value() + 10)), None);
+        assert_eq!(range.index_of(UID::new(BASE.as_u64() - 1)), None);
+        assert_eq!(range.index_of(UID::new(BASE.as_u64() + 0)), Some(0));
+        assert_eq!(range.index_of(UID::new(BASE.as_u64() + 9)), Some(9));
+        assert_eq!(range.index_of(UID::new(BASE.as_u64() + 10)), None);
     }
 
     #[test]
     fn index_of_stepped() {
         let range = UIDRange::new_count(BASE, 10, 3);
-        assert_eq!(range.index_of(UID::new(BASE.value() - 3)), None);
-        assert_eq!(range.index_of(UID::new(BASE.value() - 1)), None);
-        assert_eq!(range.index_of(UID::new(BASE.value() + 0)), Some(0));
-        assert_eq!(range.index_of(UID::new(BASE.value() + 1)), None);
-        assert_eq!(range.index_of(UID::new(BASE.value() + 3)), Some(1));
-        assert_eq!(range.index_of(UID::new(BASE.value() + 27)), Some(9));
-        assert_eq!(range.index_of(UID::new(BASE.value() + 28)), None);
-        assert_eq!(range.index_of(UID::new(BASE.value() + 30)), None);
+        assert_eq!(range.index_of(UID::new(BASE.as_u64() - 3)), None);
+        assert_eq!(range.index_of(UID::new(BASE.as_u64() - 1)), None);
+        assert_eq!(range.index_of(UID::new(BASE.as_u64() + 0)), Some(0));
+        assert_eq!(range.index_of(UID::new(BASE.as_u64() + 1)), None);
+        assert_eq!(range.index_of(UID::new(BASE.as_u64() + 3)), Some(1));
+        assert_eq!(range.index_of(UID::new(BASE.as_u64() + 27)), Some(9));
+        assert_eq!(range.index_of(UID::new(BASE.as_u64() + 28)), None);
+        assert_eq!(range.index_of(UID::new(BASE.as_u64() + 30)), None);
     }
 }

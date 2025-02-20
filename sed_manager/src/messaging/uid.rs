@@ -1,8 +1,9 @@
 use super::value::{Bytes, Value};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct UID {
-    value: u64,
+    table: u32,
+    object: u32,
 }
 
 impl UID {
@@ -11,16 +12,28 @@ impl UID {
     }
 
     pub const fn new(value: u64) -> Self {
-        Self { value: value }
+        Self { table: (value >> 32) as u32, object: value as u32 }
     }
 
-    pub const fn value(&self) -> u64 {
-        self.value
+    pub const fn as_u64(&self) -> u64 {
+        ((self.table as u64) << 32) | (self.object as u64)
+    }
+
+    pub const fn is_table(&self) -> bool {
+        self.table != 0 && self.object == 0
+    }
+
+    pub const fn is_descriptor(&self) -> bool {
+        self.table == 1 && self.object != 0
+    }
+
+    pub const fn is_object(&self) -> bool {
+        self.object != 0
     }
 
     pub const fn to_descriptor(&self) -> Option<Self> {
         if self.is_table() {
-            Some(Self::new((self.value >> 32) | (1_u64 << 32)))
+            Some(Self { table: 1, object: self.table })
         } else {
             None
         }
@@ -28,7 +41,7 @@ impl UID {
 
     pub const fn to_table(&self) -> Option<Self> {
         if self.is_descriptor() {
-            Some(Self::new(self.value << 32))
+            Some(Self { table: self.object, object: 0 })
         } else {
             None
         }
@@ -36,28 +49,16 @@ impl UID {
 
     pub const fn containing_table(&self) -> Option<Self> {
         if self.is_object() || self.is_descriptor() {
-            Some(Self::new(self.value & 0xFFFF_FFFF_0000_0000))
+            Some(Self { table: self.table, object: 0 })
         } else {
             None
         }
-    }
-
-    pub const fn is_table(&self) -> bool {
-        (self.value & 0x0000_0000_FFFF_FFFF) == 0
-    }
-
-    pub const fn is_descriptor(&self) -> bool {
-        (self.value & 0xFFFF_FFFF_0000_0000) == 0x0000_0001_0000_0000 && (self.value & 0x0000_0000_FFFF_FFFF) != 0
-    }
-
-    pub const fn is_object(&self) -> bool {
-        !self.is_table()
     }
 }
 
 impl From<UID> for Value {
     fn from(value: UID) -> Self {
-        Value::from(Bytes::from(value.value.to_be_bytes()))
+        Value::from(Bytes::from(value.as_u64().to_be_bytes()))
     }
 }
 
@@ -66,7 +67,7 @@ impl TryFrom<Value> for UID {
     fn try_from(value: Value) -> Result<Self, Self::Error> {
         match <&Bytes>::try_from(&value) {
             Ok(bytes) => match <[u8; 8]>::try_from(bytes.as_slice()) {
-                Ok(fixed_bytes) => Ok(UID { value: u64::from_be_bytes(fixed_bytes) }),
+                Ok(fixed_bytes) => Ok(Self::new(u64::from_be_bytes(fixed_bytes))),
                 Err(_) => Err(value),
             },
             Err(_) => Err(value),
@@ -76,37 +77,25 @@ impl TryFrom<Value> for UID {
 
 impl From<u64> for UID {
     fn from(value: u64) -> Self {
-        Self { value: value }
-    }
-}
-
-impl From<u32> for UID {
-    fn from(value: u32) -> Self {
-        Self { value: value as u64 }
-    }
-}
-
-impl From<u16> for UID {
-    fn from(value: u16) -> Self {
-        Self { value: value as u64 }
-    }
-}
-
-impl From<u8> for UID {
-    fn from(value: u8) -> Self {
-        Self { value: value as u64 }
+        Self::new(value)
     }
 }
 
 impl From<UID> for u64 {
     fn from(value: UID) -> Self {
-        value.value
+        value.as_u64()
     }
 }
 
 impl Default for UID {
     fn default() -> Self {
         UID::null()
+    }
+}
+
+impl std::fmt::Debug for UID {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "UID( {:8x}_{:8x} )", self.table, self.object)
     }
 }
 

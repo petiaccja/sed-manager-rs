@@ -21,14 +21,14 @@ fn to_value_normal() {
     let Ok(value) = u16::try_from(&named.value) else {
         panic!("value is not u16");
     };
-    assert_eq!(name.as_slice(), &<u16 as Type>::uid().value().to_be_bytes()[4..]);
+    assert_eq!(name.as_slice(), &<u16 as Type>::uid().as_u64().to_be_bytes()[4..]);
     assert_eq!(value, 345);
 }
 
 #[test]
 fn try_from_value_opt_a() {
     let value = Value::from(Named {
-        name: Vec::from(&<u8 as Type>::uid().value().to_be_bytes()[4..]).into(),
+        name: Vec::from(&<u8 as Type>::uid().as_u64().to_be_bytes()[4..]).into(),
         value: 234_u8.into(),
     });
     let Ok(alt) = AltSimple::try_from(value) else {
@@ -40,7 +40,7 @@ fn try_from_value_opt_a() {
 #[test]
 fn try_from_value_opt_b() {
     let value = Value::from(Named {
-        name: Vec::from(&<u16 as Type>::uid().value().to_be_bytes()[4..]).into(),
+        name: Vec::from(&<u16 as Type>::uid().as_u64().to_be_bytes()[4..]).into(),
         value: 345_u16.into(),
     });
     let Ok(alt) = AltSimple::try_from(value) else {
@@ -52,7 +52,7 @@ fn try_from_value_opt_b() {
 #[test]
 fn try_from_value_unlisted_type() {
     let value = Value::from(Named {
-        name: Vec::from(&<u32 as Type>::uid().value().to_be_bytes()[4..]).into(),
+        name: Vec::from(&<u32 as Type>::uid().as_u64().to_be_bytes()[4..]).into(),
         value: 345_u16.into(),
     });
     assert_eq!(AltSimple::try_from(value.clone()).unwrap_err(), value);
@@ -67,7 +67,7 @@ fn try_from_value_invalid_type() {
 #[test]
 fn try_from_value_invalid_value() {
     let value = Value::from(Named {
-        name: Vec::from(&<u16 as Type>::uid().value().to_be_bytes()[4..]).into(),
+        name: Vec::from(&<u16 as Type>::uid().as_u64().to_be_bytes()[4..]).into(),
         value: vec![14u8, 73u8, 33u8].into(),
     });
     assert_eq!(AltSimple::try_from(value.clone()).unwrap_err(), value);

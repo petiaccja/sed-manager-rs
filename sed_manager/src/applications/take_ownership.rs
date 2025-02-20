@@ -73,9 +73,8 @@ macro_rules! with_session {
 }
 
 pub async fn take_ownership(tper: &TPer, new_password: Password) -> Result<(), Error> {
-    use spec::core::authority::SID;
-    use spec::opal::admin::c_pin::MSID as C_PIN_MSID;
-    use spec::opal::admin::c_pin::SID as C_PIN_SID;
+    use spec::core::authority;
+    use spec::opal::admin::c_pin;
 
     let discovery = tper.discover()?;
     let default_ssc = get_default_ssc(&discovery)?;
@@ -83,11 +82,11 @@ pub async fn take_ownership(tper: &TPer, new_password: Password) -> Result<(), E
 
     let anybody_session = tper.start_session(admin_sp, None, None).await?;
     let msid_password: Password = with_session!(session = anybody_session => {
-        session.get(C_PIN_MSID, 3).await
+        session.get(c_pin::MSID, 3).await
     })?;
-    let sid_session = tper.start_session(admin_sp, Some(SID.into()), Some(&msid_password)).await?;
+    let sid_session = tper.start_session(admin_sp, Some(authority::SID.into()), Some(&msid_password)).await?;
     with_session!(session = sid_session => {
-        session.set(C_PIN_SID, 3, new_password).await
+        session.set(c_pin::SID, 3, new_password).await
     })?;
 
     Ok(())
