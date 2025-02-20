@@ -25,4 +25,5 @@ pub use generated::ruby;
 // Commonly used items from core.
 pub use generated::core::all::invoking_id;
 pub use generated::core::all::method_id;
+pub use generated::core::all::sm_method_id;
 pub use generated::core::all::table_id;

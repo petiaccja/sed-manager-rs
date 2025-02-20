@@ -34,13 +34,15 @@
             "MBRControl": {
                 "MBRControl": "0000080300000001"
             },
-            "MethodID": {
+            "SMMethodID": {
                 "Properties": "000000000000FF01",
                 "StartSession": "000000000000FF02",
                 "SyncSession": "000000000000FF03",
                 "StartTrustedSession": "000000000000FF04",
                 "SyncTrustedSession": "000000000000FF05",
-                "CloseSession": "000000000000FF06",
+                "CloseSession": "000000000000FF06"
+            },
+            "MethodID": {
                 "DeleteSP": "0000000600000001",
                 "CreateTable": "0000000600000002",
                 "Delete": "0000000600000003",

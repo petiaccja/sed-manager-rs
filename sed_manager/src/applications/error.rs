@@ -1,5 +1,6 @@
 use crate::rpc::Error as RPCError;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Error {
     RPCError(RPCError),
     IncompatibleSSC,

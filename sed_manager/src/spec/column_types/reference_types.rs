@@ -12,3 +12,4 @@ pub type SPRef = RestrictedObjectReference<{ table_id::SP.as_u64() }>;
 pub type CPinRef = RestrictedObjectReference<{ table_id::C_PIN.as_u64() }>;
 pub type CredentialRef = CPinRef; // Should have more table_id but it's difficult to express without variadics.
 pub type LogListRef = RestrictedObjectReference<{ table_id::LOG_LIST.as_u64() }>;
+pub type MethodRef = RestrictedObjectReference<{ table_id::METHOD_ID.as_u64() }>;

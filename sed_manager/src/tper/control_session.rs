@@ -8,7 +8,7 @@ use crate::rpc::{
 };
 use crate::spec::basic_types::{List, NamedValue};
 use crate::spec::column_types::{AuthorityRef, MaxBytes32, SPRef};
-use crate::spec::{invoking_id, method_id};
+use crate::spec::{invoking_id::*, sm_method_id::*};
 
 const CONTROL_SESSION_ID: SessionIdentifier = SessionIdentifier { hsn: 0, tsn: 0 };
 
@@ -63,11 +63,7 @@ impl ControlSession {
         &self,
         host_properties: Option<List<NamedValue<MaxBytes32, u32>>>,
     ) -> Result<(List<NamedValue<MaxBytes32, u32>>, Option<List<NamedValue<MaxBytes32, u32>>>), RPCError> {
-        let call = MethodCall::new_success(
-            invoking_id::SESSION_MANAGER,
-            method_id::PROPERTIES,
-            (host_properties,).encode_args(),
-        );
+        let call = MethodCall::new_success(SESSION_MANAGER, PROPERTIES, (host_properties,).encode_args());
         let result = self.do_method_call(call).await?.take_args()?;
         let (tper_capabilities, tper_properties) =
             result.decode_args().map_err(|err: MethodStatus| err.while_receiving())?;
@@ -104,7 +100,7 @@ impl ControlSession {
             signed_hash,
         )
             .encode_args();
-        let call = MethodCall::new_success(invoking_id::SESSION_MANAGER, method_id::START_SESSION, args);
+        let call = MethodCall::new_success(SESSION_MANAGER, START_SESSION, args);
         let result = self.do_method_call(call).await?.take_args()?;
         let (hsn, tsn, sp_challenge, sp_exchange_cert, sp_signing_cert, trans_timeout, initial_credit, signed_hash) =
             result.decode_args().map_err(|err: MethodStatus| err.while_receiving())?;

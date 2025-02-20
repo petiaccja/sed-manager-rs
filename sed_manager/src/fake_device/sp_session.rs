@@ -1,9 +1,9 @@
 use std::sync::{Arc, Mutex};
 
-use crate::messaging::uid::UID;
+use crate::messaging::uid::{TableUID, UID};
 use crate::messaging::value::{Bytes, Named, Value};
 use crate::rpc::MethodStatus;
-use crate::spec::basic_types::{List, NamedValue, ObjectReference};
+use crate::spec::basic_types::{List, NamedValue};
 use crate::spec::column_types::{AuthorityRef, BoolOrBytes, BytesOrRowValues, CellBlock, Password, SPRef};
 use crate::spec::{invoking_id, table_id};
 
@@ -35,7 +35,7 @@ impl SPSession {
             return Err(MethodStatus::InvalidParameter);
         };
         let ssc = self.ssc.lock().unwrap();
-        let Some(sp) = ssc.get_sp(self.sp) else {
+        let Some(sp) = ssc.get_security_provider(self.sp) else {
             return Err(MethodStatus::TPerMalfunction);
         };
         let Some(authority_table) = sp.get_authority_table() else {
@@ -47,7 +47,7 @@ impl SPSession {
         let Some(credential_ref) = authority_obj.credential else {
             return Ok(BoolOrBytes::Bool(true));
         };
-        if credential_ref.containing_table().unwrap() == table_id::C_PIN {
+        if credential_ref.containing_table() == table_id::C_PIN {
             let Some(c_pin_table) = sp.get_c_pin_table() else {
                 return Err(MethodStatus::TPerMalfunction);
             };
@@ -67,16 +67,15 @@ impl SPSession {
         if invoking_id.is_table() {
             // FakeDevice only supports calling `Get` on a byte table.
             Err(MethodStatus::InvalidParameter)
-        } else {
-            let table = invoking_id.containing_table().expect("must be dealing with an object in the else branch");
+        } else if let Some(table) = invoking_id.containing_table() {
             let ssc = self.ssc.lock().unwrap();
-            let Some(sp) = ssc.get_sp(self.sp) else {
+            let Some(sp) = ssc.get_security_provider(self.sp) else {
                 return Err(MethodStatus::TPerMalfunction);
             };
-            let Some(table) = sp.get_table(table) else {
+            let Some(table) = sp.get_table(table.try_into().unwrap()) else {
                 return Err(MethodStatus::InvalidParameter);
             };
-            let Some(object) = table.get_object(invoking_id.into()) else {
+            let Some(object) = table.get_object(invoking_id) else {
                 return Err(MethodStatus::InvalidParameter);
             };
             let first = cell_block.start_column.unwrap_or(0);
@@ -89,6 +88,8 @@ impl SPSession {
                     .map(|(n, value)| Value::from(Named { name: n.into(), value }))
                     .collect(),
             ))
+        } else {
+            Err(MethodStatus::InvalidParameter)
         }
     }
 
@@ -102,16 +103,15 @@ impl SPSession {
             // FakeDevice only supports calling `Set` on a byte table.
             let _ = where_;
             Err(MethodStatus::InvalidParameter)
-        } else {
-            let table = invoking_id.containing_table().expect("must be dealing with an object in the else branch");
+        } else if let Some(table) = invoking_id.containing_table() {
             let mut ssc = self.ssc.lock().unwrap();
-            let Some(sp) = ssc.get_sp_mut(self.sp) else {
+            let Some(sp) = ssc.get_security_provider_mut(self.sp) else {
                 return Err(MethodStatus::TPerMalfunction);
             };
-            let Some(table) = sp.get_table_mut(table) else {
+            let Some(table) = sp.get_table_mut(table.try_into().unwrap()) else {
                 return Err(MethodStatus::InvalidParameter);
             };
-            let Some(object) = table.get_object_mut(invoking_id.into()) else {
+            let Some(object) = table.get_object_mut(invoking_id) else {
                 return Err(MethodStatus::InvalidParameter);
             };
             let BytesOrRowValues::RowValues(row_values) = values.unwrap_or(BytesOrRowValues::RowValues(vec![])) else {
@@ -140,20 +140,20 @@ impl SPSession {
             } else {
                 Ok(())
             }
+        } else {
+            Err(MethodStatus::InvalidParameter)
         }
     }
 
-    pub fn next(
-        &self,
-        invoking_id: UID,
-        from: Option<ObjectReference>,
-        count: Option<u64>,
-    ) -> Result<List<ObjectReference>, MethodStatus> {
+    pub fn next(&self, invoking_id: UID, from: Option<UID>, count: Option<u64>) -> Result<List<UID>, MethodStatus> {
+        let Ok(table) = TableUID::try_from(invoking_id) else {
+            return Err(MethodStatus::InvalidParameter);
+        };
         let mut ssc = self.ssc.lock().unwrap();
-        let Some(sp) = ssc.get_sp_mut(self.sp) else {
+        let Some(sp) = ssc.get_security_provider_mut(self.sp) else {
             return Err(MethodStatus::TPerMalfunction);
         };
-        let Some(table) = sp.get_table_mut(invoking_id) else {
+        let Some(table) = sp.get_table_mut(table) else {
             return Err(MethodStatus::InvalidParameter);
         };
 

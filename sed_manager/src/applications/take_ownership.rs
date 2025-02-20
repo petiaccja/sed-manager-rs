@@ -17,14 +17,14 @@ fn get_default_ssc(discovery: &Discovery) -> Result<&FeatureDescriptor, Error> {
 
 fn get_admin_sp(ssc: FeatureCode) -> Result<SPRef, Error> {
     match ssc {
-        FeatureCode::Enterprise => Ok(spec::enterprise::admin::sp::ADMIN.into()),
-        FeatureCode::OpalV1 => Ok(spec::opal::admin::sp::ADMIN.into()),
-        FeatureCode::OpalV2 => Ok(spec::opal::admin::sp::ADMIN.into()),
-        FeatureCode::Opalite => Ok(spec::opalite::admin::sp::ADMIN.into()),
-        FeatureCode::PyriteV1 => Ok(spec::pyrite::admin::sp::ADMIN.into()),
-        FeatureCode::PyriteV2 => Ok(spec::pyrite::admin::sp::ADMIN.into()),
-        FeatureCode::Ruby => Ok(spec::ruby::admin::sp::ADMIN.into()),
-        FeatureCode::KeyPerIO => Ok(spec::kpio::admin::sp::ADMIN.into()),
+        FeatureCode::Enterprise => Ok(spec::enterprise::admin::sp::ADMIN),
+        FeatureCode::OpalV1 => Ok(spec::opal::admin::sp::ADMIN),
+        FeatureCode::OpalV2 => Ok(spec::opal::admin::sp::ADMIN),
+        FeatureCode::Opalite => Ok(spec::opalite::admin::sp::ADMIN),
+        FeatureCode::PyriteV1 => Ok(spec::pyrite::admin::sp::ADMIN),
+        FeatureCode::PyriteV2 => Ok(spec::pyrite::admin::sp::ADMIN),
+        FeatureCode::Ruby => Ok(spec::ruby::admin::sp::ADMIN),
+        FeatureCode::KeyPerIO => Ok(spec::kpio::admin::sp::ADMIN),
         _ => Err(Error::IncompatibleSSC),
     }
 }
@@ -39,11 +39,11 @@ pub async fn take_ownership(tper: &TPer, new_password: &[u8]) -> Result<(), Erro
 
     let anybody_session = tper.start_session(admin_sp, None, None).await?;
     let msid_password: Password = with_session!(session = anybody_session => {
-        session.get(c_pin::MSID, 3).await
+        session.get(c_pin::MSID.as_uid(), 3).await
     })?;
-    let sid_session = tper.start_session(admin_sp, Some(authority::SID.into()), Some(&msid_password)).await?;
+    let sid_session = tper.start_session(admin_sp, Some(authority::SID), Some(&msid_password)).await?;
     with_session!(session = sid_session => {
-        session.set(c_pin::SID, 3, new_password).await
+        session.set(c_pin::SID.as_uid(), 3, new_password).await
     })?;
 
     Ok(())
@@ -52,6 +52,35 @@ pub async fn take_ownership(tper: &TPer, new_password: &[u8]) -> Result<(), Erro
 pub async fn verify_ownership(tper: &TPer, sid_password: &[u8]) -> Result<bool, Error> {
     use spec::core::authority;
     use spec::enterprise::admin::sp;
-    let _session = tper.start_session(sp::ADMIN.into(), Some(authority::SID.into()), Some(sid_password)).await?;
+    with_session!(session = tper.start_session(sp::ADMIN, Some(authority::SID), Some(sid_password)).await? => {});
     Ok(true)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use crate::{fake_device::FakeDevice, tper::TPer};
+
+    use super::*;
+
+    #[tokio::test]
+    async fn take_ownership_success() -> Result<(), Error> {
+        let new_password = "macilaci".as_bytes();
+        let device = Arc::new(FakeDevice::new());
+        let tper = TPer::new_on_default_com_id(device)?;
+        take_ownership(&tper, new_password).await?;
+        verify_ownership(&tper, new_password).await?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn take_ownership_already_taken() -> Result<(), Error> {
+        let new_password = "macilaci".as_bytes();
+        let device = Arc::new(FakeDevice::new());
+        let tper = TPer::new_on_default_com_id(device)?;
+        take_ownership(&tper, new_password).await?;
+        assert!(take_ownership(&tper, "zsiroskenyer".as_bytes()).await.is_err());
+        Ok(())
+    }
 }

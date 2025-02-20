@@ -8,7 +8,7 @@ use crate::spec::column_types::{
 
 use super::super::{Field, Object};
 
-#[derive(AsArray, Default)]
+#[derive(AsArray)]
 #[as_array_traits(Field)]
 pub struct Authority {
     pub uid: AuthorityRef,
@@ -34,7 +34,27 @@ pub struct Authority {
 
 impl Authority {
     pub fn new(uid: AuthorityRef) -> Self {
-        Self { uid, ..Default::default() }
+        Self {
+            uid,
+            name: None,
+            common_name: None,
+            is_class: None,
+            class: None,
+            enabled: None,
+            secure: None,
+            hash_and_sign: None,
+            present_certificate: None,
+            operation: None,
+            credential: None,
+            response_sign: None,
+            response_exch: None,
+            clock_start: None,
+            clock_end: None,
+            limit: None,
+            uses: None,
+            log: None,
+            log_to: None,
+        }
     }
 }
 

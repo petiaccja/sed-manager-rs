@@ -6,7 +6,7 @@ use crate::messaging::value::Value;
 use crate::spec::basic_types::ByteTableReference;
 use crate::spec::column_types::{CPinRef, Name, Password};
 
-#[derive(AsArray, Default)]
+#[derive(AsArray)]
 #[as_array_traits(Field)]
 pub struct CPin {
     pub uid: CPinRef,
@@ -21,7 +21,16 @@ pub struct CPin {
 
 impl CPin {
     pub fn new(uid: CPinRef) -> Self {
-        Self { uid, ..Default::default() }
+        Self {
+            uid,
+            name: None,
+            common_name: None,
+            pin: None,
+            char_set: None,
+            try_limit: None,
+            tries: None,
+            persistence: None,
+        }
     }
 }
 

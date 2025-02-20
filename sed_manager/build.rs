@@ -199,6 +199,13 @@ impl SecurityProvider {
     }
 }
 
+#[derive(PartialEq, Eq)]
+enum TableKind {
+    Meta,
+    TableID,
+    Regular,
+}
+
 impl Table {
     fn parse(name: String, data: &Value) -> Result<Self, ParseError> {
         let (uids, uid_ranges): (Vec<_>, Vec<_>) = match data {
@@ -220,7 +227,32 @@ impl Table {
         to_mod_identifier(&self.name)
     }
 
+    fn kind(&self) -> TableKind {
+        match self.name.as_str() {
+            "TableID" => TableKind::TableID,
+            "General" => TableKind::Meta,
+            "InvokingID" => TableKind::Meta,
+            "SMMethodID" => TableKind::Meta,
+            _ => TableKind::Regular,
+        }
+    }
+
+    fn generate_this_table_constant(&self) -> TokenStream2 {
+        let name = to_const_identifier(&self.name);
+        match self.kind() == TableKind::Regular {
+            true => quote! { pub const THIS_TABLE: TableUID = root::core::all::table_id::#name; },
+            false => quote! { pub const THIS_TABLE: UID = UID::null(); },
+        }
+    }
+
     fn generate_data(&self) -> TokenStream2 {
+        let (this_uid, this_uid_range) = match self.kind() {
+            TableKind::Regular => {
+                (quote! { ObjectUID<{THIS_TABLE.as_u64()}> }, quote! { ObjectUIDRange<{THIS_TABLE.as_u64()}> })
+            }
+            TableKind::TableID => (quote! { TableUID }, quote! { UIDRange }),
+            _ => (quote! { UID }, quote! { UIDRange }),
+        };
         let uids = self.uids.iter().map(|x| x.generate());
         let uid_ranges = self.uid_ranges.iter().map(|x| x.generate());
         quote! {
@@ -229,7 +261,16 @@ impl Table {
             #[allow(unused)]
             use root::UIDRange;
             #[allow(unused)]
+            use root::TableUID;
+            #[allow(unused)]
+            use root::ObjectUID;
+            #[allow(unused)]
+            use root::ObjectUIDRange;
+            #[allow(unused)]
             use root::lookup::NameRange;
+
+            type ThisUID = #this_uid;
+            type ThisUIDRange = #this_uid_range;
 
             #(#uids)*
 
@@ -237,29 +278,14 @@ impl Table {
         }
     }
 
-    fn generate_lookup(&self) -> TokenStream2 {
-        let name = to_const_identifier(&self.name);
-
-        let num_uids = self.uids.len();
-        let num_uid_ranges = self.uid_ranges.len();
-
+    fn generate_table_lookup(&self) -> TokenStream2 {
         let mut uids = self.uids.clone();
-        let mut uid_ranges = self.uid_ranges.clone();
-
-        uids.sort_by_key(|x| x.base);
-        let uids_by_value: Vec<_> =
-            uids.iter().map(|x| (x.ident(), x.name_ident())).map(|(x, y)| quote! {(#x, #y)}).collect();
+        let num_uids = self.uids.len();
         uids.sort_by_key(|x| x.name.clone());
         let uids_by_name: Vec<_> =
-            uids.iter().map(|x| (x.name_ident(), x.ident())).map(|(x, y)| quote! {(#x, #y)}).collect();
-        uid_ranges.sort_by_key(|x| x.base);
-        let ranges_by_value: Vec<_> =
-            uid_ranges.iter().map(|x| (x.ident(), x.name_ident())).map(|(x, y)| quote! {(#x, #y)}).collect();
-        uid_ranges.sort_by_key(|x| x.prefix().to_string());
-        let ranges_by_name: Vec<_> =
-            uid_ranges.iter().map(|x| (x.name_ident(), x.ident())).map(|(x, y)| quote! {(#x, #y)}).collect();
+            uids.iter().map(|x| (x.name_ident(), x.ident())).map(|(x, y)| quote! {(#x, #y.as_uid())}).collect();
 
-        let table_lookup = if self.name == "TableID" {
+        if self.kind() == TableKind::TableID {
             quote! {
                 use root::lookup::ListTableLookup;
                 pub const TABLE_LOOKUP: ListTableLookup<#num_uids> = ListTableLookup {
@@ -268,42 +294,60 @@ impl Table {
             }
         } else {
             quote! {}
-        };
+        }
+    }
 
-        let object_lookup = {
-            let meta_tables = ["InvokingID", "General", "TableID"];
-            let this_table = match !meta_tables.contains(&self.name.as_str()) {
-                true => quote! { root::core::all::table_id::#name },
-                false => quote! { UID::null() },
-            };
-            quote! {
-                use root::lookup::ListObjectLookup;
-                pub const THIS_TABLE: UID = #this_table;
-                pub const OBJECT_LOOKUP: ListObjectLookup<{THIS_TABLE.as_u64()}, #num_uids, #num_uid_ranges> = ListObjectLookup {
-                    table_lookup: &root::core::all::table_id::TABLE_LOOKUP,
-                    uids_by_value: [ #(#uids_by_value),* ],
-                    uids_by_name: [ #(#uids_by_name),* ],
-                    ranges_by_value: [ #(#ranges_by_value),* ],
-                    ranges_by_name: [ #(#ranges_by_name),* ],
-                };
-            }
-        };
+    fn generate_object_lookup(&self) -> TokenStream2 {
+        let num_uids = self.uids.len();
+        let num_uid_ranges = self.uid_ranges.len();
+
+        let mut uids = self.uids.clone();
+        let mut uid_ranges = self.uid_ranges.clone();
+
+        uids.sort_by_key(|x| x.base);
+        let uids_by_value: Vec<_> =
+            uids.iter().map(|x| (x.ident(), x.name_ident())).map(|(x, y)| quote! {(#x.as_uid(), #y)}).collect();
+        uids.sort_by_key(|x| x.name.clone());
+        let uids_by_name: Vec<_> =
+            uids.iter().map(|x| (x.name_ident(), x.ident())).map(|(x, y)| quote! {(#x, #y.as_uid())}).collect();
+        uid_ranges.sort_by_key(|x| x.base);
+        let ranges_by_value: Vec<_> = uid_ranges
+            .iter()
+            .map(|x| (x.ident(), x.name_ident()))
+            .map(|(x, y)| quote! {(#x.as_uid_range(), #y)})
+            .collect();
+        uid_ranges.sort_by_key(|x| x.prefix().to_string());
+        let ranges_by_name: Vec<_> = uid_ranges
+            .iter()
+            .map(|x| (x.name_ident(), x.ident()))
+            .map(|(x, y)| quote! {(#x, #y.as_uid_range())})
+            .collect();
 
         quote! {
-            #object_lookup
-            #table_lookup
+            use root::lookup::ListObjectLookup;
+            pub const OBJECT_LOOKUP: ListObjectLookup<{THIS_TABLE.as_u64()}, #num_uids, #num_uid_ranges> = ListObjectLookup {
+                table_lookup: &root::core::all::table_id::TABLE_LOOKUP,
+                uids_by_value: [ #(#uids_by_value),* ],
+                uids_by_name: [ #(#uids_by_name),* ],
+                ranges_by_value: [ #(#ranges_by_value),* ],
+                ranges_by_name: [ #(#ranges_by_name),* ],
+            };
         }
     }
 
     fn generate(&self) -> TokenStream2 {
         let id = self.ident();
+        let this_table = self.generate_this_table_constant();
         let data = self.generate_data();
-        let lookup = self.generate_lookup();
+        let table_lookup = self.generate_table_lookup();
+        let object_lookup = self.generate_object_lookup();
         quote! {
             pub mod #id {
                 use super::root;
+                #this_table
                 #data
-                #lookup
+                #table_lookup
+                #object_lookup
             }
         }
     }
@@ -334,7 +378,7 @@ impl UID {
         let name = &self.name;
         let base = self.base;
         quote! {
-            pub const #id: UID = UID::new(#base);
+            pub const #id: ThisUID = ThisUID::new(#base);
             const #id_name: &str = #name;
         }
     }
@@ -395,7 +439,7 @@ impl UIDRange {
         let count = self.count;
         let step = self.step;
         quote! {
-            pub const #id: UIDRange = UIDRange::new_count(UID::new(#base), #count, #step);
+            pub const #id: ThisUIDRange = ThisUIDRange::new_count(ThisUID::new(#base), #count, #step);
             const #id_name: NameRange = #name;
         }
     }
