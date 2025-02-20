@@ -1,7 +1,7 @@
 use tokio::sync::oneshot;
 
 use crate::messaging::uid::UID;
-use crate::messaging::value::{Bytes, Value};
+use crate::messaging::value::Value;
 use crate::rpc::args::{DecodeArgs, EncodeArgs};
 use crate::rpc::{
     Error as RPCError, ErrorAction as RPCErrorAction, ErrorEvent as RPCErrorEvent, ErrorEventExt as _, Message,
@@ -76,7 +76,7 @@ impl SPSession {
         self.do_end_of_session().await
     }
 
-    pub async fn authenticate(&self, authority: AuthorityRef, proof: Option<Bytes>) -> Result<bool, RPCError> {
+    pub async fn authenticate(&self, authority: AuthorityRef, proof: Option<&[u8]>) -> Result<bool, RPCError> {
         let call =
             MethodCall::new_success(invoking_id::THIS_SP, method_id::AUTHENTICATE, (authority, proof).encode_args());
         let results = self.do_method_call(call).await?.take_results()?;

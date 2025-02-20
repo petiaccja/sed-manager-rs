@@ -12,7 +12,7 @@ use crate::rpc::{
     SessionIdentifier, ThreadedMessageLoop,
 };
 use crate::serialization::DeserializeBinary;
-use crate::spec::column_types::SPRef;
+use crate::spec::column_types::{AuthorityRef, SPRef};
 
 use super::com_session::ComSession;
 use super::control_session::ControlSession;
@@ -127,10 +127,18 @@ impl TPer {
         properties
     }
 
-    pub async fn start_session(&self, sp: SPRef) -> Result<SPSession, RPCError> {
+    pub async fn start_session(
+        &self,
+        sp: SPRef,
+        authority: Option<AuthorityRef>,
+        password: Option<&[u8]>,
+    ) -> Result<SPSession, RPCError> {
         let hsn = self.next_hsn.fetch_add(1, Ordering::Relaxed);
         let properties = self.current_properties().await;
-        let sync_session = self.control_session.start_session(sp, hsn).await?;
+        let sync_session = self
+            .control_session
+            .start_session(hsn, sp, true, password, None, None, authority, None, None, None, None, None)
+            .await?;
         if sync_session.hsn != hsn {
             return Err(RPCErrorEvent::Unspecified.as_error());
         };

@@ -2,7 +2,7 @@ use crate::messaging::discovery::Feature;
 use crate::messaging::discovery::{Discovery, FeatureCode, FeatureDescriptor};
 use crate::rpc::Error as RPCError;
 use crate::spec;
-use crate::spec::column_types::SPRef;
+use crate::spec::column_types::{Password, SPRef};
 use crate::tper::TPer;
 
 #[allow(unused)]
@@ -21,6 +21,7 @@ pub enum Error {
     RPCError(RPCError),
     IncompatibleSSC,
     NoAvailableSSC,
+    AlreadyOwned,
 }
 
 impl From<RPCError> for Error {
@@ -51,9 +52,43 @@ fn get_admin_sp(ssc: FeatureCode) -> Result<SPRef, Error> {
     }
 }
 
-pub fn take_ownership(tper: &TPer) -> Result<(), Error> {
+/// Run block of code and close session asynchronously afterwards.
+///
+/// While the session would be closed by [`Drop`] without blocking, it might
+/// take a while until the protocol thread actually closes the session.
+/// This can lead to weird issues like SPBusy when opening the next session.
+/// This macro ensures the session really is closed before returning.
+macro_rules! with_session {
+    ($id:ident = $session:expr => $block:expr) => {{
+        let $id = $session;
+        let result = async { $block }.await;
+        let _ = $id.end_session().await;
+        result
+    }};
+    ($id:ident => $block:expr) => {{
+        let result = async { $block }.await;
+        let _ = $id.end_session().await;
+        result
+    }};
+}
+
+pub async fn take_ownership(tper: &TPer, new_password: Password) -> Result<(), Error> {
+    use spec::core::authority::SID;
+    use spec::opal::admin::c_pin::MSID as C_PIN_MSID;
+    use spec::opal::admin::c_pin::SID as C_PIN_SID;
+
     let discovery = tper.discover()?;
     let default_ssc = get_default_ssc(&discovery)?;
-    let _admin_sp = get_admin_sp(default_ssc.feature_code())?;
+    let admin_sp = get_admin_sp(default_ssc.feature_code())?;
+
+    let anybody_session = tper.start_session(admin_sp, None, None).await?;
+    let msid_password: Password = with_session!(session = anybody_session => {
+        session.get(C_PIN_MSID, 3).await
+    })?;
+    let sid_session = tper.start_session(admin_sp, Some(SID.into()), Some(&msid_password)).await?;
+    with_session!(session = sid_session => {
+        session.set(C_PIN_SID, 3, new_password).await
+    })?;
+
     Ok(())
 }

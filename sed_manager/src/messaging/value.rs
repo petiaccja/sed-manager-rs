@@ -214,6 +214,12 @@ impl<const N: usize> From<[u8; N]> for Value {
     }
 }
 
+impl From<&[u8]> for Value {
+    fn from(value: &[u8]) -> Self {
+        Self::Bytes(Bytes::from(value))
+    }
+}
+
 //------------------------------------------------------------------------------
 // Type from value implementations.
 //------------------------------------------------------------------------------
@@ -343,6 +349,32 @@ impl<'value> TryFrom<&'value Value> for &'value Bytes {
     fn try_from(value: &'value Value) -> Result<Self, Self::Error> {
         match value {
             Value::Bytes(ref value) => Ok(value),
+            _ => Err(value),
+        }
+    }
+}
+
+impl<'value> TryFrom<&'value Value> for &'value [u8] {
+    type Error = &'value Value;
+    fn try_from(value: &'value Value) -> Result<Self, Self::Error> {
+        match value {
+            Value::Bytes(ref items) => match Self::try_from(items.as_slice()) {
+                Ok(array) => Ok(array),
+                Err(_) => Err(value),
+            },
+            _ => Err(value),
+        }
+    }
+}
+
+impl<'value, const N: usize> TryFrom<&'value Value> for &'value [u8; N] {
+    type Error = &'value Value;
+    fn try_from(value: &'value Value) -> Result<Self, Self::Error> {
+        match value {
+            Value::Bytes(ref items) => match Self::try_from(items.as_slice()) {
+                Ok(array) => Ok(array),
+                Err(_) => Err(value),
+            },
             _ => Err(value),
         }
     }

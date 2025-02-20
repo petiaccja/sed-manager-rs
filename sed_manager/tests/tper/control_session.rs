@@ -22,7 +22,7 @@ async fn start_session_normal() -> Result<(), RPCError> {
     let device = Arc::new(FakeDevice::new());
     {
         let tper = TPer::new_on_default_com_id(device.clone())?;
-        let session = tper.start_session(opal::admin::sp::ADMIN.try_into().unwrap()).await?;
+        let session = tper.start_session(opal::admin::sp::ADMIN.into(), None, None).await?;
         session.end_session().await?;
     }
     assert!(device.active_sessions().is_empty());

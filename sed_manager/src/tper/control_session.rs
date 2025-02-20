@@ -7,7 +7,7 @@ use crate::rpc::{
     MethodStatus, PackagedMethod, Properties, SessionIdentifier, Tracked,
 };
 use crate::spec::basic_types::{List, NamedValue};
-use crate::spec::column_types::{MaxBytes32, SPRef};
+use crate::spec::column_types::{AuthorityRef, MaxBytes32, SPRef};
 use crate::spec::{invoking_id, method_id};
 
 const CONTROL_SESSION_ID: SessionIdentifier = SessionIdentifier { hsn: 0, tsn: 0 };
@@ -74,12 +74,37 @@ impl ControlSession {
         Ok((tper_capabilities, tper_properties))
     }
 
-    pub async fn start_session(&self, sp: SPRef, hsn: u32) -> Result<SyncSession, RPCError> {
-        let call = MethodCall::new_success(
-            invoking_id::SESSION_MANAGER,
-            method_id::START_SESSION,
-            (hsn, sp, 0u8).encode_args(),
-        );
+    pub async fn start_session(
+        &self,
+        hsn: u32,
+        sp: SPRef,
+        write: bool,
+        host_challenge: Option<&[u8]>,
+        host_exchange_authority: Option<AuthorityRef>,
+        host_exchange_cert: Option<&[u8]>,
+        host_signing_authority: Option<AuthorityRef>,
+        host_signing_cert: Option<&[u8]>,
+        session_timeout: Option<u32>,
+        trans_timeout: Option<u32>,
+        initial_credit: Option<u32>,
+        signed_hash: Option<&[u8]>,
+    ) -> Result<SyncSession, RPCError> {
+        let args = (
+            hsn,
+            sp,
+            write,
+            host_challenge,
+            host_exchange_authority,
+            host_exchange_cert,
+            host_signing_authority,
+            host_signing_cert,
+            session_timeout,
+            trans_timeout,
+            initial_credit,
+            signed_hash,
+        )
+            .encode_args();
+        let call = MethodCall::new_success(invoking_id::SESSION_MANAGER, method_id::START_SESSION, args);
         let result = self.do_method_call(call).await?.take_args()?;
         let (hsn, tsn, sp_challenge, sp_exchange_cert, sp_signing_cert, trans_timeout, initial_credit, signed_hash) =
             result.decode_args().map_err(|err: MethodStatus| err.while_receiving())?;
