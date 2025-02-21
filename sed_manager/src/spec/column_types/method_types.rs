@@ -1,6 +1,7 @@
 use sed_manager_macros::StructType;
 use std::ops::{Add, Bound, RangeBounds, Sub};
 
+use crate::messaging::uid::UID;
 use crate::messaging::value::{Bytes, List, Value};
 use crate::spec::basic_types::{ByteTableReference, TableReference};
 
@@ -33,6 +34,12 @@ impl CellBlock {
     pub fn object(columns: impl RangeBounds<u16>) -> Self {
         let (start_column, end_column) = Self::map_bounds(columns);
         Self { table: None, start_row: None, end_row: None, start_column, end_column }
+    }
+
+    pub fn object_explicit(object: UID, columns: impl RangeBounds<u16>) -> Self {
+        let table = object.containing_table().map(|uid| uid.try_into().unwrap());
+        let (start_column, end_column) = Self::map_bounds(columns);
+        Self { table, start_row: Some(object.as_u64()), end_row: None, start_column, end_column }
     }
 
     pub fn byte_range(table: ByteTableReference, bytes: impl RangeBounds<u64>) -> Self {

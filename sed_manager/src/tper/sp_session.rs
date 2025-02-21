@@ -1,7 +1,7 @@
 use tokio::sync::oneshot;
 
 use crate::messaging::uid::UID;
-use crate::messaging::value::Value;
+use crate::messaging::value::{Bytes, Value};
 use crate::rpc::args::{DecodeArgs, EncodeArgs};
 use crate::rpc::{
     Error as RPCError, ErrorAction as RPCErrorAction, ErrorEvent as RPCErrorEvent, ErrorEventExt as _, Message,
@@ -81,7 +81,7 @@ impl SPSession {
         let results = self.do_method_call(call).await?.take_results()?;
         // I'll assume the result is encoded without the typeOr{} NVP.
         // Not clear in spec, no official examples.
-        let (success,) = results.decode_args().map_err(|err: MethodStatus| err.while_receiving())?;
+        let (success,) = results.decode_args().map_err(|err: MethodStatus| err.as_error())?;
         Ok(success)
     }
 
@@ -94,10 +94,10 @@ impl SPSession {
             if let Ok(nvp) = NamedValue::<u64, T>::try_from(value) {
                 Ok(nvp.value)
             } else {
-                Err(RPCErrorEvent::InvalidColumnType.while_receiving())
+                Err(RPCErrorEvent::InvalidColumnType.as_error())
             }
         } else {
-            Err(MethodStatus::NotAuthorized.while_receiving())
+            Err(MethodStatus::NotAuthorized.as_error())
         }
     }
 
@@ -117,7 +117,7 @@ impl SPSession {
     ) -> Result<List<UID>, RPCError> {
         let call = MethodCall::new_success(table.into(), NEXT.as_uid(), (first, count).encode_args());
         let results = self.do_method_call(call).await?.take_results()?;
-        let (objects,) = results.decode_args().map_err(|err: MethodStatus| err.while_receiving())?;
+        let (objects,) = results.decode_args().map_err(|err: MethodStatus| err.as_error())?;
         Ok(objects)
     }
 
@@ -148,8 +148,12 @@ impl SPSession {
         Ok(())
     }
 
-    pub async fn random(&self) {
-        todo!()
+    pub async fn random(&self, count: u32, cell: Option<(UID, u16)>) -> Result<Option<Bytes>, RPCError> {
+        let cell_block = cell.map(|(object, column)| CellBlock::object_explicit(object, column..=column));
+        let call = MethodCall::new_success(THIS_SP, RANDOM.as_uid(), (count, cell_block).encode_args());
+        let results = self.do_method_call(call).await?.take_results()?;
+        let (bytes,) = results.decode_args().map_err(|err: MethodStatus| err.as_error())?;
+        Ok(bytes)
     }
 }
 
