@@ -104,13 +104,13 @@ fn gen_as_array(name: &syn::Ident, fields: &[Field], array_trait: &ArrayTrait) -
     let count = fields.len();
     quote! {
         impl #name {
-            fn #as_array(&self) -> [&dyn #trait_path; #count] {
+            pub fn #as_array(&self) -> [&dyn #trait_path; #count] {
                 [
                     #(&self.#fields as &dyn #trait_path,)*
                 ]
             }
 
-            fn #as_array_mut(&mut self) -> [&mut dyn #trait_path; #count] {
+            pub fn #as_array_mut(&mut self) -> [&mut dyn #trait_path; #count] {
                 [
                     #(&mut self.#fields as &mut dyn #trait_path,)*
                 ]
