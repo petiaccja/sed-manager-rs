@@ -1,48 +1,72 @@
-use crate::fake_device::data::objects::{AuthorityTable, CPinTable};
+use as_array::AsArray;
+
+use crate::fake_device::data::objects::{AuthorityTable, CPINTable};
 use crate::fake_device::data::table::BasicTable;
 use crate::messaging::uid::TableUID;
-use crate::spec::column_types::SPRef;
-use crate::spec::{opal, table_id};
+use crate::messaging::value::Bytes;
+use crate::rpc::MethodStatus;
+use crate::spec::column_types::{AuthorityRef, BoolOrBytes};
 
-use super::super::SecurityProvider;
+use super::basic_sp::BasicSP;
+use super::security_provider::SecurityProvider;
+
+// Locking SP tables:
+// --- Basic ---
+// - Table
+// - SPInfo
+// - SPTemplates
+// - MethodID
+// - AccessControl
+// - ACE
+// - Authority
+// - C_PIN
+// --- SP-specific ---
+// - SecretProtect
+// - LockingInfo
+// - Locking
+// - MBRControl
+// - MBR
+// - K_AES_128
+// - K_AES_256
+// - DataStore
 
 pub struct LockingSP {
-    authorities: AuthorityTable,
-    c_pin: CPinTable,
+    pub basic_sp: BasicSP,
+    sp_specific: SPSpecific,
 }
+
+#[derive(AsArray)]
+#[as_array_traits(BasicTable)]
+struct SPSpecific {}
 
 impl LockingSP {
     pub fn new() -> Self {
-        Self { authorities: AuthorityTable::new(), c_pin: CPinTable::new() }
+        Self::default()
     }
 }
 
 impl SecurityProvider for LockingSP {
-    fn uid(&self) -> SPRef {
-        opal::admin::sp::ADMIN
+    fn get_table(&self, table: TableUID) -> Option<&dyn BasicTable> {
+        let basic = self.basic_sp.as_array().into_iter().find(|table_| table_.uid() == table);
+        let specific = self.sp_specific.as_array().into_iter().find(|table_| table_.uid() == table);
+        basic.or(specific)
     }
 
-    fn get_authority_table(&self) -> Option<&AuthorityTable> {
-        Some(&self.authorities)
+    fn get_table_mut(&mut self, table: TableUID) -> Option<&mut dyn BasicTable> {
+        let basic = self.basic_sp.as_array_mut().into_iter().find(|table_| table_.uid() == table);
+        let specific = self.sp_specific.as_array_mut().into_iter().find(|table_| table_.uid() == table);
+        basic.or(specific)
     }
 
-    fn get_c_pin_table(&self) -> Option<&CPinTable> {
-        Some(&self.c_pin)
+    fn authenticate(&self, authority_id: AuthorityRef, proof: Option<Bytes>) -> Result<BoolOrBytes, MethodStatus> {
+        self.basic_sp.authenticate(authority_id, proof)
     }
+}
 
-    fn get_table(&self, uid: TableUID) -> Option<&dyn BasicTable> {
-        match uid {
-            table_id::AUTHORITY => Some(&self.authorities as &dyn BasicTable),
-            table_id::C_PIN => Some(&self.c_pin as &dyn BasicTable),
-            _ => None,
-        }
-    }
-
-    fn get_table_mut(&mut self, uid: TableUID) -> Option<&mut dyn BasicTable> {
-        match uid {
-            table_id::AUTHORITY => Some(&mut self.authorities as &mut dyn BasicTable),
-            table_id::C_PIN => Some(&mut self.c_pin as &mut dyn BasicTable),
-            _ => None,
-        }
+impl Default for LockingSP {
+    fn default() -> Self {
+        let authorities = AuthorityTable::new();
+        let c_pin = CPINTable::new();
+        Self { basic_sp: BasicSP { authorities, c_pin }, sp_specific: SPSpecific {} }
     }
 }

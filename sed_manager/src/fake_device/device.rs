@@ -6,11 +6,11 @@ use std::usize;
 use crate::device::{Device, Error, Interface};
 use crate::messaging::com_id::HANDLE_COM_ID_PROTOCOL;
 use crate::messaging::packet::PACKETIZED_PROTOCOL;
-use crate::rpc::Properties;
+use crate::rpc::{Properties, SessionIdentifier};
 use crate::spec::column_types::SPRef;
 
 use super::com_id_session::ComIDSession;
-use super::data::SSC;
+use super::data::OpalV2Controller;
 use super::discovery::{get_discovery, write_discovery, BASE_COM_ID, NUM_COM_IDS};
 
 const ROUTE_DISCOVERY: Route = Route { protocol: 0x01, com_id: 0x0001 };
@@ -39,7 +39,7 @@ const CAPABILITIES: Properties = Properties {
 pub struct FakeDevice {
     capabilities: Properties,
     sessions: Mutex<HashMap<u16, ComIDSession>>,
-    ssc: Arc<Mutex<SSC>>,
+    controller: Arc<Mutex<OpalV2Controller>>,
 }
 
 #[derive(PartialEq, Eq)]
@@ -50,7 +50,7 @@ struct Route {
 
 impl FakeDevice {
     pub fn new() -> FakeDevice {
-        let controller = Arc::new(Mutex::new(SSC::new()));
+        let controller = Arc::new(Mutex::new(OpalV2Controller::new()));
         let capabilities = CAPABILITIES;
         let mut sessions = HashMap::new();
         for i in 0..NUM_COM_IDS {
@@ -58,16 +58,16 @@ impl FakeDevice {
             let session = ComIDSession::new(com_id, 0x0000, capabilities.clone(), controller.clone());
             sessions.insert(BASE_COM_ID + i, session);
         }
-        FakeDevice { capabilities, ssc: controller, sessions: sessions.into() }
+        FakeDevice { capabilities, controller, sessions: sessions.into() }
     }
 
     pub fn capabilities(&self) -> &Properties {
         &self.capabilities
     }
 
-    pub fn active_sessions(&self) -> Vec<(u32, u32, SPRef)> {
+    pub fn active_sessions(&self) -> Vec<(SessionIdentifier, SPRef)> {
         let sessions = self.sessions.lock().unwrap();
-        sessions.iter().map(|session| session.1.active_sp_sessions()).flatten().collect()
+        sessions.iter().map(|session| session.1.active_sessions()).flatten().collect()
     }
 }
 

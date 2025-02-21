@@ -1,13 +1,8 @@
 mod field;
 mod object;
 mod objects;
-pub mod security_provider;
+mod opal_v2_controller;
 mod security_providers;
-mod ssc;
 mod table;
 
-pub use field::Field;
-pub use object::Object;
-pub use security_provider::SecurityProvider;
-pub use ssc::SSC;
-pub use table::Table;
+pub use opal_v2_controller::OpalV2Controller;

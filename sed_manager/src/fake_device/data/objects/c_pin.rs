@@ -1,14 +1,16 @@
 use as_array::AsArray;
 
-use crate::fake_device::data::{Field, Object};
 use crate::messaging::uid::UID;
 use crate::messaging::value::Value;
 use crate::spec::basic_types::ByteTableReference;
 use crate::spec::column_types::{CPinRef, Name, Password};
 
+use super::super::field::Field;
+use super::super::object::Object;
+
 #[derive(AsArray)]
 #[as_array_traits(Field)]
-pub struct CPin {
+pub struct CPIN {
     pub uid: CPinRef,
     pub name: Option<Name>,
     pub common_name: Option<Name>,
@@ -19,7 +21,7 @@ pub struct CPin {
     pub persistence: Option<bool>,
 }
 
-impl CPin {
+impl CPIN {
     pub fn new(uid: CPinRef) -> Self {
         Self {
             uid,
@@ -34,7 +36,7 @@ impl CPin {
     }
 }
 
-impl Object for CPin {
+impl Object for CPIN {
     fn uid(&self) -> UID {
         self.uid.into()
     }

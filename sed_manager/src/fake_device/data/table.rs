@@ -1,20 +1,20 @@
-use std::collections::BTreeMap;
+use std::{
+    collections::BTreeMap,
+    ops::{Deref, DerefMut},
+};
 
-use crate::messaging::uid::{ObjectUID, UID};
-use crate::spec::basic_types::RestrictedObjectReference;
+use crate::messaging::uid::{ObjectUID, TableUID, UID};
 
 use super::object::Object;
 
 pub trait BasicTable {
-    fn uid(&self) -> UID;
+    fn uid(&self) -> TableUID;
     fn get_object(&self, uid: UID) -> Option<&dyn Object>;
     fn get_object_mut(&mut self, uid: UID) -> Option<&mut dyn Object>;
     fn next_from(&self, uid: Option<UID>) -> Option<UID>;
 }
 
-pub struct Table<T: Object, const TABLE_UID: u64>(pub BTreeMap<RestrictedObjectReference<TABLE_UID>, T>);
-
-type ObjectRef<const TABLE_UID: u64> = RestrictedObjectReference<{ TABLE_UID }>;
+pub struct Table<T: Object, const TABLE_UID: u64>(BTreeMap<ObjectUID<TABLE_UID>, T>);
 
 impl<T: Object, const TABLE_UID: u64> Table<T, TABLE_UID> {
     pub fn new() -> Self {
@@ -22,9 +22,22 @@ impl<T: Object, const TABLE_UID: u64> Table<T, TABLE_UID> {
     }
 }
 
+impl<T: Object, const TABLE_UID: u64> Deref for Table<T, TABLE_UID> {
+    type Target = BTreeMap<ObjectUID<TABLE_UID>, T>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<T: Object, const TABLE_UID: u64> DerefMut for Table<T, TABLE_UID> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
 impl<T: Object, const TABLE_UID: u64> BasicTable for Table<T, TABLE_UID> {
-    fn uid(&self) -> UID {
-        UID::new(TABLE_UID)
+    fn uid(&self) -> TableUID {
+        TableUID::new(TABLE_UID)
     }
 
     fn get_object(&self, uid: UID) -> Option<&dyn Object> {

@@ -1,53 +1,74 @@
-use crate::fake_device::data::objects::{Authority, AuthorityTable, CPin, CPinTable};
+use as_array::AsArray;
+
+use crate::fake_device::data::objects::{Authority, AuthorityTable, CPINTable, CPIN};
 use crate::fake_device::data::table::BasicTable;
 use crate::messaging::uid::TableUID;
-use crate::spec::column_types::{AuthMethod, SPRef};
-use crate::spec::{opal, table_id};
+use crate::messaging::value::Bytes;
+use crate::rpc::MethodStatus;
+use crate::spec::column_types::{AuthMethod, AuthorityRef, BoolOrBytes};
+use crate::spec::opal;
 
-use super::super::SecurityProvider;
+use super::basic_sp::BasicSP;
+use super::security_provider::SecurityProvider;
+
+// Admin SP tables:
+// --- Basic ---
+// - Table
+// - SPInfo
+// - SPTemplates
+// - MethodID
+// - AccessControl
+// - ACE
+// - Authority
+// - C_PIN
+// --- SP-specific ---
+// - TPerInfo
+// - Template
+// - SP
+// - DataRemovalMechanism
 
 pub struct AdminSP {
-    authorities: AuthorityTable,
-    c_pin: CPinTable,
+    pub basic_sp: BasicSP,
+    sp_specific: SPSpecific,
 }
+
+#[derive(AsArray)]
+#[as_array_traits(BasicTable)]
+struct SPSpecific {}
 
 impl AdminSP {
     pub fn new() -> Self {
-        Self { authorities: new_authority_table(), c_pin: new_c_pin_table() }
+        Self::default()
     }
 }
 
 impl SecurityProvider for AdminSP {
-    fn uid(&self) -> SPRef {
-        opal::admin::sp::ADMIN
+    fn get_table(&self, table: TableUID) -> Option<&dyn BasicTable> {
+        let basic = self.basic_sp.as_array().into_iter().find(|table_| table_.uid() == table);
+        let specific = self.sp_specific.as_array().into_iter().find(|table_| table_.uid() == table);
+        basic.or(specific)
     }
 
-    fn get_authority_table(&self) -> Option<&AuthorityTable> {
-        Some(&self.authorities)
+    fn get_table_mut(&mut self, table: TableUID) -> Option<&mut dyn BasicTable> {
+        let basic = self.basic_sp.as_array_mut().into_iter().find(|table_| table_.uid() == table);
+        let specific = self.sp_specific.as_array_mut().into_iter().find(|table_| table_.uid() == table);
+        basic.or(specific)
     }
 
-    fn get_c_pin_table(&self) -> Option<&CPinTable> {
-        Some(&self.c_pin)
-    }
-
-    fn get_table(&self, uid: TableUID) -> Option<&dyn BasicTable> {
-        match uid {
-            table_id::AUTHORITY => Some(&self.authorities as &dyn BasicTable),
-            table_id::C_PIN => Some(&self.c_pin as &dyn BasicTable),
-            _ => None,
-        }
-    }
-
-    fn get_table_mut(&mut self, uid: TableUID) -> Option<&mut dyn BasicTable> {
-        match uid {
-            table_id::AUTHORITY => Some(&mut self.authorities as &mut dyn BasicTable),
-            table_id::C_PIN => Some(&mut self.c_pin as &mut dyn BasicTable),
-            _ => None,
-        }
+    fn authenticate(&self, authority_id: AuthorityRef, proof: Option<Bytes>) -> Result<BoolOrBytes, MethodStatus> {
+        self.basic_sp.authenticate(authority_id, proof)
     }
 }
 
-fn new_authority_table() -> AuthorityTable {
+impl Default for AdminSP {
+    fn default() -> Self {
+        let authorities = preconfig_authorities();
+        let c_pin = preconfig_c_pin();
+        Self { basic_sp: BasicSP { authorities, c_pin }, sp_specific: SPSpecific {} }
+    }
+}
+
+fn preconfig_authorities() -> AuthorityTable {
     let mut authorities = AuthorityTable::new();
     let anybody = Authority {
         name: Some("Anybody".into()),
@@ -77,10 +98,10 @@ fn new_authority_table() -> AuthorityTable {
         ..Authority::new(opal::admin::authority::SID)
     };
 
-    authorities.0.insert(anybody.uid, anybody);
-    authorities.0.insert(admins.uid, admins);
-    authorities.0.insert(makers.uid, makers);
-    authorities.0.insert(sid.uid, sid);
+    authorities.insert(anybody.uid, anybody);
+    authorities.insert(admins.uid, admins);
+    authorities.insert(makers.uid, makers);
+    authorities.insert(sid.uid, sid);
 
     for i in 1..=4 {
         let admin = Authority {
@@ -90,24 +111,24 @@ fn new_authority_table() -> AuthorityTable {
             credential: Some(opal::admin::c_pin::ADMIN.nth(i).unwrap()),
             ..Authority::new(opal::admin::authority::ADMIN.nth(i).unwrap())
         };
-        authorities.0.insert(admin.uid, admin);
+        authorities.insert(admin.uid, admin);
     }
 
     authorities
 }
 
-fn new_c_pin_table() -> CPinTable {
-    let mut c_pins = CPinTable::new();
+fn preconfig_c_pin() -> CPINTable {
+    let mut c_pins = CPINTable::new();
 
-    let sid = CPin { pin: Some("password".into()), ..CPin::new(opal::admin::c_pin::SID) };
-    let msid = CPin { pin: Some("password".into()), ..CPin::new(opal::admin::c_pin::MSID) };
+    let sid = CPIN { pin: Some("password".into()), ..CPIN::new(opal::admin::c_pin::SID) };
+    let msid = CPIN { pin: Some("password".into()), ..CPIN::new(opal::admin::c_pin::MSID) };
 
-    c_pins.0.insert(sid.uid, sid);
-    c_pins.0.insert(msid.uid, msid);
+    c_pins.insert(sid.uid, sid);
+    c_pins.insert(msid.uid, msid);
 
     for i in 1..=4 {
-        let admin = CPin { pin: Some("password".into()), ..CPin::new(opal::admin::c_pin::ADMIN.nth(i).unwrap()) };
-        c_pins.0.insert(admin.uid, admin);
+        let admin = CPIN { pin: Some("password".into()), ..CPIN::new(opal::admin::c_pin::ADMIN.nth(i).unwrap()) };
+        c_pins.insert(admin.uid, admin);
     }
 
     c_pins

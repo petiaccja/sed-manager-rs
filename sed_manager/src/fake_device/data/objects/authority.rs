@@ -6,7 +6,8 @@ use crate::spec::column_types::{
     AuthMethod, AuthorityRef, CredentialRef, Date, HashProtocol, LogListRef, LogSelect, MessagingType, Name,
 };
 
-use super::super::{Field, Object};
+use super::super::field::Field;
+use super::super::object::Object;
 
 #[derive(AsArray)]
 #[as_array_traits(Field)]
