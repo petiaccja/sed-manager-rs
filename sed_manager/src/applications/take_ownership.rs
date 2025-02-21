@@ -1,32 +1,14 @@
-use crate::messaging::discovery::Feature;
-use crate::messaging::discovery::{Discovery, FeatureCode, FeatureDescriptor};
+use crate::applications::utility::{get_admin_sp, get_default_ssc};
+use crate::messaging::discovery::{Discovery, Feature};
 use crate::spec;
-use crate::spec::column_types::{Password, SPRef};
+use crate::spec::column_types::Password;
 use crate::tper::TPer;
 
 use super::error::Error;
 use super::with_session::with_session;
 
-fn get_default_ssc(discovery: &Discovery) -> Result<&FeatureDescriptor, Error> {
-    discovery
-        .descriptors
-        .iter()
-        .find(|desc| desc.security_subsystem_class().is_some())
-        .ok_or(Error::NoAvailableSSC)
-}
-
-fn get_admin_sp(ssc: FeatureCode) -> Result<SPRef, Error> {
-    match ssc {
-        FeatureCode::Enterprise => Ok(spec::enterprise::admin::sp::ADMIN),
-        FeatureCode::OpalV1 => Ok(spec::opal::admin::sp::ADMIN),
-        FeatureCode::OpalV2 => Ok(spec::opal::admin::sp::ADMIN),
-        FeatureCode::Opalite => Ok(spec::opalite::admin::sp::ADMIN),
-        FeatureCode::PyriteV1 => Ok(spec::pyrite::admin::sp::ADMIN),
-        FeatureCode::PyriteV2 => Ok(spec::pyrite::admin::sp::ADMIN),
-        FeatureCode::Ruby => Ok(spec::ruby::admin::sp::ADMIN),
-        FeatureCode::KeyPerIO => Ok(spec::kpio::admin::sp::ADMIN),
-        _ => Err(Error::IncompatibleSSC),
-    }
+pub async fn is_taking_ownership_supported(_discovery: &Discovery) -> bool {
+    true
 }
 
 pub async fn take_ownership(tper: &TPer, new_password: &[u8]) -> Result<(), Error> {
@@ -51,8 +33,10 @@ pub async fn take_ownership(tper: &TPer, new_password: &[u8]) -> Result<(), Erro
 
 pub async fn verify_ownership(tper: &TPer, sid_password: &[u8]) -> Result<bool, Error> {
     use spec::core::authority;
-    use spec::enterprise::admin::sp;
-    with_session!(session = tper.start_session(sp::ADMIN, Some(authority::SID), Some(sid_password)).await? => {});
+    let discovery = tper.discover()?;
+    let default_ssc = get_default_ssc(&discovery)?;
+    let admin_sp = get_admin_sp(default_ssc.feature_code())?;
+    with_session!(session = tper.start_session(admin_sp, Some(authority::SID), Some(sid_password)).await? => {});
     Ok(true)
 }
 
@@ -70,7 +54,7 @@ mod tests {
         let device = Arc::new(FakeDevice::new());
         let tper = TPer::new_on_default_com_id(device)?;
         take_ownership(&tper, new_password).await?;
-        verify_ownership(&tper, new_password).await?;
+        assert!(verify_ownership(&tper, new_password).await?);
         Ok(())
     }
 

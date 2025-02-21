@@ -3,7 +3,7 @@ use as_array::AsArray;
 use crate::messaging::uid::UID;
 use crate::messaging::value::Value;
 use crate::spec::basic_types::ByteTableReference;
-use crate::spec::column_types::{CPinRef, Name, Password};
+use crate::spec::column_types::{CPINRef, Name, Password};
 
 use super::super::field::Field;
 use super::super::object::Object;
@@ -11,7 +11,7 @@ use super::super::object::Object;
 #[derive(AsArray)]
 #[as_array_traits(Field)]
 pub struct CPIN {
-    pub uid: CPinRef,
+    pub uid: CPINRef,
     pub name: Option<Name>,
     pub common_name: Option<Name>,
     pub pin: Option<Password>,
@@ -22,7 +22,7 @@ pub struct CPIN {
 }
 
 impl CPIN {
-    pub fn new(uid: CPinRef) -> Self {
+    pub fn new(uid: CPINRef) -> Self {
         Self {
             uid,
             name: None,

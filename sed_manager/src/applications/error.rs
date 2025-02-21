@@ -6,6 +6,7 @@ pub enum Error {
     IncompatibleSSC,
     NoAvailableSSC,
     AlreadyOwned,
+    AlreadyActivated,
 }
 
 impl From<RPCError> for Error {
