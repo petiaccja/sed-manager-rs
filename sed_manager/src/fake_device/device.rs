@@ -69,6 +69,10 @@ impl FakeDevice {
         let sessions = self.sessions.lock().unwrap();
         sessions.iter().map(|session| session.1.active_sessions()).flatten().collect()
     }
+
+    pub fn controller(&self) -> Arc<Mutex<OpalV2Controller>> {
+        self.controller.clone()
+    }
 }
 
 impl Device for FakeDevice {

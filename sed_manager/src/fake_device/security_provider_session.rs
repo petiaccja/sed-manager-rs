@@ -6,6 +6,7 @@ use crate::rpc::MethodStatus;
 use crate::spec::basic_types::List;
 use crate::spec::column_types::{AuthorityRef, BoolOrBytes, BytesOrRowValues, CellBlock, SPRef};
 use crate::spec::invoking_id::THIS_SP;
+use crate::spec::opal::admin::sp;
 
 use super::data::OpalV2Controller;
 
@@ -14,11 +15,12 @@ pub struct SecurityProviderSession {
     write: bool,
     controller: Arc<Mutex<OpalV2Controller>>,
     authentications: Vec<AuthorityRef>,
+    pub reverted: Vec<SPRef>, // SPs affected are added here after a call to Revert or RevertSP.
 }
 
 impl SecurityProviderSession {
     pub fn new(sp: SPRef, write: bool, controller: Arc<Mutex<OpalV2Controller>>) -> Self {
-        Self { this_sp: sp, write, controller, authentications: Vec::new() }
+        Self { this_sp: sp, write, controller, authentications: Vec::new(), reverted: Vec::new() }
     }
 
     pub fn this_sp(&self) -> SPRef {
@@ -75,5 +77,41 @@ impl SecurityProviderSession {
             return Err(MethodStatus::InvalidParameter);
         };
         security_provider.next(table, from, count).map(|out| (out,))
+    }
+
+    pub fn revert(&mut self, invoking_id: UID) -> Result<(), MethodStatus> {
+        let mut controller = self.controller.lock().unwrap();
+        if self.this_sp != sp::ADMIN {
+            return Err(MethodStatus::NotAuthorized);
+        }
+        let Ok(sp) = invoking_id.try_into() else {
+            return Err(MethodStatus::InvalidParameter);
+        };
+        controller.revert(sp).map(|reverted| {
+            self.reverted = reverted;
+            ()
+        })
+    }
+
+    pub fn revert_sp(&mut self, invoking_id: UID, keep_global_range_key: Option<bool>) -> Result<(), MethodStatus> {
+        let mut controller = self.controller.lock().unwrap();
+        if invoking_id != THIS_SP {
+            return Err(MethodStatus::InvalidParameter);
+        };
+        controller.revert_sp(self.this_sp, keep_global_range_key).map(|reverted| {
+            self.reverted = reverted;
+            ()
+        })
+    }
+
+    pub fn activate(&self, invoking_id: UID) -> Result<(), MethodStatus> {
+        let mut controller = self.controller.lock().unwrap();
+        if self.this_sp != sp::ADMIN {
+            return Err(MethodStatus::NotAuthorized);
+        }
+        let Ok(sp) = invoking_id.try_into() else {
+            return Err(MethodStatus::InvalidParameter);
+        };
+        controller.activate(sp)
     }
 }

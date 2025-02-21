@@ -8,7 +8,7 @@ use crate::rpc::{
     MessageSender, MethodCall, MethodResult, MethodStatus, PackagedMethod, Properties, SessionIdentifier, Tracked,
 };
 use crate::spec::basic_types::{List, NamedValue, ObjectReference, TableReference};
-use crate::spec::column_types::{AuthorityRef, CellBlock};
+use crate::spec::column_types::{AuthorityRef, CellBlock, SPRef};
 use crate::spec::{invoking_id::*, method_id::*};
 
 pub struct SPSession {
@@ -129,16 +129,23 @@ impl SPSession {
         todo!()
     }
 
-    pub async fn revert(&self) {
-        todo!()
+    pub async fn revert(&self, sp: SPRef) -> Result<(), RPCError> {
+        let call = MethodCall::new_success(sp.as_uid(), REVERT.as_uid(), vec![]);
+        let _ = self.do_method_call(call).await?.take_results()?;
+        Ok(())
     }
 
-    pub async fn revert_sp(&self) {
-        todo!()
+    pub async fn revert_sp(&self, keep_global_range_key: Option<bool>) -> Result<(), RPCError> {
+        let call =
+            MethodCall::new_success(THIS_SP.as_uid(), REVERT_SP.as_uid(), (keep_global_range_key,).encode_args());
+        let _ = self.do_method_call(call).await?.take_results()?;
+        Ok(())
     }
 
-    pub async fn activate(&self) {
-        todo!()
+    pub async fn activate(&self, sp: SPRef) -> Result<(), RPCError> {
+        let call = MethodCall::new_success(sp.as_uid(), ACTIVATE.as_uid(), vec![]);
+        let _ = self.do_method_call(call).await?.take_results()?;
+        Ok(())
     }
 
     pub async fn random(&self) {

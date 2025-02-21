@@ -1,8 +1,8 @@
-mod field;
-mod object;
-mod objects;
-mod opal_v2_controller;
-mod security_providers;
-mod table;
+pub mod field;
+pub mod object;
+pub mod objects;
+pub mod opal_v2_controller;
+pub mod security_providers;
+pub mod table;
 
 pub use opal_v2_controller::OpalV2Controller;

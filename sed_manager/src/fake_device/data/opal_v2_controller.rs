@@ -2,15 +2,15 @@ use std::sync::atomic::AtomicU32;
 
 use crate::messaging::value::Bytes;
 use crate::rpc::MethodStatus;
-use crate::spec::column_types::{AuthorityRef, BoolOrBytes, SPRef};
-use crate::spec::opal::admin::sp;
+use crate::spec::column_types::{AuthorityRef, BoolOrBytes, LifeCycleState, SPRef};
+use crate::spec::opal::{admin, locking};
 
 use super::security_providers::{AdminSP, LockingSP, SecurityProvider};
 
 #[derive(Default)]
 pub struct OpalV2Controller {
-    admin_sp: AdminSP,
-    locking_sp: LockingSP,
+    pub admin_sp: AdminSP,
+    pub locking_sp: LockingSP,
     tper_session_number: AtomicU32,
 }
 
@@ -21,16 +21,16 @@ impl OpalV2Controller {
 
     pub fn get_security_provider(&self, sp: SPRef) -> Option<&dyn SecurityProvider> {
         match sp {
-            sp::ADMIN => Some(&self.admin_sp),
-            sp::LOCKING => Some(&self.locking_sp),
+            admin::sp::ADMIN => Some(&self.admin_sp),
+            admin::sp::LOCKING => Some(&self.locking_sp),
             _ => None,
         }
     }
 
     pub fn get_security_provider_mut(&mut self, sp: SPRef) -> Option<&mut dyn SecurityProvider> {
         match sp {
-            sp::ADMIN => Some(&mut self.admin_sp),
-            sp::LOCKING => Some(&mut self.locking_sp),
+            admin::sp::ADMIN => Some(&mut self.admin_sp),
+            admin::sp::LOCKING => Some(&mut self.locking_sp),
             _ => None,
         }
     }
@@ -58,7 +58,7 @@ impl OpalV2Controller {
         };
 
         let authenticated = match host_sgn_auth {
-            Some(auth) => security_provider.authenticate(auth, host_challenge) == Ok(BoolOrBytes::Bool(true)),
+            Some(auth) => security_provider.authenticate(auth, host_challenge)? == BoolOrBytes::Bool(true),
             None => true,
         };
         if !authenticated {
@@ -67,5 +67,43 @@ impl OpalV2Controller {
 
         let tsn = self.tper_session_number.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         Ok((hsn, tsn, None, None, None, None, None, None))
+    }
+
+    pub fn revert(&mut self, sp: SPRef) -> Result<Vec<SPRef>, MethodStatus> {
+        self.revert_sp(sp, None)
+    }
+
+    pub fn revert_sp(&mut self, sp: SPRef, _keep_global_range_key: Option<bool>) -> Result<Vec<SPRef>, MethodStatus> {
+        match sp {
+            admin::sp::ADMIN => {
+                self.admin_sp = AdminSP::new();
+                self.locking_sp = LockingSP::new();
+                Ok(vec![admin::sp::ADMIN, admin::sp::LOCKING])
+            }
+            admin::sp::LOCKING => {
+                let row_sp_locking = self.admin_sp.sp_specific.sp.get_mut(&sp).unwrap();
+                row_sp_locking.life_cycle_state = LifeCycleState::ManufacturedInactive;
+
+                self.locking_sp = LockingSP::new();
+                Ok(vec![admin::sp::LOCKING])
+            }
+            _ => Err(MethodStatus::InvalidParameter),
+        }
+    }
+
+    pub fn activate(&mut self, sp: SPRef) -> Result<(), MethodStatus> {
+        match sp {
+            admin::sp::LOCKING => {
+                let row_sp_locking = self.admin_sp.sp_specific.sp.get_mut(&sp).unwrap();
+                row_sp_locking.life_cycle_state = LifeCycleState::Manufactured;
+
+                let row_c_pin_sid = self.admin_sp.basic_sp.c_pin.get(&admin::c_pin::SID).unwrap();
+                let row_c_pin_admin1 =
+                    self.locking_sp.basic_sp.c_pin.get_mut(&locking::c_pin::ADMIN.nth(1).unwrap()).unwrap();
+                row_c_pin_admin1.pin = row_c_pin_sid.pin.clone();
+                Ok(())
+            }
+            _ => Err(MethodStatus::InvalidParameter),
+        }
     }
 }

@@ -12,6 +12,24 @@ define_column_type!(LogSelect, 0x0000_0005_0000_040C_u64, "log_select");
 
 #[repr(u8)]
 #[derive(EnumerationType, PartialEq, Eq, Clone, Debug)]
+pub enum LifeCycleState {
+    Issued = 0,
+    IssuedDisabled = 1,
+    IssuedFrozen = 2,
+    IssuedDisabledFrozen = 3,
+    IssuedFailed = 4,
+    ManufacturedInactive = 8,
+    Manufactured = 9,
+    ManufacturedDisabled = 10,
+    ManufacturedFrozen = 11,
+    ManufacturedDisabledFrozen = 12,
+    ManufacturedFailed = 13,
+    #[fallback]
+    Unknown = 255,
+}
+
+#[repr(u8)]
+#[derive(EnumerationType, PartialEq, Eq, Clone, Debug)]
 pub enum AuthMethod {
     None = 0,
     Password = 1,

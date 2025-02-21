@@ -119,12 +119,30 @@ impl PacketStack {
         let mut extended_args = vec![Value::from(call.invoking_id)];
         extended_args.append(&mut call.args);
 
-        match method_id {
+        let result = match method_id {
             AUTHENTICATE => call_generic_sp_session(sp_session, SecurityProviderSession::authenticate, extended_args),
             GET => call_generic_sp_session(sp_session as &_, SecurityProviderSession::get, extended_args),
             SET => call_generic_sp_session(sp_session, SecurityProviderSession::set, extended_args),
             NEXT => call_generic_sp_session(sp_session as &_, SecurityProviderSession::next, extended_args),
+            REVERT => call_generic_sp_session(sp_session, SecurityProviderSession::revert, extended_args),
+            REVERT_SP => call_generic_sp_session(sp_session, SecurityProviderSession::revert_sp, extended_args),
+            ACTIVATE => call_generic_sp_session(sp_session as &_, SecurityProviderSession::activate, extended_args),
             _ => Some(PackagedMethod::Result(invalid_parameter)),
+        };
+        let reverted = self.security_provider_sessions.get(&session_id).map(|s| s.reverted.clone()).unwrap_or(vec![]);
+        self.abort_reverted_sp_sessions(reverted);
+        result
+    }
+
+    pub fn abort_reverted_sp_sessions(&mut self, reverted: Vec<SPRef>) {
+        let affected_sessions: Vec<_> = self
+            .security_provider_sessions
+            .iter()
+            .filter(|(_, s)| reverted.contains(&s.this_sp()))
+            .map(|(id, _)| *id)
+            .collect();
+        for id in affected_sessions {
+            self.security_provider_sessions.remove(&id);
         }
     }
 
