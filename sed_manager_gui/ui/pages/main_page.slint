@@ -2,6 +2,7 @@ import { SummaryModel, SummaryPage, LivePreviewData as LivePreviewSummaryData } 
 import { AdditionalDrivesPage, AdditionalDrivesModel } from "additional_drives_page.slint";
 import { ScrollView, Palette, Button } from "std-widgets.slint";
 import { ContentStatus } from "../widgets/loading.slint";
+import { PaletteExtra } from "../widgets/visual.slint";
 
 
 component Tab inherits Rectangle {
@@ -10,9 +11,9 @@ component Tab inherits Rectangle {
     width: 240px;
     height: 32px;
     border-radius: 6px;
-    background: selected ? Palette.control-background.mix(Palette.accent-background, 0.7) : area.has-hover ? Palette.control-background : Palette.background;
+    background: selected ? PaletteExtra.accented-control-background : area.has-hover ? PaletteExtra.highlight : Palette.background;
     border-width: 1px;
-    border-color: selected ? self.background : Palette.control-foreground.with-alpha(0.2);
+    border-color: selected ? self.background : PaletteExtra.highlight;
     callback clicked <=> area.clicked;
     area := TouchArea {
         width: parent.width;
@@ -45,6 +46,10 @@ export component MainPage inherits Window {
     }
     VerticalLayout {
         alignment: stretch;
+        padding-left: 16px;
+        padding-right: 16px;
+        padding-bottom: 16px;
+        padding-top: 6px;
         HorizontalLayout {
             ScrollView {
                 vertical-scrollbar-policy: always-off;
@@ -53,7 +58,6 @@ export component MainPage inherits Window {
                 vertical-stretch: 0.0;
                 tabs := HorizontalLayout {
                     spacing: 4px;
-                    padding: 4px;
                     for summary[i] in summaries: Tab {
                         name: summary.name;
                         selected: root.active-tab == i;
@@ -71,21 +75,29 @@ export component MainPage inherits Window {
                 }
             }
 
-            HorizontalLayout {
-                padding: 4px;
-                Button {
-                    height: 32px;
-                    icon: @image-url("../../logo/icon_refresh.svg");
-                    colorize-icon: true;
-                    clicked => {
-                        update-device-list();
-                    }
+            Rectangle {
+                width: 0px;
+                height: 32px;
+                Rectangle {
+                    width: 33px;
+                    height: 36px;
+                    x: -32px;
+                    y: -2px;
+                    background: @linear-gradient(90deg, Palette.background.with-alpha(0) 0%, Palette.background 80%);
+                }
+            }
+
+            Button {
+                height: 32px;
+                icon: @image-url("../../images/action/8666728_refresh_cw_icon.svg");
+                colorize-icon: true;
+                clicked => {
+                    update-device-list();
                 }
             }
         }
 
         HorizontalLayout {
-            padding: 8px;
             max-height: 100000px; // Otherwise it assumes max-height == min-height
             vertical-stretch: 1.0;
             for summary[i] in root.summaries: HorizontalLayout {

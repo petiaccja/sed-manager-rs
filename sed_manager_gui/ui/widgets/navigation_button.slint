@@ -1,0 +1,133 @@
+import { Island, PaletteExtra } from "visual.slint";
+import { Palette } from "std-widgets.slint";
+
+
+export enum NavigationDirection {
+    up,
+    down,
+    left,
+    none,
+}
+
+
+export component NavigationButton inherits Island {
+    in property <image> icon;
+    in property <string> text;
+    in property <NavigationDirection> navigation-direction: NavigationDirection.none;
+    in property <color> icon-color: Palette.control-foreground;
+    in property <color> text-color: Palette.control-foreground;
+    in property <length> font-size;
+    in property <length> spacing: 8px;
+    in property <bool> enabled: true;
+    callback clicked <=> area.clicked;
+    padding: 6px;
+    min-height: title.height + effective-padding-top() + effective-padding-bottom();
+    min-width: effective-padding-left() + image.width + spacing + title.width + spacing + direction-indicator.width + effective-padding-right();
+    area := TouchArea {
+        enabled: root.enabled;
+    }
+
+    image := Image {
+        x: effective-padding-left();
+        width: icon-size();
+        height: icon-size();
+        source: root.icon;
+        colorize: root.icon-color;
+        vertical-alignment: center;
+        horizontal-alignment: center;
+        image-fit: ImageFit.contain;
+        image-rendering: ImageRendering.smooth;
+        opacity: root.enabled ? 100% : 45%;
+    }
+
+    title := Text {
+        x: effective-padding-left() + icon-size() + spacing;
+        text: root.text;
+        vertical-alignment: center;
+        font-weight: 600;
+        font-size: root.font-size;
+        color: root.text-color;
+        opacity: root.enabled ? 100% : 45%;
+    }
+
+    direction-indicator := Image {
+        x: root.width - self.width - effective-padding-right();
+        height: title.height;
+        width: self.height;
+        source: navigation-image();
+        colorize: root.text-color;
+        vertical-alignment: center;
+        horizontal-alignment: center;
+        image-fit: ImageFit.contain;
+        image-rendering: ImageRendering.smooth;
+        opacity: root.enabled ? 100% : 45%;
+    }
+
+    highlight := Rectangle {
+        border-radius: root.border-radius;
+        background: area.has-hover && root.enabled ? PaletteExtra.highlight : #00000000;
+    }
+
+    pure function navigation-image() -> image {
+        if self.navigation-direction == NavigationDirection.up {
+            @image-url("../../images/shape/8666673_chevron_up_icon.svg")
+        } else if self.navigation-direction == NavigationDirection.down {
+            @image-url("../../images/shape/8666558_chevron_down_icon.svg")
+        } else if self.navigation-direction == NavigationDirection.left {
+            @image-url("../../images/shape/8666777_chevron_right_arrow_icon.svg")
+        } else {
+            @image-url("")
+        }
+    }
+    pure function icon-size() -> length {
+        if self.icon.width != 0 {
+            Math.min(1.4 * title.height, root.height - effective-padding-top() - effective-padding-bottom());
+        } else {
+            0px
+        }
+    }
+    pure function effective-padding-left() -> length {
+        Math.max(root.padding-left, root.padding)
+    }
+    pure function effective-padding-right() -> length {
+        Math.max(root.padding-right, root.padding)
+    }
+    pure function effective-padding-top() -> length {
+        Math.max(root.padding-top, root.padding)
+    }
+    pure function effective-padding-bottom() -> length {
+        Math.max(root.padding-bottom, root.padding)
+    }
+}
+
+export component LivePreviewTest_Empty inherits NavigationButton {
+    navigation-direction: NavigationDirection.none;
+    icon-color: PaletteExtra.accented-foreground;
+    text-color: Palette.control-foreground;
+}
+
+export component LivePreviewTest_NoIcon inherits NavigationButton {
+    text: "Button title";
+    navigation-direction: NavigationDirection.left;
+    icon-color: PaletteExtra.accented-foreground;
+    text-color: Palette.control-foreground;
+}
+
+export component LivePreviewTest_WithIcon inherits NavigationButton {
+    icon: @image-url("../../images/device/8666570_hard_drive_icon.svg");
+    text: "Button title";
+    navigation-direction: NavigationDirection.none;
+    icon-color: PaletteExtra.accented-foreground;
+    text-color: Palette.control-foreground;
+    clicked => {
+        if self.navigation-direction == NavigationDirection.up {
+            self.navigation-direction = NavigationDirection.down;
+        } else if self.navigation-direction == NavigationDirection.down {
+            self.navigation-direction = NavigationDirection.left;
+        } else if self.navigation-direction == NavigationDirection.left {
+            self.navigation-direction = NavigationDirection.none;
+        } else {
+            self.navigation-direction = NavigationDirection.up;
+        }
+    }
+}

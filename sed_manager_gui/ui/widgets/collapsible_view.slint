@@ -1,94 +1,47 @@
 import { Palette } from "std-widgets.slint";
 import { HorizontalSeparator, Island } from "visual.slint";
-
-component TitleBar {
-    in property <string> title;
-    in-out property <bool> collaped: false;
-    property <length> internal-padding: 6px;
-    min-width: title.min-width + 4 * internal-padding + 2 * toggle.min-width;
-    min-height: Math.max(title.min-height, toggle.min-height);
-    preferred-height: self.min-height;
-    area := TouchArea {
-        clicked => {
-            root.collaped = !root.collaped;
-        }
-    }
-
-    title := Text {
-        text: root.title;
-        font-weight: 600;
-        vertical-alignment: center;
-        color: Palette.control-foreground;
-    }
-
-    toggle := Text {
-        text: root.collaped ? "\u{25BC}" : "\u{25B2}";
-        font-weight: 600;
-        x: root.width - self.width - root.internal-padding;
-        vertical-alignment: center;
-        color: Palette.control-foreground;
-    }
-
-    // HorizontalLayout {
-    //     padding: 8px;
-    //     Text {
-    //         horizontal-stretch: 1.0;
-    //         text: root.title;
-    //         font-weight: 600;
-    //         horizontal-alignment: center;
-    //         vertical-alignment: center;
-    //         color: Palette.control-foreground;
-    //     }
-
-    //     Text {
-    //         horizontal-stretch: 0.0;
-    //         text: root.collaped ? "\u{25BC}" : "\u{25B2}";
-    //         font-weight: 600;
-    //         horizontal-alignment: center;
-    //         vertical-alignment: center;
-    //         color: Palette.control-foreground;
-    //     }
-    // }
-}
-
-component Content {
-    in property <bool> collaped;
-    visible: !collaped;
-    min-height: collaped ? 0px : container.min-height;
-    preferred-height: self.min-height;
-    container := VerticalLayout {
-        alignment: start;
-        @children
-    }
-}
+import { NavigationButton, NavigationDirection } from "navigation_button.slint";
 
 export component CollapsibleView inherits Island {
-    in property <string> title;
-    in property <bool> collaped: title-bar.collaped;
-    VerticalLayout {
+    in property <string> text;
+    in property <image> icon;
+    in-out property <bool> collapsed: false;
+    in property <length> header-height: 32px;
+    in property <length> font-size;
+    in property <color> font-color: Palette.control-foreground;
+    min-height: collapsed ? header-height : layout.min-height;
+    layout := VerticalLayout {
         alignment: start;
-        title-bar := TitleBar {
-            title: title;
-            height: 32px;
+        header := NavigationButton {
+            text: root.text;
+            icon: root.icon;
+            font-size: root.font-size;
+            icon-color: font-color;
+            text-color: font-color;
+            height: Math.max(header-height, self.min-height);
+            background: #00000000;
+            navigation-direction: root.collapsed ? NavigationDirection.down : NavigationDirection.up;
+            clicked => {
+                root.collapsed = !root.collapsed;
+            }
         }
 
-        if !root.collaped: HorizontalSeparator {
-            background: Palette.background;
-        }
-        Content {
-            collaped: title-bar.collaped;
+        content := Rectangle {
+            visible: !collapsed;
             @children
         }
     }
 }
 
 export component LivePreviewTest inherits CollapsibleView {
-    title: "Title";
-    Text {
-        text: "Some text for you";
-    }
+    text: "Title";
+    VerticalLayout {
+        Text {
+            text: "Some text for you";
+        }
 
-    Text {
-        text: "And some more";
+        Text {
+            text: "And some more";
+        }
     }
 }

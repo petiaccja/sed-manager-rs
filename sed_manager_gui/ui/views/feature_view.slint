@@ -1,5 +1,5 @@
 import { ScrollView, GridBox, HorizontalBox, Palette } from "std-widgets.slint";
-import { VerticalSeparator, PaletteExtra } from "../widgets/visual.slint";
+import { VerticalSeparator, PaletteExtra, HorizontalSeparator } from "../widgets/visual.slint";
 import { CollapsibleView } from "../widgets/collapsible_view.slint";
 import { NameValueListView } from "../widgets/name_value_list_view.slint";
 import { ContentStatus, TextLoadingIndicator } from "../widgets/loading.slint";
@@ -11,36 +11,39 @@ export struct FeatureModel {
 
 component LoadingView {
     property <length> spacing: 16px;
-    min-width: 16px + 2 * Math.max(common-view.min-width, ssc-view.min-width);
-    min-height: Math.max(common-view.min-height, ssc-view.min-height);
-    common-view := CollapsibleView {
-        x: 0;
-        y: 0;
-        width: (root.width - root.spacing) / 2;
-        title: "Common features";
-        height: self.min-height;
+    HorizontalLayout {
+        spacing: 12px;
         VerticalLayout {
-            padding: 6px;
             alignment: start;
-            TextLoadingIndicator {
-                min-width: 60px;
-                height: 16px;
+            CollapsibleView {
+                text: "Common features";
+                preferred-height: self.min-height;
+                font-color: PaletteExtra.accented-control-foreground;
+                VerticalLayout {
+                    padding: 6px;
+                    alignment: start;
+                    TextLoadingIndicator {
+                        min-width: 100px;
+                        height: 16px;
+                    }
+                }
             }
         }
-    }
 
-    ssc-view := CollapsibleView {
-        x: common-view.width + root.spacing;
-        y: 0;
-        width: common-view.width;
-        title: "SSC features";
-        height: self.min-height;
         VerticalLayout {
-            padding: 6px;
             alignment: start;
-            TextLoadingIndicator {
-                min-width: 60px;
-                height: 16px;
+            CollapsibleView {
+                text: "SSC features";
+                preferred-height: self.min-height;
+                font-color: PaletteExtra.accented-control-foreground;
+                VerticalLayout {
+                    padding: 6px;
+                    alignment: start;
+                    TextLoadingIndicator {
+                        min-width: 60px;
+                        height: 16px;
+                    }
+                }
             }
         }
     }
@@ -53,10 +56,10 @@ component ErrorView {
         padding: 12px;
         spacing: 8px;
         Image {
-            source: @image-url("../../logo/icon_no_lock.svg");
+            source: @image-url("../../images/device/9111167_lock_no_icon.svg");
             preferred-height: 200px;
             min-height: 80px;
-            colorize: PaletteExtra.action-foreground.with-alpha(0.6);
+            colorize: PaletteExtra.accented-foreground.with-alpha(0.6);
         }
 
         Text {
@@ -78,19 +81,25 @@ component SplitView {
     in property <[FeatureModel]> ssc-features;
     HorizontalLayout {
         alignment: stretch;
-        spacing: 16px;
-        preferred-width: 100%;
+        spacing: 12px;
         if root.common-features.length != 0: ScrollView {
             horizontal-scrollbar-policy: always-off;
             min-width: common_feature_view.min-width;
             viewport-height: common_feature_view.min-height;
             common_feature_view := VerticalLayout {
-                preferred-width: 100%;
-                spacing: 16px;
+                spacing: 12px;
                 for feature in root.common-features: CollapsibleView {
-                    title: feature.name;
-                    NameValueListView {
-                        name_value_pairs: feature.nvps;
+                    text: feature.name;
+                    font-color: PaletteExtra.accented-control-foreground;
+                    VerticalLayout {
+                        alignment: start;
+                        HorizontalSeparator {
+                            background: Palette.background;
+                        }
+
+                        NameValueListView {
+                            name_value_pairs: feature.nvps;
+                        }
                     }
                 }
             }
@@ -100,12 +109,19 @@ component SplitView {
             min-width: ssc_feature_view.min-width;
             viewport-height: ssc_feature_view.min-height;
             ssc_feature_view := VerticalLayout {
-                preferred-width: 100%;
                 spacing: 16px;
                 for feature in root.ssc-features: CollapsibleView {
-                    title: feature.name;
-                    NameValueListView {
-                        name_value_pairs: feature.nvps;
+                    text: feature.name;
+                    font-color: PaletteExtra.accented-control-foreground;
+                    VerticalLayout {
+                        alignment: start;
+                        HorizontalSeparator {
+                            background: Palette.background;
+                        }
+
+                        NameValueListView {
+                            name_value_pairs: feature.nvps;
+                        }
                     }
                 }
             }
@@ -124,8 +140,6 @@ export component FeatureView {
             error: root.error;
         }
         if root.status == ContentStatus.success: SplitView {
-            preferred-width: 100%;
-            preferred-height: 100%;
             common-features: root.common-features;
             ssc-features: root.ssc-features;
         }
@@ -133,6 +147,7 @@ export component FeatureView {
 }
 
 export component LivePreviewTest_Filled inherits FeatureView {
+    status: ContentStatus.success;
     common-features: [
         {
             name: "TPer",

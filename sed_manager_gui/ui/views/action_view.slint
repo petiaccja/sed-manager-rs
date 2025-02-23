@@ -1,0 +1,76 @@
+import { GroupBox, Button, Palette } from "std-widgets.slint";
+import { CollapsibleView } from "../widgets/collapsible_view.slint";
+import { NavigationButton, NavigationDirection } from "../widgets/navigation_button.slint";
+import { HorizontalSeparator, PaletteExtra } from "../widgets/visual.slint";
+
+export component ActionView {
+    in property <[string]> security-providers;
+    private property <length> button-height: 32px;
+    VerticalLayout {
+        alignment: start;
+        spacing: 12px;
+        CollapsibleView {
+            text: "Configure";
+            icon: @image-url("../../images/action/8666615_settings_icon.svg");
+            preferred-height: self.min-height;
+            font-color: PaletteExtra.accented-control-foreground;
+            header-height: 42px;
+            VerticalLayout {
+                alignment: start;
+                HorizontalSeparator {
+                    background: Palette.background;
+                }
+
+                NavigationButton {
+                    text: "Take ownership";
+                    icon: @image-url("../../images/action/8666628_user_check_icon.svg");
+                    height: button-height;
+                    navigation-direction: NavigationDirection.left;
+                    background: #00000000;
+                }
+
+                HorizontalSeparator {
+                    background: Palette.background;
+                }
+
+                NavigationButton {
+                    text: "Activate locking";
+                    icon: @image-url("../../images/device/9111193_lock_icon.svg");
+                    height: button-height;
+                    navigation-direction: NavigationDirection.left;
+                    background: #00000000;
+                }
+            }
+        }
+
+        if root.security-providers.length > 0: CollapsibleView {
+            text: "Table editor";
+            icon: @image-url("../../images/action/9111030_table_icon.svg");
+            preferred-height: self.min-height;
+            font-color: PaletteExtra.accented-control-foreground;
+            header-height: 42px;
+            VerticalLayout {
+                alignment: start;
+                for sp in security_providers: VerticalLayout {
+                    alignment: start;
+                    HorizontalSeparator {
+                        background: Palette.background;
+                    }
+
+                    NavigationButton {
+                        text: sp + " SP";
+                        icon: @image-url("../../images/device/9111101_key_security_icon.svg");
+                        height: button-height;
+                        navigation-direction: NavigationDirection.left;
+                        background: #00000000;
+                        enabled: false;
+                    }
+                }
+            }
+        }
+    }
+}
+
+export component LivePreviewTest inherits ActionView {
+    security-providers: ["Admin", "Locking"];
+}

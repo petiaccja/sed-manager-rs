@@ -1,4 +1,4 @@
-import { VerticalSeparator } from "visual.slint";
+import { VerticalSeparator, PaletteExtra } from "visual.slint";
 import { Palette, HorizontalBox } from "std-widgets.slint";
 
 enum CellType {
@@ -10,7 +10,7 @@ component Cell {
     in property <string> content;
     in property <int> row-number;
     in property <CellType> cell-type;
-    out property <color> row-color: Math.mod(row-number, 2) == 0 ? Palette.accent-background.with-alpha(0.16) : #00000000;
+    out property <color> row-color: Math.mod(row-number, 2) == 0 ? PaletteExtra.accent.with-alpha(0.1) : #00000000;
     height: text-box.min-height;
     min-width: Math.min(60px, text-box.min-width + 12px);
     Rectangle {
@@ -33,9 +33,12 @@ component Cell {
 
 export component NameValueListView {
     in property <[{name: string, value: string}]> name_value_pairs;
-    HorizontalLayout {
+    min-height: names.min-height;
+    min-width: rows.min-width;
+    preferred-width: 100%;
+    rows := HorizontalLayout {
         alignment: stretch;
-        VerticalLayout {
+        names := VerticalLayout {
             horizontal-stretch: 1;
             for nvp[i] in root.name_value_pairs: Cell {
                 content: nvp.name;
@@ -48,7 +51,7 @@ export component NameValueListView {
             background: Palette.background;
         }
 
-        VerticalLayout {
+        values := VerticalLayout {
             horizontal-stretch: 1;
             for nvp[i] in root.name_value_pairs: Cell {
                 content: nvp.value;

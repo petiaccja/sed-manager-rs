@@ -2,21 +2,61 @@ import { Palette } from "std-widgets.slint";
 
 
 export global PaletteExtra {
-    out property <color> separator: Palette.foreground.mix(Palette.background, 0.27);
-    out property <color> error-foreground: Palette.foreground.mix(#FF0000, 0.3);
-    out property <color> warning-foreground: Palette.foreground.mix(#FFD000, 0.3);
-    out property <color> action-foreground: Palette.foreground.mix(Palette.accent-background, 0.4);
+    out property <color> accent: compute-accent-color();
+    out property <color> accented-background: make-accented(accent, Palette.background, Palette.foreground);
+    out property <color> accented-foreground: make-accented(accent, Palette.foreground, Palette.background);
+    out property <color> accented-control-background: make-accented(accent, reduced-control-background, Palette.control-foreground);
+    out property <color> accented-control-foreground: make-accented(accent, Palette.control-foreground, reduced-control-background);
+    out property <color> highlight: Palette.control-foreground.with-alpha(0.1);
+    out property <color> error-foreground: make-accented(#FF0000, Palette.foreground, Palette.background);
+    out property <color> warning-foreground: make-accented(#FFD000, Palette.foreground, Palette.background);
+    out property <color> separator: make-accented(accent.mix(#808080, 0.2), Palette.foreground, Palette.background).with-alpha(0.65);
+    private property <color> reduced-control-background: reduce-alpha(Palette.control-background);
+    private property <float> min-saturation: 0.4;
+    private property <float> min-value: 0.25;
+    private property <float> sv-slope: -(1 - min-saturation) / (1 - min-value);
+    private property <float> sv-offset: min-saturation - sv-slope;
+    pure function compute-accent-color() -> color {
+        if Palette.accent-background.to-hsv().saturation > Palette.accent-foreground.to-hsv().saturation {
+            hsv(Palette.accent-background.to-hsv().hue, 1, 1)
+        } else {
+            hsv(Palette.accent-foreground.to-hsv().hue, 1, 1)
+        }
+    }
+    public pure function luma(color: color) -> float {
+        (0.299 * color.red + 0.587 * color.green + 0.114 * color.blue) / 255.0
+    }
+    public pure function target-luma(accent: float, hint: float, contrast: float) -> float {
+        if contrast > 0.55 {
+            Math.clamp(0.5 * (accent + hint), Math.min(0.5 * accent, 0.2), contrast / 2.5)
+        } else {
+            Math.clamp(accent, contrast + 0.4, 1.0)
+        }
+    }
+    public pure function with-luma(src: color, target: float) -> color {
+        if luma(src) < target {
+            src.mix(#FFFFFF.with-alpha(src.alpha), 1 - ((target - luma(src)) / (1 - luma(src))))
+        } else {
+            src.mix(#000000.with-alpha(src.alpha), 1 - ((luma(src) - target) / luma(src)))
+        }
+    }
+    pure function reduce-alpha(color: color) -> color {
+        color.with-alpha(1.0).mix(Palette.background, color.alpha / 255)
+    }
+    public pure function make-accented(accent: color, hint: color, contrast: color) -> color {
+        with-luma(accent, target-luma(luma(accent), luma(hint), luma(contrast)))
+    }
 }
 
 export component HorizontalSeparator inherits Rectangle {
-    width: 100%;
+    preferred-width: 100%;
     height: 1px;
     background: PaletteExtra.separator;
 }
 
 export component VerticalSeparator inherits Rectangle {
     width: 1px;
-    height: 100%;
+    preferred-height: 100%;
     background: PaletteExtra.separator;
 }
 
@@ -27,5 +67,97 @@ export component Island inherits Rectangle {
     // Get padding from sides that give `distance` at the rounded corners.
     public pure function corner-padding(distance: length) -> length {
         (self.border-radius * (Math.sqrt(2.0) - 1.0) + distance) / Math.sqrt(2.0);
+    }
+}
+
+export component Calculations_LivePreview {
+    private property <color> accent: PaletteExtra.accented-control-foreground;
+    private property <color> hint: Palette.background;
+    private property <color> contrast: Palette.foreground;
+    VerticalLayout {
+        Text {
+            text: "luma(accent) = " + PaletteExtra.luma(accent);
+        }
+
+        Text {
+            text: "target-luma(0.4, 0.1, 1.0) = " + PaletteExtra.target-luma(0.4, 0.1, 1.0);
+        }
+
+        Text {
+            text: "target-luma(0.4, 0.9, 0.3) = " + PaletteExtra.target-luma(0.4, 0.9, 0.3);
+        }
+
+        Text {
+            text: "with-luma(accent, 0.1) = " + PaletteExtra.luma(PaletteExtra.with-luma(accent, 0.1));
+        }
+
+        Text {
+            text: "with-luma(accent, 0.3) = " + PaletteExtra.luma(PaletteExtra.with-luma(accent, 0.3));
+        }
+
+        Text {
+            text: "with-luma(accent, 0.7) = " + PaletteExtra.luma(PaletteExtra.with-luma(accent, 0.7));
+        }
+
+        Text {
+            text: "with-luma(accent, 0.9) = " + PaletteExtra.luma(PaletteExtra.with-luma(accent, 0.9));
+        }
+    }
+}
+
+export component PaletteExtra_LivePreview {
+    private property <[{name: string, bg: color, fg: color}]> items: [
+        { name: "* regular", bg: Palette.background, fg: Palette.foreground },
+        { name: "* control", bg: Palette.control-background, fg: Palette.control-foreground },
+        {
+            name: "accented-background",
+            bg: PaletteExtra.accented-background,
+            fg: Palette.foreground
+        },
+        {
+            name: "accented-control-background",
+            bg: PaletteExtra.accented-control-background,
+            fg: Palette.control-foreground
+        },
+        { name: "highlight", bg: PaletteExtra.highlight, fg: Palette.control-foreground },
+        {
+            name: "accented-foreground",
+            bg: Palette.background,
+            fg: PaletteExtra.accented-foreground
+        },
+        {
+            name: "accented-control-foreground",
+            bg:  Palette.control-background,
+            fg: PaletteExtra.accented-control-foreground,
+        },
+        { name: "error-foreground", bg: Palette.background, fg: PaletteExtra.error-foreground },
+        {
+            name: "warning-foreground",
+            bg: Palette.background,
+            fg: PaletteExtra.warning-foreground
+        },
+        { name: "separator", bg: Palette.background, fg: PaletteExtra.separator },
+        { name: "accent", bg: PaletteExtra.accent },
+    ];
+    VerticalLayout {
+        padding: 12px;
+        for item in items: HorizontalLayout {
+            spacing: 12px;
+            Text {
+                text: item.name;
+                horizontal-alignment: right;
+                vertical-alignment: center;
+            }
+
+            Rectangle {
+                height: 32px;
+                width: 160px;
+                background: item.bg;
+                Text {
+                    text: "Sample text";
+                    color: item.fg;
+                }
+            }
+        }
     }
 }

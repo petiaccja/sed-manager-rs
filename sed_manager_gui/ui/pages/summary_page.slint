@@ -1,7 +1,8 @@
 import { FeatureModel, FeatureView } from "../views/feature_view.slint";
 import { LineEdit, GroupBox, Button, Palette } from "std-widgets.slint";
-import { Island } from "../widgets/visual.slint";
+import { Island, PaletteExtra } from "../widgets/visual.slint";
 import { ContentStatus } from "../widgets/loading.slint";
+import { ActionView } from "../views/action_view.slint";
 
 export struct SummaryModel {
     name: string,
@@ -34,7 +35,7 @@ component HeaderView {
                     text: summary.name;
                     font-weight: 800;
                     font-size: 28px;
-                    color: Palette.accent-background.mix(Palette.foreground, 0.8);
+                    color: PaletteExtra.accented-foreground;
                 }
 
                 serial-view := HorizontalLayout {
@@ -96,56 +97,6 @@ component HeaderView {
     }
 }
 
-component ActionView {
-    in property <[string]> security-providers;
-    VerticalLayout {
-        alignment: start;
-        spacing: 4px;
-        GroupBox {
-            title: "Configuration";
-            VerticalLayout {
-                alignment: start;
-                spacing: 4px;
-                Button {
-                    text: "Configure locking  \u{25B6}";
-                    width: 140px;
-                    height: 32px;
-                }
-
-                Button {
-                    text: "Change password";
-                    width: 140px;
-                    height: 32px;
-                }
-
-                Button {
-                    text: "Stack reset";
-                    width: 140px;
-                    height: 32px;
-                }
-
-                Button {
-                    text: "Factory reset";
-                    width: 140px;
-                    height: 32px;
-                }
-            }
-        }
-
-        if root.security_providers.length > 0: GroupBox {
-            title: "Table editor";
-            VerticalLayout {
-                spacing: 4px;
-                for sp[i] in root.security-providers: Button {
-                    text: sp + " SP  \u{25B6}";
-                    width: 140px;
-                    height: 32px;
-                }
-            }
-        }
-    }
-}
-
 export component SummaryPage {
     in property <SummaryModel> summary;
     VerticalLayout {
@@ -155,8 +106,10 @@ export component SummaryPage {
         }
 
         HorizontalLayout {
-            spacing: 32px;
+            spacing: 20px;
+            alignment: stretch;
             FeatureView {
+                horizontal-stretch: 1.0;
                 status: summary.discovery-status;
                 error: summary.discovery-error;
                 common-features: summary.common-features;
@@ -164,6 +117,7 @@ export component SummaryPage {
             }
 
             ActionView {
+                horizontal-stretch: 0.0;
                 security-providers: summary.security-providers;
             }
         }
@@ -177,6 +131,7 @@ export global LivePreviewData {
         path: "/dev/this/may/actually/be/a/very/long/path/on/windows/nvme0",
         firmware: "FW1.0",
         interface: "NVMe",
+        discovery-status: ContentStatus.success,
         security-subsystem-classes: ["Opal 2.0"],
         security-providers: ["Admin", "Locking"],
         common-features: [
