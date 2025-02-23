@@ -1,0 +1,19 @@
+export component SwitchContent {
+    in property <bool> selected: true;
+    visible <=> selected;
+    min-height: selected ? content.min-height : 0px;
+    preferred-height: selected ? content.preferred-height : 0px;
+    vertical-stretch: root.selected ? 1.0 : 0.0;
+    content := VerticalLayout {
+        @children
+    }
+}
+
+export component SwitchContainer {
+    max-width: 100000px;
+    max-height: 100000px;
+    VerticalLayout {
+        max-width: 100000px;
+        @children
+    }
+}

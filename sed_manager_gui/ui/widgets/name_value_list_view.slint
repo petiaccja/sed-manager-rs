@@ -1,6 +1,11 @@
 import { VerticalSeparator, PaletteExtra } from "visual.slint";
 import { Palette, HorizontalBox } from "std-widgets.slint";
 
+export struct NameValuePair {
+    name: string,
+    value: string,   
+}
+
 enum CellType {
     name,
     value,
@@ -32,7 +37,7 @@ component Cell {
 }
 
 export component NameValueListView {
-    in property <[{name: string, value: string}]> name_value_pairs;
+    in property <[NameValuePair]> name_value_pairs;
     min-height: names.min-height;
     min-width: rows.min-width;
     preferred-width: 100%;

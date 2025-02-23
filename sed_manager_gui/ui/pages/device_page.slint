@@ -1,0 +1,12 @@
+import { DeviceDescriptionView } from "../views/device_description_view.slint";
+import { DeviceDescription } from "../views/device_description_view/data.slint";
+
+export component DevicePage {
+    in property <DeviceDescription> description;
+    callback update-device-discovery();
+    VerticalLayout {
+        DeviceDescriptionView {
+            description: root.description;
+        }
+    }
+}

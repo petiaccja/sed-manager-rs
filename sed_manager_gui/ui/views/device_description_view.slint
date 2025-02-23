@@ -1,0 +1,40 @@
+import { LineEdit, GroupBox, Button, Palette } from "std-widgets.slint";
+import { Island, PaletteExtra } from "../widgets/visual.slint";
+import { ContentStatus } from "../widgets/loading.slint";
+import { ActionView } from "device_description_view/action_view.slint";
+import { DiscoveryView } from "device_description_view/discovery_view.slint";
+import { IdentityView } from "device_description_view/identity_view.slint";
+import { DeviceDescription, ExampleData } from "device_description_view/data.slint";
+
+export component DeviceDescriptionView {
+    in property <DeviceDescription> description;
+    VerticalLayout {
+        spacing: 20px;
+        IdentityView {
+            identity: description.identity;
+            security-subsystem-classes: description.discovery.security-subsystem-classes;
+            vertical-stretch: 0.0;
+        }
+
+        HorizontalLayout {
+            spacing: 20px;
+            alignment: stretch;
+            vertical-stretch: 1.0;
+            DiscoveryView {
+                horizontal-stretch: 1.0;
+                status: description.discovery-status;
+                error-message: description.discovery-error-message;
+                discovery: description.discovery;
+            }
+
+            ActionView {
+                horizontal-stretch: 0.0;
+                security-providers: description.discovery.security-providers;
+            }
+        }
+    }
+}
+
+export component LivePreviewTest_Page inherits DeviceDescriptionView {
+    description: ExampleData.description;
+}

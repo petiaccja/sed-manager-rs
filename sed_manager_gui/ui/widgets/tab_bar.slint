@@ -1,0 +1,81 @@
+import { PaletteExtra, HorizontalSeparator } from "visual.slint";
+import { Palette, ScrollView } from "std-widgets.slint";
+
+component TabButton inherits Rectangle {
+    in property <string> title;
+    in property <bool> selected;
+    width: 240px;
+    height: 32px;
+    border-radius: 6px;
+    background: selected ? PaletteExtra.accented-control-background : area.has-hover ? PaletteExtra.highlight : Palette.background;
+    border-width: 1px;
+    border-color: selected ? self.background : PaletteExtra.highlight;
+    callback clicked <=> area.clicked;
+    area := TouchArea {
+        width: parent.width;
+        height: parent.height;
+    }
+
+    Text {
+        text: title;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        font-weight: 600;
+        color: selected ? Palette.control-foreground : Palette.foreground;
+    }
+}
+
+export component TabBar {
+    in property <[string]> titles;
+    callback tab-selected(index: int);
+    private property <int> selected;
+    function set-selected(index: int) {
+        selected = index;
+        tab-selected(index);
+    }
+    changed titles => {
+        set-selected(Math.min(selected, self.titles.length - 1))
+    }
+    ScrollView {
+        vertical-scrollbar-policy: always-off;
+        preferred-height: tabs.preferred-height;
+        horizontal-stretch: 1.0;
+        vertical-stretch: 0.0;
+        tabs := HorizontalLayout {
+            spacing: 4px;
+            for title[i] in titles: TabButton {
+                title: title;
+                selected: root.selected == i;
+                clicked => {
+                    set-selected(i);
+                }
+            }
+        }
+    }
+
+    Rectangle {
+        width: 33px;
+        height: 36px;
+        x: root.width - 32px;
+        y: -2px;
+        background: @linear-gradient(90deg, Palette.background.with-alpha(0) 0%, Palette.background 80%);
+    }
+}
+
+export component LivePreviewTest {
+    private property <int> selected;
+    VerticalLayout {
+        tab-bar := TabBar {
+            titles: ["Foo", "Bar", "Baz"];
+            tab-selected(index) => {
+                root.selected = index;
+            }
+        }
+
+        HorizontalSeparator { }
+
+        Text {
+            text: "Selected: " + selected;
+        }
+    }
+}

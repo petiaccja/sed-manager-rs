@@ -1,0 +1,67 @@
+import { NameValuePair } from "../../widgets/name_value_list_view.slint";
+import { ContentStatus } from "../../widgets/loading.slint";
+
+export struct DeviceIdentity {
+    name: string,
+    serial: string,
+    path: string,
+    firmware: string,
+    interface: string,
+}
+
+export struct DeviceDiscoveryFeature {
+    name: string,
+    properties: [NameValuePair],    
+}
+
+
+export struct DeviceDiscovery {
+    security-subsystem-classes: [string],
+    security-providers: [string],
+    common-features: [DeviceDiscoveryFeature],
+    ssc-features: [DeviceDiscoveryFeature],    
+}
+
+export struct DeviceDescription {
+    identity: DeviceIdentity,
+    discovery-status: ContentStatus,
+    discovery-error-message: string,
+    discovery: DeviceDiscovery, 
+}
+
+
+export global ExampleData {
+    out property <DeviceDescription> description: {
+        identity: {
+            name: "Test Storage Device",
+            serial: "0123456ABCDEF",
+            path: "/dev/this/may/actually/be/a/very/long/path/on/windows/nvme0",
+            firmware: "FW1.0",
+            interface: "NVMe",
+        },
+        discovery-status: ContentStatus.success,
+        discovery-error-message: "",
+        discovery: {
+            security-subsystem-classes: ["Opal 2.0"],
+            security-providers: ["Admin", "Locking"],
+            common-features: [
+                {
+                    name: "TPer features",
+                    properties: [{ name: "Sync supported", value: "Yes" }, { name: "Async supported", value: "No" }],
+                },
+                {
+                    name: "Locking features",
+                    properties: [
+                        { name: "Locked", value: "No" },
+                    ],
+                }
+            ],
+            ssc-features: [
+                {
+                    name: "Opal 2.0 features",
+                    properties: [{ name: "Num admins supported", value: "4" }],
+                },
+            ],
+        }
+    };
+}

@@ -1,0 +1,93 @@
+import { DeviceIdentity, ExampleData } from "data.slint";
+import { Island, PaletteExtra } from "../../widgets/visual.slint";
+import { LineEdit } from "std-widgets.slint";
+
+
+export component IdentityView inherits Island {
+    in property <DeviceIdentity> identity;
+    in property <[string]> security-subsystem-classes;
+    HorizontalLayout {
+        spacing: 12px;
+        padding: 6px;
+        Image {
+            source: @image-url("../../../images/device/3671772_ATTRIB_drive_hard_icon.svg");
+            image-fit: ImageFit.contain;
+            vertical-alignment: center;
+            colorize: PaletteExtra.accented-foreground;
+            min-height: name.min-height;
+            min-width: self.min-height * self.source.width / self.source.height;
+        }
+
+        name := VerticalLayout {
+            alignment: start;
+            spacing: 4px;
+            preferred-width: self.min-width;
+            Text {
+                text: identity.name;
+                font-weight: 800;
+                font-size: 28px;
+                color: PaletteExtra.accented-foreground;
+            }
+
+            HorizontalLayout {
+                alignment: space-between;
+                Text {
+                    text: identity.interface;
+                    font-size: 16px;
+                }
+
+                Text {
+                    text: identity.serial;
+                    font-size: 16px;
+                }
+            }
+        }
+
+        Rectangle {
+            preferred-width: 100%;
+        }
+
+        VerticalLayout {
+            alignment: start;
+            max-width: 400px;
+            preferred-width: 400px;
+            spacing: 4px;
+            HorizontalLayout {
+                spacing: 16px;
+                Text {
+                    text: "Path:";
+                    vertical-alignment: center;
+                }
+
+                LineEdit {
+                    horizontal-stretch: 1.0;
+                    horizontal-alignment: right;
+                    read-only: true;
+                    text: identity.path;
+                }
+            }
+
+            for parameter in [
+                { name: "Firmware revision:", values: [identity.firmware] },
+                { name: "Security subsystem classes:", values: security-subsystem-classes },
+            ]: HorizontalLayout {
+                spacing: 8px;
+                alignment: space-between;
+                Text {
+                    text: parameter.name;
+                    vertical-alignment: center;
+                }
+
+                for value in parameter.values: Text {
+                    text: value;
+                    vertical-alignment: center;
+                }
+            }
+        }
+    }
+}
+
+export component LivePreviewTest inherits IdentityView {
+    identity: ExampleData.description.identity;
+    security-subsystem-classes: ExampleData.description.discovery.security-subsystem-classes;
+}

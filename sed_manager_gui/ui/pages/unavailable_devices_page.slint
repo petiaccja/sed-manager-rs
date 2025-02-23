@@ -1,0 +1,65 @@
+import { NameValueListView } from "../widgets/name_value_list_view.slint";
+import { TextLoadingIndicator, ContentStatus } from "../widgets/loading.slint";
+import { HorizontalBox, Palette, LineEdit } from "std-widgets.slint";
+import { HorizontalSeparator, Island, PaletteExtra } from "../widgets/visual.slint";
+
+export struct UnavailableDevice {
+    path: string,
+    error-message: string,
+}
+
+component UnavailableDeviceView inherits Island {
+    in property <UnavailableDevice> unavailable-device;
+    preferred-width: 100%;
+    preferred-height: self.min-height;
+    VerticalLayout {
+        padding: root.corner-padding(4px);
+        spacing: 6px;
+        alignment: start;
+        HorizontalLayout {
+            height: 24px;
+            spacing: 12px;
+            Text {
+                text: "Path:";
+                vertical-alignment: center;
+            }
+
+            LineEdit {
+                horizontal-stretch: 1.0;
+                horizontal-alignment: right;
+                read-only: true;
+                text: unavailable-device.path;
+            }
+        }
+
+        HorizontalLayout {
+            spacing: 4px;
+            Image {
+                source: @image-url("../../images/error/8666566_alert_circle_icon.svg");
+                colorize: PaletteExtra.error-foreground;
+            }
+            Text {
+                horizontal-stretch: 1.0;
+                text: "Failed to open device: " + unavailable-device.error-message;
+            }
+        }
+    }
+}
+
+export component UnavailableDevicesPage {
+    in property <[UnavailableDevice]> unavailable-devices;
+    VerticalLayout {
+        alignment: start;
+        spacing: 8px;
+        for device in unavailable-devices: UnavailableDeviceView {
+            unavailable-device: device;
+        }
+    }
+}
+
+export component LivePreviewTest inherits UnavailableDevicesPage {
+    unavailable-devices: [
+        { path: "/dev/drive1", error-message: "error 1" },
+        { path: "/dev/drive2", error-message: "error 2" },
+    ];
+}

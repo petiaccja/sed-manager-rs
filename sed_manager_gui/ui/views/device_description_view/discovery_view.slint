@@ -1,13 +1,9 @@
 import { ScrollView, GridBox, HorizontalBox, Palette } from "std-widgets.slint";
-import { VerticalSeparator, PaletteExtra, HorizontalSeparator } from "../widgets/visual.slint";
-import { CollapsibleView } from "../widgets/collapsible_view.slint";
-import { NameValueListView } from "../widgets/name_value_list_view.slint";
-import { ContentStatus, TextLoadingIndicator } from "../widgets/loading.slint";
-
-export struct FeatureModel {
-    name: string,
-    nvps: [{name: string, value: string}],    
-}
+import { VerticalSeparator, PaletteExtra, HorizontalSeparator } from "../../widgets/visual.slint";
+import { CollapsibleView } from "../../widgets/collapsible_view.slint";
+import { NameValueListView } from "../../widgets/name_value_list_view.slint";
+import { ContentStatus, TextLoadingIndicator } from "../../widgets/loading.slint";
+import { DeviceDiscovery, DeviceDiscoveryFeature, ExampleData } from "data.slint";
 
 component LoadingView {
     property <length> spacing: 16px;
@@ -56,7 +52,7 @@ component ErrorView {
         padding: 12px;
         spacing: 8px;
         Image {
-            source: @image-url("../../images/device/9111167_lock_no_icon.svg");
+            source: @image-url("../../../images/device/9111167_lock_no_icon.svg");
             preferred-height: 200px;
             min-height: 80px;
             colorize: PaletteExtra.accented-foreground.with-alpha(0.6);
@@ -77,8 +73,8 @@ component ErrorView {
 }
 
 component SplitView {
-    in property <[FeatureModel]> common-features;
-    in property <[FeatureModel]> ssc-features;
+    in property <[DeviceDiscoveryFeature]> common-features;
+    in property <[DeviceDiscoveryFeature]> ssc-features;
     HorizontalLayout {
         alignment: stretch;
         spacing: 12px;
@@ -98,7 +94,7 @@ component SplitView {
                         }
 
                         NameValueListView {
-                            name_value_pairs: feature.nvps;
+                            name_value_pairs: feature.properties;
                         }
                     }
                 }
@@ -120,7 +116,7 @@ component SplitView {
                         }
 
                         NameValueListView {
-                            name_value_pairs: feature.nvps;
+                            name_value_pairs: feature.properties;
                         }
                     }
                 }
@@ -129,41 +125,23 @@ component SplitView {
     }
 }
 
-export component FeatureView {
-    in property <ContentStatus> status: ContentStatus.loading;
-    in property <string> error;
-    in property <[FeatureModel]> common-features;
-    in property <[FeatureModel]> ssc-features;
+export component DiscoveryView {
+    in property <ContentStatus> status;
+    in property <string> error-message;
+    in property <DeviceDiscovery> discovery;
     HorizontalLayout {
         if root.status == ContentStatus.loading: LoadingView { }
         if root.status == ContentStatus.error: ErrorView {
-            error: root.error;
+            error: root.error-message;
         }
         if root.status == ContentStatus.success: SplitView {
-            common-features: root.common-features;
-            ssc-features: root.ssc-features;
+            common-features: root.discovery.common-features;
+            ssc-features: root.discovery.ssc-features;
         }
     }
 }
 
-export component LivePreviewTest_Filled inherits FeatureView {
+export component LivePreviewTest_Success inherits DiscoveryView {
     status: ContentStatus.success;
-    common-features: [
-        {
-            name: "TPer",
-            nvps: [{ name: "Sync supported", value: "Yes" }, { name: "Async supported", value: "No" }],
-        },
-        {
-            name: "Locking",
-            nvps: [
-                { name: "Locked", value: "No" },
-            ],
-        }
-    ];
-    ssc-features: [
-        {
-            name: "Opal 2.0",
-            nvps: [{ name: "Num admins supported", value: "4" }],
-        },
-    ];
+    discovery: ExampleData.description.discovery;
 }
