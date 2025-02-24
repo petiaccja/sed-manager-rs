@@ -7,9 +7,9 @@ component TabButton inherits Rectangle {
     width: 240px;
     height: 32px;
     border-radius: 6px;
-    background: selected ? PaletteExtra.accented-control-background : area.has-hover ? PaletteExtra.highlight : Palette.background;
-    border-width: 1px;
-    border-color: selected ? self.background : PaletteExtra.highlight;
+    background: selected ? PaletteExtra.accented-control-background : area.has-hover ? PaletteExtra.highlight : Palette.control-background;
+    //border-width: 1px;
+    //border-color: selected ? self.background : PaletteExtra.highlight;
     callback clicked <=> area.clicked;
     area := TouchArea {
         width: parent.width;
