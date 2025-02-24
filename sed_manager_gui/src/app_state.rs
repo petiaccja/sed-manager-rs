@@ -332,7 +332,7 @@ pub async fn revert(
                 true => spec::psid::admin::authority::PSID,
                 false => spec::core::authority::SID,
             };
-            let sp = match include_admin {
+            let sp = match include_admin || use_psid {
                 true => admin_sp,
                 false => locking_sp,
             };
