@@ -3,6 +3,54 @@ import { LineEdit, Button } from "std-widgets.slint";
 import { PaletteExtra } from "../widgets/visual.slint";
 import { PasswordValidator } from "../widgets/password_validator.slint";
 import { ContentStatus} from "../data/content_status.slint";
+import { SolidPopupWindow } from "../widgets/solid_popup_window.slint";
+
+component ConfirmationPopup inherits SolidPopupWindow {
+    width: 320px;
+    height: self.min-height;
+    callback confirmed();
+    content := VerticalLayout {
+        spacing: 12px;
+        padding: 12px;
+        HorizontalLayout {
+            alignment: center;
+            spacing: 6px;
+            Image {
+                source: @image-url("../../images/error/8666599_alert_triangle_icon.svg");
+                colorize: PaletteExtra.warning-foreground;
+                width: 80px;
+                height: 80px;
+            }
+
+            Text {
+                text: "If you forget your owner's password, you can permanently lose access to this device. Only proceed if you have your PSID password and you successfully tested reverting the device with it.";
+                wrap: word-wrap;
+                vertical-alignment: center;
+            }
+        }
+
+        HorizontalLayout {
+            alignment: center;
+            spacing: 6px;
+            Button {
+                text: "Understood";
+                width: 90px;
+                clicked => {
+                    root.close();
+                    root.confirmed();
+                }
+            }
+
+            Button {
+                text: "Cancel";
+                width: 90px;
+                clicked => {
+                    root.close();
+                }
+            }
+        }
+    }
+}
 
 export component TakeOwnershipView inherits ActionView {
     action-name: "Take ownership";
@@ -10,6 +58,15 @@ export component TakeOwnershipView inherits ActionView {
     callback take-ownership(new-password: string);
     private property <string> feedback-text;
     private property <bool> password-ok: feedback-text == "";
+    confirmation-popup := ConfirmationPopup {
+        x: (root.width - self.width) / 2;
+        y: (root.height - self.height) / 2;
+        confirmed => {
+            root.start();
+            take-ownership(password.text)
+        }
+    }
+
     VerticalLayout {
         alignment: LayoutAlignment.center;
         padding: 8px;
@@ -42,8 +99,7 @@ export component TakeOwnershipView inherits ActionView {
             primary: true;
             enabled: password-ok && root.result.status != ContentStatus.loading;
             clicked => {
-                root.start();
-                take-ownership(password.text)
+                confirmation-popup.show();
             }
         }
 
