@@ -2,6 +2,7 @@ import { Island, PaletteExtra } from "../widgets/visual.slint";
 import { ContentStatus } from "../data/content_status.slint";
 import { Button, Palette, Spinner } from "std-widgets.slint";
 import { ActionResult} from "../data/action_result.slint";
+import { SolidPopupWindow } from "../widgets/solid_popup_window.slint";
 
 
 component BackButton inherits Rectangle {
@@ -94,7 +95,7 @@ component StatusIndicator {
     }
 }
 
-component StatusPopup inherits PopupWindow {
+component StatusPopup inherits SolidPopupWindow {
     in property <ActionResult> result;
     in property <image> action-icon;
     callback back();
@@ -103,22 +104,6 @@ component StatusPopup inherits PopupWindow {
     }
     width: 260px;
     height: content.min-height;
-    Rectangle {
-        background: Palette.background;
-        border-radius: 16px;
-        drop-shadow-color: #00000080;
-        drop-shadow-blur: 12px;
-        drop-shadow-offset-x: 2px;
-        drop-shadow-offset-y: 2px;
-        opacity: 95%;
-    }
-
-    Rectangle {
-        background: Palette.control-background;
-        border-radius: 16px;
-        opacity: 95%;
-    }
-
     content := VerticalLayout {
         padding: 12px;
         spacing: 12px;

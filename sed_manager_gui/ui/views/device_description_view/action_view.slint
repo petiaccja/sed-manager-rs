@@ -8,6 +8,7 @@ export component ActionView {
     private property <length> button-height: 32px;
     callback take-ownership();
     callback activate-locking();
+    callback revert();
     ScrollView {
         horizontal-scrollbar-policy: always-off;
         min-width: viewport.min-width;
@@ -50,6 +51,21 @@ export component ActionView {
                         background: #00000000;
                         clicked => {
                             activate-locking();
+                        }
+                    }
+
+                    HorizontalSeparator {
+                        background: Palette.background;
+                    }
+
+                    NavigationButton {
+                        text: "Revert";
+                        icon: @image-url("../../../images/action/user-x.svg");
+                        height: button-height;
+                        navigation-direction: NavigationDirection.left;
+                        background: #00000000;
+                        clicked => {
+                            revert();
                         }
                     }
                 }

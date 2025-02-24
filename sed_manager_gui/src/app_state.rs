@@ -300,3 +300,45 @@ pub async fn activate_locking(
         }
     }
 }
+
+pub async fn revert(
+    app_state: Rc<AtomicBorrow<AppState>>,
+    device_idx: usize,
+    use_psid: bool,
+    password: String,
+    include_admin: bool,
+) {
+    let tper = app_state.with_mut(|app_state| app_state.get_tper(device_idx));
+
+    app_state.with_mut(|app_state| {
+        app_state.set_action_result(device_idx, ActionResult::loading());
+    });
+
+    match tper {
+        Some(tper) => {
+            // let result = applications::activate_locking(
+            //     &*tper,
+            //     sid_password.as_bytes(),
+            //     new_admin1_password.as_ref().map(|s| s.as_bytes()),
+            // )
+            // .await;
+            // let action_result = match result {
+            //     Ok(_) => ActionResult::success(),
+            //     Err(err) => ActionResult::error(err.to_string()),
+            // };
+            // app_state.with_mut(|app_state| {
+            //     app_state.set_action_result(device_idx, action_result);
+            // });
+            app_state.with_mut(|app_state| {
+                let action_result = ActionResult::error("revert not implemented yet".into());
+                app_state.set_action_result(device_idx, action_result);
+            });
+        }
+        None => {
+            app_state.with_mut(|app_state| {
+                let action_result = ActionResult::error("could not open device to configure encryption".into());
+                app_state.set_action_result(device_idx, action_result);
+            });
+        }
+    }
+}

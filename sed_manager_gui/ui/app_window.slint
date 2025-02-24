@@ -24,6 +24,7 @@ export component AppWindow inherits Window {
     callback update-device-discovery(device-idx: int);
     callback take-ownership(device-idx: int, new-password: string);
     callback activate-locking(device-idx: int, sid-password: string, new-admin1-password: string);
+    callback revert(device-idx: int, use-psid: bool, password: string, include-admin: bool);
     VerticalLayout {
         if device-tabs.length != 0: VerticalLayout {
             alignment: stretch;
@@ -65,6 +66,9 @@ export component AppWindow inherits Window {
                         }
                         activate-locking(sid-password, new-admin1-password) => {
                             activate-locking(i, sid-password, new-admin1-password);
+                        }
+                        revert(use-psid, password, include-admin) => {
+                            revert(i, use-psid, password, include-admin);
                         }
                     }
                 }

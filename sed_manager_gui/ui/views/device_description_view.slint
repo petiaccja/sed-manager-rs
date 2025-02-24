@@ -10,6 +10,7 @@ export component DeviceDescriptionView {
     in property <DeviceDescription> description;
     callback take-ownership <=> action-view.take-ownership;
     callback activate-locking <=> action-view.activate-locking;
+    callback revert <=> action-view.revert;
     VerticalLayout {
         spacing: 20px;
         IdentityView {

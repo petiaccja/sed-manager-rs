@@ -1,0 +1,103 @@
+import { ActionView } from "action_view.slint";
+import { LineEdit, Button, ComboBox, Switch } from "std-widgets.slint";
+import { PaletteExtra } from "../widgets/visual.slint";
+import { PasswordValidator } from "../widgets/password_validator.slint";
+import { ContentStatus} from "../data/content_status.slint";
+import { SolidPopupWindow } from "../widgets/solid_popup_window.slint";
+
+component ConfirmationPopup inherits SolidPopupWindow {
+    width: 320px;
+    height: self.min-height;
+    callback confirmed();
+    content := VerticalLayout {
+        spacing: 12px;
+        padding: 12px;
+        HorizontalLayout {
+            alignment: center;
+            spacing: 6px;
+            Image {
+                source: @image-url("../../images/error/8666599_alert_triangle_icon.svg");
+                colorize: PaletteExtra.warning-foreground;
+                width: 80px;
+                height: 80px;
+            }
+
+            Text {
+                text: "This will erase all data from your drive! The data is cryptographically erased and no tool or person can recover it.";
+                wrap: word-wrap;
+                vertical-alignment: center;
+            }
+        }
+
+        HorizontalLayout {
+            alignment: center;
+            spacing: 6px;
+            Button {
+                text: "Erase";
+                clicked => {
+                    root.close();
+                    root.confirmed();
+                }
+            }
+
+            Button {
+                text: "Cancel";
+                clicked => {
+                    root.close();
+                }
+            }
+        }
+    }
+}
+
+export component RevertView inherits ActionView {
+    action-name: "Revert";
+    action-icon: @image-url("../../images/action/user-x.svg");
+    callback revert(use-psid: bool, password: string, include-admin: bool);
+    private property <string> feedback-text;
+    private property <bool> password-ok: feedback-text == "";
+    private property <bool> use-psid: authority.current-index == 1;
+    confirmation-popup := ConfirmationPopup {
+        x: (root.width - self.width) / 2;
+        y: (root.height - self.height) / 2;
+        confirmed => {
+            root.start();
+            revert(use-psid, password.text, include-admin.checked);
+        }
+    }
+
+    VerticalLayout {
+        alignment: LayoutAlignment.center;
+        padding: 8px;
+        spacing: 6px;
+        min-width: 200px;
+        authority := ComboBox {
+            model: ["Owner (SID) password:", "Physical owner (PSID) password:"];
+        }
+
+        password := LineEdit {
+            input-type: InputType.password;
+        }
+
+        include-admin := Switch {
+            text: "Revert admin";
+            checked: false;
+            enabled: !use-psid;
+        }
+
+        Button {
+            text: include-admin.checked || use-psid ? "Revert admin & locking" : "Revert locking";
+            primary: true;
+            enabled: password-ok && root.result.status != ContentStatus.loading;
+            clicked => {
+                confirmation-popup.show();
+            }
+        }
+
+        Text {
+            text: feedback-text;
+            color: PaletteExtra.error-foreground;
+            horizontal-alignment: center;
+        }
+    }
+}

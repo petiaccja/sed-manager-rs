@@ -36,6 +36,16 @@ fn set_callbacks(app_window: &ui::AppWindow, app_state: Rc<AtomicBorrow<AppState
             Some(new_admin1_password.into()),
         ));
     });
+    let copy = app_state.clone();
+    app_window.on_revert(move |device_idx, use_psid, password, include_admin| {
+        let _ = slint::spawn_local(app_state::revert(
+            copy.clone(),
+            device_idx as usize,
+            use_psid,
+            password.into(),
+            include_admin,
+        ));
+    });
 }
 
 fn main() -> Result<(), Box<dyn Error>> {

@@ -6,11 +6,13 @@ import { ActionView } from "../views/action_view.slint";
 import { TakeOwnershipView } from "../views/take_owneship_view.slint";
 import { ActivateLockingView } from "../views/activate_locking_view.slint";
 import { ContentStatus } from "../data/content_status.slint";
+import { RevertView } from "../views/revert_view.slint";
 
 enum ActivePage {
     device-description,
     take-ownership,
     activate-locking,
+    revert,
 }
 
 export component DevicePage {
@@ -20,6 +22,7 @@ export component DevicePage {
     callback update-device-discovery();
     callback take-ownership(new-password: string);
     callback activate-locking(sid-password: string, new-admin1-password: string);
+    callback revert(use-psid: bool, password: string, include-admin: bool);
     function set-active-page(active-page: ActivePage) {
         self.active-page = active-page;
         if active-page == ActivePage.device-description {
@@ -35,6 +38,9 @@ export component DevicePage {
             }
             activate-locking => {
                 set-active-page(ActivePage.activate-locking);
+            }
+            revert => {
+                set-active-page(ActivePage.revert);
             }
         }
         if active-page == ActivePage.take-ownership: TakeOwnershipView {
@@ -55,6 +61,16 @@ export component DevicePage {
             }
             activate-locking(sid-password, new-admin1-password) => {
                 root.activate-locking(sid-password, new-admin1-password)
+            }
+        }
+        if active-page == ActivePage.revert: RevertView {
+            device-name: description.identity.name;
+            result: action-result;
+            back => {
+                set-active-page(ActivePage.device-description);
+            }
+            revert(use-psid, password, include-admin) => {
+                root.revert(use-psid, password, include-admin)
             }
         }
     }
