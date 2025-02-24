@@ -54,7 +54,7 @@ impl AppState {
 
     fn init_from_devices(&mut self) {
         let num_devices = self.device_list.as_ref().map(|dev| dev.devices.len()).unwrap_or(0);
-        let action_results = std::iter::repeat_with(|| ActionResult::loading()).take(num_devices).collect::<Vec<_>>();
+        let action_results = std::iter::repeat_with(|| ActionResult::success()).take(num_devices).collect::<Vec<_>>();
         let discoveries = std::iter::repeat_with(|| None).take(num_devices).collect::<Vec<_>>();
         let tpers = std::iter::repeat_with(|| None).take(num_devices).collect::<Vec<_>>();
 
@@ -240,6 +240,10 @@ pub async fn update_device_discovery(app_state: Rc<AtomicBorrow<AppState>>, devi
 pub async fn take_ownership(app_state: Rc<AtomicBorrow<AppState>>, device_idx: usize, new_password: String) {
     let tper = app_state.with_mut(|app_state| app_state.get_tper(device_idx));
 
+    app_state.with_mut(|app_state| {
+        app_state.set_action_result(device_idx, ActionResult::loading());
+    });
+
     match tper {
         Some(tper) => {
             let result = applications::take_ownership(&*tper, new_password.as_bytes()).await;
@@ -267,6 +271,10 @@ pub async fn activate_locking(
     new_admin1_password: Option<String>,
 ) {
     let tper = app_state.with_mut(|app_state| app_state.get_tper(device_idx));
+
+    app_state.with_mut(|app_state| {
+        app_state.set_action_result(device_idx, ActionResult::loading());
+    });
 
     match tper {
         Some(tper) => {

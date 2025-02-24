@@ -69,28 +69,112 @@ component Header inherits Island {
     }
 }
 
-component Status {
+component StatusIndicator {
     in property <ContentStatus> status;
-    in property <bool> started: false;
     in property <image> action-icon;
     VerticalLayout {
         alignment: center;
-        if started && status == ContentStatus.loading: Spinner {
+        if status == ContentStatus.loading: Spinner {
             width: 80px;
             height: 80px;
             indeterminate: true;
         }
-        if started && status == ContentStatus.error: Image {
+        if status == ContentStatus.error: Image {
             width: 80px;
             height: 80px;
             source: @image-url("../../images/error/8666566_alert_circle_icon.svg");
             colorize: PaletteExtra.error-foreground;
         }
-        if !started || status == ContentStatus.success: Image {
+        if status == ContentStatus.success: Image {
             width: 80px;
             height: 80px;
             source: action-icon;
-            colorize: !started ? Palette.control-foreground.with-alpha(0.35) : PaletteExtra.success-foreground;
+            colorize: PaletteExtra.success-foreground;
+        }
+    }
+}
+
+component StatusPopup inherits PopupWindow {
+    in property <ActionResult> result;
+    in property <image> action-icon;
+    callback back();
+    changed result => {
+        root.height = content.min-height;
+    }
+    width: 260px;
+    height: content.min-height;
+    Rectangle {
+        background: Palette.background;
+        border-radius: 16px;
+        drop-shadow-color: #00000080;
+        drop-shadow-blur: 12px;
+        drop-shadow-offset-x: 2px;
+        drop-shadow-offset-y: 2px;
+        opacity: 95%;
+    }
+
+    Rectangle {
+        background: Palette.control-background;
+        border-radius: 16px;
+        opacity: 95%;
+    }
+
+    content := VerticalLayout {
+        padding: 12px;
+        spacing: 12px;
+        alignment: start;
+        HorizontalLayout {
+            alignment: center;
+            StatusIndicator {
+                status: result.status;
+                action-icon: action-icon;
+            }
+        }
+
+        Text {
+            text: {
+                if result.status == ContentStatus.loading {
+                    "Please wait..."
+                } else if result.status == ContentStatus.success {
+                    "Success!"
+                } else {
+                    "Failed: " + result.error-message
+                }
+            }
+            horizontal-alignment: center;
+            color: {
+                if result.status == ContentStatus.loading {
+                    Palette.control-foreground
+                } else if result.status == ContentStatus.success {
+                    PaletteExtra.success-foreground
+                } else {
+                    PaletteExtra.error-foreground
+                }
+            }
+            wrap: TextWrap.word-wrap;
+        }
+
+        HorizontalLayout {
+            spacing: 6px;
+            alignment: center;
+            Button {
+                text: "Retry";
+                width: 90px;
+                enabled: result.status != ContentStatus.loading;
+                clicked => {
+                    root.close()
+                }
+            }
+
+            Button {
+                text: "Back";
+                width: 90px;
+                enabled: result.status != ContentStatus.loading;
+                clicked => {
+                    root.close();
+                    root.back();
+                }
+            }
         }
     }
 }
@@ -99,10 +183,23 @@ export component ActionView {
     in property <string> device-name;
     in property <string> action-name;
     in property <image> action-icon;
-    in property <ActionResult> action-result;
-    in property <bool> started: false;
-    private property <bool> back-enabled: !started || action-result.status != ContentStatus.loading;
+    in property <ActionResult> result: { status: ContentStatus.success };
+    private property <bool> back-enabled: result.status != ContentStatus.loading;
     callback back <=> header.back;
+    public function start() {
+        status-popup.show()
+    }
+    status-popup := StatusPopup {
+        x: form.x + (form.width - self.width) / 2;
+        y: form.y + (form.height - self.height) / 2;
+        close-policy: no-auto-close;
+        result: result;
+        action-icon: action-icon;
+        back => {
+            back()
+        }
+    }
+
     VerticalLayout {
         header := Header {
             vertical-stretch: 0;
@@ -111,20 +208,11 @@ export component ActionView {
             back-enabled: back-enabled;
         }
 
-        HorizontalLayout {
+        form := HorizontalLayout {
             vertical-stretch: 1;
             spacing: 16px;
             preferred-height: 100%;
             alignment: center;
-            VerticalLayout {
-                alignment: center;
-                Status {
-                    action-icon: action-icon;
-                    started: started;
-                    status: action-result.status;
-                }
-            }
-
             VerticalLayout {
                 alignment: center;
                 @children
@@ -136,8 +224,23 @@ export component ActionView {
 export component LivePreviewTest inherits ActionView {
     device-name: "Foo Device";
     action-name: "Take ownership";
-    started: true;
-    Text {
-        text: "Content";
+    timer := Timer {
+        interval: 2s;
+        running: false;
+        triggered => {
+            self.running = false;
+            root.result = {
+                status: ContentStatus.error,
+                error-message: "this is a long error message to describe what the hell happened"
+            }
+        }
+    }
+
+    Button {
+        text: timer.running ? "Running" : "Start";
+        clicked => {
+            root.start();
+            timer.running = true;
+        }
     }
 }

@@ -40,9 +40,9 @@ export component TakeOwnershipView inherits ActionView {
         Button {
             text: "Take ownership";
             primary: true;
-            enabled: password-ok && (!root.started || root.action-result.status != ContentStatus.loading);
+            enabled: password-ok && root.result.status != ContentStatus.loading;
             clicked => {
-                root.started = true;
+                root.start();
                 take-ownership(password.text)
             }
         }

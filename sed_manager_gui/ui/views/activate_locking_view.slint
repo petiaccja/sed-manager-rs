@@ -67,9 +67,9 @@ export component ActivateLockingView inherits ActionView {
         Button {
             text: "Activate locking";
             primary: true;
-            enabled: password-ok && (!root.started || root.action-result.status != ContentStatus.loading);
+            enabled: password-ok && root.result.status != ContentStatus.loading;
             clicked => {
-                root.started = true;
+                root.start();
                 activate-locking(owner-password.text, same-as-owner.checked ? owner-password.text : admin1-password.text)
             }
         }

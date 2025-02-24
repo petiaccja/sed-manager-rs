@@ -5,6 +5,7 @@ import { SwitchContent, SwitchContainer } from "../widgets/switch_content.slint"
 import { ActionView } from "../views/action_view.slint";
 import { TakeOwnershipView } from "../views/take_owneship_view.slint";
 import { ActivateLockingView } from "../views/activate_locking_view.slint";
+import { ContentStatus } from "../data/content_status.slint";
 
 enum ActivePage {
     device-description,
@@ -38,7 +39,7 @@ export component DevicePage {
         }
         if active-page == ActivePage.take-ownership: TakeOwnershipView {
             device-name: description.identity.name;
-            action-result: action-result;
+            result: action-result;
             back => {
                 set-active-page(ActivePage.device-description);
             }
@@ -48,7 +49,7 @@ export component DevicePage {
         }
         if active-page == ActivePage.activate-locking: ActivateLockingView {
             device-name: description.identity.name;
-            action-result: action-result;
+            result: action-result;
             back => {
                 set-active-page(ActivePage.device-description);
             }
