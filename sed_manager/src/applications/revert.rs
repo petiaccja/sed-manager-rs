@@ -12,7 +12,7 @@ pub async fn is_revert_supported(_discovery: &Discovery) -> bool {
 }
 
 pub async fn revert(tper: &TPer, authority: AuthorityRef, password: &[u8], sp: SPRef) -> Result<(), Error> {
-    let discovery = tper.discover()?;
+    let discovery = tper.discover().await?;
     let default_ssc = get_default_ssc(&discovery)?;
     let admin_sp = get_admin_sp(default_ssc.feature_code())?;
 
@@ -28,7 +28,7 @@ pub async fn verify_reverted(tper: &TPer) -> Result<bool, Error> {
     use spec::core::authority;
     use spec::opal::admin::c_pin;
 
-    let discovery = tper.discover()?;
+    let discovery = tper.discover().await?;
     let default_ssc = get_default_ssc(&discovery)?;
     let admin_sp = get_admin_sp(default_ssc.feature_code())?;
 

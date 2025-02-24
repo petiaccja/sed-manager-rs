@@ -6,6 +6,7 @@ use crate::device::Device;
 use crate::messaging::com_id::{
     HandleComIdRequest, HandleComIdResponse, HANDLE_COM_ID_PROTOCOL, HANDLE_COM_ID_RESPONSE_LEN,
 };
+use crate::messaging::discovery::Discovery;
 use crate::messaging::packet::{ComPacket, PACKETIZED_PROTOCOL};
 use crate::rpc::error::ErrorEventExt;
 use crate::rpc::{Error, PackagedMethod, Properties};
@@ -25,6 +26,7 @@ pub enum Message {
     StartSession { session: SessionIdentifier, properties: Properties },
     EndSession { session: SessionIdentifier },
     AbortSession { session: SessionIdentifier },
+    Discover { content: Tracked<(), Result<Discovery, Error>> },
 }
 
 pub type MessageSender = std::sync::mpsc::Sender<Message>;
@@ -104,6 +106,7 @@ impl LocalMessageLoop {
             Message::StartSession { session, properties } => self.stack.insert_session(session, properties),
             Message::EndSession { session } => self.stack.remove_session(session),
             Message::AbortSession { session } => self.stack.abort_session(session),
+            Message::Discover { content } => content.close(discover(&*self.device)),
         }
     }
 
@@ -223,4 +226,9 @@ impl LocalMessageLoop {
             }
         }
     }
+}
+
+pub fn discover(device: &dyn Device) -> Result<Discovery, Error> {
+    let data = device.security_recv(0x01, 0x0001_u16.to_be_bytes(), 4096).map_err(|err| err.while_receiving())?;
+    Discovery::from_bytes(data).map_err(|err| err.while_receiving()).map(|d| d.remove_empty())
 }

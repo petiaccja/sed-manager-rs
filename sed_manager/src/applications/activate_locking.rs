@@ -17,7 +17,7 @@ pub async fn activate_locking(
     sid_password: &[u8],
     new_admin1_password: Option<&[u8]>,
 ) -> Result<(), Error> {
-    let discovery = tper.discover()?;
+    let discovery = tper.discover().await?;
     let default_ssc = get_default_ssc(&discovery)?;
     let admin_sp = get_admin_sp(default_ssc.feature_code())?;
     let locking_sp = get_locking_sp(default_ssc.feature_code())?;
@@ -47,7 +47,7 @@ pub async fn activate_locking(
 }
 
 pub async fn verify_locking_activation(tper: &TPer, admin1_password: Option<&[u8]>) -> Result<bool, Error> {
-    let discovery = tper.discover()?;
+    let discovery = tper.discover().await?;
     let default_ssc = get_default_ssc(&discovery)?;
     let locking_sp = get_locking_sp(default_ssc.feature_code())?;
     let admin1 = get_locking_admins(default_ssc.feature_code()).ok().map(|uids| uids.nth(1)).flatten();

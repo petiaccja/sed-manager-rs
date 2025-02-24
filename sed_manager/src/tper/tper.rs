@@ -6,10 +6,10 @@ use tokio::sync::Mutex;
 
 use crate::device::Device;
 use crate::messaging::com_id::{ComIdState, StackResetStatus};
-use crate::messaging::discovery::{Discovery, FeatureDescriptor, UnrecognizedDescriptor};
+use crate::messaging::discovery::Discovery;
 use crate::rpc::{
-    Error as RPCError, ErrorEvent as RPCErrorEvent, ErrorEventExt, MessageSender, MessageStack, Properties,
-    SessionIdentifier, ThreadedMessageLoop,
+    Error as RPCError, ErrorEvent as RPCErrorEvent, ErrorEventExt, Message, MessageSender, MessageStack, Properties,
+    SessionIdentifier, ThreadedMessageLoop, Tracked,
 };
 use crate::serialization::DeserializeBinary;
 use crate::spec::column_types::{AuthorityRef, SPRef};
@@ -19,7 +19,6 @@ use super::control_session::ControlSession;
 use super::sp_session::SPSession;
 
 pub struct TPer {
-    device: Arc<dyn Device>,
     com_id: u16,
     com_id_ext: u16,
     next_hsn: AtomicU32,
@@ -34,17 +33,7 @@ pub struct TPer {
 
 pub fn discover(device: &dyn Device) -> Result<Discovery, RPCError> {
     let data = device.security_recv(0x01, 0x0001_u16.to_be_bytes(), 4096).map_err(|err| err.while_receiving())?;
-    let discovery = Discovery::from_bytes(data).map_err(|err| err.while_receiving())?;
-    let descs: Vec<_> = discovery
-        .descriptors
-        .into_vec()
-        .into_iter()
-        .filter(|desc| match desc {
-            FeatureDescriptor::Unrecognized(UnrecognizedDescriptor { feature_code: 0, length: 0, version: 0 }) => false,
-            _ => true,
-        })
-        .collect();
-    Ok(Discovery { descriptors: descs.into() })
+    Discovery::from_bytes(data).map_err(|err| err.while_receiving()).map(|d| d.remove_empty())
 }
 
 pub fn default_com_id(discovery: &Discovery) -> Option<(u16, u16)> {
@@ -61,7 +50,6 @@ impl TPer {
         let capabilities = message_stack.capabilities();
         let (message_loop, message_sender) = ThreadedMessageLoop::new(device.clone(), message_stack);
         Self {
-            device,
             com_id,
             com_id_ext,
             next_hsn: 1.into(),
@@ -95,8 +83,13 @@ impl TPer {
         &self.capabilities
     }
 
-    pub fn discover(&self) -> Result<Discovery, RPCError> {
-        discover(self.device.as_ref())
+    pub async fn discover(&self) -> Result<Discovery, RPCError> {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        let _ = self.message_sender.send(Message::Discover { content: Tracked { item: (), promises: vec![tx] } });
+        match rx.await {
+            Ok(result) => result,
+            Err(_) => Err(RPCErrorEvent::Aborted.while_receiving()),
+        }
     }
 
     pub async fn current_properties(&self) -> Properties {

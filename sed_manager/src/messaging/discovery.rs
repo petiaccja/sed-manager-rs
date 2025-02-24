@@ -363,6 +363,22 @@ impl Discovery {
             .map(|desc| <&'me FeatureDescriptor as TryInto<&'me T>>::try_into(desc))
             .find_map(|result| result.ok())
     }
+
+    pub fn remove_empty(self) -> Discovery {
+        let new_descriptors: Vec<_> = self
+            .descriptors
+            .into_vec()
+            .into_iter()
+            .filter(|desc| {
+                desc != &FeatureDescriptor::Unrecognized(UnrecognizedDescriptor {
+                    feature_code: 0,
+                    length: 0,
+                    version: 0,
+                })
+            })
+            .collect();
+        Self { descriptors: new_descriptors.into() }
+    }
 }
 
 macro_rules! impl_feature {
