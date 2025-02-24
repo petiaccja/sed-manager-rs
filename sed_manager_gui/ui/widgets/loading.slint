@@ -1,10 +1,5 @@
 import { Palette } from "std-widgets.slint";
-
-export enum ContentStatus {
-    loading,
-    error,
-    success,
-}
+import { ContentStatus } from "../data/content_status.slint";
 
 export component TextLoadingIndicator inherits Rectangle {
     in-out property <duration> time;

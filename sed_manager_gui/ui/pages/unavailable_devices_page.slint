@@ -1,12 +1,9 @@
 import { NameValueListView } from "../widgets/name_value_list_view.slint";
-import { TextLoadingIndicator, ContentStatus } from "../widgets/loading.slint";
+import { TextLoadingIndicator } from "../widgets/loading.slint";
+import { ContentStatus } from "../data/content_status.slint";
 import { HorizontalBox, Palette, LineEdit } from "std-widgets.slint";
 import { HorizontalSeparator, Island, PaletteExtra } from "../widgets/visual.slint";
-
-export struct UnavailableDevice {
-    path: string,
-    error-message: string,
-}
+import { UnavailableDevice } from "../data/unavailable_device.slint";
 
 component UnavailableDeviceView inherits Island {
     in property <UnavailableDevice> unavailable-device;
@@ -38,6 +35,7 @@ component UnavailableDeviceView inherits Island {
                 source: @image-url("../../images/error/8666566_alert_circle_icon.svg");
                 colorize: PaletteExtra.error-foreground;
             }
+
             Text {
                 horizontal-stretch: 1.0;
                 text: "Failed to open device: " + unavailable-device.error-message;

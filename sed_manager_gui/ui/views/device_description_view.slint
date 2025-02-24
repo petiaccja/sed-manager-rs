@@ -1,10 +1,10 @@
 import { LineEdit, GroupBox, Button, Palette } from "std-widgets.slint";
 import { Island, PaletteExtra } from "../widgets/visual.slint";
-import { ContentStatus } from "../widgets/loading.slint";
+import { ContentStatus } from "../data/content_status.slint";
 import { ActionView } from "device_description_view/action_view.slint";
 import { DiscoveryView } from "device_description_view/discovery_view.slint";
 import { IdentityView } from "device_description_view/identity_view.slint";
-import { DeviceDescription, ExampleData } from "device_description_view/device_description.slint";
+import { DeviceDescription, ExampleData } from "../data/device_description.slint";
 
 export component DeviceDescriptionView {
     in property <DeviceDescription> description;
@@ -29,7 +29,7 @@ export component DeviceDescriptionView {
                 discovery: description.discovery;
             }
 
-            action-view:= ActionView {
+            action-view := ActionView {
                 horizontal-stretch: 0.0;
                 security-providers: description.discovery.security-providers;
             }
