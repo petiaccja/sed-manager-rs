@@ -23,6 +23,19 @@ fn set_callbacks(app_window: &ui::AppWindow, app_state: Rc<AtomicBorrow<AppState
     app_window.on_update_device_discovery(move |device_idx| {
         let _ = slint::spawn_local(app_state::update_device_discovery(copy.clone(), device_idx as usize));
     });
+    let copy = app_state.clone();
+    app_window.on_take_ownership(move |device_idx, new_password| {
+        let _ = slint::spawn_local(app_state::take_ownership(copy.clone(), device_idx as usize, new_password.into()));
+    });
+    let copy = app_state.clone();
+    app_window.on_activate_locking(move |device_idx, sid_password, new_admin1_password| {
+        let _ = slint::spawn_local(app_state::activate_locking(
+            copy.clone(),
+            device_idx as usize,
+            sid_password.into(),
+            Some(new_admin1_password.into()),
+        ));
+    });
 }
 
 fn main() -> Result<(), Box<dyn Error>> {

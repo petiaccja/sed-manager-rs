@@ -1,5 +1,6 @@
 import { DeviceDescription, ExampleData as DeviceDescriptionExampleData } from "data/device_description.slint";
 import { UnavailableDevice } from "data/unavailable_device.slint";
+import { ActionResult } from "data/action_result.slint";
 import { UnavailableDevicesPage} from "pages/unavailable_devices_page.slint";
 import { ContentStatus } from "data/content_Status.slint";
 import { TabBar } from "widgets/tab_bar.slint";
@@ -17,9 +18,12 @@ export component AppWindow inherits Window {
     in property <[string]> device-tabs;
     in property <[DeviceDescription]> device-descriptions;
     in property <[UnavailableDevice]> unavailable-devices;
+    in property <[ActionResult]> action-results;
     private property <int> selected-device-tab;
     callback update-devices();
     callback update-device-discovery(device-idx: int);
+    callback take-ownership(device-idx: int, new-password: string);
+    callback activate-locking(device-idx: int, sid-password: string, new-admin1-password: string);
     VerticalLayout {
         if device-tabs.length != 0: VerticalLayout {
             alignment: stretch;
@@ -52,8 +56,15 @@ export component AppWindow inherits Window {
                     selected: i == selected-device-tab;
                     DevicePage {
                         description: description;
+                        action-result: i < action-results.length ? action-results[i] : { };
                         update-device-discovery => {
                             update-device-discovery(i);
+                        }
+                        take-ownership(new-password) => {
+                            take-ownership(i, new-password);
+                        }
+                        activate-locking(sid-password, new-admin1-password) => {
+                            activate-locking(i, sid-password, new-admin1-password);
                         }
                     }
                 }

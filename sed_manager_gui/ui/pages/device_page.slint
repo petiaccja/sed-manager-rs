@@ -1,5 +1,6 @@
 import { DeviceDescriptionView } from "../views/device_description_view.slint";
 import { DeviceDescription } from "../data/device_description.slint";
+import { ActionResult } from "../data/action_result.slint";
 import { SwitchContent, SwitchContainer } from "../widgets/switch_content.slint";
 import { ActionView } from "../views/action_view.slint";
 import { TakeOwnershipView } from "../views/take_owneship_view.slint";
@@ -13,8 +14,11 @@ enum ActivePage {
 
 export component DevicePage {
     in property <DeviceDescription> description;
+    in property <ActionResult> action-result;
     private property <ActivePage> active-page: ActivePage.device-description;
     callback update-device-discovery();
+    callback take-ownership(new-password: string);
+    callback activate-locking(sid-password: string, new-admin1-password: string);
     function set-active-page(active-page: ActivePage) {
         self.active-page = active-page;
         if active-page == ActivePage.device-description {
@@ -34,14 +38,22 @@ export component DevicePage {
         }
         if active-page == ActivePage.take-ownership: TakeOwnershipView {
             device-name: description.identity.name;
+            action-result: action-result;
             back => {
                 set-active-page(ActivePage.device-description);
+            }
+            take-ownership(new-password) => {
+                root.take-ownership(new-password)
             }
         }
         if active-page == ActivePage.activate-locking: ActivateLockingView {
             device-name: description.identity.name;
+            action-result: action-result;
             back => {
                 set-active-page(ActivePage.device-description);
+            }
+            activate-locking(sid-password, new-admin1-password) => {
+                root.activate-locking(sid-password, new-admin1-password)
             }
         }
     }

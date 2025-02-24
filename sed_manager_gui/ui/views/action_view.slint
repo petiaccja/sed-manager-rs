@@ -1,6 +1,8 @@
 import { Island, PaletteExtra } from "../widgets/visual.slint";
 import { ContentStatus } from "../data/content_status.slint";
 import { Button, Palette, Spinner } from "std-widgets.slint";
+import { ActionResult} from "../data/action_result.slint";
+
 
 component BackButton inherits Rectangle {
     in property <bool> enabled;
@@ -68,7 +70,7 @@ component Header inherits Island {
 }
 
 component Status {
-    in property <ContentStatus> status: ContentStatus.loading;
+    in property <ContentStatus> status;
     in property <bool> started: false;
     in property <image> action-icon;
     VerticalLayout {
@@ -78,7 +80,7 @@ component Status {
             height: 80px;
             indeterminate: true;
         }
-        if status == ContentStatus.error: Image {
+        if started && status == ContentStatus.error: Image {
             width: 80px;
             height: 80px;
             source: @image-url("../../images/error/8666566_alert_circle_icon.svg");
@@ -97,9 +99,9 @@ export component ActionView {
     in property <string> device-name;
     in property <string> action-name;
     in property <image> action-icon;
-    private property <bool> back-enabled: !started || status != ContentStatus.loading;
-    in property <ContentStatus> status: ContentStatus.loading;
+    in property <ActionResult> action-result;
     in property <bool> started: false;
+    private property <bool> back-enabled: !started || action-result.status != ContentStatus.loading;
     callback back <=> header.back;
     VerticalLayout {
         header := Header {
@@ -119,7 +121,7 @@ export component ActionView {
                 Status {
                     action-icon: action-icon;
                     started: started;
-                    status: status;
+                    status: action-result.status;
                 }
             }
 
