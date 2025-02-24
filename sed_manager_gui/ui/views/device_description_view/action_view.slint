@@ -6,11 +6,13 @@ import { HorizontalSeparator, PaletteExtra } from "../../widgets/visual.slint";
 export component ActionView {
     in property <[string]> security-providers;
     private property <length> button-height: 32px;
+    callback take-ownership();
+    callback activate-locking();
     ScrollView {
         horizontal-scrollbar-policy: always-off;
         min-width: viewport.min-width;
         min-height: 128px;
-        viewport:= VerticalLayout {
+        viewport := VerticalLayout {
             alignment: start;
             spacing: 12px;
             CollapsibleView {
@@ -31,6 +33,9 @@ export component ActionView {
                         height: button-height;
                         navigation-direction: NavigationDirection.left;
                         background: #00000000;
+                        clicked => {
+                            take-ownership();
+                        }
                     }
 
                     HorizontalSeparator {
@@ -43,6 +48,9 @@ export component ActionView {
                         height: button-height;
                         navigation-direction: NavigationDirection.left;
                         background: #00000000;
+                        clicked => {
+                            activate-locking();
+                        }
                     }
                 }
             }

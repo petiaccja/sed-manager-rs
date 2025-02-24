@@ -8,6 +8,8 @@ import { DeviceDescription, ExampleData } from "device_description_view/data.sli
 
 export component DeviceDescriptionView {
     in property <DeviceDescription> description;
+    callback take-ownership <=> action-view.take-ownership;
+    callback activate-locking <=> action-view.activate-locking;
     VerticalLayout {
         spacing: 20px;
         IdentityView {
@@ -27,7 +29,7 @@ export component DeviceDescriptionView {
                 discovery: description.discovery;
             }
 
-            ActionView {
+            action-view:= ActionView {
                 horizontal-stretch: 0.0;
                 security-providers: description.discovery.security-providers;
             }

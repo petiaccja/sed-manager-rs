@@ -11,6 +11,8 @@ export component AppWindow inherits Window {
     icon: @image-url("../images/temporary_logo.png");
     preferred-width: 960px;
     preferred-height: 600px;
+    min-width: 640px;
+    min-height: 360px;
     in property <[string]> device-tabs;
     in property <[DeviceDescription]> device-descriptions;
     in property <[UnavailableDevice]> unavailable-devices;

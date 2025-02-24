@@ -1,0 +1,81 @@
+import { ActionView } from "action_view.slint";
+import { LineEdit, Button, Switch } from "std-widgets.slint";
+import { PaletteExtra } from "../widgets/visual.slint";
+import { PasswordValidator } from "../widgets/password_validator.slint";
+
+export component ActivateLockingView inherits ActionView {
+    action-name: "Activate locking";
+    action-icon: @image-url("../../images/device/9111193_lock_icon.svg");
+    private property <string> feedback-text;
+    private property <bool> password-ok: same-as-owner.checked || feedback-text == "";
+    VerticalLayout {
+        alignment: LayoutAlignment.center;
+        padding: 8px;
+        spacing: 6px;
+        min-width: 200px;
+        Text {
+            text: "Enter owner password:";
+        }
+
+        owner-password := LineEdit {
+            input-type: InputType.password;
+            edited(text) => {
+                validate-password()
+            }
+        }
+
+        Rectangle {
+            height: 12px;
+        }
+
+        Text {
+            text: "Enter new locking Admin1 password:";
+            opacity: same-as-owner.checked ? 0.5 : 1.0;
+        }
+
+        admin1-password := LineEdit {
+            input-type: InputType.password;
+            edited(text) => {
+                validate-password()
+            }
+            enabled: !same-as-owner.checked;
+        }
+
+        Text {
+            text: "Repeat password:";
+            opacity: same-as-owner.checked ? 0.5 : 1.0;
+        }
+
+        admin1-repeat := LineEdit {
+            input-type: InputType.password;
+            edited(text) => {
+                validate-password()
+            }
+            enabled: !same-as-owner.checked;
+        }
+
+        same-as-owner := Switch {
+            text: "Same as owner password";
+        }
+
+        Rectangle {
+            height: 12px;
+        }
+
+        Button {
+            text: "Activate locking";
+            primary: true;
+            enabled: password-ok;
+        }
+
+        Text {
+            text: same-as-owner.checked ? "" : feedback-text;
+            color: PaletteExtra.error-foreground;
+            horizontal-alignment: center;
+        }
+    }
+
+    function validate-password() {
+        feedback-text = PasswordValidator.validate(admin1-password.text, admin1-repeat.text)
+    }
+}

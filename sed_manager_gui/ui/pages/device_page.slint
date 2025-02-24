@@ -1,12 +1,61 @@
 import { DeviceDescriptionView } from "../views/device_description_view.slint";
 import { DeviceDescription } from "../views/device_description_view/data.slint";
+import { SwitchContent, SwitchContainer } from "../widgets/switch_content.slint";
+import { ActionView } from "../views/action_view.slint";
+import { TakeOwnershipView } from "../views/take_owneship_view.slint";
+import { ActivateLockingView } from "../views/activate_locking_view.slint";
+
+enum ActivePage {
+    device-description,
+    take-ownership,
+    activate-locking,
+}
 
 export component DevicePage {
     in property <DeviceDescription> description;
+    private property <ActivePage> active-page: ActivePage.device-description;
     callback update-device-discovery();
-    VerticalLayout {
-        DeviceDescriptionView {
-            description: root.description;
+    function set-active-page(active-page: ActivePage) {
+        self.active-page = active-page;
+        if active-page == ActivePage.device-description {
+            // Discovery may change upon TPer modifications.
+            update-device-discovery();
+        }
+    }
+    SwitchContainer {
+        preferred-width: 100%;
+        preferred-height: 100%;
+        SwitchContent {
+            selected: active-page == ActivePage.device-description;
+            DeviceDescriptionView {
+                description: root.description;
+                take-ownership => {
+                    set-active-page(ActivePage.take-ownership);
+                }
+                activate-locking => {
+                    set-active-page(ActivePage.activate-locking);
+                }
+            }
+        }
+
+        SwitchContent {
+            selected: active-page == ActivePage.take-ownership;
+            TakeOwnershipView {
+                device-name: description.identity.name;
+                back => {
+                    set-active-page(ActivePage.device-description);
+                }
+            }
+        }
+
+        SwitchContent {
+            selected: active-page == ActivePage.activate-locking;
+            ActivateLockingView {
+                device-name: description.identity.name;
+                back => {
+                    set-active-page(ActivePage.device-description);
+                }
+            }
         }
     }
 }

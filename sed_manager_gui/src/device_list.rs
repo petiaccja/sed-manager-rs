@@ -1,7 +1,5 @@
-use sed_manager::{
-    device::{list_physical_drives, open_device, Device, Error as DeviceError},
-    fake_device::FakeDevice,
-};
+use sed_manager::device::{list_physical_drives, open_device, Device, Error as DeviceError};
+use sed_manager::fake_device::FakeDevice;
 
 use crate::utility::{run_in_thread, Versioned};
 

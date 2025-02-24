@@ -1,0 +1,54 @@
+import { ActionView } from "action_view.slint";
+import { LineEdit, Button } from "std-widgets.slint";
+import { PaletteExtra } from "../widgets/visual.slint";
+import { PasswordValidator } from "../widgets/password_validator.slint";
+
+export component TakeOwnershipView inherits ActionView {
+    action-name: "Take ownership";
+    action-icon: @image-url("../../images/action/8666628_user_check_icon.svg");
+    private property <string> feedback-text;
+    private property <bool> password-ok: feedback-text == "";
+    VerticalLayout {
+        alignment: LayoutAlignment.center;
+        padding: 8px;
+        spacing: 6px;
+        min-width: 200px;
+        Text {
+            text: "Enter new owner password:";
+        }
+
+        password := LineEdit {
+            input-type: InputType.password;
+            edited(text) => {
+                validate-password()
+            }
+        }
+
+        Text {
+            text: "Repeat password:";
+        }
+
+        repeat := LineEdit {
+            input-type: InputType.password;
+            edited(text) => {
+                validate-password()
+            }
+        }
+
+        Button {
+            text: "Take ownership";
+            primary: true;
+            enabled: password-ok;
+        }
+
+        Text {
+            text: feedback-text;
+            color: PaletteExtra.error-foreground;
+            horizontal-alignment: center;
+        }
+    }
+
+    function validate-password() {
+        feedback-text = PasswordValidator.validate(password.text, repeat.text)
+    }
+}

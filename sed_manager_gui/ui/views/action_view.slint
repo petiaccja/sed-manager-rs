@@ -1,0 +1,141 @@
+import { Island, PaletteExtra } from "../widgets/visual.slint";
+import { ContentStatus } from "../widgets/loading.slint";
+import { Button, Palette, Spinner } from "std-widgets.slint";
+
+component BackButton inherits Rectangle {
+    in property <bool> enabled;
+    private property <color> text-color: area.has-hover && enabled ? PaletteExtra.accented-control-foreground : Palette.control-foreground.with-alpha(enabled ? 1.0 : 0.5);
+    callback clicked <=> area.clicked;
+    width: 32px;
+    height: 32px;
+    background: #00000000;
+    border-radius: Math.min(self.width, self.height) / 2;
+    border-color: text-color;
+    border-width: 2px;
+    Image {
+        source: @image-url("../../images/shape/8666600_arrow_left_icon.svg");
+        colorize: text-color;
+    }
+
+    area := TouchArea {
+        enabled: enabled;
+    }
+}
+
+component Header inherits Island {
+    in property <string> device-name;
+    in property <string> action-name;
+    in property <bool> back-enabled: true;
+    callback back <=> back-button.clicked;
+    preferred-height: content.min-height;
+    content := HorizontalLayout {
+        spacing: 12px;
+        padding-top: 4px;
+        padding-bottom: 4px;
+        padding-left: 12px;
+        padding-right: 12px;
+        VerticalLayout {
+            alignment: space-around;
+            back-button := BackButton {
+                enabled: back-enabled;
+            }
+        }
+
+        Text {
+            text: device-name;
+            font-size: 28px;
+            font-weight: 800;
+            color: PaletteExtra.accented-control-foreground;
+            vertical-alignment: center;
+        }
+
+        Image {
+            source: @image-url("../../images/shape/8666777_chevron_right_arrow_icon.svg");
+            colorize: Palette.control-foreground;
+            width: 26px;
+            vertical-alignment: center;
+            horizontal-alignment: center;
+            image-fit: ImageFit.contain;
+        }
+
+        Text {
+            text: action-name;
+            font-size: 24px;
+            vertical-alignment: center;
+            horizontal-stretch: 1;
+        }
+    }
+}
+
+component Status {
+    in property <ContentStatus> status: ContentStatus.loading;
+    in property <bool> started: false;
+    in property <image> action-icon;
+    VerticalLayout {
+        alignment: center;
+        if started && status == ContentStatus.loading: Spinner {
+            width: 80px;
+            height: 80px;
+            indeterminate: true;
+        }
+        if status == ContentStatus.error: Image {
+            width: 80px;
+            height: 80px;
+            source: @image-url("../../images/error/8666566_alert_circle_icon.svg");
+            colorize: PaletteExtra.error-foreground;
+        }
+        if !started || status == ContentStatus.success: Image {
+            width: 80px;
+            height: 80px;
+            source: action-icon;
+            colorize: !started ? Palette.control-foreground.with-alpha(0.35) : PaletteExtra.success-foreground;
+        }
+    }
+}
+
+export component ActionView {
+    in property <string> device-name;
+    in property <string> action-name;
+    in property <image> action-icon;
+    private property <bool> back-enabled: !started || status != ContentStatus.loading;
+    in property <ContentStatus> status: ContentStatus.loading;
+    in property <bool> started: false;
+    callback back <=> header.back;
+    VerticalLayout {
+        header := Header {
+            vertical-stretch: 0;
+            device-name: device-name;
+            action-name: action-name;
+            back-enabled: back-enabled;
+        }
+
+        HorizontalLayout {
+            vertical-stretch: 1;
+            spacing: 16px;
+            preferred-height: 100%;
+            alignment: center;
+            VerticalLayout {
+                alignment: center;
+                Status {
+                    action-icon: action-icon;
+                    started: started;
+                    status: status;
+                }
+            }
+
+            VerticalLayout {
+                alignment: center;
+                @children
+            }
+        }
+    }
+}
+
+export component LivePreviewTest inherits ActionView {
+    device-name: "Foo Device";
+    action-name: "Take ownership";
+    started: true;
+    Text {
+        text: "Content";
+    }
+}

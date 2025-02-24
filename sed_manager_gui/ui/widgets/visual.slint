@@ -8,6 +8,7 @@ export global PaletteExtra {
     out property <color> accented-control-background: make-accented(accent, reduced-control-background, Palette.control-foreground);
     out property <color> accented-control-foreground: make-accented(accent, Palette.control-foreground, reduced-control-background);
     out property <color> highlight: Palette.control-foreground.with-alpha(0.1);
+    out property <color> success-foreground: make-accented(#00c531, Palette.foreground, Palette.background);
     out property <color> error-foreground: make-accented(#FF0000, Palette.foreground, Palette.background);
     out property <color> warning-foreground: make-accented(#FFD000, Palette.foreground, Palette.background);
     out property <color> separator: make-accented(accent.mix(#808080, 0.2), Palette.foreground, Palette.background).with-alpha(0.65);
