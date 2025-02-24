@@ -2,10 +2,11 @@ use as_array::AsArray;
 
 use crate::fake_device::data::objects::{Authority, AuthorityTable, CPINTable, SPTable, CPIN, SP};
 use crate::fake_device::data::table::BasicTable;
-use crate::fake_device::MSID_PASSWORD;
+use crate::fake_device::{MSID_PASSWORD, PSID_PASSWORD};
 use crate::messaging::uid::TableUID;
 use crate::messaging::value::Bytes;
 use crate::rpc::MethodStatus;
+use crate::spec;
 use crate::spec::column_types::{AuthMethod, AuthorityRef, BoolOrBytes, LifeCycleState};
 use crate::spec::opal::admin::*;
 
@@ -101,11 +102,19 @@ fn preconfig_authorities() -> AuthorityTable {
         credential: Some(c_pin::SID.into()),
         ..Authority::new(authority::SID)
     };
+    let psid = Authority {
+        name: Some("PSID".into()),
+        enabled: true.into(),
+        operation: AuthMethod::Password.into(),
+        credential: Some(spec::psid::admin::c_pin::PSID.into()),
+        ..Authority::new(spec::psid::admin::authority::PSID)
+    };
 
     authorities.insert(anybody.uid, anybody);
     authorities.insert(admins.uid, admins);
     authorities.insert(makers.uid, makers);
     authorities.insert(sid.uid, sid);
+    authorities.insert(psid.uid, psid);
 
     for i in 1..=4 {
         let admin = Authority {
@@ -126,9 +135,11 @@ fn preconfig_c_pin() -> CPINTable {
 
     let sid = CPIN { pin: Some(MSID_PASSWORD.into()), ..CPIN::new(c_pin::SID) };
     let msid = CPIN { pin: Some(MSID_PASSWORD.into()), ..CPIN::new(c_pin::MSID) };
+    let psid = CPIN { pin: Some(PSID_PASSWORD.into()), ..CPIN::new(spec::psid::admin::c_pin::PSID) };
 
     c_pins.insert(sid.uid, sid);
     c_pins.insert(msid.uid, msid);
+    c_pins.insert(psid.uid, psid);
 
     for i in 1..=4 {
         let admin = CPIN { pin: Some("8965823nz987gt346".into()), ..CPIN::new(c_pin::ADMIN.nth(i).unwrap()) };

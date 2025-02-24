@@ -1,10 +1,11 @@
 use std::{rc::Rc, sync::Arc};
 
 use sed_manager::{
-    applications::{self, get_default_ssc},
+    applications::{self, get_admin_sp, get_default_ssc, get_locking_sp},
     device::{Device, Error as DeviceError},
-    messaging::discovery::Discovery,
+    messaging::discovery::{Discovery, Feature as _},
     rpc::Error as RPCError,
+    spec,
     tper::{discover, TPer},
 };
 use slint::{Model, ModelRc, SharedString, ToSharedString, VecModel};
@@ -309,32 +310,42 @@ pub async fn revert(
     include_admin: bool,
 ) {
     let tper = app_state.with_mut(|app_state| app_state.get_tper(device_idx));
+    let security_providers = app_state
+        .with(|app_state| {
+            app_state.discoveries.get(device_idx).map(|discovery| {
+                let discovery = discovery.as_ref()?;
+                let ssc = get_default_ssc(discovery).ok()?;
+                let admin_sp = get_admin_sp(ssc.feature_code()).ok()?;
+                let locking_sp = get_locking_sp(ssc.feature_code()).ok()?;
+                Some((admin_sp, locking_sp))
+            })
+        })
+        .flatten();
 
     app_state.with_mut(|app_state| {
         app_state.set_action_result(device_idx, ActionResult::loading());
     });
 
-    match tper {
-        Some(tper) => {
-            // let result = applications::activate_locking(
-            //     &*tper,
-            //     sid_password.as_bytes(),
-            //     new_admin1_password.as_ref().map(|s| s.as_bytes()),
-            // )
-            // .await;
-            // let action_result = match result {
-            //     Ok(_) => ActionResult::success(),
-            //     Err(err) => ActionResult::error(err.to_string()),
-            // };
-            // app_state.with_mut(|app_state| {
-            //     app_state.set_action_result(device_idx, action_result);
-            // });
+    match (tper, security_providers) {
+        (Some(tper), Some((admin_sp, locking_sp))) => {
+            let authority = match use_psid {
+                true => spec::psid::admin::authority::PSID,
+                false => spec::core::authority::SID,
+            };
+            let sp = match include_admin {
+                true => admin_sp,
+                false => locking_sp,
+            };
+            let result = applications::revert(&*tper, authority, password.as_bytes(), sp).await;
+            let action_result = match result {
+                Ok(_) => ActionResult::success(),
+                Err(err) => ActionResult::error(err.to_string()),
+            };
             app_state.with_mut(|app_state| {
-                let action_result = ActionResult::error("revert not implemented yet".into());
                 app_state.set_action_result(device_idx, action_result);
             });
         }
-        None => {
+        _ => {
             app_state.with_mut(|app_state| {
                 let action_result = ActionResult::error("could not open device to configure encryption".into());
                 app_state.set_action_result(device_idx, action_result);
