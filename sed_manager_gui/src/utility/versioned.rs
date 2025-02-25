@@ -1,7 +1,5 @@
-use std::{
-    ops::Deref,
-    sync::{Arc, Weak},
-};
+use core::ops::Deref;
+use std::sync::{Arc, Weak};
 
 pub struct Versioned<T: ?Sized> {
     value: Arc<T>,

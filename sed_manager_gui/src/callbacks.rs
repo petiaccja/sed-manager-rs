@@ -1,4 +1,4 @@
-use std::future::Future;
+use core::future::Future;
 use std::rc::Rc;
 
 use sed_manager::device::Device;

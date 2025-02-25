@@ -33,7 +33,7 @@ fn gen_deref(alias_struct: &AliasStruct) -> TokenStream2 {
     let name = &alias_struct.name;
     let ty = &alias_struct.ty;
     quote! {
-        impl ::std::ops::Deref for #name {
+        impl ::core::ops::Deref for #name {
             type Target = #ty;
             fn deref(&self) -> &Self::Target {
                 &self.0
@@ -45,7 +45,7 @@ fn gen_deref(alias_struct: &AliasStruct) -> TokenStream2 {
 fn gen_deref_mut(alias_struct: &AliasStruct) -> TokenStream2 {
     let name = &alias_struct.name;
     quote! {
-        impl ::std::ops::DerefMut for #name {
+        impl ::core::ops::DerefMut for #name {
             fn deref_mut(&mut self) -> &mut Self::Target {
                 &mut self.0
             }

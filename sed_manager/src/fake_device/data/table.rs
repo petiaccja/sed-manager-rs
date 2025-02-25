@@ -1,7 +1,5 @@
-use std::{
-    collections::BTreeMap,
-    ops::{Deref, DerefMut},
-};
+use core::ops::{Deref, DerefMut};
+use std::collections::BTreeMap;
 
 use crate::messaging::uid::{ObjectUID, TableUID, UID};
 

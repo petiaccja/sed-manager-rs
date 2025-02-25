@@ -1,4 +1,5 @@
-use std::{ops::Deref, ptr::null_mut};
+use core::ops::Deref;
+use core::ptr::null_mut;
 
 use winapi::um::unknwnbase::IUnknown;
 

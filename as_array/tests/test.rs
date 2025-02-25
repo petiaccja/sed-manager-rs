@@ -1,18 +1,18 @@
 use as_array::AsArray;
 
 #[derive(AsArray)]
-#[as_array_traits(std::any::Any(as_any_array))]
+#[as_array_traits(core::any::Any(as_any_array))]
 struct TupleStruct(u32, bool);
 
 #[derive(AsArray)]
-#[as_array_traits(std::any::Any(as_any_array), std::any::Any(as_any_2_array))]
+#[as_array_traits(core::any::Any(as_any_array), core::any::Any(as_any_2_array))]
 struct FieldStruct {
     f1: u32,
     f2: bool,
 }
 
 #[derive(AsArray)]
-#[as_array_traits(std::any::Any)]
+#[as_array_traits(core::any::Any)]
 struct DefaultName {
     f1: u32,
 }

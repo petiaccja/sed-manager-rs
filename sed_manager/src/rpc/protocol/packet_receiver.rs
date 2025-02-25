@@ -170,7 +170,7 @@ impl Splitter {
             SplitterState::GatheringResult(depth) => {
                 let new_depth = match tag {
                     Tag::StartList => depth + 1,
-                    Tag::EndList => std::cmp::max(1, depth) - 1,
+                    Tag::EndList => core::cmp::max(1, depth) - 1,
                     _ => depth,
                 };
                 match new_depth {
@@ -183,14 +183,14 @@ impl Splitter {
     }
 
     fn commit_method(&mut self) {
-        let maybe_pm = PackagedMethod::from_tokens(std::mem::replace(&mut self.method_tokens, Vec::new()));
+        let maybe_pm = PackagedMethod::from_tokens(core::mem::replace(&mut self.method_tokens, Vec::new()));
         self.method_buffer.push_back(maybe_pm.map_err(|err| err.while_receiving()));
     }
 }
 
 impl Drop for PacketReceiver {
     fn drop(&mut self) {
-        for promise in std::mem::replace(&mut self.promise_buffer, VecDeque::new()) {
+        for promise in core::mem::replace(&mut self.promise_buffer, VecDeque::new()) {
             let _ = promise.send(Err(ErrorEvent::Aborted.while_receiving()));
         }
     }
@@ -198,7 +198,7 @@ impl Drop for PacketReceiver {
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
+    use core::time::Duration;
 
     use crate::messaging::uid::UID;
     use crate::messaging::{packet::SubPacket, value::Value};

@@ -1,4 +1,4 @@
-use std::fmt::Write;
+use core::fmt::Write;
 
 #[allow(unused)]
 macro_rules! format_flat {
@@ -33,7 +33,7 @@ pub struct PrettyFormatter<'a> {
 }
 
 pub trait PrettyPrint {
-    fn fmt(&self, f: &mut PrettyFormatter<'_>) -> Result<(), std::fmt::Error>;
+    fn fmt(&self, f: &mut PrettyFormatter<'_>) -> Result<(), core::fmt::Error>;
 }
 
 impl<'a> PrettyFormatter<'a> {
@@ -43,8 +43,8 @@ impl<'a> PrettyFormatter<'a> {
 
     pub fn indented(
         &mut self,
-        f: impl Fn(&mut PrettyFormatter) -> Result<(), std::fmt::Error>,
-    ) -> Result<(), std::fmt::Error> {
+        f: impl Fn(&mut PrettyFormatter) -> Result<(), core::fmt::Error>,
+    ) -> Result<(), core::fmt::Error> {
         self.level += 1;
         let res = f(self);
         self.level -= 1;
@@ -55,7 +55,7 @@ impl<'a> PrettyFormatter<'a> {
         self.indent.is_some()
     }
 
-    fn write_indentation(&mut self) -> Result<(), std::fmt::Error> {
+    fn write_indentation(&mut self) -> Result<(), core::fmt::Error> {
         if let Some(indent) = self.indent {
             for _ in 0..(indent * self.level) {
                 self.write_char(' ')?;
@@ -66,14 +66,14 @@ impl<'a> PrettyFormatter<'a> {
 }
 
 impl<'a> PrettyFormatter<'a> {
-    pub fn write_str(&mut self, s: &str) -> Result<(), std::fmt::Error> {
+    pub fn write_str(&mut self, s: &str) -> Result<(), core::fmt::Error> {
         let mut chunks = s.split('\n');
         let mut first = chunks.next();
         while let Some(chunk) = first {
             let next = chunks.next();
 
             if !chunk.is_empty() {
-                if std::mem::replace(&mut self.line_start, false) {
+                if core::mem::replace(&mut self.line_start, false) {
                     self.write_indentation()?;
                 }
                 self.buf.write_str(chunk)?;
@@ -89,8 +89,8 @@ impl<'a> PrettyFormatter<'a> {
         Ok(())
     }
 
-    pub fn write_char(&mut self, c: char) -> Result<(), std::fmt::Error> {
-        if std::mem::replace(&mut self.line_start, false) {
+    pub fn write_char(&mut self, c: char) -> Result<(), core::fmt::Error> {
+        if core::mem::replace(&mut self.line_start, false) {
             self.write_indentation()?;
         }
         self.buf.write_char(c)?;
@@ -100,19 +100,19 @@ impl<'a> PrettyFormatter<'a> {
 }
 
 impl PrettyPrint for &str {
-    fn fmt(&self, f: &mut PrettyFormatter<'_>) -> Result<(), std::fmt::Error> {
+    fn fmt(&self, f: &mut PrettyFormatter<'_>) -> Result<(), core::fmt::Error> {
         f.write_str(self)
     }
 }
 
 impl PrettyPrint for char {
-    fn fmt(&self, f: &mut PrettyFormatter<'_>) -> Result<(), std::fmt::Error> {
+    fn fmt(&self, f: &mut PrettyFormatter<'_>) -> Result<(), core::fmt::Error> {
         f.write_char(*self)
     }
 }
 
 impl PrettyPrint for String {
-    fn fmt(&self, f: &mut PrettyFormatter<'_>) -> Result<(), std::fmt::Error> {
+    fn fmt(&self, f: &mut PrettyFormatter<'_>) -> Result<(), core::fmt::Error> {
         f.write_str(&self)
     }
 }
@@ -125,13 +125,13 @@ mod tests {
     struct Nested(Vec<Number>);
 
     impl PrettyPrint for Number {
-        fn fmt(&self, f: &mut PrettyFormatter<'_>) -> Result<(), std::fmt::Error> {
+        fn fmt(&self, f: &mut PrettyFormatter<'_>) -> Result<(), core::fmt::Error> {
             f.write_str(&format!("{}", self.0))
         }
     }
 
     impl PrettyPrint for Nested {
-        fn fmt(&self, f: &mut PrettyFormatter<'_>) -> Result<(), std::fmt::Error> {
+        fn fmt(&self, f: &mut PrettyFormatter<'_>) -> Result<(), core::fmt::Error> {
             let sep = if f.is_indenting_enabled() { '\n' } else { ' ' };
             f.write_char('[')?;
             f.write_char(sep)?;

@@ -1,4 +1,4 @@
-use std::sync::atomic::AtomicU32;
+use core::sync::atomic::AtomicU32;
 
 use crate::messaging::value::Bytes;
 use crate::rpc::MethodStatus;
@@ -65,7 +65,7 @@ impl OpalV2Controller {
             return Err(MethodStatus::NotAuthorized);
         }
 
-        let tsn = self.tper_session_number.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let tsn = self.tper_session_number.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
         Ok((hsn, tsn, None, None, None, None, None, None))
     }
 

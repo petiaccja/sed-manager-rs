@@ -1,5 +1,5 @@
-use std::fmt::Display;
-use std::ops::Range;
+use core::fmt::Display;
+use core::ops::Range;
 
 use crate::parse::data_struct::{DataField, DataStruct, LayoutAttr};
 use crate::parse::numeric_enum::NumericEnum;
@@ -11,7 +11,7 @@ pub enum LayoutError {
 }
 
 impl Display for LayoutError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             LayoutError::InvalidStructLayoutParam(param) => {
                 f.write_fmt(format_args!("parameter `{}` is not allowed on structs", param))

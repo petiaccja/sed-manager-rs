@@ -10,7 +10,7 @@ fn gen_optional<T: quote::ToTokens>(opt: Option<T>) -> TokenStream2 {
     }
 }
 
-fn gen_optional_range<T: quote::ToTokens>(opt: &Option<std::ops::Range<T>>) -> TokenStream2 {
+fn gen_optional_range<T: quote::ToTokens>(opt: &Option<core::ops::Range<T>>) -> TokenStream2 {
     match opt {
         Some(offset) => {
             let start = &offset.start;
@@ -162,8 +162,8 @@ pub fn gen_deserialize_struct(struct_desc: &DataStruct) -> TokenStream2 {
 
 #[cfg(test)]
 mod tests {
+    use core::ops::Range;
     use quote::quote;
-    use std::ops::Range;
 
     use super::*;
 

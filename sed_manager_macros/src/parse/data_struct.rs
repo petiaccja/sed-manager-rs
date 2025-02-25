@@ -15,7 +15,7 @@ pub struct DataField {
 
 pub struct LayoutAttr {
     pub offset: Option<usize>,
-    pub bits: Option<std::ops::Range<usize>>,
+    pub bits: Option<core::ops::Range<usize>>,
     pub round: Option<usize>,
 }
 
@@ -108,7 +108,7 @@ fn parse_literal_usize(expr: &syn::Expr) -> Result<usize, syn::Error> {
     integral.base10_parse()
 }
 
-fn parse_literal_range_usize(expr: &syn::Expr) -> Result<std::ops::Range<usize>, syn::Error> {
+fn parse_literal_range_usize(expr: &syn::Expr) -> Result<core::ops::Range<usize>, syn::Error> {
     let syn::Expr::Range(range) = expr else {
         return Err(syn::Error::new(expr.span(), "expected a range expression"));
     };
@@ -128,7 +128,7 @@ fn parse_literal_range_usize(expr: &syn::Expr) -> Result<std::ops::Range<usize>,
     if start >= end {
         return Err(syn::Error::new(expr.span(), "empty range is not accepted"));
     }
-    Ok(std::ops::Range::<usize> { start: start, end: end })
+    Ok(core::ops::Range::<usize> { start: start, end: end })
 }
 
 fn find_layout_attr(attrs: &[syn::Attribute]) -> Option<&syn::Attribute> {

@@ -1,4 +1,5 @@
-use std::{collections::VecDeque, time::Instant};
+use std::collections::VecDeque;
+use std::time::Instant;
 
 use crate::rpc::{
     error::{ErrorEvent, ErrorEventExt as _},
@@ -42,7 +43,7 @@ impl<T> Timeout<T> {
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
+    use core::time::Duration;
 
     use super::*;
 

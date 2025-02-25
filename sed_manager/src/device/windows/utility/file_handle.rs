@@ -1,4 +1,4 @@
-use std::ptr::null_mut;
+use core::ptr::null_mut;
 
 use winapi::{
     shared::ntdef::HANDLE,

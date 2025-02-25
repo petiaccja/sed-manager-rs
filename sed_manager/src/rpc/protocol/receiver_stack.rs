@@ -104,7 +104,7 @@ impl ReceiverStack {
 
 impl Drop for ReceiverStack {
     fn drop(&mut self) {
-        for promise in std::mem::replace(&mut self.com_id_promises, VecDeque::new()) {
+        for promise in core::mem::replace(&mut self.com_id_promises, VecDeque::new()) {
             let _ = promise.send(Err(ErrorEvent::Aborted.while_receiving()));
         }
     }

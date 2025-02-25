@@ -1,5 +1,5 @@
-use std::ffi::c_void;
-use std::ptr::null_mut;
+use core::ffi::c_void;
+use core::ptr::null_mut;
 
 use winapi::{
     shared::{

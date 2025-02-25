@@ -1,5 +1,5 @@
+use core::ops::{Deref, DerefMut};
 use std::cell::RefCell;
-use std::ops::{Deref, DerefMut};
 
 pub struct AtomicBorrow<T> {
     value: RefCell<T>,

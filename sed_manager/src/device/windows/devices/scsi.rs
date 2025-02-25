@@ -1,4 +1,4 @@
-use std::ffi::c_void;
+use core::ffi::c_void;
 
 use winapi::shared::{
     ntddscsi::{IOCTL_SCSI_PASS_THROUGH_DIRECT, SCSI_IOCTL_DATA_IN, SCSI_IOCTL_DATA_OUT, SCSI_PASS_THROUGH_DIRECT},

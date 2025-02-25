@@ -114,7 +114,7 @@ impl Bundler {
 
 impl Drop for SenderStack {
     fn drop(&mut self) {
-        for tracked in std::mem::replace(&mut self.com_id_buffer, VecDeque::new()) {
+        for tracked in core::mem::replace(&mut self.com_id_buffer, VecDeque::new()) {
             tracked.close(Err(ErrorEvent::Aborted.while_sending()));
         }
     }

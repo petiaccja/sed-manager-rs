@@ -22,8 +22,8 @@ pub trait Device: Send + Sync {
     fn security_recv(&self, security_protocol: u8, protocol_specific: [u8; 2], len: usize) -> Result<Vec<u8>, Error>;
 }
 
-impl std::fmt::Display for Interface {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for Interface {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Interface::ATA => write!(f, "ATA"),
             Interface::SATA => write!(f, "SATA"),

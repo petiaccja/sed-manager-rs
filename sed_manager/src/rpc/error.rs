@@ -121,8 +121,8 @@ impl Error {
     }
 }
 
-impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self.action {
             ErrorAction::Unspecified => write!(f, "{}", self.event),
             ErrorAction::Send => write!(f, "[sending] {}", self.event),
@@ -131,4 +131,4 @@ impl std::fmt::Display for Error {
     }
 }
 
-impl std::error::Error for Error {}
+impl core::error::Error for Error {}

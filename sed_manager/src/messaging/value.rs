@@ -63,7 +63,7 @@ impl Value {
 }
 
 impl PrettyPrint for Value {
-    fn fmt(&self, f: &mut super::fmt::PrettyFormatter) -> Result<(), std::fmt::Error> {
+    fn fmt(&self, f: &mut super::fmt::PrettyFormatter) -> Result<(), core::fmt::Error> {
         match self {
             Value::Empty => f.write_str("<>"),
             Value::Int8(n) => f.write_str(&format!("{n}_u8")),
@@ -83,7 +83,7 @@ impl PrettyPrint for Value {
 }
 
 impl PrettyPrint for Command {
-    fn fmt(&self, f: &mut super::fmt::PrettyFormatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut super::fmt::PrettyFormatter<'_>) -> core::fmt::Result {
         match self {
             Command::Call => f.write_str("CALL"),
             Command::EndOfData => f.write_str("EOD"),
@@ -96,7 +96,7 @@ impl PrettyPrint for Command {
 }
 
 impl PrettyPrint for Bytes {
-    fn fmt(&self, f: &mut super::fmt::PrettyFormatter<'_>) -> Result<(), std::fmt::Error> {
+    fn fmt(&self, f: &mut super::fmt::PrettyFormatter<'_>) -> Result<(), core::fmt::Error> {
         let item_sep = if f.is_indenting_enabled() { '\n' } else { ' ' };
         f.write_str("b[")?;
         f.write_char(item_sep)?;
@@ -114,7 +114,7 @@ impl PrettyPrint for Bytes {
 }
 
 impl PrettyPrint for List {
-    fn fmt(&self, f: &mut super::fmt::PrettyFormatter<'_>) -> Result<(), std::fmt::Error> {
+    fn fmt(&self, f: &mut super::fmt::PrettyFormatter<'_>) -> Result<(), core::fmt::Error> {
         let item_sep = if f.is_indenting_enabled() { '\n' } else { ' ' };
         f.write_str("v[")?;
         f.write_char(item_sep)?;
@@ -130,7 +130,7 @@ impl PrettyPrint for List {
 }
 
 impl PrettyPrint for Named {
-    fn fmt(&self, f: &mut super::fmt::PrettyFormatter<'_>) -> Result<(), std::fmt::Error> {
+    fn fmt(&self, f: &mut super::fmt::PrettyFormatter<'_>) -> Result<(), core::fmt::Error> {
         let item_sep = if f.is_indenting_enabled() { '\n' } else { ' ' };
         f.write_str("{")?;
         f.write_char(item_sep)?;

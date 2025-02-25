@@ -1,6 +1,5 @@
+use core::time::Duration;
 use std::collections::HashSet;
-use std::time::Duration;
-use std::usize;
 
 use tokio::sync::oneshot;
 

@@ -15,7 +15,7 @@ where
     }
 
     fn try_replace_with_value(&mut self, value: Value) -> Result<(), Value> {
-        let _ = std::mem::replace(self, Self::try_from(value)?);
+        let _ = core::mem::replace(self, Self::try_from(value)?);
         Ok(())
     }
 

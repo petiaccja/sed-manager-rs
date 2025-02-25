@@ -1,7 +1,8 @@
 use super::super::shared::string::FromNullTerminated;
 use crate::device;
 
-use std::{fmt::Display, ptr::null_mut};
+use core::fmt::Display;
+use core::ptr::null_mut;
 use winapi::{
     shared::{
         minwindef::DWORD,
@@ -23,10 +24,10 @@ pub enum Error {
     COM(HRESULT),
 }
 
-impl std::error::Error for Error {}
+impl core::error::Error for Error {}
 
 impl Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Error::Win32(code) => match format_win32_error(*code) {
                 Some(text) => write!(f, "{text}"),

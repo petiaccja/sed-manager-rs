@@ -7,8 +7,8 @@ use crate::device::windows::Error as WindowsError;
 use crate::device::Error as DeviceError;
 use crate::serialization::{Deserialize, InputStream};
 
+use core::mem::offset_of;
 use std::io::Seek;
-use std::mem::offset_of;
 use std::os::windows::raw::HANDLE;
 use std::sync::OnceLock;
 use winapi::um::winioctl::{IOCTL_STORAGE_QUERY_PROPERTY, STORAGE_PROPERTY_QUERY};

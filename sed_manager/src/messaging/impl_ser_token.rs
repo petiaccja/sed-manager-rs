@@ -40,7 +40,7 @@ macro_rules! impl_from_tokens_integer {
                         let unsigned_fill = 0u8;
                         let fill = if token.is_signed { twos_complement_fill } else { unsigned_fill };
                         let mut bytes = [fill; size_of::<$int_ty>()];
-                        for i in 0..std::cmp::min(bytes.len(), token.data.len()) {
+                        for i in 0..core::cmp::min(bytes.len(), token.data.len()) {
                             bytes[i] = token.data[token.data.len() - i - 1];
                         }
                         Ok(<$int_ty>::from_le_bytes(bytes))
@@ -354,7 +354,7 @@ mod tests {
             tag: Tag::ShortAtom,
             is_byte: false,
             is_signed: true,
-            data: vec![unsafe { std::mem::transmute::<i8, u8>(input) }],
+            data: vec![unsafe { core::mem::transmute::<i8, u8>(input) }],
         }];
         let mut is = InputStream::<Token>::from(tokens);
         match i64::deserialize(&mut is) {

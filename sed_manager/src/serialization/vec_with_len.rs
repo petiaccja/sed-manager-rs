@@ -9,7 +9,7 @@ use std::{io::Seek, marker::PhantomData, ops::Deref, ops::DerefMut};
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct VecWithLen<T, L: TryFrom<usize> + TryInto<usize>> {
     data: Vec<T>,
-    phantom_data: std::marker::PhantomData<L>,
+    phantom_data: core::marker::PhantomData<L>,
 }
 
 impl<T, L: TryFrom<usize> + TryInto<usize>> VecWithLen<T, L> {

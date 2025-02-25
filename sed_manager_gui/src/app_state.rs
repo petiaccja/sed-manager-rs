@@ -52,9 +52,9 @@ impl AppState {
 
     pub fn init_from_devices(&mut self) {
         let num_devices = self.device_list.as_ref().map(|dev| dev.devices.len()).unwrap_or(0);
-        let action_results = std::iter::repeat_with(|| ActionResult::success()).take(num_devices).collect::<Vec<_>>();
-        let discoveries = std::iter::repeat_with(|| None).take(num_devices).collect::<Vec<_>>();
-        let tpers = std::iter::repeat_with(|| None).take(num_devices).collect::<Vec<_>>();
+        let action_results = core::iter::repeat_with(|| ActionResult::success()).take(num_devices).collect::<Vec<_>>();
+        let discoveries = core::iter::repeat_with(|| None).take(num_devices).collect::<Vec<_>>();
+        let tpers = core::iter::repeat_with(|| None).take(num_devices).collect::<Vec<_>>();
         let unavailable_devices: Vec<_> = self
             .device_list
             .as_ref()

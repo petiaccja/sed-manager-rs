@@ -58,7 +58,7 @@ pub trait SecurityProvider {
             let mut rollback_idx = None;
             for (idx, NamedValue { name, value }) in nvps.iter_mut().enumerate() {
                 let old = object.get_column(*name as usize);
-                if object.try_set_column(*name as usize, std::mem::replace(value, old)).is_err() {
+                if object.try_set_column(*name as usize, core::mem::replace(value, old)).is_err() {
                     rollback_idx = Some(idx);
                     break;
                 }
@@ -83,7 +83,7 @@ pub trait SecurityProvider {
         };
         let next = (0..=count.unwrap_or(1))
             .into_iter()
-            .scan(from, |from, _| std::mem::replace(from, table.next_from(*from)))
+            .scan(from, |from, _| core::mem::replace(from, table.next_from(*from)))
             .skip(1);
         Ok(List(next.collect()))
     }

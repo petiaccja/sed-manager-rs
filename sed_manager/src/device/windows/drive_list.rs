@@ -1,5 +1,5 @@
 use core::ptr::null_mut;
-use std::{iter::from_fn, mem::zeroed, ops::Deref, os::raw::c_void};
+use core::{ffi::c_void, iter::from_fn, mem::zeroed, ops::Deref};
 use winapi::{
     shared::{
         guiddef::GUID,
@@ -103,7 +103,7 @@ fn exec_query(wbem_services: *mut IWbemServices, query: &str) -> Result<ComPtr<I
 
 fn map_enumerator(
     enumerator: *mut IEnumWbemClassObject,
-) -> std::iter::FromFn<impl FnMut() -> Option<ComPtr<IWbemClassObject>>> {
+) -> core::iter::FromFn<impl FnMut() -> Option<ComPtr<IWbemClassObject>>> {
     from_fn(move || -> Option<ComPtr<IWbemClassObject>> {
         let mut returned: u32 = 0;
         let mut ptr = ComPtr::<IWbemClassObject>::null();

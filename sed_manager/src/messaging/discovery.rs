@@ -1,7 +1,5 @@
-use std::{
-    ops::{Deref, DerefMut},
-    time::Duration,
-};
+use core::ops::{Deref, DerefMut};
+use core::time::Duration;
 
 use crate::serialization::{
     vec_with_len::VecWithLen, Deserialize, Error as SerializeError, InputStream, ItemRead, OutputStream, Serialize,
@@ -676,8 +674,8 @@ impl DataRemovalTime {
     }
 }
 
-impl std::fmt::Display for FeatureCode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for FeatureCode {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             FeatureCode::TPer => write!(f, "TPer"),
             FeatureCode::Locking => write!(f, "Locking"),

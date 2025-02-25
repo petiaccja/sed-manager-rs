@@ -1,5 +1,5 @@
 use super::{annotate_field, stream::SeekAlways, Deserialize, Error, InputStream, OutputStream, Serialize};
-use std::{ops::Deref, ops::DerefMut};
+use core::{ops::Deref, ops::DerefMut};
 
 /// A vector of `T` with special a serialization format.
 ///

@@ -7,8 +7,8 @@ mod device_list;
 mod ui;
 mod utility;
 
+use core::error::Error;
 use slint::ComponentHandle;
-use std::error::Error;
 use std::rc::Rc;
 
 use app_state::AppState;

@@ -1,7 +1,6 @@
+use core::time::Duration;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
-use std::usize;
 
 use crate::device::{Device, Error, Interface};
 use crate::messaging::com_id::HANDLE_COM_ID_PROTOCOL;

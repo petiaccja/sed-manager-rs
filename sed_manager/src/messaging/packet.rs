@@ -1,4 +1,4 @@
-use std::ops::Deref;
+use core::ops::Deref;
 
 use crate::serialization::{vec_with_len::VecWithLen, Deserialize, Serialize};
 

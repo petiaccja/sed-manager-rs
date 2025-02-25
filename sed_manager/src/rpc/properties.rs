@@ -1,4 +1,4 @@
-use std::{time::Duration, usize};
+use core::time::Duration;
 
 use crate::spec::basic_types::{List, NamedValue};
 use crate::spec::column_types::MaxBytes32;
@@ -104,25 +104,25 @@ impl Properties {
 
     pub fn common(lhs: &Properties, rhs: &Properties) -> Properties {
         Properties {
-            max_methods: std::cmp::min(lhs.max_methods, rhs.max_methods),
-            max_subpackets: std::cmp::min(lhs.max_subpackets, rhs.max_subpackets),
-            max_gross_packet_size: std::cmp::min(lhs.max_gross_packet_size, rhs.max_gross_packet_size),
-            max_packets: std::cmp::min(lhs.max_packets, rhs.max_packets),
-            max_gross_compacket_size: std::cmp::min(lhs.max_gross_compacket_size, rhs.max_gross_compacket_size),
-            max_gross_compacket_response_size: std::cmp::min(
+            max_methods: core::cmp::min(lhs.max_methods, rhs.max_methods),
+            max_subpackets: core::cmp::min(lhs.max_subpackets, rhs.max_subpackets),
+            max_gross_packet_size: core::cmp::min(lhs.max_gross_packet_size, rhs.max_gross_packet_size),
+            max_packets: core::cmp::min(lhs.max_packets, rhs.max_packets),
+            max_gross_compacket_size: core::cmp::min(lhs.max_gross_compacket_size, rhs.max_gross_compacket_size),
+            max_gross_compacket_response_size: core::cmp::min(
                 lhs.max_gross_compacket_response_size,
                 rhs.max_gross_compacket_response_size,
             ),
-            max_ind_token_size: std::cmp::min(lhs.max_ind_token_size, rhs.max_ind_token_size),
-            max_agg_token_size: std::cmp::min(lhs.max_agg_token_size, rhs.max_agg_token_size),
+            max_ind_token_size: core::cmp::min(lhs.max_ind_token_size, rhs.max_ind_token_size),
+            max_agg_token_size: core::cmp::min(lhs.max_agg_token_size, rhs.max_agg_token_size),
             continued_tokens: lhs.continued_tokens && rhs.continued_tokens,
             seq_numbers: lhs.seq_numbers && rhs.seq_numbers,
             ack_nak: lhs.ack_nak && rhs.ack_nak,
             asynchronous: lhs.asynchronous && rhs.asynchronous,
             buffer_mgmt: lhs.buffer_mgmt && rhs.buffer_mgmt,
-            max_retries: std::cmp::min(lhs.max_retries, rhs.max_retries),
-            trans_timeout: std::cmp::min(lhs.def_trans_timeout, rhs.def_trans_timeout), // Not a typo.
-            def_trans_timeout: std::cmp::min(lhs.def_trans_timeout, rhs.def_trans_timeout),
+            max_retries: core::cmp::min(lhs.max_retries, rhs.max_retries),
+            trans_timeout: core::cmp::min(lhs.def_trans_timeout, rhs.def_trans_timeout), // Not a typo.
+            def_trans_timeout: core::cmp::min(lhs.def_trans_timeout, rhs.def_trans_timeout),
         }
     }
 }

@@ -1,6 +1,6 @@
+use core::ops::Deref;
+use core::sync::atomic::AtomicU32;
 use std::collections::HashMap;
-use std::ops::Deref;
-use std::sync::atomic::AtomicU32;
 use std::sync::{Arc, Mutex};
 
 use crate::call_with_tuple::CallSelfWithTuple;

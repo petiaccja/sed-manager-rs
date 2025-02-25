@@ -1,5 +1,5 @@
+use core::ops::Range;
 use std::io::{Seek, SeekFrom};
-use std::ops::Range;
 
 use super::error::Error;
 use super::serialize::{Deserialize, Serialize};
@@ -54,7 +54,7 @@ pub fn serialize_field<T: Serialize<u8>>(
     stream: &mut OutputStream<u8>,
     struct_pos: u64,
     offset: Option<usize>,
-    bits: Option<std::ops::Range<usize>>,
+    bits: Option<core::ops::Range<usize>>,
     round: Option<usize>,
 ) -> Result<(), Error>
 where
@@ -92,7 +92,7 @@ pub fn deserialize_field<T: Deserialize<u8>>(
     stream: &mut InputStream<u8>,
     struct_pos: u64,
     offset: Option<usize>,
-    bits: Option<std::ops::Range<usize>>,
+    bits: Option<core::ops::Range<usize>>,
     round: Option<usize>,
 ) -> Result<T, Error>
 where

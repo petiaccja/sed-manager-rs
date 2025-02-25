@@ -1,4 +1,4 @@
-use std::array::from_fn;
+use core::array::from_fn;
 
 use crate::{
     messaging::value::{Named, Value},
@@ -150,7 +150,7 @@ pub fn expand_args<const N: usize>(args: Vec<Value>, optionals: &[bool; N]) -> R
 /// but there is not `std::index_sequence` in Rust, so I have no idea
 /// how to do it without this ugly mutability.
 pub fn to_concrete<T: TryFromValue>(values: &mut [Value], idx: &mut usize) -> Result<T, <T as TryFromValue>::Error> {
-    let value = std::mem::replace(&mut values[*idx], Value::empty());
+    let value = core::mem::replace(&mut values[*idx], Value::empty());
     *idx += 1;
     T::try_from_value(value)
 }

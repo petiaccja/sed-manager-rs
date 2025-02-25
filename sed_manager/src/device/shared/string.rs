@@ -58,7 +58,7 @@ where
         let current = unsafe { ptr.add(len) };
         let value = unsafe { current.read() };
         if i64::from(value) == 0 {
-            return unsafe { std::slice::from_raw_parts(ptr, len) };
+            return unsafe { core::slice::from_raw_parts(ptr, len) };
         }
         len += 1;
     }

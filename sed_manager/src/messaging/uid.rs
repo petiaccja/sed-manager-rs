@@ -272,8 +272,8 @@ impl<const TABLE: u64> From<ObjectUID<TABLE>> for UID {
     }
 }
 
-impl std::fmt::Debug for UID {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Debug for UID {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "UID::{:#010x}_{:08x}", self.table, self.object)
     }
 }

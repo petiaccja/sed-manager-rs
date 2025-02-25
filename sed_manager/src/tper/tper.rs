@@ -1,7 +1,7 @@
-use std::ops::{Deref, DerefMut};
-use std::sync::atomic::{AtomicU32, Ordering};
+use core::ops::{Deref, DerefMut};
+use core::sync::atomic::{AtomicU32, Ordering};
+use core::time::Duration;
 use std::sync::Arc;
-use std::time::Duration;
 use tokio::sync::Mutex;
 
 use crate::device::Device;

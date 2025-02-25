@@ -1,6 +1,6 @@
+use core::time::Duration;
 use std::sync::mpsc::TryRecvError;
 use std::sync::Arc;
-use std::time::Duration;
 
 use crate::device::Device;
 use crate::messaging::com_id::{
@@ -205,8 +205,8 @@ impl LocalMessageLoop {
 
     fn optimal_transfer_len(&self, min_transfer: u32, outstanding_data: u32) -> usize {
         let limit = self.properties.max_gross_compacket_response_size;
-        let desired = std::cmp::max(512, std::cmp::min(limit, outstanding_data as usize));
-        std::cmp::max(min_transfer as usize, desired)
+        let desired = core::cmp::max(512, core::cmp::min(limit, outstanding_data as usize));
+        core::cmp::max(min_transfer as usize, desired)
     }
 
     fn recv_com_id(&mut self) -> Result<HandleComIdResponse, Error> {

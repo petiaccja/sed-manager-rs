@@ -1,5 +1,7 @@
 use crate::device::windows::error::{check_hresult, Error};
-use std::{cell::OnceCell, ptr::null_mut, sync::OnceLock};
+use core::ptr::null_mut;
+use std::cell::OnceCell;
+use std::sync::OnceLock;
 
 use winapi::{
     shared::rpcdce::{RPC_C_AUTHN_LEVEL_DEFAULT, RPC_C_IMP_LEVEL_IMPERSONATE},

@@ -138,7 +138,7 @@ impl ComIDSession {
         let payload = if com_id == self.com_id && self.com_id_ext == com_id_ext {
             self.com_queue.clear();
             self.packet_queue.clear();
-            let _ = std::mem::replace(
+            let _ = core::mem::replace(
                 &mut self.packet_stack,
                 PacketStack::new(self.capabilities.clone(), self.controller.clone()),
             );

@@ -21,7 +21,7 @@ struct ArrayTrait {
 
 impl Struct {
     pub fn parse(ast: &syn::DeriveInput) -> Result<Self, syn::Error> {
-        use std::sync::atomic::{AtomicU32, Ordering::Relaxed};
+        use core::sync::atomic::{AtomicU32, Ordering::Relaxed};
 
         let syn::Data::Struct(data) = &ast.data else {
             return Err(syn::Error::new(ast.span(), "expected a struct"));
