@@ -70,17 +70,16 @@ impl LocalMessageLoop {
 
     pub fn run(mut self) {
         loop {
-            let (messages, connected) = self.recv_messages();
-            messages.into_iter().for_each(|message| self.enqueue_message(message));
             if let Some(request) = self.stack.poll_com_id() {
                 self.exchange_com_id(request);
             } else if let Some((com_packet, promise_groups)) = self.stack.poll_packet() {
                 self.exchange_packet(com_packet, promise_groups);
             } else {
-                if !connected {
+                let (messages, connected) = self.recv_messages();
+                messages.into_iter().for_each(|message| self.enqueue_message(message));
+                if !connected && !self.stack.has_pending() {
                     break;
                 }
-                std::thread::sleep(Duration::from_millis(100));
             }
             self.stack.forward_results();
             self.stack.remove_sessions();
@@ -89,6 +88,10 @@ impl LocalMessageLoop {
 
     fn recv_messages(&self) -> (Vec<Message>, bool) {
         let mut messages = Vec::new();
+        match self.messages.recv_timeout(Duration::from_millis(100)) {
+            Ok(message) => messages.push(message),
+            Err(_) => (),
+        }
         let connected = loop {
             match self.messages.try_recv() {
                 Ok(message) => messages.push(message),

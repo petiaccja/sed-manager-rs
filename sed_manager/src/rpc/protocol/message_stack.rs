@@ -140,6 +140,10 @@ impl MessageStack {
             let _ = promise.send(result);
         }
     }
+
+    pub fn has_pending(&self) -> bool {
+        self.sender_stack.has_pending() || self.receiver_stack.has_pending()
+    }
 }
 
 #[cfg(test)]

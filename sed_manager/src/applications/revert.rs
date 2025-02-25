@@ -17,11 +17,13 @@ pub async fn revert(tper: &TPer, authority: AuthorityRef, password: &[u8], sp: S
     let admin_sp = get_admin_sp(ssc.feature_code())?;
 
     let session = tper.start_session(admin_sp, Some(authority), Some(password)).await?;
-    with_session!(session => {
-        session.revert(sp).await
-    })?;
-
-    Ok(())
+    let result = session.revert(sp).await;
+    if sp == admin_sp {
+        session.abort_session();
+    } else {
+        let _ = session.end_session().await;
+    }
+    Ok(result?)
 }
 
 pub async fn verify_reverted(tper: &TPer) -> Result<bool, Error> {

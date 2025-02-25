@@ -96,6 +96,10 @@ impl ReceiverStack {
             None
         }
     }
+
+    pub fn has_pending(&self) -> bool {
+        self.packet_receivers.iter().any(|s| s.1.has_pending()) || !self.com_id_promises.is_empty()
+    }
 }
 
 impl Drop for ReceiverStack {

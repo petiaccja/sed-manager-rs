@@ -81,6 +81,10 @@ impl SenderStack {
     pub fn poll_com_id(&mut self) -> Option<Tracked<HandleComIdRequest, ComIdResponse>> {
         self.com_id_buffer.pop_front()
     }
+
+    pub fn has_pending(&self) -> bool {
+        self.packet_senders.iter().any(|s| s.1.has_pending())
+    }
 }
 
 impl Bundler {

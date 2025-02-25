@@ -76,6 +76,10 @@ impl SPSession {
         self.do_end_of_session().await
     }
 
+    pub fn abort_session(self) {
+        let _ = self.do_abort();
+    }
+
     pub async fn authenticate(&self, authority: AuthorityRef, proof: Option<&[u8]>) -> Result<bool, RPCError> {
         let call = MethodCall::new_success(THIS_SP, AUTHENTICATE.as_uid(), (authority, proof).encode_args());
         let results = self.do_method_call(call).await?.take_results()?;
