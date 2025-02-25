@@ -1,5 +1,5 @@
-use crate::applications::utility::{get_admin_sp, get_default_ssc};
-use crate::messaging::discovery::{Discovery, Feature};
+use crate::applications::utility::get_admin_sp;
+use crate::messaging::discovery::Discovery;
 use crate::spec;
 use crate::spec::column_types::Password;
 use crate::tper::TPer;
@@ -16,8 +16,8 @@ pub async fn take_ownership(tper: &TPer, new_password: &[u8]) -> Result<(), Erro
     use spec::opal::admin::c_pin;
 
     let discovery = tper.discover().await?;
-    let default_ssc = get_default_ssc(&discovery)?;
-    let admin_sp = get_admin_sp(default_ssc.feature_code())?;
+    let ssc = discovery.get_primary_ssc().ok_or(Error::NoAvailableSSC)?;
+    let admin_sp = get_admin_sp(ssc.feature_code())?;
 
     let anybody_session = tper.start_session(admin_sp, None, None).await?;
     let msid_password: Password = with_session!(session = anybody_session => {
@@ -34,8 +34,8 @@ pub async fn take_ownership(tper: &TPer, new_password: &[u8]) -> Result<(), Erro
 pub async fn verify_ownership(tper: &TPer, sid_password: &[u8]) -> Result<bool, Error> {
     use spec::core::authority;
     let discovery = tper.discover().await?;
-    let default_ssc = get_default_ssc(&discovery)?;
-    let admin_sp = get_admin_sp(default_ssc.feature_code())?;
+    let ssc = discovery.get_primary_ssc().ok_or(Error::NoAvailableSSC)?;
+    let admin_sp = get_admin_sp(ssc.feature_code())?;
     with_session!(session = tper.start_session(admin_sp, Some(authority::SID), Some(sid_password)).await? => {});
     Ok(true)
 }

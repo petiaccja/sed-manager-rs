@@ -1,4 +1,7 @@
-use std::time::Duration;
+use std::{
+    ops::{Deref, DerefMut},
+    time::Duration,
+};
 
 use crate::serialization::{
     vec_with_len::VecWithLen, Deserialize, Error as SerializeError, InputStream, ItemRead, OutputStream, Serialize,
@@ -33,17 +36,11 @@ pub enum OwnerPasswordState {
 }
 
 pub trait Feature {
-    const FEATURE_CODE: FeatureCode;
-    const VERSION: u8;
-    fn feature_code(&self) -> FeatureCode {
-        Self::FEATURE_CODE
-    }
-    fn version(&self) -> u8 {
-        Self::VERSION
-    }
+    fn feature_code(&self) -> FeatureCode;
+    fn version(&self) -> u8;
 }
 
-pub trait SecuritySubsystemClass {
+pub trait SecuritySubsystemClass: Feature {
     fn base_com_id(&self) -> u16;
     fn num_com_ids(&self) -> u16;
     fn base_com_id_p3(&self) -> Option<u16> {
@@ -346,28 +343,27 @@ pub struct DiscoveryHeader {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct Discovery {
-    pub descriptors: VecWithLen<FeatureDescriptor, DiscoveryHeader>,
+    feature_descriptors: VecWithLen<FeatureDescriptor, DiscoveryHeader>,
 }
 
 impl Discovery {
-    pub fn new(descs: Vec<FeatureDescriptor>) -> Discovery {
-        Discovery { descriptors: VecWithLen::from(descs) }
+    pub fn new(feature_descriptors: Vec<FeatureDescriptor>) -> Discovery {
+        Discovery { feature_descriptors: feature_descriptors.into() }
     }
 
     pub fn get<'me, T>(&'me self) -> Option<&'me T>
     where
         &'me T: TryFrom<&'me FeatureDescriptor>,
     {
-        self.descriptors
+        self.feature_descriptors
             .iter()
             .map(|desc| <&'me FeatureDescriptor as TryInto<&'me T>>::try_into(desc))
             .find_map(|result| result.ok())
     }
 
     pub fn remove_empty(self) -> Discovery {
-        let new_descriptors: Vec<_> = self
-            .descriptors
-            .into_vec()
+        let feature_descriptors: Vec<_> = self
+            .feature_descriptors
             .into_iter()
             .filter(|desc| {
                 desc != &FeatureDescriptor::Unrecognized(UnrecognizedDescriptor {
@@ -377,15 +373,52 @@ impl Discovery {
                 })
             })
             .collect();
-        Self { descriptors: new_descriptors.into() }
+        Self { feature_descriptors: feature_descriptors.into() }
+    }
+
+    pub fn get_common_features(&self) -> impl Iterator<Item = &FeatureDescriptor> {
+        self.feature_descriptors.iter().filter(|desc| desc.security_subsystem_class().is_none())
+    }
+
+    pub fn get_ssc_features(&self) -> impl Iterator<Item = &dyn SecuritySubsystemClass> {
+        self.feature_descriptors.iter().filter_map(|desc| desc.security_subsystem_class())
+    }
+
+    pub fn get_primary_ssc(&self) -> Option<&dyn SecuritySubsystemClass> {
+        self.get_ssc_features().next()
+    }
+}
+
+impl IntoIterator for Discovery {
+    type Item = <VecWithLen<FeatureDescriptor, DiscoveryHeader> as IntoIterator>::Item;
+    type IntoIter = <VecWithLen<FeatureDescriptor, DiscoveryHeader> as IntoIterator>::IntoIter;
+    fn into_iter(self) -> Self::IntoIter {
+        self.feature_descriptors.into_iter()
+    }
+}
+
+impl Deref for Discovery {
+    type Target = Vec<FeatureDescriptor>;
+    fn deref(&self) -> &Self::Target {
+        self.feature_descriptors.deref()
+    }
+}
+
+impl DerefMut for Discovery {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.feature_descriptors.deref_mut()
     }
 }
 
 macro_rules! impl_feature {
     ($desc:path, $feature_code:expr, $version:expr) => {
         impl Feature for $desc {
-            const FEATURE_CODE: FeatureCode = $feature_code;
-            const VERSION: u8 = $version;
+            fn feature_code(&self) -> FeatureCode {
+                $feature_code
+            }
+            fn version(&self) -> u8 {
+                $version
+            }
         }
     };
 }
@@ -442,8 +475,6 @@ impl SecuritySubsystemClass for KeyPerIODescriptor {
 }
 
 impl Feature for FeatureDescriptor {
-    const FEATURE_CODE: FeatureCode = FeatureCode::Unrecognized;
-    const VERSION: u8 = 1;
     fn feature_code(&self) -> FeatureCode {
         match self {
             FeatureDescriptor::TPer(desc) => desc.feature_code(),

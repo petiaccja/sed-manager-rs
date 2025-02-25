@@ -1,9 +1,9 @@
 use std::{rc::Rc, sync::Arc};
 
 use sed_manager::{
-    applications::{self, get_admin_sp, get_default_ssc, get_locking_sp},
+    applications::{self, get_admin_sp, get_locking_sp},
     device::{Device, Error as DeviceError},
-    messaging::discovery::{Discovery, Feature as _},
+    messaging::discovery::Discovery,
     rpc::Error as RPCError,
     spec,
     tper::{discover, TPer},
@@ -112,8 +112,7 @@ impl AppState {
         }
         let device = self.device_list.as_ref().ok().and_then(|x| x.devices.get(device_idx))?;
         let discovery = self.discoveries.get(device_idx).and_then(|x| x.as_ref())?;
-        let default_ssc = get_default_ssc(discovery).ok()?;
-        let ssc = default_ssc.security_subsystem_class()?;
+        let ssc = discovery.get_primary_ssc()?;
         let tper = Arc::new(TPer::new(device.arc(), ssc.base_com_id(), 0));
         *tper_ref = Some(tper.clone());
         Some(tper)
@@ -314,7 +313,7 @@ pub async fn revert(
         .with(|app_state| {
             app_state.discoveries.get(device_idx).map(|discovery| {
                 let discovery = discovery.as_ref()?;
-                let ssc = get_default_ssc(discovery).ok()?;
+                let ssc = discovery.get_primary_ssc()?;
                 let admin_sp = get_admin_sp(ssc.feature_code()).ok()?;
                 let locking_sp = get_locking_sp(ssc.feature_code()).ok()?;
                 Some((admin_sp, locking_sp))

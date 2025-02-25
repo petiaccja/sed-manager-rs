@@ -1,4 +1,4 @@
-use sed_manager::messaging::discovery::{Discovery, Feature as _, FeatureCode};
+use sed_manager::messaging::discovery::{Discovery, FeatureCode};
 use slint::{SharedString, ToSharedString as _, VecModel};
 use std::rc::Rc;
 
@@ -43,24 +43,14 @@ impl DeviceDiscovery {
     }
 
     pub fn from_discovery(discovery: &Discovery) -> Self {
-        let common_features: Vec<_> = discovery
-            .descriptors
-            .iter()
-            .filter(|desc| desc.security_subsystem_class().is_none())
-            .map(|desc| DeviceDiscoveryFeature::from(desc))
-            .collect();
+        let common_features: Vec<_> =
+            discovery.get_common_features().map(|desc| DeviceDiscoveryFeature::from(desc)).collect();
         let ssc_features: Vec<_> = discovery
-            .descriptors
             .iter()
             .filter(|desc| desc.security_subsystem_class().is_some())
             .map(|desc| DeviceDiscoveryFeature::from(desc))
             .collect();
-        let ssc: Vec<_> = discovery
-            .descriptors
-            .iter()
-            .filter(|desc| desc.security_subsystem_class().is_some())
-            .map(|desc| desc.feature_code())
-            .collect();
+        let ssc: Vec<_> = discovery.get_ssc_features().map(|desc| desc.feature_code()).collect();
         let sp = ssc.first().map(|ssc| get_security_providers(&ssc)).unwrap_or(vec![]);
 
         let sp = sp.into_iter().map(|x| x.into()).collect::<Vec<_>>();

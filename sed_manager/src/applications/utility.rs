@@ -1,17 +1,9 @@
-use crate::messaging::discovery::{Discovery, FeatureCode, FeatureDescriptor};
+use crate::messaging::discovery::FeatureCode;
 use crate::messaging::uid_range::ObjectUIDRange;
 use crate::spec;
 use crate::spec::column_types::{AuthorityRefRange, CPINRefRange, SPRef};
 
 use super::error::Error;
-
-pub fn get_default_ssc(discovery: &Discovery) -> Result<&FeatureDescriptor, Error> {
-    discovery
-        .descriptors
-        .iter()
-        .find(|desc| desc.security_subsystem_class().is_some())
-        .ok_or(Error::NoAvailableSSC)
-}
 
 pub fn get_admin_sp(ssc: FeatureCode) -> Result<SPRef, Error> {
     match ssc {

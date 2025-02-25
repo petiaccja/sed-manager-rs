@@ -36,12 +36,8 @@ pub fn discover(device: &dyn Device) -> Result<Discovery, RPCError> {
     Discovery::from_bytes(data).map_err(|err| err.while_receiving()).map(|d| d.remove_empty())
 }
 
-pub fn default_com_id(discovery: &Discovery) -> Option<(u16, u16)> {
-    discovery
-        .descriptors
-        .iter()
-        .find_map(|desc| desc.security_subsystem_class())
-        .map(|ssc| (ssc.base_com_id(), 0))
+pub fn get_primary_ssc_com_id(discovery: &Discovery) -> Option<(u16, u16)> {
+    discovery.get_primary_ssc().map(|ssc| (ssc.base_com_id(), 0))
 }
 
 impl TPer {
@@ -64,7 +60,7 @@ impl TPer {
 
     pub fn new_on_default_com_id(device: Arc<dyn Device>) -> Result<Self, RPCError> {
         let discovery = discover(&*device)?;
-        if let Some((com_id, com_id_ext)) = default_com_id(&discovery) {
+        if let Some((com_id, com_id_ext)) = get_primary_ssc_com_id(&discovery) {
             Ok(Self::new(device, com_id, com_id_ext))
         } else {
             Err(RPCErrorEvent::NotSupported.as_error())

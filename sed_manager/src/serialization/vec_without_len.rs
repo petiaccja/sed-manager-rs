@@ -86,6 +86,14 @@ where
     }
 }
 
+impl<T> IntoIterator for VecWithoutLen<T> {
+    type Item = <Vec<T> as IntoIterator>::Item;
+    type IntoIter = <Vec<T> as IntoIterator>::IntoIter;
+    fn into_iter(self) -> Self::IntoIter {
+        self.data.into_iter()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

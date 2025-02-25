@@ -1,5 +1,5 @@
-use crate::applications::utility::{get_admin_sp, get_default_ssc};
-use crate::messaging::discovery::{Discovery, Feature};
+use crate::applications::utility::get_admin_sp;
+use crate::messaging::discovery::Discovery;
 use crate::spec;
 use crate::spec::column_types::{AuthorityRef, Password, SPRef};
 use crate::tper::TPer;
@@ -13,8 +13,8 @@ pub async fn is_revert_supported(_discovery: &Discovery) -> bool {
 
 pub async fn revert(tper: &TPer, authority: AuthorityRef, password: &[u8], sp: SPRef) -> Result<(), Error> {
     let discovery = tper.discover().await?;
-    let default_ssc = get_default_ssc(&discovery)?;
-    let admin_sp = get_admin_sp(default_ssc.feature_code())?;
+    let ssc = discovery.get_primary_ssc().ok_or(Error::NoAvailableSSC)?;
+    let admin_sp = get_admin_sp(ssc.feature_code())?;
 
     let session = tper.start_session(admin_sp, Some(authority), Some(password)).await?;
     with_session!(session => {
@@ -29,8 +29,8 @@ pub async fn verify_reverted(tper: &TPer) -> Result<bool, Error> {
     use spec::opal::admin::c_pin;
 
     let discovery = tper.discover().await?;
-    let default_ssc = get_default_ssc(&discovery)?;
-    let admin_sp = get_admin_sp(default_ssc.feature_code())?;
+    let ssc = discovery.get_primary_ssc().ok_or(Error::NoAvailableSSC)?;
+    let admin_sp = get_admin_sp(ssc.feature_code())?;
 
     let anybody_session = tper.start_session(admin_sp, None, None).await?;
     let msid_password: Password = with_session!(session = anybody_session => {
