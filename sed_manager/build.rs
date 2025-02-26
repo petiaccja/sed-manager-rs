@@ -248,7 +248,7 @@ impl Table {
     fn generate_data(&self) -> TokenStream2 {
         let (this_uid, this_uid_range) = match self.kind() {
             TableKind::Regular => {
-                (quote! { ObjectUID<{THIS_TABLE.as_u64()}> }, quote! { ObjectUIDRange<{THIS_TABLE.as_u64()}> })
+                (quote! { ObjectUID<{THIS_TABLE.mask()}> }, quote! { ObjectUIDRange<{THIS_TABLE.mask()}> })
             }
             TableKind::TableID => (quote! { TableUID }, quote! { UIDRange }),
             _ => (quote! { UID }, quote! { UIDRange }),
@@ -268,6 +268,8 @@ impl Table {
             use root::ObjectUIDRange;
             #[allow(unused)]
             use root::lookup::NameRange;
+            #[allow(unused)]
+            use root::table_mask;
 
             type ThisUID = #this_uid;
             type ThisUIDRange = #this_uid_range;

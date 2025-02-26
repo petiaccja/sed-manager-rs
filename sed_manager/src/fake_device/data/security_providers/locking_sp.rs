@@ -5,7 +5,7 @@ use crate::fake_device::data::table::BasicTable;
 use crate::messaging::uid::TableUID;
 use crate::messaging::value::Bytes;
 use crate::rpc::MethodStatus;
-use crate::spec::column_types::{AuthMethod, AuthorityRef, BoolOrBytes};
+use crate::spec::column_types::{AuthMethod, AuthorityRef, BoolOrBytes, CredentialRef};
 use crate::spec::opal::locking::*;
 
 use super::basic_sp::BasicSP;
@@ -79,7 +79,7 @@ fn preconfig_authority() -> AuthorityTable {
             name: Some(format!("Admin{}", i).into()),
             enabled: false.into(),
             operation: AuthMethod::Password.into(),
-            credential: Some(c_pin::ADMIN.nth(i).unwrap()),
+            credential: Some(CredentialRef::new_other(c_pin::ADMIN.nth(i).unwrap())),
             ..Authority::new(authority::ADMIN.nth(i).unwrap())
         };
         authorities.insert(admin.uid, admin);
@@ -89,7 +89,7 @@ fn preconfig_authority() -> AuthorityTable {
             name: Some(format!("User{}", i).into()),
             enabled: false.into(),
             operation: AuthMethod::Password.into(),
-            credential: Some(c_pin::USER.nth(i).unwrap()),
+            credential: Some(CredentialRef::new_other(c_pin::USER.nth(i).unwrap())),
             ..Authority::new(authority::USER.nth(i).unwrap())
         };
         authorities.insert(admin.uid, admin);

@@ -9,6 +9,7 @@
 // crate::* imports are PROHIBITED in the generated code. This method creates
 // a protective layer so the rest of the library can be refactored without
 // introducing any modifications to the code generator.
+use crate::messaging::table_mask::table_mask;
 use crate::messaging::uid::ObjectUID;
 use crate::messaging::uid::TableUID;
 use crate::messaging::uid::UID;

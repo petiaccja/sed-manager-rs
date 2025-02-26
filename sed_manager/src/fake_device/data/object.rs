@@ -1,7 +1,7 @@
 use crate::messaging::uid::UID;
 use crate::messaging::value::Value;
 
-pub trait Object {
+pub trait GenericObject {
     fn uid(&self) -> UID;
     fn len(&self) -> usize;
     fn is_column_empty(&self, column: usize) -> bool;

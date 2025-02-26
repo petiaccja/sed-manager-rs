@@ -7,7 +7,7 @@ use crate::messaging::uid::TableUID;
 use crate::messaging::value::Bytes;
 use crate::rpc::MethodStatus;
 use crate::spec;
-use crate::spec::column_types::{AuthMethod, AuthorityRef, BoolOrBytes, LifeCycleState};
+use crate::spec::column_types::{AuthMethod, AuthorityRef, BoolOrBytes, CredentialRef, LifeCycleState};
 use crate::spec::opal::admin::*;
 
 use super::basic_sp::BasicSP;
@@ -99,14 +99,14 @@ fn preconfig_authorities() -> AuthorityTable {
         name: Some("SID".into()),
         enabled: true.into(),
         operation: AuthMethod::Password.into(),
-        credential: Some(c_pin::SID.into()),
+        credential: Some(CredentialRef::new_other(c_pin::SID)),
         ..Authority::new(authority::SID)
     };
     let psid = Authority {
         name: Some("PSID".into()),
         enabled: true.into(),
         operation: AuthMethod::Password.into(),
-        credential: Some(spec::psid::admin::c_pin::PSID.into()),
+        credential: Some(CredentialRef::new_other(spec::psid::admin::c_pin::PSID)),
         ..Authority::new(spec::psid::admin::authority::PSID)
     };
 
@@ -121,7 +121,7 @@ fn preconfig_authorities() -> AuthorityTable {
             name: Some(format!("Admin{}", i).into()),
             enabled: false.into(),
             operation: AuthMethod::Password.into(),
-            credential: Some(c_pin::ADMIN.nth(i).unwrap()),
+            credential: Some(CredentialRef::new_other(c_pin::ADMIN.nth(i).unwrap())),
             ..Authority::new(authority::ADMIN.nth(i).unwrap())
         };
         authorities.insert(admin.uid, admin);

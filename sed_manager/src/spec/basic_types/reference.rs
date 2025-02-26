@@ -5,9 +5,9 @@ use sed_manager_macros::AliasType;
 pub struct RowReference(pub u64);
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd, Ord, Default)]
-pub struct RestrictedRowReference<const TABLE: u64>(pub u64);
+pub struct RestrictedRowReference<const TABLE_MASK: u64>(pub u64);
 
-pub type RestrictedObjectReference<const TABLE: u64> = ObjectUID<TABLE>;
+pub type RestrictedObjectReference<const TABLE_MASK: u64> = ObjectUID<TABLE_MASK>;
 
 #[derive(AliasType, PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd, Ord, Default)]
 pub struct ObjectReference(pub UID);

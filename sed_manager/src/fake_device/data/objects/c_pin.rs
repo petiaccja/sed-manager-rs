@@ -6,7 +6,7 @@ use crate::spec::basic_types::ByteTableReference;
 use crate::spec::column_types::{CPINRef, Name, Password};
 
 use super::super::field::Field;
-use super::super::object::Object;
+use super::super::object::GenericObject;
 
 #[derive(AsArray)]
 #[as_array_traits(Field)]
@@ -36,7 +36,7 @@ impl CPIN {
     }
 }
 
-impl Object for CPIN {
+impl GenericObject for CPIN {
     fn uid(&self) -> UID {
         self.uid.into()
     }

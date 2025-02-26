@@ -8,7 +8,7 @@ pub struct UIDRange {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct ObjectUIDRange<const TABLE: u64>(UIDRange);
+pub struct ObjectUIDRange<const TABLE_MASK: u64>(UIDRange);
 
 impl UIDRange {
     pub const fn new_range(start: UID, end: UID, step: u64) -> Self {
@@ -42,28 +42,28 @@ impl UIDRange {
     }
 }
 
-impl<const TABLE: u64> ObjectUIDRange<TABLE> {
-    pub const fn new_range(start: ObjectUID<TABLE>, end: ObjectUID<TABLE>, step: u64) -> Self {
+impl<const TABLE_MASK: u64> ObjectUIDRange<TABLE_MASK> {
+    pub const fn new_range(start: ObjectUID<TABLE_MASK>, end: ObjectUID<TABLE_MASK>, step: u64) -> Self {
         Self(UIDRange::new_range(start.as_uid(), end.as_uid(), step))
     }
 
-    pub const fn new_count(start: ObjectUID<TABLE>, count: u64, step: u64) -> Self {
+    pub const fn new_count(start: ObjectUID<TABLE_MASK>, count: u64, step: u64) -> Self {
         Self(UIDRange::new_count(start.as_uid(), count, step))
     }
 
-    pub const fn nth(&self, offset: u64) -> Option<ObjectUID<TABLE>> {
+    pub const fn nth(&self, offset: u64) -> Option<ObjectUID<TABLE_MASK>> {
         if let Some(uid) = self.0.nth(offset) {
-            Some(ObjectUID::<TABLE>::new(uid.as_u64()))
+            Some(ObjectUID::<TABLE_MASK>::new(uid.as_u64()))
         } else {
             None
         }
     }
 
-    pub const fn contains(&self, uid: ObjectUID<TABLE>) -> bool {
+    pub const fn contains(&self, uid: ObjectUID<TABLE_MASK>) -> bool {
         self.0.contains(uid.as_uid())
     }
 
-    pub const fn index_of(&self, uid: ObjectUID<TABLE>) -> Option<u64> {
+    pub const fn index_of(&self, uid: ObjectUID<TABLE_MASK>) -> Option<u64> {
         self.0.index_of(uid.as_uid())
     }
 
@@ -78,16 +78,18 @@ impl From<UID> for UIDRange {
     }
 }
 
-impl<const TABLE: u64> From<ObjectUID<TABLE>> for ObjectUIDRange<TABLE> {
-    fn from(value: ObjectUID<TABLE>) -> Self {
+impl<const TABLE_MASK: u64> From<ObjectUID<TABLE_MASK>> for ObjectUIDRange<TABLE_MASK> {
+    fn from(value: ObjectUID<TABLE_MASK>) -> Self {
         Self::new_count(value, 1, 1)
     }
 }
 
-impl<const TABLE: u64> TryFrom<UIDRange> for ObjectUIDRange<TABLE> {
+impl<const TABLE_MASK: u64> TryFrom<UIDRange> for ObjectUIDRange<TABLE_MASK> {
     type Error = UIDRange;
     fn try_from(value: UIDRange) -> Result<Self, Self::Error> {
-        if let (Ok(_), Ok(_)) = (ObjectUID::<TABLE>::try_from(value.start), ObjectUID::<TABLE>::try_from(value.end)) {
+        if let (Ok(_), Ok(_)) =
+            (ObjectUID::<TABLE_MASK>::try_from(value.start), ObjectUID::<TABLE_MASK>::try_from(value.end))
+        {
             Ok(Self(value))
         } else {
             Err(value)

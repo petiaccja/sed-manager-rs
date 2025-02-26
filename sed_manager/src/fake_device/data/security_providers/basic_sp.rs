@@ -6,8 +6,7 @@ use crate::fake_device::data::objects::{AuthorityTable, CPINTable};
 use crate::fake_device::data::table::BasicTable;
 use crate::messaging::value::Bytes;
 use crate::rpc::MethodStatus;
-use crate::spec::column_types::{AuthorityRef, BoolOrBytes, Password};
-use crate::spec::table_id;
+use crate::spec::column_types::{AuthorityRef, BoolOrBytes, CPINRef, Password};
 
 // Admin SP tables:
 // --- Basic ---
@@ -40,8 +39,8 @@ impl BasicSP {
         let Some(credential_id) = authority.credential else {
             return Ok(BoolOrBytes::Bool(true));
         };
-        if credential_id.containing_table() == table_id::C_PIN {
-            if let Some(credential) = self.c_pin.get(&credential_id) {
+        if let Ok(c_pin_id) = CPINRef::try_new_other(credential_id) {
+            if let Some(credential) = self.c_pin.get(&c_pin_id) {
                 let empty_provided_password = vec![];
                 let empty_authority_password = Password::default();
                 let provided_password = proof.as_ref().unwrap_or(&empty_provided_password);

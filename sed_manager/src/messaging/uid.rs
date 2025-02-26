@@ -10,7 +10,7 @@ pub struct UID {
 pub struct TableUID(UID);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct ObjectUID<const TABLE: u64>(UID);
+pub struct ObjectUID<const TABLE_MASK: u64>(UID);
 
 impl UID {
     pub const fn null() -> Self {
@@ -97,17 +97,26 @@ impl TableUID {
         self.0
     }
 
+    pub const fn mask(&self) -> u64 {
+        super::table_mask::table_mask(*self)
+    }
+
+    pub const fn is_contained_in_mask(&self, mask: u64) -> bool {
+        super::table_mask::is_table_in_mask(*self, mask)
+    }
+
     pub const fn to_descriptor(&self) -> ObjectUID<1> {
         ObjectUID(self.0.to_descriptor().unwrap())
     }
 }
 
-impl<const TABLE: u64> ObjectUID<TABLE> {
+impl<const TABLE_MASK: u64> ObjectUID<TABLE_MASK> {
     const fn is_value_accepted(value: u64) -> bool {
-        let table_uid = UID::new(TABLE);
         let value_uid = UID::new(value);
-        assert!(table_uid.is_table());
-        table_uid.table == value_uid.table && value_uid.is_object()
+        match value_uid.containing_table() {
+            Some(table) => TableUID::new(table.as_u64()).is_contained_in_mask(TABLE_MASK),
+            None => false,
+        }
     }
 
     pub const fn new(value: u64) -> Self {
@@ -120,6 +129,19 @@ impl<const TABLE: u64> ObjectUID<TABLE> {
             Ok(Self(UID::new(value)))
         } else {
             Err(value)
+        }
+    }
+
+    pub const fn new_other<const OTHER_TABLE_MASK: u64>(other: ObjectUID<OTHER_TABLE_MASK>) -> Self {
+        Self::new(other.as_u64())
+    }
+
+    pub const fn try_new_other<const OTHER_TABLE_MASK: u64>(
+        other: ObjectUID<OTHER_TABLE_MASK>,
+    ) -> Result<Self, ObjectUID<OTHER_TABLE_MASK>> {
+        match Self::try_new(other.as_u64()) {
+            Ok(value) => Ok(value),
+            Err(_) => Err(other),
         }
     }
 
@@ -144,7 +166,7 @@ impl<const TABLE: u64> ObjectUID<TABLE> {
     }
 
     pub const fn containing_table(&self) -> TableUID {
-        TableUID::new(TABLE)
+        TableUID::new(self.0.containing_table().unwrap().as_u64())
     }
 }
 
@@ -227,13 +249,13 @@ impl From<TableUID> for UID {
     }
 }
 
-impl<const TABLE: u64> From<ObjectUID<TABLE>> for Value {
-    fn from(value: ObjectUID<TABLE>) -> Self {
+impl<const TABLE_MASK: u64> From<ObjectUID<TABLE_MASK>> for Value {
+    fn from(value: ObjectUID<TABLE_MASK>) -> Self {
         Value::from(value.as_uid())
     }
 }
 
-impl<const TABLE: u64> TryFrom<Value> for ObjectUID<TABLE> {
+impl<const TABLE_MASK: u64> TryFrom<Value> for ObjectUID<TABLE_MASK> {
     type Error = Value;
     fn try_from(value: Value) -> Result<Self, Self::Error> {
         match <&[u8; 8]>::try_from(&value) {
@@ -246,28 +268,28 @@ impl<const TABLE: u64> TryFrom<Value> for ObjectUID<TABLE> {
     }
 }
 
-impl<const TABLE: u64> TryFrom<u64> for ObjectUID<TABLE> {
+impl<const TABLE_MASK: u64> TryFrom<u64> for ObjectUID<TABLE_MASK> {
     type Error = u64;
     fn try_from(value: u64) -> Result<Self, Self::Error> {
         Self::try_new(value)
     }
 }
 
-impl<const TABLE: u64> From<ObjectUID<TABLE>> for u64 {
-    fn from(value: ObjectUID<TABLE>) -> Self {
+impl<const TABLE_MASK: u64> From<ObjectUID<TABLE_MASK>> for u64 {
+    fn from(value: ObjectUID<TABLE_MASK>) -> Self {
         value.as_u64()
     }
 }
 
-impl<const TABLE: u64> TryFrom<UID> for ObjectUID<TABLE> {
+impl<const TABLE_MASK: u64> TryFrom<UID> for ObjectUID<TABLE_MASK> {
     type Error = UID;
     fn try_from(value: UID) -> Result<Self, Self::Error> {
         Self::try_new(value.as_u64()).map_err(|_| value)
     }
 }
 
-impl<const TABLE: u64> From<ObjectUID<TABLE>> for UID {
-    fn from(value: ObjectUID<TABLE>) -> Self {
+impl<const TABLE_MASK: u64> From<ObjectUID<TABLE_MASK>> for UID {
+    fn from(value: ObjectUID<TABLE_MASK>) -> Self {
         value.0
     }
 }
@@ -280,8 +302,8 @@ impl core::fmt::Debug for UID {
 
 #[cfg(test)]
 mod tests {
-
     use super::*;
+
     const TABLE: UID = UID::new(0x0000_0001_0000_0000);
     const DESCRIPTOR: UID = UID::new(0x0000_0001_0000_0001);
     const OBJECT: UID = UID::new(0x0000_0009_0000_0001);
@@ -345,7 +367,7 @@ mod tests {
 
     #[test]
     fn object_uid_try_new() {
-        type SomeTableUID = ObjectUID<{ SOME_TABLE.as_u64() }>;
+        type SomeTableUID = ObjectUID<{ TableUID::new(SOME_TABLE.as_u64()).mask() }>;
         assert_eq!(SomeTableUID::try_from(TABLE), Err(TABLE));
         assert_eq!(SomeTableUID::try_from(DESCRIPTOR), Err(DESCRIPTOR));
         assert_eq!(SomeTableUID::try_from(OBJECT), Ok(SomeTableUID::new(OBJECT.as_u64())));

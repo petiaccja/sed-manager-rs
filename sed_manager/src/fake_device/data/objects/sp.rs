@@ -5,7 +5,7 @@ use crate::messaging::value::Value;
 use crate::spec::column_types::{AuthorityRef, Date, LifeCycleState, MaxBytes32, Name, SPRef};
 
 use super::super::field::Field;
-use super::super::object::Object;
+use super::super::object::GenericObject;
 
 #[derive(AsArray)]
 #[as_array_traits(Field)]
@@ -35,7 +35,7 @@ impl SP {
     }
 }
 
-impl Object for SP {
+impl GenericObject for SP {
     fn uid(&self) -> UID {
         self.uid.into()
     }

@@ -4,6 +4,7 @@ pub mod fmt;
 mod impl_ser_bin;
 mod impl_ser_token;
 pub mod packet;
+pub mod table_mask;
 pub mod token;
 pub mod uid;
 pub mod uid_range;

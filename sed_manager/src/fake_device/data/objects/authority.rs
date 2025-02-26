@@ -7,7 +7,7 @@ use crate::spec::column_types::{
 };
 
 use super::super::field::Field;
-use super::super::object::Object;
+use super::super::object::GenericObject;
 
 #[derive(AsArray)]
 #[as_array_traits(Field)]
@@ -59,7 +59,7 @@ impl Authority {
     }
 }
 
-impl Object for Authority {
+impl GenericObject for Authority {
     fn uid(&self) -> UID {
         self.uid.into()
     }

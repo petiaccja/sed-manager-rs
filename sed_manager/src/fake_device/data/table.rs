@@ -1,66 +1,85 @@
 use core::ops::{Deref, DerefMut};
 use std::collections::BTreeMap;
 
-use crate::messaging::uid::{ObjectUID, TableUID, UID};
+use crate::messaging::uid::{TableUID, UID};
 
-use super::object::Object;
+use super::object::GenericObject;
 
 pub trait BasicTable {
     fn uid(&self) -> TableUID;
-    fn get_object(&self, uid: UID) -> Option<&dyn Object>;
-    fn get_object_mut(&mut self, uid: UID) -> Option<&mut dyn Object>;
+    fn get_object(&self, uid: UID) -> Option<&dyn GenericObject>;
+    fn get_object_mut(&mut self, uid: UID) -> Option<&mut dyn GenericObject>;
     fn next_from(&self, uid: Option<UID>) -> Option<UID>;
 }
 
-pub struct Table<T: Object, const TABLE_UID: u64>(BTreeMap<ObjectUID<TABLE_UID>, T>);
+pub struct Table<Object, ObjectRef, const THIS_TABLE: u64>(BTreeMap<ObjectRef, Object>)
+where
+    Object: GenericObject,
+    ObjectRef: TryFrom<UID> + Into<UID> + Copy;
 
-impl<T: Object, const TABLE_UID: u64> Table<T, TABLE_UID> {
+impl<Object, ObjectRef, const THIS_TABLE: u64> Table<Object, ObjectRef, THIS_TABLE>
+where
+    Object: GenericObject,
+    ObjectRef: TryFrom<UID> + Into<UID> + Ord + Copy,
+{
     pub fn new() -> Self {
         Self(BTreeMap::new())
     }
 }
 
-impl<T: Object, const TABLE_UID: u64> Deref for Table<T, TABLE_UID> {
-    type Target = BTreeMap<ObjectUID<TABLE_UID>, T>;
+impl<Object, ObjectRef, const THIS_TABLE: u64> Deref for Table<Object, ObjectRef, THIS_TABLE>
+where
+    Object: GenericObject,
+    ObjectRef: TryFrom<UID> + Into<UID> + Ord + Copy,
+{
+    type Target = BTreeMap<ObjectRef, Object>;
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl<T: Object, const TABLE_UID: u64> DerefMut for Table<T, TABLE_UID> {
+impl<Object, ObjectRef, const THIS_TABLE: u64> DerefMut for Table<Object, ObjectRef, THIS_TABLE>
+where
+    Object: GenericObject,
+    ObjectRef: TryFrom<UID> + Into<UID> + Ord + Copy,
+{
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
 }
 
-impl<T: Object, const TABLE_UID: u64> BasicTable for Table<T, TABLE_UID> {
+impl<Object, ObjectRef, const THIS_TABLE: u64> BasicTable for Table<Object, ObjectRef, THIS_TABLE>
+where
+    Object: GenericObject,
+    ObjectRef: TryFrom<UID> + Into<UID> + Ord + Copy,
+{
     fn uid(&self) -> TableUID {
-        TableUID::new(TABLE_UID)
+        TableUID::new(THIS_TABLE)
     }
 
-    fn get_object(&self, uid: UID) -> Option<&dyn Object> {
+    fn get_object(&self, uid: UID) -> Option<&dyn GenericObject> {
         if let Ok(uid) = uid.try_into() {
-            self.0.get(&uid).map(|object| object as &dyn Object)
+            self.0.get(&uid).map(|object| object as &dyn GenericObject)
         } else {
             None
         }
     }
 
-    fn get_object_mut(&mut self, uid: UID) -> Option<&mut dyn Object> {
+    fn get_object_mut(&mut self, uid: UID) -> Option<&mut dyn GenericObject> {
         if let Ok(uid) = uid.try_into() {
-            self.0.get_mut(&uid).map(|object| object as &mut dyn Object)
+            self.0.get_mut(&uid).map(|object| object as &mut dyn GenericObject)
         } else {
             None
         }
     }
 
     fn next_from(&self, uid: Option<UID>) -> Option<UID> {
-        if let Some(Ok(uid)) = uid.map(|uid| ObjectUID::<TABLE_UID>::try_from(uid)) {
+        if let Some(Ok(uid)) = uid.map(|uid| ObjectRef::try_from(uid)) {
             let mut iter = self.0.range(uid..);
             if iter.next().is_none() {
                 None
             } else {
-                iter.next().map(|(k, _v)| k.clone().into())
+                iter.next().map(|(k, _v)| (*k).into())
             }
         } else {
             None
