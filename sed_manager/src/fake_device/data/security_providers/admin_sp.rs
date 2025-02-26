@@ -1,7 +1,7 @@
 use as_array::AsArray;
 
 use crate::fake_device::data::objects::{Authority, AuthorityTable, CPINTable, SPTable, CPIN, SP};
-use crate::fake_device::data::table::BasicTable;
+use crate::fake_device::data::table::GenericTable;
 use crate::fake_device::{MSID_PASSWORD, PSID_PASSWORD};
 use crate::messaging::uid::TableUID;
 use crate::messaging::value::Bytes;
@@ -35,7 +35,7 @@ pub struct AdminSP {
 }
 
 #[derive(AsArray)]
-#[as_array_traits(BasicTable)]
+#[as_array_traits(GenericTable)]
 pub struct SPSpecific {
     pub sp: SPTable,
 }
@@ -47,13 +47,13 @@ impl AdminSP {
 }
 
 impl SecurityProvider for AdminSP {
-    fn get_table(&self, table: TableUID) -> Option<&dyn BasicTable> {
+    fn get_table(&self, table: TableUID) -> Option<&dyn GenericTable> {
         let basic = self.basic_sp.as_array().into_iter().find(|table_| table_.uid() == table);
         let specific = self.sp_specific.as_array().into_iter().find(|table_| table_.uid() == table);
         basic.or(specific)
     }
 
-    fn get_table_mut(&mut self, table: TableUID) -> Option<&mut dyn BasicTable> {
+    fn get_table_mut(&mut self, table: TableUID) -> Option<&mut dyn GenericTable> {
         let basic = self.basic_sp.as_array_mut().into_iter().find(|table_| table_.uid() == table);
         let specific = self.sp_specific.as_array_mut().into_iter().find(|table_| table_.uid() == table);
         basic.or(specific)

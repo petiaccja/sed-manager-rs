@@ -1,4 +1,4 @@
-use crate::fake_device::data::table::BasicTable;
+use crate::fake_device::data::table::GenericTable;
 use crate::messaging::uid::{TableUID, UID};
 use crate::messaging::value::{Bytes, Named, Value};
 use crate::rpc::MethodStatus;
@@ -6,8 +6,8 @@ use crate::spec::basic_types::{List, NamedValue};
 use crate::spec::column_types::{AuthorityRef, BoolOrBytes, BytesOrRowValues, CellBlock};
 
 pub trait SecurityProvider {
-    fn get_table(&self, table: TableUID) -> Option<&dyn BasicTable>;
-    fn get_table_mut(&mut self, table: TableUID) -> Option<&mut dyn BasicTable>;
+    fn get_table(&self, table: TableUID) -> Option<&dyn GenericTable>;
+    fn get_table_mut(&mut self, table: TableUID) -> Option<&mut dyn GenericTable>;
     fn authenticate(&self, authority_id: AuthorityRef, proof: Option<Bytes>) -> Result<BoolOrBytes, MethodStatus>;
 
     fn get(&self, target: UID, cell_block: CellBlock) -> Result<BytesOrRowValues, MethodStatus> {

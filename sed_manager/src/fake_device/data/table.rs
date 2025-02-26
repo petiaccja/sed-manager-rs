@@ -5,7 +5,7 @@ use crate::messaging::uid::{TableUID, UID};
 
 use super::object::GenericObject;
 
-pub trait BasicTable {
+pub trait GenericTable {
     fn uid(&self) -> TableUID;
     fn get_object(&self, uid: UID) -> Option<&dyn GenericObject>;
     fn get_object_mut(&mut self, uid: UID) -> Option<&mut dyn GenericObject>;
@@ -48,7 +48,7 @@ where
     }
 }
 
-impl<Object, ObjectRef, const THIS_TABLE: u64> BasicTable for Table<Object, ObjectRef, THIS_TABLE>
+impl<Object, ObjectRef, const THIS_TABLE: u64> GenericTable for Table<Object, ObjectRef, THIS_TABLE>
 where
     Object: GenericObject,
     ObjectRef: TryFrom<UID> + Into<UID> + Ord + Copy,

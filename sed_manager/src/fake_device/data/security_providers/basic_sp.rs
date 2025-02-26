@@ -3,7 +3,7 @@ use core::ops::Deref;
 use as_array::AsArray;
 
 use crate::fake_device::data::objects::{AuthorityTable, CPINTable};
-use crate::fake_device::data::table::BasicTable;
+use crate::fake_device::data::table::GenericTable;
 use crate::messaging::value::Bytes;
 use crate::rpc::MethodStatus;
 use crate::spec::column_types::{AuthorityRef, BoolOrBytes, CPINRef, Password};
@@ -25,7 +25,7 @@ use crate::spec::column_types::{AuthorityRef, BoolOrBytes, CPINRef, Password};
 // - DataRemovalMechanism
 
 #[derive(AsArray)]
-#[as_array_traits(BasicTable)]
+#[as_array_traits(GenericTable)]
 pub struct BasicSP {
     pub authorities: AuthorityTable,
     pub c_pin: CPINTable,
