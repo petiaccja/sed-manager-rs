@@ -107,3 +107,87 @@ pub struct Month(u8);
 
 #[derive(AliasType, PartialEq, Eq, Clone, Debug, Default)]
 pub struct Day(u8);
+
+#[allow(non_camel_case_types)]
+#[repr(u8)]
+#[derive(EnumerationType, PartialEq, Eq, Clone, Debug)]
+pub enum ResetTypes {
+    PowerCycle = 0,
+    Hardware = 1,
+    HotPlug = 2,
+    #[fallback]
+    Unknown = 31,
+}
+
+#[allow(non_camel_case_types)]
+#[repr(u8)]
+#[derive(EnumerationType, PartialEq, Eq, Clone, Debug)]
+pub enum ReencryptState {
+    Idle = 1,
+    Pending = 2,
+    Active = 3,
+    Completed = 4,
+    Paused = 5,
+    #[fallback]
+    Unknown = 16,
+}
+
+#[allow(non_camel_case_types)]
+#[repr(u8)]
+#[derive(EnumerationType, PartialEq, Eq, Clone, Debug)]
+pub enum ReencryptRequest {
+    // This is not empty as a mistake.
+    // The values are missing from the core specification.
+    #[fallback]
+    Unknown = 16,
+}
+
+#[allow(non_camel_case_types)]
+#[repr(u8)]
+#[derive(EnumerationType, PartialEq, Eq, Clone, Debug)]
+pub enum AdvKeyMode {
+    WaitForAdvKeyReq = 0,
+    AutoAdvanceKeys = 1,
+    #[fallback]
+    Unknown = 7,
+}
+
+#[allow(non_camel_case_types)]
+#[repr(u8)]
+#[derive(EnumerationType, PartialEq, Eq, Clone, Debug)]
+pub enum VerifyMode {
+    NoVerify = 0,
+    VerifyEnabled = 1,
+    #[fallback]
+    Unknown = 7,
+}
+
+#[allow(non_camel_case_types)]
+#[repr(u8)]
+#[derive(EnumerationType, PartialEq, Eq, Clone, Debug)]
+pub enum LastReencStatus {
+    Success = 0,
+    ReadError = 1,
+    WriteError = 2,
+    VerifyError = 3,
+    #[fallback]
+    Unknown = 7,
+}
+
+#[allow(non_camel_case_types)]
+#[repr(u8)]
+#[derive(EnumerationType, PartialEq, Eq, Clone, Debug)]
+pub enum GeneralStatus {
+    None = 0,
+    PendingTPerError = 1,
+    ActiveTPerError = 2,
+    ActivePauseRequest = 3,
+    PendingPauseRequested = 4,
+    PendingResetStopDetected = 5,
+    KeyError = 6,
+    WaitAvailableKeys = 32,
+    WaitForTPerResources = 33,
+    ActiveResetStopDetected = 34,
+    #[fallback]
+    Unknown = 63,
+}

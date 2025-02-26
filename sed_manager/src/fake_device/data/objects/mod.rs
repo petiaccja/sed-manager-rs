@@ -1,5 +1,6 @@
 mod authority;
 mod c_pin;
+mod locking_range;
 mod sp;
 
 use super::table::Table;

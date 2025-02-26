@@ -119,6 +119,10 @@ impl<const TABLE_MASK: u64> ObjectUID<TABLE_MASK> {
         }
     }
 
+    pub const fn null() -> Self {
+        Self(UID::null())
+    }
+
     pub const fn new(value: u64) -> Self {
         assert!(Self::is_value_accepted(value));
         Self(UID::new(value))
@@ -145,6 +149,10 @@ impl<const TABLE_MASK: u64> ObjectUID<TABLE_MASK> {
         }
     }
 
+    pub const fn is_null(&self) -> bool {
+        self.as_u64() == 0
+    }
+
     pub const fn as_u64(&self) -> u64 {
         self.0.as_u64()
     }
@@ -166,7 +174,7 @@ impl<const TABLE_MASK: u64> ObjectUID<TABLE_MASK> {
     }
 
     pub const fn containing_table(&self) -> TableUID {
-        TableUID::new(self.0.containing_table().unwrap().as_u64())
+        TableUID::new(self.0.containing_table().expect("cannot get containing table for null UID").as_u64())
     }
 }
 

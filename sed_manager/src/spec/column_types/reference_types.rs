@@ -21,4 +21,6 @@ pub type CredentialRef = ObjectUID<
 >;
 pub type CredentialRefRange = CPINRefRange;
 pub type LogListRef = ObjectUID<{ LOG_LIST.mask() }>;
+pub type LockingRangeRef = ObjectUID<{ LOCKING.mask() }>;
+pub type MediaKeyRef = ObjectUID<{ K_AES_128.mask() | K_AES_256.mask() }>;
 pub type MethodRef = ObjectUID<{ METHOD_ID.mask() }>;
