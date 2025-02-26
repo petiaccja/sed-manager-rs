@@ -1,6 +1,6 @@
 use as_array::AsArray;
 
-use crate::fake_device::data::objects::{Authority, AuthorityTable, CPINTable, CPIN};
+use crate::fake_device::data::objects::{Authority, AuthorityTable, CPINTable, LockingRange, LockingTable, CPIN};
 use crate::fake_device::data::table::GenericTable;
 use crate::messaging::uid::TableUID;
 use crate::messaging::value::Bytes;
@@ -38,7 +38,9 @@ pub struct LockingSP {
 
 #[derive(AsArray)]
 #[as_array_traits(GenericTable)]
-pub struct SPSpecific {}
+pub struct SPSpecific {
+    pub locking: LockingTable,
+}
 
 impl LockingSP {
     pub fn new() -> Self {
@@ -68,7 +70,8 @@ impl Default for LockingSP {
     fn default() -> Self {
         let authorities = preconfig_authority();
         let c_pin = preconfig_c_pin();
-        Self { basic_sp: BasicSP { authorities, c_pin }, sp_specific: SPSpecific {} }
+        let locking = preconfig_locking();
+        Self { basic_sp: BasicSP { authorities, c_pin }, sp_specific: SPSpecific { locking } }
     }
 }
 
@@ -108,4 +111,18 @@ fn preconfig_c_pin() -> CPINTable {
         c_pin.insert(user.uid, user);
     }
     c_pin
+}
+
+fn preconfig_locking() -> LockingTable {
+    let mut locking = LockingTable::new();
+
+    let global_range = LockingRange::new(locking::GLOBAL_RANGE);
+    locking.insert(global_range.uid, global_range);
+
+    for i in 1..=8 {
+        let range = LockingRange::new(locking::RANGE.nth(i).unwrap());
+        locking.insert(range.uid, range);
+    }
+
+    locking
 }
