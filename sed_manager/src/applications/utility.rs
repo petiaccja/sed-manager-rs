@@ -1,7 +1,7 @@
 use crate::messaging::discovery::FeatureCode;
 use crate::messaging::uid_range::ObjectUIDRange;
-use crate::spec;
 use crate::spec::column_types::{AuthorityRefRange, CPINRefRange, SPRef};
+use crate::spec::{self, ObjectLookup};
 
 use super::error::Error;
 
@@ -58,5 +58,19 @@ pub fn get_locking_admin_c_pins(ssc: FeatureCode) -> Result<CPINRefRange, Error>
         FeatureCode::Ruby => Ok(spec::ruby::locking::c_pin::ADMIN),
         FeatureCode::KeyPerIO => Ok(spec::kpio::key_per_io::c_pin::ADMIN),
         _ => Err(Error::IncompatibleSSC),
+    }
+}
+
+pub fn get_lookup(ssc: FeatureCode) -> &'static dyn ObjectLookup {
+    match ssc {
+        FeatureCode::Enterprise => &spec::enterprise::OBJECT_LOOKUP,
+        FeatureCode::OpalV1 => &spec::opal::OBJECT_LOOKUP,
+        FeatureCode::OpalV2 => &spec::opal::OBJECT_LOOKUP,
+        FeatureCode::Opalite => &spec::pyrite::OBJECT_LOOKUP,
+        FeatureCode::PyriteV1 => &spec::pyrite::OBJECT_LOOKUP,
+        FeatureCode::PyriteV2 => &spec::pyrite::OBJECT_LOOKUP,
+        FeatureCode::Ruby => &spec::ruby::OBJECT_LOOKUP,
+        FeatureCode::KeyPerIO => &spec::kpio::OBJECT_LOOKUP,
+        _ => &spec::core::OBJECT_LOOKUP,
     }
 }
