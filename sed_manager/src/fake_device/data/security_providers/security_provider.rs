@@ -81,10 +81,15 @@ pub trait SecurityProvider {
         let Some(table) = self.get_table(table) else {
             return Err(MethodStatus::InvalidParameter);
         };
-        let next = (0..=count.unwrap_or(1))
-            .into_iter()
-            .scan(from, |from, _| core::mem::replace(from, table.next_from(*from)))
-            .skip(1);
-        Ok(List(next.collect()))
+        let mut uids = Vec::new();
+        let mut last = from;
+        while let Some(uid) = table.next_from(last) {
+            if uids.len() as u64 >= count.unwrap_or(u64::MAX) {
+                break;
+            }
+            last = Some(uid);
+            uids.push(uid);
+        }
+        Ok(List(uids))
     }
 }

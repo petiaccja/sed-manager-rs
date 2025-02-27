@@ -74,7 +74,11 @@ where
     }
 
     fn next_from(&self, uid: Option<UID>) -> Option<UID> {
-        if let Some(Ok(uid)) = uid.map(|uid| ObjectRef::try_from(uid)) {
+        let uid = match uid {
+            Some(uid) => Some(ObjectRef::try_from(uid).ok()?),
+            None => None,
+        };
+        if let Some(uid) = uid {
             let mut iter = self.0.range(uid..);
             if iter.next().is_none() {
                 None
@@ -82,7 +86,8 @@ where
                 iter.next().map(|(k, _v)| (*k).into())
             }
         } else {
-            None
+            let mut iter = self.0.range(..);
+            iter.next().map(|(k, _v)| (*k).into())
         }
     }
 }

@@ -115,7 +115,7 @@ async fn set_invalid_type() -> Result<(), RPCError> {
 }
 
 #[tokio::test]
-async fn next_success() -> Result<(), RPCError> {
+async fn next_success_with_uid() -> Result<(), RPCError> {
     use opal::admin::authority;
     let device = FakeDevice::new();
     let tper = TPer::new_on_default_com_id(Arc::new(device))?;
@@ -128,6 +128,16 @@ async fn next_success() -> Result<(), RPCError> {
             authority::ADMIN.nth(3).unwrap().as_uid()
         ]
     );
+    Ok(())
+}
+
+#[tokio::test]
+async fn next_success_no_uid() -> Result<(), RPCError> {
+    let device = FakeDevice::new();
+    let tper = TPer::new_on_default_com_id(Arc::new(device))?;
+    let session = tper.start_session(sp::ADMIN, None, None).await?;
+    let result = session.next(table_id::SP, None, None).await?;
+    assert_eq!(result.0, vec![sp::ADMIN.as_uid(), sp::LOCKING.as_uid(),]);
     Ok(())
 }
 
