@@ -24,6 +24,10 @@ fn set_callbacks(app_window: &ui::AppWindow, app_state: Rc<AtomicBorrow<AppState
         let _ = slint::spawn_local(callbacks::update_device_discovery(copy.clone(), device_idx as usize));
     });
     let copy = app_state.clone();
+    app_window.on_reset_session(move |device_idx| {
+        let _ = slint::spawn_local(callbacks::reset_session(copy.clone(), device_idx as usize));
+    });
+    let copy = app_state.clone();
     app_window.on_take_ownership(move |device_idx, new_password| {
         let _ = slint::spawn_local(callbacks::take_ownership(copy.clone(), device_idx as usize, new_password.into()));
     });
@@ -35,6 +39,10 @@ fn set_callbacks(app_window: &ui::AppWindow, app_state: Rc<AtomicBorrow<AppState
             sid_password.into(),
             Some(new_admin1_password.into()),
         ));
+    });
+    let copy = app_state.clone();
+    app_window.on_query_ranges(move |device_idx, password| {
+        let _ = slint::spawn_local(callbacks::query_ranges(copy.clone(), device_idx as usize, password.into()));
     });
     let copy = app_state.clone();
     app_window.on_revert(move |device_idx, use_psid, password, include_admin| {

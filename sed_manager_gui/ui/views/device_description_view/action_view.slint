@@ -8,6 +8,7 @@ export component ActionView {
     private property <length> button-height: 32px;
     callback take-ownership();
     callback activate-locking();
+    callback configure-ranges();
     callback revert();
     ScrollView {
         horizontal-scrollbar-policy: always-off;
@@ -51,6 +52,21 @@ export component ActionView {
                         background: #00000000;
                         clicked => {
                             activate-locking();
+                        }
+                    }
+
+                    HorizontalSeparator {
+                        background: Palette.background;
+                    }
+
+                    NavigationButton {
+                        text: "Configure ranges";
+                        icon: @image-url("../../../images/action/menu.svg");
+                        height: button-height;
+                        navigation-direction: NavigationDirection.left;
+                        background: #00000000;
+                        clicked => {
+                            configure-ranges();
                         }
                     }
 

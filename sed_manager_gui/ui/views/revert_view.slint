@@ -1,4 +1,4 @@
-import { ActionView } from "action_view.slint";
+import { OneClickConfigView } from "one_click_config_view.slint";
 import { LineEdit, Button, ComboBox, Switch } from "std-widgets.slint";
 import { PaletteExtra } from "../widgets/visual.slint";
 import { PasswordValidator } from "../widgets/password_validator.slint";
@@ -50,9 +50,9 @@ component ConfirmationPopup inherits SolidPopupWindow {
     }
 }
 
-export component RevertView inherits ActionView {
-    action-name: "Revert";
-    action-icon: @image-url("../../images/action/user-x.svg");
+export component RevertView inherits OneClickConfigView {
+    config-name: "Revert";
+    config-icon: @image-url("../../images/action/user-x.svg");
     callback revert(use-psid: bool, password: string, include-admin: bool);
     private property <string> feedback-text;
     private property <bool> password-ok: feedback-text == "";
@@ -72,7 +72,7 @@ export component RevertView inherits ActionView {
         spacing: 6px;
         min-width: 200px;
         authority := ComboBox {
-            model: ["Owner (SID) password:", "Physical owner (PSID) password:"];
+            model: ["Enter owner password:", "Enter PSID password:"];
         }
 
         password := LineEdit {

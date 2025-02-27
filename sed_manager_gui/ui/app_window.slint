@@ -7,6 +7,7 @@ import { TabBar } from "widgets/tab_bar.slint";
 import { SwitchContainer, SwitchContent } from "widgets/switch_content.slint";
 import { Button, Spinner } from "std-widgets.slint";
 import { DevicePage } from "pages/device_page.slint";
+import { LockingRange } from "data/locking_range.slint";
 
 export component AppWindow inherits Window {
     title: "SED Manager";
@@ -19,11 +20,16 @@ export component AppWindow inherits Window {
     in property <[DeviceDescription]> device-descriptions;
     in property <[UnavailableDevice]> unavailable-devices;
     in property <[ActionResult]> action-results;
+    in property <[[string]]> locking-range-error-logs;
+    in property <[[LockingRange]]> locking-ranges;
     private property <int> selected-device-tab;
     callback update-devices();
     callback update-device-discovery(device-idx: int);
+    callback reset-session(device-idx: int);
     callback take-ownership(device-idx: int, new-password: string);
     callback activate-locking(device-idx: int, sid-password: string, new-admin1-password: string);
+    callback query-ranges(device-idx: int, password: string);
+    callback update-range(device-idx: int, range-idx: int, value: LockingRange);
     callback revert(device-idx: int, use-psid: bool, password: string, include-admin: bool);
     VerticalLayout {
         if device-tabs.length != 0: VerticalLayout {
@@ -58,14 +64,25 @@ export component AppWindow inherits Window {
                     DevicePage {
                         description: description;
                         action-result: i < action-results.length ? action-results[i] : { };
+                        locking-range-error-log: i < locking-range-error-logs.length ? locking-range-error-logs[i] : [];
+                        locking-ranges: i < locking-ranges.length ? locking-ranges[i] : [];
                         update-device-discovery => {
                             update-device-discovery(i);
+                        }
+                        reset-session => {
+                            reset-session(i);
                         }
                         take-ownership(new-password) => {
                             take-ownership(i, new-password);
                         }
                         activate-locking(sid-password, new-admin1-password) => {
                             activate-locking(i, sid-password, new-admin1-password);
+                        }
+                        query-ranges(password) => {
+                            query-ranges(i, password);
+                        }
+                        update-range(range-idx, value) => {
+                            update-range(i, range-idx, value);
                         }
                         revert(use-psid, password, include-admin) => {
                             revert(i, use-psid, password, include-admin);

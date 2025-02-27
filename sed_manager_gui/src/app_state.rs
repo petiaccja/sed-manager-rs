@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use sed_manager::tper::Session;
 use sed_manager::{device::Error as DeviceError, messaging::discovery::Discovery, rpc::Error as RPCError, tper::TPer};
 use slint::{Model, ModelRc, SharedString, ToSharedString, VecModel};
 
@@ -12,8 +13,11 @@ pub struct AppState {
     device_list: Versioned<Result<DeviceList, DeviceError>>,
     discoveries: Vec<Option<Discovery>>,
     tpers: Vec<Option<Arc<TPer>>>,
+    sessions: Vec<Option<Arc<Session>>>,
     descriptions: ModelRc<ui::DeviceDescription>,
     action_results: ModelRc<ui::ActionResult>,
+    locking_range_errors: ModelRc<ModelRc<SharedString>>,
+    locking_ranges: ModelRc<ModelRc<ui::LockingRange>>,
 }
 
 pub struct SyncDeviceIdentity {
@@ -31,8 +35,11 @@ impl AppState {
             device_list: Versioned::new(Ok(DeviceList::empty())),
             discoveries: vec![],
             tpers: vec![],
+            sessions: vec![],
             descriptions: ModelRc::new(VecModel::from(vec![])),
             action_results: ModelRc::new(VecModel::from(vec![])),
+            locking_range_errors: ModelRc::new(VecModel::from(vec![])),
+            locking_ranges: ModelRc::new(VecModel::from(vec![])),
         }
     }
 
@@ -52,9 +59,9 @@ impl AppState {
 
     pub fn init_from_devices(&mut self) {
         let num_devices = self.device_list.as_ref().map(|dev| dev.devices.len()).unwrap_or(0);
-        let action_results = core::iter::repeat_with(|| ActionResult::success()).take(num_devices).collect::<Vec<_>>();
         let discoveries = core::iter::repeat_with(|| None).take(num_devices).collect::<Vec<_>>();
         let tpers = core::iter::repeat_with(|| None).take(num_devices).collect::<Vec<_>>();
+        let sessions = core::iter::repeat_with(|| None).take(num_devices).collect::<Vec<_>>();
         let unavailable_devices: Vec<_> = self
             .device_list
             .as_ref()
@@ -63,12 +70,24 @@ impl AppState {
             .iter()
             .map(|(path, error)| ui::UnavailableDevice::new(path.clone(), error.to_string()))
             .collect();
+        let action_results = core::iter::repeat_with(|| ActionResult::success()).take(num_devices).collect::<Vec<_>>();
+        let locking_range_error_logs = core::iter::repeat_with(|| ModelRc::new(VecModel::from(vec![])))
+            .take(num_devices)
+            .collect::<Vec<_>>();
+        let locking_ranges = core::iter::repeat_with(|| ModelRc::new(VecModel::from(vec![])))
+            .take(num_devices)
+            .collect::<Vec<_>>();
 
         self.discoveries = discoveries;
         self.tpers = tpers;
+        self.sessions = sessions;
         self.action_results = ModelRc::new(VecModel::from(action_results));
+        self.locking_range_errors = ModelRc::new(VecModel::from(locking_range_error_logs));
+        self.locking_ranges = ModelRc::new(VecModel::from(locking_ranges));
         self.window.set_unavailable_devices(ModelRc::new(VecModel::from(unavailable_devices)));
         self.window.set_action_results(self.action_results.clone());
+        self.window.set_locking_range_error_logs(self.locking_range_errors.clone());
+        self.window.set_locking_ranges(self.locking_ranges.clone());
     }
 
     pub fn set_device_identities(&mut self, identities: Vec<SyncDeviceIdentity>) {
@@ -136,10 +155,54 @@ impl AppState {
         Some(tper)
     }
 
+    pub fn get_session(&self, device_idx: usize) -> Option<Arc<Session>> {
+        self.sessions.get(device_idx).cloned().flatten()
+    }
+
+    pub fn take_session(&mut self, device_idx: usize) -> Option<Arc<Session>> {
+        self.sessions.get_mut(device_idx).map(|s| s.take()).flatten()
+    }
+
+    pub fn set_session(&mut self, device_idx: usize, session: Arc<Session>) -> Option<Arc<Session>> {
+        self.sessions.get_mut(device_idx).map(|s| s.replace(session)).flatten()
+    }
+
     pub fn set_action_result(&mut self, device_idx: usize, action_result: ActionResult) {
         let action_results = &self.action_results;
         if device_idx < action_results.row_count() {
             action_results.set_row_data(device_idx, action_result);
         }
+    }
+
+    pub fn append_locking_range_error(&mut self, device_idx: usize, error: String) {
+        let Some(device_logs) = self.locking_range_errors.row_data(device_idx) else {
+            return;
+        };
+        let device_logs = device_logs.as_any().downcast_ref::<VecModel<SharedString>>().unwrap();
+        device_logs.push(error.into());
+    }
+
+    pub fn clear_locking_range_errors(&mut self, device_idx: usize) {
+        let Some(device_logs) = self.locking_range_errors.row_data(device_idx) else {
+            return;
+        };
+        let device_logs = device_logs.as_any().downcast_ref::<VecModel<SharedString>>().unwrap();
+        device_logs.clear();
+    }
+
+    pub fn append_locking_range(&mut self, device_idx: usize, locking_range: ui::LockingRange) {
+        let Some(device_ranges) = self.locking_ranges.row_data(device_idx) else {
+            return;
+        };
+        let device_logs = device_ranges.as_any().downcast_ref::<VecModel<ui::LockingRange>>().unwrap();
+        device_logs.push(locking_range);
+    }
+
+    pub fn clear_locking_ranges(&mut self, device_idx: usize) {
+        let Some(device_ranges) = self.locking_ranges.row_data(device_idx) else {
+            return;
+        };
+        let device_logs = device_ranges.as_any().downcast_ref::<VecModel<ui::LockingRange>>().unwrap();
+        device_logs.clear();
     }
 }

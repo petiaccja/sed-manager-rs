@@ -1,12 +1,12 @@
-import { ActionView } from "action_view.slint";
+import { OneClickConfigView } from "one_click_config_view.slint";
 import { LineEdit, Button, Switch } from "std-widgets.slint";
 import { PaletteExtra } from "../widgets/visual.slint";
 import { PasswordValidator } from "../widgets/password_validator.slint";
 import { ContentStatus} from "../data/content_status.slint";
 
-export component ActivateLockingView inherits ActionView {
-    action-name: "Activate locking";
-    action-icon: @image-url("../../images/device/9111193_lock_icon.svg");
+export component ActivateLockingView inherits OneClickConfigView {
+    config-name: "Activate locking";
+    config-icon: @image-url("../../images/device/9111193_lock_icon.svg");
     callback activate-locking(sid-password: string, new-admin1-password: string);
     private property <string> feedback-text;
     private property <bool> password-ok: same-as-owner.checked || feedback-text == "";
@@ -31,7 +31,7 @@ export component ActivateLockingView inherits ActionView {
         }
 
         Text {
-            text: "Enter new locking Admin1 password:";
+            text: "New Admin1 password:";
             opacity: same-as-owner.checked ? 0.5 : 1.0;
         }
 

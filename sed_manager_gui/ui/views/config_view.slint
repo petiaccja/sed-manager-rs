@@ -1,0 +1,101 @@
+import { Island, PaletteExtra } from "../widgets/visual.slint";
+import { ContentStatus } from "../data/content_status.slint";
+import { Button, Palette, Spinner } from "std-widgets.slint";
+import { ActionResult} from "../data/action_result.slint";
+import { SolidPopupWindow } from "../widgets/solid_popup_window.slint";
+
+
+component BackButton inherits Rectangle {
+    in property <bool> enabled;
+    private property <color> text-color: area.has-hover && enabled ? PaletteExtra.accented-control-foreground : Palette.control-foreground.with-alpha(enabled ? 1.0 : 0.5);
+    callback clicked <=> area.clicked;
+    width: 32px;
+    height: 32px;
+    background: #00000000;
+    border-radius: Math.min(self.width, self.height) / 2;
+    border-color: text-color;
+    border-width: 2px;
+    Image {
+        source: @image-url("../../images/shape/8666600_arrow_left_icon.svg");
+        colorize: text-color;
+    }
+
+    area := TouchArea {
+        enabled: enabled;
+    }
+}
+
+component Header inherits Island {
+    in property <string> device-name;
+    in property <string> config-name;
+    in property <bool> back-enabled: true;
+    callback back <=> back-button.clicked;
+    preferred-height: content.min-height;
+    content := HorizontalLayout {
+        spacing: 12px;
+        padding-top: 4px;
+        padding-bottom: 4px;
+        padding-left: 12px;
+        padding-right: 12px;
+        VerticalLayout {
+            alignment: space-around;
+            back-button := BackButton {
+                enabled: back-enabled;
+            }
+        }
+
+        Text {
+            text: device-name;
+            font-size: 28px;
+            font-weight: 800;
+            color: PaletteExtra.accented-control-foreground;
+            vertical-alignment: center;
+        }
+
+        Image {
+            source: @image-url("../../images/shape/8666777_chevron_right_arrow_icon.svg");
+            colorize: Palette.control-foreground;
+            width: 26px;
+            vertical-alignment: center;
+            horizontal-alignment: center;
+            image-fit: ImageFit.contain;
+        }
+
+        Text {
+            text: config-name;
+            font-size: 24px;
+            vertical-alignment: center;
+            horizontal-stretch: 1;
+        }
+    }
+}
+
+export component ConfigView {
+    in property <string> device-name;
+    in property <string> config-name;
+    in property <image> config-icon;
+    in property <bool> back-enabled: true;
+    callback back <=> header.back;
+    VerticalLayout {
+        header := Header {
+            vertical-stretch: 0;
+            device-name: device-name;
+            config-name: config-name;
+            back-enabled: back-enabled;
+        }
+
+        @children
+    }
+}
+
+export component LivePreviewTest inherits ConfigView {
+    device-name: "Foo Device";
+    config-name: "Take ownership";
+    VerticalLayout {
+        vertical-stretch: 1;
+        alignment: center;
+        Text {
+            text: "Content";
+        }
+    }
+}
