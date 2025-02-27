@@ -1,5 +1,5 @@
 [package]
-name = "sed_manager_macros"
+name = "sed-manager-macros"
 version = "0.1.0"
 edition = "2021"
 

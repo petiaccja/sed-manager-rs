@@ -1,5 +1,5 @@
 [package]
-name = "skip_test_macros"
+name = "skip-test-macros"
 version = "0.1.0"
 edition = "2021"
 

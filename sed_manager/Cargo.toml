@@ -7,9 +7,9 @@ edition = "2021"
 build = "build.rs"
 
 [dependencies]
-sed_manager_macros = { path = "../sed_manager_macros" }
-skip_test = { path = "../skip_test" }
-as_array = { path = "../as_array" }
+sed-manager-macros = { path = "../sed_manager_macros" }
+skip-test = { path = "../skip_test" }
+as-array = { path = "../as_array" }
 
 [dependencies.bitvec]
 version = "1"
