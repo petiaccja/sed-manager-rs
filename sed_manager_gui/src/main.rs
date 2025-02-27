@@ -2,7 +2,6 @@
 
 mod app_state;
 mod callbacks;
-mod data;
 mod device_list;
 mod ui;
 mod utility;

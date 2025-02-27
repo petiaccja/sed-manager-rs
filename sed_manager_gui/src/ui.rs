@@ -1,1 +1,1 @@
-slint::include_modules!();
+pub use sed_manager_gui_elements::*;

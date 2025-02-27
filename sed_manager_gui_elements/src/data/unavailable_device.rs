@@ -1,4 +1,4 @@
-use crate::ui::UnavailableDevice;
+use crate::UnavailableDevice;
 
 impl UnavailableDevice {
     pub fn new(path: String, error_message: String) -> Self {

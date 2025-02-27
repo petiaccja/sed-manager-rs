@@ -1,4 +1,4 @@
-use crate::ui::NameValuePair;
+use crate::NameValuePair;
 
 impl NameValuePair {
     pub fn new(name: String, value: String) -> Self {

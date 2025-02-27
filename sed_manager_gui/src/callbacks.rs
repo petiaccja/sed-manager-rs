@@ -6,7 +6,7 @@ use sed_manager::applications::{get_locking_admins, get_locking_sp, get_lookup};
 use sed_manager::device::Device;
 use sed_manager::messaging::discovery::FeatureCode;
 use sed_manager::rpc::{ErrorEvent as RPCErrorEvent, ErrorEventExt};
-use sed_manager::spec::column_types::{AuthorityRef, LockingRangeRef, SPRef};
+use sed_manager::spec::column_types::{AuthorityRef, SPRef};
 use sed_manager::spec::table_id;
 use sed_manager::tper::{discover, Session};
 use sed_manager::{applications, spec};

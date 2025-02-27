@@ -2,7 +2,7 @@ use sed_manager::messaging::discovery::{Discovery, FeatureCode};
 use slint::{SharedString, ToSharedString as _, VecModel};
 use std::rc::Rc;
 
-use crate::ui::{ContentStatus, DeviceDescription, DeviceDiscovery, DeviceDiscoveryFeature, DeviceIdentity};
+use crate::{ContentStatus, DeviceDescription, DeviceDiscovery, DeviceDiscoveryFeature, DeviceIdentity};
 
 impl DeviceIdentity {
     pub fn new(name: String, serial: String, path: String, firmware: String, interface: String) -> Self {

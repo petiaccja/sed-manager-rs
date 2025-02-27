@@ -1,4 +1,4 @@
-use crate::ui::{ActionResult, ContentStatus};
+use crate::{ActionResult, ContentStatus};
 
 impl ActionResult {
     pub fn new(status: ContentStatus, error_message: String) -> Self {

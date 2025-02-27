@@ -1,5 +1,5 @@
 [workspace]
 resolver = "2"
 members = [
-    "sed_manager", "sed_manager_macros", "sed_manager_gui", "skip_test", "skip_test_macros", "as_array", "as_array_macros"
+    "sed_manager", "sed_manager_macros", "sed_manager_gui", "sed_manager_gui_elements", "skip_test", "skip_test_macros", "as_array", "as_array_macros"
 ]

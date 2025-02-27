@@ -1,5 +1,5 @@
 [package]
-name = "sed-manager-gui"
+name = "sed-manager-gui-elements"
 version = "0.1.0"
 edition = "2021"
 
@@ -8,17 +8,11 @@ build = "build.rs"
 
 [dependencies]
 sed-manager = { path = "../sed_manager" }
-sed-manager-gui-elements = { path = "../sed_manager_gui_elements" }
 
 [dependencies.slint]
 version = "1.9.2"
 default-features = false
 features = ["std", "compat-1-2", "backend-winit", "renderer-skia", "renderer-femtovg"]
-
-[dependencies.tokio]
-version = "1.41.0"
-default-features = false
-features = ["rt", "sync", "macros"]
 
 [build-dependencies]
 slint-build = "1.9.2"

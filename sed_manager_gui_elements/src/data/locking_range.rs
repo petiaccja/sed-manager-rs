@@ -1,4 +1,4 @@
-use crate::ui::LockingRange;
+use crate::LockingRange;
 
 impl LockingRange {
     pub fn new(

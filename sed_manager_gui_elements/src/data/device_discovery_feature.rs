@@ -7,7 +7,7 @@ use sed_manager::messaging::discovery::{
     UnrecognizedDescriptor,
 };
 
-use crate::ui::{DeviceDiscoveryFeature, NameValuePair};
+use crate::{DeviceDiscoveryFeature, NameValuePair};
 
 impl DeviceDiscoveryFeature {
     pub fn new(name: String, properties: Vec<NameValuePair>) -> Self {
