@@ -1,8 +1,8 @@
 use core::task::Poll::*;
 
 use crate::messaging::packet::{ComPacket, Packet};
-use crate::rpc::protocol_4::promise::Promise;
-use crate::rpc::protocol_4::shared::pipe::{SinkPipe, SourcePipe};
+use crate::rpc::protocol::promise::Promise;
+use crate::rpc::protocol::shared::pipe::{SinkPipe, SourcePipe};
 use crate::rpc::{Error, PackagedMethod, SessionIdentifier};
 
 pub type Input = Promise<Packet, PackagedMethod, Error>;

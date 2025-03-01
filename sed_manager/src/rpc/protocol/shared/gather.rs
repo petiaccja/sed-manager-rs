@@ -15,7 +15,7 @@ pub fn gather<Item>(inputs: &mut [&mut dyn SourcePipe<Item>], output: &mut dyn S
 
 #[cfg(test)]
 mod tests {
-    use crate::rpc::protocol_4::shared::buffer::Buffer;
+    use crate::rpc::protocol::shared::buffer::Buffer;
 
     use super::*;
 

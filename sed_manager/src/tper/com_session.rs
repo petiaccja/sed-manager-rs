@@ -1,31 +1,21 @@
-use tokio::sync::{oneshot, Mutex};
-
 use crate::messaging::com_id::{
     ComIdState, HandleComIdRequest, HandleComIdResponse, StackResetResponsePayload, StackResetStatus,
     VerifyComIdValidResponsePayload,
 };
-use crate::rpc::{Error as RPCError, ErrorEvent as RPCErrorEvent, ErrorEventExt as _, MessageSender};
-use crate::rpc::{Message, Tracked};
+use crate::rpc::{CommandSender, Error as RPCError, ErrorEventExt as _};
 use crate::serialization::DeserializeBinary as _;
 
 pub struct ComSession {
-    sender: MessageSender,
-    mutex: Mutex<()>,
+    sender: CommandSender,
 }
 
 impl ComSession {
-    pub fn new(sender: MessageSender) -> Self {
-        Self { sender, mutex: ().into() }
+    pub fn new(sender: CommandSender) -> Self {
+        Self { sender }
     }
 
     async fn do_request(&self, request: HandleComIdRequest) -> Result<HandleComIdResponse, RPCError> {
-        let (tx, rx) = oneshot::channel();
-        let _guard = self.mutex.lock().await;
-        let _ = self.sender.send(Message::HandleComId { content: Tracked { item: request, promises: vec![tx] } });
-        match rx.await {
-            Ok(result) => result,
-            Err(_) => Err(RPCErrorEvent::Closed.as_error()),
-        }
+        self.sender.com_id(request).await
     }
 }
 
@@ -46,5 +36,11 @@ impl ComSession {
             Ok(response) => Ok(response.stack_reset_status),
             Err(err) => Err(err.as_error()),
         }
+    }
+}
+
+impl Drop for ComSession {
+    fn drop(&mut self) {
+        self.sender.close_com_session();
     }
 }

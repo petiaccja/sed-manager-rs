@@ -8,8 +8,8 @@ use crate::device::Device;
 use crate::messaging::com_id::{ComIdState, StackResetStatus};
 use crate::messaging::discovery::Discovery;
 use crate::rpc::{
-    Error as RPCError, ErrorEvent as RPCErrorEvent, ErrorEventExt, Message, MessageSender, MessageStack, Properties,
-    SessionIdentifier, ThreadedMessageLoop, Tracked,
+    CommandSender, Error as RPCError, ErrorEvent as RPCErrorEvent, ErrorEventExt, Properties, Protocol,
+    SessionIdentifier,
 };
 use crate::serialization::DeserializeBinary;
 use crate::spec::column_types::{AuthorityRef, SPRef};
@@ -24,11 +24,9 @@ pub struct TPer {
     next_hsn: AtomicU32,
     capabilities: Properties,
     properties: Mutex<Option<Properties>>,
-    message_sender: MessageSender,
+    message_sender: CommandSender,
     com_session: ComSession,
     control_session: ControlSession,
-    #[allow(unused)]
-    message_loop: ThreadedMessageLoop, // Drop last! Needs all the senders to be dropped first for thread join.
 }
 
 pub fn discover(device: &dyn Device) -> Result<Discovery, RPCError> {
@@ -42,16 +40,14 @@ pub fn get_primary_ssc_com_id(discovery: &Discovery) -> Option<(u16, u16)> {
 
 impl TPer {
     pub fn new(device: Arc<dyn Device>, com_id: u16, com_id_ext: u16) -> Self {
-        let message_stack = MessageStack::new(com_id, com_id_ext);
-        let capabilities = message_stack.capabilities();
-        let (message_loop, message_sender) = ThreadedMessageLoop::new(device.clone(), message_stack);
+        let capabilities = Protocol::capabilities();
+        let (message_sender, _) = Protocol::spawn(device, com_id, com_id_ext, capabilities.clone());
         Self {
             com_id,
             com_id_ext,
             next_hsn: 1.into(),
             capabilities,
             properties: None.into(),
-            message_loop,
             message_sender: message_sender.clone(),
             com_session: ComSession::new(message_sender.clone()),
             control_session: ControlSession::new(message_sender.clone()),
@@ -80,12 +76,7 @@ impl TPer {
     }
 
     pub async fn discover(&self) -> Result<Discovery, RPCError> {
-        let (tx, rx) = tokio::sync::oneshot::channel();
-        let _ = self.message_sender.send(Message::Discover { content: Tracked { item: (), promises: vec![tx] } });
-        match rx.await {
-            Ok(result) => result,
-            Err(_) => Err(RPCErrorEvent::Aborted.while_receiving()),
-        }
+        self.message_sender.discover().await
     }
 
     pub async fn current_properties(&self) -> Properties {

@@ -2,8 +2,8 @@ use core::task::Poll::*;
 
 use crate::messaging::packet::{SubPacket, SubPacketKind};
 use crate::messaging::token::SerializeTokens;
-use crate::rpc::protocol_4::promise::Promise;
-use crate::rpc::protocol_4::shared::pipe::{SinkPipe, SourcePipe};
+use crate::rpc::protocol::promise::Promise;
+use crate::rpc::protocol::shared::pipe::{SinkPipe, SourcePipe};
 use crate::rpc::{Error, PackagedMethod};
 use crate::serialization::vec_without_len::VecWithoutLen;
 use crate::serialization::SerializeBinary;

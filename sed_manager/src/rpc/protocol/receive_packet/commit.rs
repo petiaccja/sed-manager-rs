@@ -1,6 +1,6 @@
 use tokio::sync::oneshot;
 
-use crate::rpc::protocol_4::shared::pipe::SourcePipe;
+use crate::rpc::protocol::shared::pipe::SourcePipe;
 
 pub type Sender<Item> = oneshot::Sender<Item>;
 

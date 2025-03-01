@@ -4,7 +4,7 @@ use std::rc::{Rc, Weak};
 
 use crate::messaging::packet::{SubPacket, SubPacketKind};
 use crate::messaging::token::Token;
-use crate::rpc::protocol_4::shared::pipe::{SinkPipe, SourcePipe};
+use crate::rpc::protocol::shared::pipe::{SinkPipe, SourcePipe};
 use crate::rpc::Error;
 
 use crate::serialization::vec_without_len::VecWithoutLen;

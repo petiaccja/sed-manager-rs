@@ -17,12 +17,12 @@ impl Retry {
         Self { start_time, deadline, sleep_duration }
     }
 
-    pub fn sleep(&mut self) -> Result<(), Error> {
+    pub async fn sleep(&mut self) -> Result<(), Error> {
         let current_time = Instant::now();
         if self.deadline <= current_time {
             Err(ErrorEvent::TimedOut.into())
         } else {
-            sleep(self.sleep_duration);
+            sleep(self.sleep_duration).await;
             self.sleep_duration = core::cmp::min(self.sleep_duration, (self.deadline - self.start_time) / 7);
             Ok(())
         }
@@ -36,14 +36,14 @@ impl Retry {
 /// with IF-RECV much less often, and that can slow down the synchronous
 /// communication protocol by a large margin. A finer loop-based sleep should
 /// allow the device to be polled for replies often.
-fn sleep(duration: Duration) {
+async fn sleep(duration: Duration) {
     if duration < Duration::from_millis(8) {
         let start = Instant::now();
         let end = start + duration;
         while Instant::now() < end {
-            std::thread::yield_now();
+            tokio::task::yield_now().await;
         }
     } else {
-        std::thread::sleep(duration);
+        tokio::time::sleep(duration).await;
     }
 }

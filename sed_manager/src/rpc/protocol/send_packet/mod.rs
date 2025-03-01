@@ -5,8 +5,8 @@ use crate::rpc::{Error, PackagedMethod, Properties, SessionIdentifier};
 use super::promise::Promise;
 use super::shared::distribute::distribute;
 use super::shared::pipe::{SinkPipe, SourcePipe};
-use crate::rpc::protocol_4::shared::buffer::Buffer;
-use crate::rpc::protocol_4::shared::gather::gather;
+use crate::rpc::protocol::shared::buffer::Buffer;
+use crate::rpc::protocol::shared::gather::gather;
 use assemble_com_packet::AssembleComPacket;
 use assemble_packet::assemble_packet;
 use assign_session_id::assign_session_id;
@@ -161,7 +161,7 @@ mod tests {
 
     use core::task::Poll;
 
-    use crate::rpc::protocol_4::{promise::Promise, shared::buffer::Buffer};
+    use crate::rpc::protocol::{promise::Promise, shared::buffer::Buffer};
     use crate::rpc::{PackagedMethod, Properties, SessionIdentifier};
 
     fn setup() -> (Buffer<Input>, SendPacket, Buffer<Output>, Buffer<SessionIdentifier>) {

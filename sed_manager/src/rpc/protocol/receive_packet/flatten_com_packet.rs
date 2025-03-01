@@ -1,7 +1,7 @@
 use core::task::Poll::*;
 
 use crate::messaging::packet::{ComPacket, Packet};
-use crate::rpc::protocol_4::shared::pipe::{SinkPipe, SourcePipe};
+use crate::rpc::protocol::shared::pipe::{SinkPipe, SourcePipe};
 
 pub type Input = ComPacket;
 pub type Output = Packet;

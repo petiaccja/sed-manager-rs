@@ -1,7 +1,7 @@
 use core::task::Poll::*;
 
 use crate::messaging::token::{Tag, Token};
-use crate::rpc::protocol_4::shared::pipe::{SinkPipe, SourcePipe};
+use crate::rpc::protocol::shared::pipe::{SinkPipe, SourcePipe};
 use crate::rpc::{Error, ErrorEvent, ErrorEventExt, PackagedMethod};
 
 pub type Input = Result<Token, Error>;
@@ -112,7 +112,7 @@ mod tests {
 
     use crate::messaging::token::TokenStreamError;
     use crate::messaging::{uid::UID, value::Value};
-    use crate::rpc::protocol_4::shared::buffer::Buffer;
+    use crate::rpc::protocol::shared::buffer::Buffer;
     use crate::rpc::{MethodCall, MethodResult, MethodStatus, PackagedMethod};
     use crate::serialization::{OutputStream, Serialize as _};
 
