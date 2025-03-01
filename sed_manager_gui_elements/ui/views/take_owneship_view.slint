@@ -6,7 +6,7 @@ import { ContentStatus} from "../data/content_status.slint";
 import { SolidPopupWindow } from "../widgets/solid_popup_window.slint";
 
 component ConfirmationPopup inherits SolidPopupWindow {
-    width: 320px;
+    width: 400px;
     height: self.min-height;
     callback confirmed();
     content := VerticalLayout {
@@ -15,25 +15,42 @@ component ConfirmationPopup inherits SolidPopupWindow {
         HorizontalLayout {
             alignment: center;
             spacing: 6px;
-            Image {
-                source: @image-url("../../images/error/8666599_alert_triangle_icon.svg");
-                colorize: PaletteExtra.warning-foreground;
-                width: 80px;
-                height: 80px;
+            VerticalLayout {
+                alignment: center;
+                Image {
+                    source: @image-url("../../images/error/8666599_alert_triangle_icon.svg");
+                    colorize: PaletteExtra.warning-foreground;
+                    width: 80px;
+                    height: 80px;
+                }
             }
 
-            Text {
-                text: "If you forget your owner's password, you can permanently lose access to this device. Only proceed if you have your PSID password and you successfully tested reverting the device with it.";
-                wrap: word-wrap;
-                vertical-alignment: center;
+            VerticalLayout {
+                spacing: 8px;
+                alignment: center;
+                Text {
+                    text: "Losing the password could render your drive unusable (bricked)!";
+                    font-weight: 600;
+                    wrap: word-wrap;
+                }
+
+                Text {
+                    text: "You need this password to reset the device in case you lose your encryption password.";
+                    wrap: word-wrap;
+                }
+
+                Text {
+                    text: "Make sure you have your PSID password. The PSID is a second way to reset the drive.";
+                    wrap: word-wrap;
+                }
             }
         }
 
         HorizontalLayout {
-            alignment: center;
+            alignment: end;
             spacing: 6px;
             Button {
-                text: "Understood";
+                text: "Continue";
                 width: 90px;
                 clicked => {
                     root.close();

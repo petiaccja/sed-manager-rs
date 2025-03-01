@@ -30,6 +30,8 @@ export component DevicePage {
     callback update-range(range-idx: int, value: LockingRange);
     callback query-ranges(password: string);
     callback revert(use-psid: bool, password: string, include-admin: bool);
+    callback update-com-id-status();
+    callback stack-reset();
     function set-active-page(active-page: ActivePage) {
         reset-session();
         self.active-page = active-page;
@@ -52,6 +54,12 @@ export component DevicePage {
             }
             revert => {
                 set-active-page(ActivePage.revert);
+            }
+            update-com-id-status => {
+                update-com-id-status();
+            }
+            stack-reset => {
+                stack-reset();
             }
         }
         if active-page == ActivePage.take-ownership: TakeOwnershipView {

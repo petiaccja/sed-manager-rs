@@ -31,6 +31,8 @@ export component AppWindow inherits Window {
     callback query-ranges(device-idx: int, password: string);
     callback update-range(device-idx: int, range-idx: int, value: LockingRange);
     callback revert(device-idx: int, use-psid: bool, password: string, include-admin: bool);
+    callback update-com-id-status(device-idx: int);
+    callback stack-reset(device-idx: int);
     VerticalLayout {
         if device-tabs.length != 0: VerticalLayout {
             alignment: stretch;

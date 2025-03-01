@@ -2,17 +2,19 @@ use core::future::Future;
 use std::rc::Rc;
 use std::sync::Arc;
 
+use sed_manager::applications::error::Error as AppError;
 use sed_manager::applications::{get_locking_admins, get_locking_sp, get_lookup};
 use sed_manager::device::Device;
 use sed_manager::messaging::discovery::FeatureCode;
 use sed_manager::rpc::Error as RPCError;
-use sed_manager::spec::column_types::{AuthorityRef, SPRef};
+use sed_manager::spec::column_types::{AuthorityRef, LockingRangeRef, SPRef};
 use sed_manager::spec::table_id;
 use sed_manager::tper::{discover, Session};
 use sed_manager::{applications, spec};
 
-use crate::app_state::{AppState, SyncDeviceIdentity};
+use crate::app_state::AppState;
 use crate::device_list::DeviceList;
+use crate::native_data::{NativeDeviceIdentity, NativeLockingRange};
 use crate::ui::{self, ActionResult};
 use crate::utility::{run_in_thread, AtomicBorrow, Versioned};
 
@@ -35,7 +37,7 @@ async fn update_device_descriptions(app_state: Rc<AtomicBorrow<AppState>>) {
         Ok(devices) => devices
             .devices
             .iter()
-            .map(|device| SyncDeviceIdentity {
+            .map(|device| NativeDeviceIdentity {
                 name: device.model_number().unwrap_or("Unknown model".into()),
                 serial: device.serial_number().unwrap_or("Unknown serial".into()),
                 path: device.path().unwrap_or("Unknown path".into()),
@@ -114,8 +116,7 @@ pub async fn update_devices(app_state: Rc<AtomicBorrow<AppState>>) {
 pub async fn reset_session(app_state: Rc<AtomicBorrow<AppState>>, device_idx: usize) {
     app_state.with_mut(|app_state| {
         app_state.set_action_result(device_idx, ui::ActionResult::error("".into()));
-        app_state.clear_locking_range_errors(device_idx);
-        app_state.clear_locking_ranges(device_idx);
+        app_state.get_locking_ranges_mut().clear(device_idx);
     });
 
     if let Some(session) = app_state.with_mut(|app_state| app_state.take_session(device_idx)) {
@@ -128,7 +129,7 @@ pub async fn reset_session(app_state: Rc<AtomicBorrow<AppState>>, device_idx: us
 pub async fn one_click_action(
     app_state: Rc<AtomicBorrow<AppState>>,
     device_idx: usize,
-    future_result: impl Future<Output = Result<(), applications::error::Error>>,
+    future_result: impl Future<Output = Result<(), AppError>>,
 ) {
     app_state.with_mut(|app_state| {
         app_state.set_action_result(device_idx, ui::ActionResult::loading());
@@ -148,7 +149,7 @@ async fn take_ownership_impl(
     app_state: Rc<AtomicBorrow<AppState>>,
     device_idx: usize,
     new_password: String,
-) -> Result<(), applications::error::Error> {
+) -> Result<(), AppError> {
     if let Some(tper) = app_state.with_mut(|app_state| app_state.get_tper(device_idx)) {
         applications::take_ownership(&*tper, new_password.as_bytes()).await
     } else {
@@ -161,7 +162,7 @@ async fn activate_locking_impl(
     device_idx: usize,
     sid_password: String,
     new_admin1_password: Option<String>,
-) -> Result<(), applications::error::Error> {
+) -> Result<(), AppError> {
     if let Some(tper) = app_state.with_mut(|app_state| app_state.get_tper(device_idx)) {
         applications::activate_locking(
             &*tper,
@@ -180,7 +181,7 @@ async fn revert_impl(
     use_psid: bool,
     password: String,
     include_admin: bool,
-) -> Result<(), applications::error::Error> {
+) -> Result<(), AppError> {
     if let Some(tper) = app_state.with_mut(|app_state| app_state.get_tper(device_idx)) {
         let security_providers = app_state
             .with(|app_state| {
@@ -244,7 +245,7 @@ pub async fn start_persistent_session(
     sp: SPRef,
     authority: Option<AuthorityRef>,
     password: Option<String>,
-) -> Result<Arc<Session>, applications::error::Error> {
+) -> Result<Arc<Session>, AppError> {
     if let Some(tper) = app_state.with_mut(|app_state| app_state.get_tper(device_idx)) {
         let session = Arc::new(tper.start_session(sp, authority, password.as_ref().map(|s| s.as_bytes())).await?);
         let old_session = app_state.with_mut(|app_state| app_state.set_session(device_idx, session.clone()));
@@ -263,15 +264,40 @@ pub async fn start_query_ranges_session(
     app_state: Rc<AtomicBorrow<AppState>>,
     device_idx: usize,
     password: String,
-) -> Result<Arc<Session>, applications::error::Error> {
+) -> Result<Arc<Session>, AppError> {
     let ssc = app_state.with(|app_state| {
-        let discovery = app_state.get_discovery(device_idx).ok_or(applications::error::Error::NoAvailableSSC)?;
-        let ssc = discovery.get_primary_ssc().ok_or(applications::error::Error::IncompatibleSSC)?;
-        Ok::<FeatureCode, applications::error::Error>(ssc.feature_code())
+        let discovery = app_state.get_discovery(device_idx).ok_or(AppError::NoAvailableSSC)?;
+        let ssc = discovery.get_primary_ssc().ok_or(AppError::IncompatibleSSC)?;
+        Ok::<FeatureCode, AppError>(ssc.feature_code())
     })?;
     let locking_sp = get_locking_sp(ssc)?;
-    let authority = get_locking_admins(ssc)?.nth(1).ok_or(applications::error::Error::IncompatibleSSC)?;
+    let authority = get_locking_admins(ssc)?.nth(1).ok_or(AppError::IncompatibleSSC)?;
     start_persistent_session(app_state, device_idx, locking_sp, Some(authority), Some(password)).await
+}
+
+pub async fn get_range_columns(
+    session: &Session,
+    ssc: FeatureCode,
+    range: LockingRangeRef,
+) -> Result<NativeLockingRange, AppError> {
+    let sp = get_locking_sp(ssc).ok();
+    let lookup = get_lookup(ssc);
+    let name = lookup.by_uid(range.as_uid(), sp.map(|sp| sp.as_uid())).unwrap_or(format!("{:16X}", range.as_u64()));
+    let start_lba: u64 = session.get(range.as_uid(), 3).await?;
+    let length_lba: u64 = session.get(range.as_uid(), 4).await?;
+    let read_lock_enabled: bool = session.get(range.as_uid(), 5).await?;
+    let write_lock_enabled: bool = session.get(range.as_uid(), 6).await?;
+    let read_locked: bool = session.get(range.as_uid(), 7).await?;
+    let write_locked: bool = session.get(range.as_uid(), 8).await?;
+    Ok(NativeLockingRange {
+        name,
+        start_lba,
+        end_lba: start_lba + length_lba,
+        read_lock_enabled,
+        write_lock_enabled,
+        read_locked,
+        write_locked,
+    })
 }
 
 pub async fn query_ranges(app_state: Rc<AtomicBorrow<AppState>>, device_idx: usize, password: String) {
@@ -286,27 +312,45 @@ pub async fn query_ranges(app_state: Rc<AtomicBorrow<AppState>>, device_idx: usi
     };
     app_state.with_mut(|app_state| app_state.set_action_result(device_idx, ActionResult::success()));
 
-    let locking_ranges = match session.next(table_id::LOCKING, None, None).await {
+    let ranges = match session.next(table_id::LOCKING, None, None).await {
         Ok(locking_ranges) => locking_ranges,
         Err(err) => {
-            app_state.with_mut(|app_state| app_state.append_locking_range_error(device_idx, err.to_string()));
+            app_state
+                .with_mut(|app_state| app_state.get_locking_ranges_mut().append_error(device_idx, err.to_string()));
             return;
         }
     };
 
+    let ranges: Vec<_> = ranges.0.into_iter().filter_map(|uid| LockingRangeRef::try_from(uid).ok()).collect();
+
     let ssc = app_state
         .with(|app_state| {
-            let discovery = app_state.get_discovery(device_idx).ok_or(applications::error::Error::NoAvailableSSC)?;
-            let ssc = discovery.get_primary_ssc().ok_or(applications::error::Error::IncompatibleSSC)?;
-            Ok::<FeatureCode, applications::error::Error>(ssc.feature_code())
+            let discovery = app_state.get_discovery(device_idx).ok_or(AppError::NoAvailableSSC)?;
+            let ssc = discovery.get_primary_ssc().ok_or(AppError::IncompatibleSSC)?;
+            Ok::<FeatureCode, AppError>(ssc.feature_code())
         })
         .unwrap_or(FeatureCode::Unrecognized);
 
-    let sp = get_locking_sp(ssc).ok();
-    let lookup = get_lookup(ssc);
-    for range in locking_ranges.iter() {
-        let name = lookup.by_uid(*range, sp.map(|sp| sp.as_uid())).unwrap_or(format!("{:16X}", range.as_u64()));
-        let ui_range = ui::LockingRange::new(name, 0, 0, false, false, false, false);
-        app_state.with_mut(|app_state| app_state.append_locking_range(device_idx, ui_range));
+    for range in ranges {
+        let model = get_range_columns(&session, ssc, range).await;
+        app_state.with_mut(|app_state| {
+            let ranges = app_state.get_locking_ranges_mut();
+            match model {
+                Ok(model) => ranges.append_range(device_idx, range, model),
+                Err(error) => ranges.append_error(device_idx, error.to_string()),
+            }
+        });
     }
+}
+
+pub async fn update_range(
+    app_state: Rc<AtomicBorrow<AppState>>,
+    device_idx: usize,
+    range_idx: usize,
+    range: ui::LockingRange,
+) {
+    let Some(uid) = app_state.with_mut(|app_state| app_state.get_locking_ranges().get_uid(device_idx, range_idx))
+    else {
+        return;
+    };
 }

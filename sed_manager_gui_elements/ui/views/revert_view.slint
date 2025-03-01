@@ -6,7 +6,7 @@ import { ContentStatus} from "../data/content_status.slint";
 import { SolidPopupWindow } from "../widgets/solid_popup_window.slint";
 
 component ConfirmationPopup inherits SolidPopupWindow {
-    width: 320px;
+    width: 400px;
     height: self.min-height;
     callback confirmed();
     content := VerticalLayout {
@@ -15,25 +15,38 @@ component ConfirmationPopup inherits SolidPopupWindow {
         HorizontalLayout {
             alignment: center;
             spacing: 6px;
-            Image {
-                source: @image-url("../../images/error/8666599_alert_triangle_icon.svg");
-                colorize: PaletteExtra.warning-foreground;
-                width: 80px;
-                height: 80px;
+            VerticalLayout {
+                alignment: center;
+                Image {
+                    source: @image-url("../../images/error/8666599_alert_triangle_icon.svg");
+                    colorize: PaletteExtra.warning-foreground;
+                    width: 80px;
+                    height: 80px;
+                }
             }
 
-            Text {
-                text: "This will erase all data from your drive! The data is cryptographically erased and no tool or person can recover it.";
-                wrap: word-wrap;
-                vertical-alignment: center;
+            VerticalLayout {
+                alignment: center;
+                spacing: 8px;
+                Text {
+                    text: "All data will be erased!";
+                    wrap: word-wrap;
+                    font-weight: 600;
+                }
+
+                Text {
+                    text: "Your data is erased cryptographically, and it is not recoverable in any way.";
+                    wrap: word-wrap;
+                }
             }
         }
 
         HorizontalLayout {
-            alignment: center;
+            alignment: end;
             spacing: 6px;
             Button {
                 text: "Erase";
+                width: 90px;
                 clicked => {
                     root.close();
                     root.confirmed();
@@ -42,6 +55,7 @@ component ConfirmationPopup inherits SolidPopupWindow {
 
             Button {
                 text: "Cancel";
+                width: 90px;
                 clicked => {
                     root.close();
                 }

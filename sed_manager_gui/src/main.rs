@@ -5,6 +5,7 @@ mod callbacks;
 mod device_list;
 mod ui;
 mod utility;
+mod native_data;
 
 use core::error::Error;
 use slint::ComponentHandle;
@@ -42,6 +43,11 @@ fn set_callbacks(app_window: &ui::AppWindow, app_state: Rc<AtomicBorrow<AppState
     let copy = app_state.clone();
     app_window.on_query_ranges(move |device_idx, password| {
         let _ = slint::spawn_local(callbacks::query_ranges(copy.clone(), device_idx as usize, password.into()));
+    });
+    let copy = app_state.clone();
+    app_window.on_update_range(move |device_idx, range_idx, range| {
+        let _ =
+            slint::spawn_local(callbacks::update_range(copy.clone(), device_idx as usize, range_idx as usize, range));
     });
     let copy = app_state.clone();
     app_window.on_revert(move |device_idx, use_psid, password, include_admin| {

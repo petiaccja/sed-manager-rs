@@ -10,6 +10,8 @@ export component ActionView {
     callback activate-locking();
     callback configure-ranges();
     callback revert();
+    callback update-com-id-status();
+    callback stack-reset();
     ScrollView {
         horizontal-scrollbar-policy: always-off;
         min-width: viewport.min-width;
@@ -82,6 +84,44 @@ export component ActionView {
                         background: #00000000;
                         clicked => {
                             revert();
+                        }
+                    }
+                }
+            }
+
+            CollapsibleView {
+                text: "Troubleshoot";
+                icon: @image-url("../../../images/action/construction_24dp_E3E3E3.svg");
+                preferred-height: self.min-height;
+                font-color: PaletteExtra.accented-control-foreground;
+                header-height: 42px;
+                VerticalLayout {
+                    alignment: start;
+                    HorizontalSeparator {
+                        background: Palette.background;
+                    }
+
+                    NavigationButton {
+                        text: "ComID status";
+                        icon: @image-url("../../../images/action/activity.svg");
+                        height: button-height;
+                        background: #00000000;
+                        clicked => {
+                            update-com-id-status()
+                        }
+                    }
+
+                    HorizontalSeparator {
+                        background: Palette.background;
+                    }
+
+                    NavigationButton {
+                        text: "Stack reset";
+                        icon: @image-url("../../../images/action/restart_alt_24dp_E3E3E3.svg");
+                        height: button-height;
+                        background: #00000000;
+                        clicked => {
+                            stack-reset()
                         }
                     }
                 }
