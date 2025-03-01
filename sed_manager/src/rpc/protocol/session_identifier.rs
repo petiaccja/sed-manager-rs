@@ -1,6 +1,6 @@
 use crate::messaging::packet::Packet;
 
-#[derive(Hash, PartialEq, Eq, Clone, Copy)]
+#[derive(Hash, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug)]
 pub struct SessionIdentifier {
     pub hsn: u32,
     pub tsn: u32,

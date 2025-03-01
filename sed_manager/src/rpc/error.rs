@@ -95,6 +95,24 @@ impl From<MethodStatus> for ErrorEvent {
     }
 }
 
+impl From<TokenStreamError> for Error {
+    fn from(value: TokenStreamError) -> Self {
+        value.as_error()
+    }
+}
+
+impl From<SerializeError> for Error {
+    fn from(value: SerializeError) -> Self {
+        value.as_error()
+    }
+}
+
+impl From<DeviceError> for Error {
+    fn from(value: DeviceError) -> Self {
+        value.as_error()
+    }
+}
+
 impl From<MethodStatus> for Error {
     fn from(value: MethodStatus) -> Self {
         value.as_error()

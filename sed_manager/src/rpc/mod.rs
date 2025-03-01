@@ -4,6 +4,7 @@ mod message;
 mod method;
 mod properties;
 mod protocol;
+mod protocol_4;
 
 pub use error::{Error, ErrorAction, ErrorEvent, ErrorEventExt};
 pub use message::PackagedMethod;
