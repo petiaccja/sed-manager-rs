@@ -2,7 +2,7 @@ use tokio::sync::{mpsc, oneshot};
 
 use crate::messaging::com_id::{HandleComIdRequest, HandleComIdResponse};
 use crate::messaging::discovery::Discovery;
-use crate::rpc::{Error, ErrorEvent, ErrorEventExt, PackagedMethod, Properties, SessionIdentifier};
+use crate::rpc::{Error, PackagedMethod, Properties, SessionIdentifier};
 
 use super::promise::Promise;
 
@@ -48,7 +48,7 @@ impl CommandSender {
         let _ = self.tx.send(Command::Method { id, request: promise });
         match rx.await {
             Ok(response) => response,
-            Err(_) => Err(ErrorEvent::Closed.as_error()),
+            Err(_) => Err(Error::Closed),
         }
     }
 
@@ -58,7 +58,7 @@ impl CommandSender {
         let _ = self.tx.send(Command::ComId { request: promise });
         match rx.await {
             Ok(response) => response,
-            Err(_) => Err(ErrorEvent::Closed.as_error()),
+            Err(_) => Err(Error::Closed),
         }
     }
 
@@ -68,7 +68,7 @@ impl CommandSender {
         let _ = self.tx.send(Command::Discover { request: promise });
         match rx.await {
             Ok(response) => response,
-            Err(_) => Err(ErrorEvent::Closed.as_error()),
+            Err(_) => Err(Error::Closed),
         }
     }
 }

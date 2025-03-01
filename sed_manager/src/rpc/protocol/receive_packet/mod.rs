@@ -7,7 +7,7 @@ use flatten_packet::flatten_packet;
 use tokio::sync::oneshot;
 
 use crate::messaging::packet::{ComPacket, Packet};
-use crate::rpc::{Error, ErrorEvent, ErrorEventExt, PackagedMethod, Properties, SessionIdentifier};
+use crate::rpc::{Error, PackagedMethod, Properties, SessionIdentifier};
 
 use flatten_com_packet::flatten_com_packet;
 
@@ -152,8 +152,7 @@ impl Session {
         flatten_packet(&mut self.packet, &mut self.sub_packet);
         deserialize_sub_packet(&mut self.sub_packet, &mut self.token);
         self.assemble_method.update(&mut self.token, &mut self.method);
-        self.timeout
-            .update(&mut self.method, &mut self.in_time, Some(|| Err(ErrorEvent::TimedOut.as_error())));
+        self.timeout.update(&mut self.method, &mut self.in_time, Some(|| Err(Error::TimedOut)));
         commit(&mut self.sender, &mut self.in_time);
     }
 

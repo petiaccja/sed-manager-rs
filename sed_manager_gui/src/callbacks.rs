@@ -5,7 +5,7 @@ use std::sync::Arc;
 use sed_manager::applications::{get_locking_admins, get_locking_sp, get_lookup};
 use sed_manager::device::Device;
 use sed_manager::messaging::discovery::FeatureCode;
-use sed_manager::rpc::{ErrorEvent as RPCErrorEvent, ErrorEventExt};
+use sed_manager::rpc::Error as RPCError;
 use sed_manager::spec::column_types::{AuthorityRef, SPRef};
 use sed_manager::spec::table_id;
 use sed_manager::tper::{discover, Session};
@@ -152,7 +152,7 @@ async fn take_ownership_impl(
     if let Some(tper) = app_state.with_mut(|app_state| app_state.get_tper(device_idx)) {
         applications::take_ownership(&*tper, new_password.as_bytes()).await
     } else {
-        Err(RPCErrorEvent::NotSupported.as_error().into())
+        Err(RPCError::NotSupported.into())
     }
 }
 
@@ -170,7 +170,7 @@ async fn activate_locking_impl(
         )
         .await
     } else {
-        Err(RPCErrorEvent::NotSupported.as_error().into())
+        Err(RPCError::NotSupported.into())
     }
 }
 
@@ -205,10 +205,10 @@ async fn revert_impl(
             let result = applications::revert(&*tper, authority, password.as_bytes(), sp).await;
             result
         } else {
-            Err(RPCErrorEvent::NotSupported.as_error().into())
+            Err(RPCError::NotSupported.into())
         }
     } else {
-        Err(RPCErrorEvent::NotSupported.as_error().into())
+        Err(RPCError::NotSupported.into())
     }
 }
 
@@ -255,7 +255,7 @@ pub async fn start_persistent_session(
         }
         Ok(session)
     } else {
-        Err(RPCErrorEvent::NotSupported.as_error().into())
+        Err(RPCError::NotSupported.into())
     }
 }
 

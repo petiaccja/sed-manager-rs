@@ -9,5 +9,6 @@ mod shared;
 mod sync_protocol;
 
 pub use command::CommandSender;
+pub use protocol::discover;
 pub use protocol::Protocol;
 pub use session_identifier::SessionIdentifier;

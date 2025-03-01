@@ -8,7 +8,7 @@ use crate::device::Device;
 use crate::messaging::com_id::{HandleComIdRequest, HandleComIdResponse};
 use crate::messaging::discovery::Discovery;
 use crate::messaging::packet::ComPacket;
-use crate::rpc::{Error, ErrorEventExt, PackagedMethod, Properties, SessionIdentifier};
+use crate::rpc::{Error, PackagedMethod, Properties, SessionIdentifier};
 use crate::serialization::DeserializeBinary;
 
 use super::command::Command;
@@ -278,8 +278,9 @@ fn append_command(batches: &mut Vec<CommandBatch>, command: Command) {
 }
 
 pub fn discover(device: &dyn Device) -> Result<Discovery, Error> {
-    let data = device.security_recv(0x01, 0x0001_u16.to_be_bytes(), 4096).map_err(|err| err.while_receiving())?;
-    Discovery::from_bytes(data).map_err(|err| err.while_receiving()).map(|d| d.remove_empty())
+    let data = device.security_recv(0x01, 0x0001_u16.to_be_bytes(), 4096)?;
+    let discovery = Discovery::from_bytes(data)?;
+    Ok(discovery.remove_empty())
 }
 
 #[cfg(test)]

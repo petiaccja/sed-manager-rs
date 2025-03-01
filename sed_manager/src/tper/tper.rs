@@ -7,11 +7,7 @@ use tokio::sync::Mutex;
 use crate::device::Device;
 use crate::messaging::com_id::{ComIdState, StackResetStatus};
 use crate::messaging::discovery::Discovery;
-use crate::rpc::{
-    CommandSender, Error as RPCError, ErrorEvent as RPCErrorEvent, ErrorEventExt, Properties, Protocol,
-    SessionIdentifier,
-};
-use crate::serialization::DeserializeBinary;
+use crate::rpc::{CommandSender, Error as RPCError, Properties, Protocol, SessionIdentifier};
 use crate::spec::column_types::{AuthorityRef, SPRef};
 
 use super::com_session::ComSession;
@@ -29,10 +25,7 @@ pub struct TPer {
     control_session: ControlSession,
 }
 
-pub fn discover(device: &dyn Device) -> Result<Discovery, RPCError> {
-    let data = device.security_recv(0x01, 0x0001_u16.to_be_bytes(), 4096).map_err(|err| err.while_receiving())?;
-    Discovery::from_bytes(data).map_err(|err| err.while_receiving()).map(|d| d.remove_empty())
-}
+pub use crate::rpc::discover;
 
 pub fn get_primary_ssc_com_id(discovery: &Discovery) -> Option<(u16, u16)> {
     discovery.get_primary_ssc().map(|ssc| (ssc.base_com_id(), 0))
@@ -59,7 +52,7 @@ impl TPer {
         if let Some((com_id, com_id_ext)) = get_primary_ssc_com_id(&discovery) {
             Ok(Self::new(device, com_id, com_id_ext))
         } else {
-            Err(RPCErrorEvent::NotSupported.as_error())
+            Err(RPCError::NotSupported)
         }
     }
 
@@ -120,7 +113,7 @@ impl TPer {
             .start_session(hsn, sp, true, password, None, None, authority, None, None, None, None, None)
             .await?;
         if sync_session.hsn != hsn {
-            return Err(RPCErrorEvent::Unspecified.as_error());
+            return Err(RPCError::Unspecified);
         };
         let trans_timeout = sync_session
             .trans_timeout

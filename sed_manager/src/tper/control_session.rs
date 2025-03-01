@@ -2,10 +2,7 @@ use tokio::sync::Mutex;
 
 use crate::messaging::value::Bytes;
 use crate::rpc::args::{DecodeArgs as _, EncodeArgs as _};
-use crate::rpc::{
-    CommandSender, Error as RPCError, ErrorEvent as RPCErrorEvent, ErrorEventExt as _, MethodCall, MethodStatus,
-    PackagedMethod, Properties, SessionIdentifier,
-};
+use crate::rpc::{CommandSender, Error as RPCError, MethodCall, PackagedMethod, Properties, SessionIdentifier};
 use crate::spec::basic_types::{List, NamedValue};
 use crate::spec::column_types::{AuthorityRef, MaxBytes32, SPRef};
 use crate::spec::{invoking_id::*, sm_method_id::*};
@@ -40,7 +37,7 @@ impl ControlSession {
         let result = self.sender.method(CONTROL_SESSION_ID, PackagedMethod::Call(method)).await;
         match result {
             Ok(PackagedMethod::Call(call)) => return Ok(call),
-            Ok(_) => return Err(RPCErrorEvent::MethodCallExpected.while_receiving()),
+            Ok(_) => return Err(RPCError::MethodCallExpected),
             Err(error) => Err(error),
         }
     }
@@ -59,8 +56,7 @@ impl ControlSession {
     ) -> Result<(List<NamedValue<MaxBytes32, u32>>, Option<List<NamedValue<MaxBytes32, u32>>>), RPCError> {
         let call = MethodCall::new_success(SESSION_MANAGER, PROPERTIES, (host_properties,).encode_args());
         let result = self.do_method_call(call).await?.take_args()?;
-        let (tper_capabilities, tper_properties) =
-            result.decode_args().map_err(|err: MethodStatus| err.while_receiving())?;
+        let (tper_capabilities, tper_properties) = result.decode_args()?;
         Ok((tper_capabilities, tper_properties))
     }
 
@@ -97,7 +93,7 @@ impl ControlSession {
         let call = MethodCall::new_success(SESSION_MANAGER, START_SESSION, args);
         let result = self.do_method_call(call).await?.take_args()?;
         let (hsn, tsn, sp_challenge, sp_exchange_cert, sp_signing_cert, trans_timeout, initial_credit, signed_hash) =
-            result.decode_args().map_err(|err: MethodStatus| err.while_receiving())?;
+            result.decode_args()?;
         Ok(SyncSession {
             hsn,
             tsn,

@@ -2,7 +2,7 @@ use core::task::Poll::*;
 
 use crate::messaging::token::{Tag, Token};
 use crate::rpc::protocol::shared::pipe::{SinkPipe, SourcePipe};
-use crate::rpc::{Error, ErrorEvent, ErrorEventExt, PackagedMethod};
+use crate::rpc::{Error, PackagedMethod};
 
 pub type Input = Result<Token, Error>;
 pub type Output = Result<PackagedMethod, Error>;
@@ -66,10 +66,10 @@ impl State {
             self.size = 0;
             let tokens = core::mem::replace(&mut self.tokens, Vec::new());
             let method = PackagedMethod::from_tokens(tokens);
-            Some(method.map_err(|err| err.as_error()))
+            Some(method.map_err(|err| err.into()))
         } else if self.size > 2 * 1024 * 1024 {
             self.tokens.clear();
-            Some(Err(ErrorEvent::MethodTooLarge.while_receiving()))
+            Some(Err(Error::MethodTooLarge))
         } else {
             None
         }
@@ -167,7 +167,7 @@ mod tests {
         let mut assemble = AssembleMethod::new();
         assemble.update(&mut input, &mut output);
 
-        assert_eq!(output.pop(), Poll::Ready(Some(Err(TokenStreamError::UnexpectedTag.as_error()))));
+        assert_eq!(output.pop(), Poll::Ready(Some(Err(TokenStreamError::UnexpectedTag.into()))));
         assert_eq!(output.pop(), Poll::Ready(None));
     }
 
@@ -192,7 +192,7 @@ mod tests {
         let mut assemble = AssembleMethod::new();
         assemble.update(&mut input, &mut output);
 
-        assert_eq!(output.pop(), Poll::Ready(Some(Err(TokenStreamError::InvalidData.as_error()))));
+        assert_eq!(output.pop(), Poll::Ready(Some(Err(TokenStreamError::InvalidData.into()))));
         assert_eq!(output.pop(), Poll::Ready(None));
     }
 }
