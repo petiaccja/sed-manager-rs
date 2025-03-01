@@ -20,9 +20,6 @@ use super::shared::pipe::{SinkPipe, SourcePipe};
 use super::sync_protocol::{roundtrip_com_id, roundtrip_packet};
 use super::CommandSender;
 
-static RUNTIME: std::sync::LazyLock<tokio::runtime::Runtime> =
-    std::sync::LazyLock::new(|| tokio::runtime::Runtime::new().unwrap());
-
 pub struct Protocol {
     rx: mpsc::UnboundedReceiver<Command>,
     device: Arc<dyn Device>,
@@ -64,7 +61,7 @@ impl Protocol {
         let (tx, rx) = mpsc::unbounded_channel();
         let (done_tx, done_rx) = oneshot::channel();
         let protocol = Self::new(rx, device, com_id, com_id_ext, properties);
-        let _ = RUNTIME.spawn(protocol.run(done_tx));
+        let _ = super::runtime::RUNTIME.spawn(protocol.run(done_tx));
         (CommandSender::new(tx), done_rx)
     }
 
@@ -142,11 +139,9 @@ impl Protocol {
 
     async fn recv_batches(&mut self) -> Vec<CommandBatch> {
         let mut batches = Vec::<CommandBatch>::new();
-        tokio::select! {
-            biased;
-            Some(command) = self.rx.recv() => append_command(&mut batches, command),
-            _ = tokio::time::sleep(Duration::from_millis(64)) => (),
-        };
+        if let Ok(Some(command)) = tokio::time::timeout(Duration::from_millis(64), self.rx.recv()).await {
+            append_command(&mut batches, command);
+        }
         while let Ok(command) = self.rx.try_recv() {
             append_command(&mut batches, command);
         }
