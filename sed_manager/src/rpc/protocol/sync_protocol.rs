@@ -1,11 +1,9 @@
-use std::time::Duration;
-
 use crate::device::Device;
 use crate::messaging::com_id::{
     HandleComIdRequest, HandleComIdResponse, HANDLE_COM_ID_PROTOCOL, HANDLE_COM_ID_RESPONSE_LEN,
 };
 use crate::messaging::packet::{ComPacket, PACKETIZED_PROTOCOL};
-use crate::rpc::{Error, ErrorEventExt as _, Properties};
+use crate::rpc::{Error, Properties};
 use crate::serialization::{DeserializeBinary as _, SerializeBinary};
 
 use super::retry::Retry;

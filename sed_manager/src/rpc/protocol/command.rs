@@ -1,21 +1,10 @@
-use core::task::Poll;
-use core::time::Duration;
-use std::sync::Arc;
-
 use tokio::sync::{mpsc, oneshot};
 
-use crate::device::Device;
 use crate::messaging::com_id::{HandleComIdRequest, HandleComIdResponse};
 use crate::messaging::discovery::Discovery;
-use crate::messaging::packet::ComPacket;
 use crate::rpc::{Error, ErrorEvent, ErrorEventExt, PackagedMethod, Properties, SessionIdentifier};
-use crate::serialization::DeserializeBinary;
 
 use super::promise::Promise;
-use super::receive_packet::{self, ReceivePacket};
-use super::send_packet::{self, SendPacket};
-use super::shared::buffer::Buffer;
-use super::shared::pipe::{SinkPipe, SourcePipe};
 
 pub enum Command {
     OpenSession { id: SessionIdentifier, properties: Properties },

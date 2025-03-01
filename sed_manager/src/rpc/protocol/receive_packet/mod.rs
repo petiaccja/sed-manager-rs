@@ -47,7 +47,7 @@ impl ReceivePacket {
 
     pub fn open_session(&mut self, id: SessionIdentifier, properties: Properties) {
         if !self.sessions.contains_key(&id) {
-            let session = Session::new(id, properties);
+            let session = Session::new(properties);
             self.sessions.insert(id, session);
         }
     }
@@ -112,7 +112,7 @@ impl ReceivePacket {
         let done: Vec<_> = self
             .sessions
             .iter()
-            .filter(|(id, session)| session.is_done() || session.is_aborted())
+            .filter(|(_, session)| session.is_done() || session.is_aborted())
             .map(|(id, _)| *id)
             .collect();
         for id in &done {
@@ -126,7 +126,7 @@ impl ReceivePacket {
 }
 
 impl Session {
-    pub fn new(id: SessionIdentifier, properties: Properties) -> Self {
+    pub fn new(properties: Properties) -> Self {
         Self {
             sender: Buffer::new(),
             packet: Buffer::new(),

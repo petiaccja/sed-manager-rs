@@ -4,7 +4,7 @@ use crate::rpc::protocol::shared::pipe::SourcePipe;
 
 pub type Sender<Item> = oneshot::Sender<Item>;
 
-pub fn is_done<Item>(sender: &dyn SourcePipe<Sender<Item>>, item: &dyn SourcePipe<Item>) -> bool {
+pub fn is_done<Item>(sender: &dyn SourcePipe<Sender<Item>>, _item: &dyn SourcePipe<Item>) -> bool {
     sender.is_done()
 }
 

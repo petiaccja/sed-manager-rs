@@ -8,13 +8,12 @@ use crate::device::Device;
 use crate::messaging::com_id::{HandleComIdRequest, HandleComIdResponse};
 use crate::messaging::discovery::Discovery;
 use crate::messaging::packet::ComPacket;
-use crate::rpc::{properties, Error, ErrorEvent, ErrorEventExt, PackagedMethod, Properties, SessionIdentifier};
+use crate::rpc::{Error, ErrorEventExt, PackagedMethod, Properties, SessionIdentifier};
 use crate::serialization::DeserializeBinary;
 
 use super::command::Command;
 use super::promise::Promise;
 use super::receive_packet::{self, commit, ReceivePacket};
-use super::retry::Retry;
 use super::send_packet::{self, SendPacket};
 use super::shared::buffer::Buffer;
 use super::shared::pipe::{SinkPipe, SourcePipe};
@@ -96,7 +95,7 @@ impl Protocol {
     }
 
     pub fn capabilities() -> Properties {
-        use crate::messaging::packet::{ComPacket, COM_PACKET_HEADER_LEN, PACKET_HEADER_LEN, SUB_PACKET_HEADER_LEN};
+        use crate::messaging::packet::{COM_PACKET_HEADER_LEN, PACKET_HEADER_LEN, SUB_PACKET_HEADER_LEN};
         let max_transfer_len = 1048576;
         Properties {
             max_methods: usize::MAX,
@@ -303,7 +302,7 @@ mod tests {
         command.close_com_session();
         command.try_shutdown();
         drop(command);
-        done.await;
+        let _ = done.await;
     }
 
     #[tokio::test]
@@ -321,6 +320,6 @@ mod tests {
         command.close_com_session();
         command.try_shutdown();
         drop(command);
-        done.await;
+        let _ = done.await;
     }
 }

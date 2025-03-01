@@ -1,6 +1,4 @@
-use core::cell::RefCell;
 use core::task::Poll::*;
-use std::rc::{Rc, Weak};
 
 use crate::messaging::packet::{SubPacket, SubPacketKind};
 use crate::messaging::token::Token;

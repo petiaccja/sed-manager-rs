@@ -106,7 +106,7 @@ impl SendPacket {
         com_packet: &mut dyn SinkPipe<Output>,
         done_out: &mut dyn SinkPipe<SessionIdentifier>,
     ) {
-        let done: Vec<_> = self.sessions.iter().filter(|(id, session)| session.is_done()).map(|(id, _)| *id).collect();
+        let done: Vec<_> = self.sessions.iter().filter(|(_, session)| session.is_done()).map(|(id, _)| *id).collect();
         for id in &done {
             self.sessions.remove(id);
             done_out.push(*id);

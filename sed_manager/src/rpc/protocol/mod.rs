@@ -1,5 +1,3 @@
-#![allow(unused)]
-
 mod command;
 mod promise;
 mod protocol;
