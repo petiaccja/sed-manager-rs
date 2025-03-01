@@ -14,6 +14,10 @@ impl Timeout {
         Self { timeout, last: Instant::now() }
     }
 
+    pub fn reset(&mut self) {
+        self.last = Instant::now();
+    }
+
     pub fn update<Item>(
         &mut self,
         input: &mut dyn SourcePipe<Item>,
@@ -22,7 +26,6 @@ impl Timeout {
     ) {
         while let Ready(Some(item)) = input.pop() {
             output.push(item);
-            self.last = Instant::now();
         }
         if self.last.elapsed() > self.timeout {
             if let Some(error) = error {

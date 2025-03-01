@@ -9,4 +9,4 @@ pub use error::Error;
 pub use message::PackagedMethod;
 pub use method::{MethodCall, MethodResult, MethodStatus};
 pub use properties::Properties;
-pub use protocol::{discover, CommandSender, Protocol, SessionIdentifier};
+pub use protocol::{discover, CommandSender, Protocol, SessionIdentifier, CONTROL_SESSION_ID};

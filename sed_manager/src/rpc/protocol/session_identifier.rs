@@ -11,3 +11,5 @@ impl From<&Packet> for SessionIdentifier {
         Self { hsn: value.host_session_number, tsn: value.tper_session_number }
     }
 }
+
+pub const CONTROL_SESSION_ID: SessionIdentifier = SessionIdentifier { hsn: 0, tsn: 0 };

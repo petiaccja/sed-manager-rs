@@ -11,4 +11,4 @@ mod sync_protocol;
 pub use command::CommandSender;
 pub use protocol::discover;
 pub use protocol::Protocol;
-pub use session_identifier::SessionIdentifier;
+pub use session_identifier::{SessionIdentifier, CONTROL_SESSION_ID};

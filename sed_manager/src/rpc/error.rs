@@ -14,9 +14,9 @@ pub enum Error {
     // Protocol-related.
     #[error("security command failed: {}", .0)]
     SecurityCommandFailed(DeviceError),
-    #[error("operation/session has been aborted by the host")]
+    #[error("operation/session has been aborted")]
     Aborted,
-    #[error("operation/session has been aborted by the remote (TPer)")]
+    #[error("the session is closed")]
     Closed,
     #[error("timed out")]
     TimedOut,

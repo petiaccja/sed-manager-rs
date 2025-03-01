@@ -11,6 +11,7 @@ use crate::rpc::{Error, PackagedMethod, Properties, SessionIdentifier};
 
 use flatten_com_packet::flatten_com_packet;
 
+use super::session_identifier::CONTROL_SESSION_ID;
 use super::shared::buffer::Buffer;
 use super::shared::distribute::distribute;
 use super::shared::pipe::{SinkPipe, SourcePipe};
@@ -30,6 +31,7 @@ pub struct ReceivePacket {
 }
 
 struct Session {
+    id: SessionIdentifier,
     sender: Buffer<Sender>,
     packet: Buffer<flatten_packet::Input>,
     sub_packet: Buffer<flatten_packet::Output>,
@@ -47,7 +49,7 @@ impl ReceivePacket {
 
     pub fn open_session(&mut self, id: SessionIdentifier, properties: Properties) {
         if !self.sessions.contains_key(&id) {
-            let session = Session::new(properties);
+            let session = Session::new(id, properties);
             self.sessions.insert(id, session);
         }
     }
@@ -126,8 +128,9 @@ impl ReceivePacket {
 }
 
 impl Session {
-    pub fn new(properties: Properties) -> Self {
+    pub fn new(id: SessionIdentifier, properties: Properties) -> Self {
         Self {
+            id,
             sender: Buffer::new(),
             packet: Buffer::new(),
             sub_packet: Buffer::new(),
@@ -149,11 +152,18 @@ impl Session {
     }
 
     pub fn update(&mut self) {
+        if self.sender.is_empty() {
+            self.timeout.reset();
+        }
         flatten_packet(&mut self.packet, &mut self.sub_packet);
         deserialize_sub_packet(&mut self.sub_packet, &mut self.token);
         self.assemble_method.update(&mut self.token, &mut self.method);
         self.timeout.update(&mut self.method, &mut self.in_time, Some(|| Err(Error::TimedOut)));
-        commit(&mut self.sender, &mut self.in_time);
+        let num_comitted = commit(&mut self.sender, &mut self.in_time);
+        if num_comitted > 0 {
+            self.timeout.reset();
+        }
+        self.restore_control_session();
     }
 
     pub fn is_done(&self) -> bool {
@@ -162,6 +172,18 @@ impl Session {
 
     pub fn is_aborted(&self) -> bool {
         commit::is_aborted(&self.sender, &self.in_time)
+    }
+
+    fn restore_control_session(&mut self) {
+        // The control session should not be terminated by errors.
+        let is_control_session = self.id == CONTROL_SESSION_ID;
+        let is_soft_closed = !self.sender.is_closed() && self.in_time.is_closed();
+        if is_control_session && is_soft_closed {
+            // Drop anything if queued and reopen buffers.
+            self.token = Buffer::new();
+            self.method = Buffer::new();
+            self.in_time = Buffer::new();
+        }
     }
 }
 
@@ -176,12 +198,12 @@ mod tests {
         (Buffer::new(), Buffer::new(), ReceivePacket::new(), Buffer::new())
     }
 
-    fn make_com_packet(valid: bool) -> ComPacket {
+    fn make_com_packet(id: SessionIdentifier, valid: bool) -> ComPacket {
         let byte = if valid { Tag::EndOfSession as u8 } else { 0xFE };
         let sub_packet = SubPacket { kind: SubPacketKind::Data, payload: vec![byte].into() };
         let packet = Packet {
-            host_session_number: 0,
-            tper_session_number: 0,
+            host_session_number: id.hsn,
+            tper_session_number: id.tsn,
             payload: vec![sub_packet].into(),
             ..Default::default()
         };
@@ -202,7 +224,7 @@ mod tests {
     #[test]
     fn invalid_session() {
         let (mut sender, mut com_packet, mut node, mut done) = setup();
-        com_packet.push(make_com_packet(true));
+        com_packet.push(make_com_packet(CONTROL_SESSION_ID, true));
         node.update(&mut sender, &mut com_packet, &mut done);
         assert!(!done.is_closed());
     }
@@ -211,7 +233,7 @@ mod tests {
     fn active_session() {
         let id = SessionIdentifier { hsn: 0, tsn: 0 };
         let (mut sender, mut com_packet, mut node, mut done) = setup();
-        com_packet.push(make_com_packet(true));
+        com_packet.push(make_com_packet(id, true));
         let (tx, mut rx) = make_channel();
         sender.push((id, tx));
         node.open_session(id, Properties::ASSUMED);
@@ -221,16 +243,29 @@ mod tests {
     }
 
     #[test]
-    fn active_session_abort() {
-        let id = SessionIdentifier { hsn: 0, tsn: 0 };
+    fn active_session_abort_on_error() {
+        let id = SessionIdentifier { hsn: 1, tsn: 1 };
         let (mut sender, mut com_packet, mut node, mut done) = setup();
-        com_packet.push(make_com_packet(false));
+        com_packet.push(make_com_packet(id, false));
         let (tx, mut rx) = make_channel();
         sender.push((id, tx));
         node.open_session(id, Properties::ASSUMED);
         node.update(&mut sender, &mut com_packet, &mut done);
         assert!(rx.try_recv().is_ok_and(|response| response.is_err()));
         assert!(done.is_closed());
+    }
+
+    #[test]
+    fn active_session_restore_on_error() {
+        let id = SessionIdentifier { hsn: 0, tsn: 0 };
+        let (mut sender, mut com_packet, mut node, mut done) = setup();
+        com_packet.push(make_com_packet(id, false));
+        let (tx, mut rx) = make_channel();
+        sender.push((id, tx));
+        node.open_session(id, Properties::ASSUMED);
+        node.update(&mut sender, &mut com_packet, &mut done);
+        assert!(rx.try_recv().is_ok_and(|response| response.is_err()));
+        assert!(!done.is_closed());
     }
 
     #[test]

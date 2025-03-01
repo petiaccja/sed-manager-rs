@@ -2,12 +2,10 @@ use tokio::sync::Mutex;
 
 use crate::messaging::value::Bytes;
 use crate::rpc::args::{DecodeArgs as _, EncodeArgs as _};
-use crate::rpc::{CommandSender, Error as RPCError, MethodCall, PackagedMethod, Properties, SessionIdentifier};
+use crate::rpc::{CommandSender, Error as RPCError, MethodCall, PackagedMethod, Properties, CONTROL_SESSION_ID};
 use crate::spec::basic_types::{List, NamedValue};
 use crate::spec::column_types::{AuthorityRef, MaxBytes32, SPRef};
 use crate::spec::{invoking_id::*, sm_method_id::*};
-
-const CONTROL_SESSION_ID: SessionIdentifier = SessionIdentifier { hsn: 0, tsn: 0 };
 
 pub struct ControlSession {
     sender: CommandSender,
