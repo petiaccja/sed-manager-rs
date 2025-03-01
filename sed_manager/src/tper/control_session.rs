@@ -1,19 +1,14 @@
-use tokio::sync::{oneshot, Mutex};
+use tokio::sync::Mutex;
 
 use crate::messaging::value::Bytes;
 use crate::rpc::args::{DecodeArgs as _, EncodeArgs as _};
-use crate::rpc::{
-    Error as RPCError, ErrorEvent as RPCErrorEvent, ErrorEventExt as _, Message, MessageSender, MethodCall,
-    MethodStatus, PackagedMethod, Properties, SessionIdentifier, Tracked,
-};
+use crate::rpc::{CommandSender, Error as RPCError, MethodCall, PackagedMethod, Properties, CONTROL_SESSION_ID};
 use crate::spec::basic_types::{List, NamedValue};
 use crate::spec::column_types::{AuthorityRef, MaxBytes32, SPRef};
 use crate::spec::{invoking_id::*, sm_method_id::*};
 
-const CONTROL_SESSION_ID: SessionIdentifier = SessionIdentifier { hsn: 0, tsn: 0 };
-
 pub struct ControlSession {
-    sender: MessageSender,
+    sender: CommandSender,
     mutex: Mutex<()>,
 }
 
@@ -30,23 +25,17 @@ pub struct SyncSession {
 }
 
 impl ControlSession {
-    pub fn new(sender: MessageSender) -> Self {
-        let _ = sender.send(Message::StartSession { session: CONTROL_SESSION_ID, properties: Properties::ASSUMED });
+    pub fn new(sender: CommandSender) -> Self {
+        let _ = sender.open_session(CONTROL_SESSION_ID, Properties::ASSUMED);
         Self { sender, mutex: ().into() }
     }
 
     pub async fn do_method_call(&self, method: MethodCall) -> Result<MethodCall, RPCError> {
-        let (tx, rx) = oneshot::channel();
-        let content = Tracked { item: PackagedMethod::Call(method), promises: vec![tx] };
         let _guard = self.mutex.lock().await;
-        let _ = self.sender.send(Message::Method { session: CONTROL_SESSION_ID, content });
-        let result = match rx.await {
-            Ok(result) => result,
-            Err(_) => Err(RPCErrorEvent::Closed.while_receiving()),
-        };
+        let result = self.sender.method(CONTROL_SESSION_ID, PackagedMethod::Call(method)).await;
         match result {
             Ok(PackagedMethod::Call(call)) => return Ok(call),
-            Ok(_) => return Err(RPCErrorEvent::MethodCallExpected.while_receiving()),
+            Ok(_) => return Err(RPCError::MethodCallExpected),
             Err(error) => Err(error),
         }
     }
@@ -54,7 +43,7 @@ impl ControlSession {
 
 impl Drop for ControlSession {
     fn drop(&mut self) {
-        let _ = self.sender.send(Message::EndSession { session: CONTROL_SESSION_ID });
+        let _ = self.sender.close_session(CONTROL_SESSION_ID);
     }
 }
 
@@ -65,8 +54,7 @@ impl ControlSession {
     ) -> Result<(List<NamedValue<MaxBytes32, u32>>, Option<List<NamedValue<MaxBytes32, u32>>>), RPCError> {
         let call = MethodCall::new_success(SESSION_MANAGER, PROPERTIES, (host_properties,).encode_args());
         let result = self.do_method_call(call).await?.take_args()?;
-        let (tper_capabilities, tper_properties) =
-            result.decode_args().map_err(|err: MethodStatus| err.while_receiving())?;
+        let (tper_capabilities, tper_properties) = result.decode_args()?;
         Ok((tper_capabilities, tper_properties))
     }
 
@@ -103,7 +91,7 @@ impl ControlSession {
         let call = MethodCall::new_success(SESSION_MANAGER, START_SESSION, args);
         let result = self.do_method_call(call).await?.take_args()?;
         let (hsn, tsn, sp_challenge, sp_exchange_cert, sp_signing_cert, trans_timeout, initial_credit, signed_hash) =
-            result.decode_args().map_err(|err: MethodStatus| err.while_receiving())?;
+            result.decode_args()?;
         Ok(SyncSession {
             hsn,
             tsn,

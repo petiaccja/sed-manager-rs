@@ -27,7 +27,7 @@ version = "1.0.66"
 [dependencies.tokio]
 version = "1.41.0"
 default-features = false
-features = ["rt", "sync", "macros"]
+features = ["rt", "sync", "rt-multi-thread", "time", "macros"]
 
 [build-dependencies]
 quote = "1.0.37"

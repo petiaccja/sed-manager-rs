@@ -4,7 +4,7 @@ use crate::messaging::token::TokenStreamError;
 use crate::serialization::Error as SerializeError;
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-pub enum ErrorEvent {
+pub enum Error {
     // Encoding-related.
     #[error("tokenization failed: {}", .0)]
     TokenStreamFailed(TokenStreamError),
@@ -14,9 +14,9 @@ pub enum ErrorEvent {
     // Protocol-related.
     #[error("security command failed: {}", .0)]
     SecurityCommandFailed(DeviceError),
-    #[error("operation/session has been aborted by the host")]
+    #[error("operation/session has been aborted")]
     Aborted,
-    #[error("operation/session has been aborted by the remote (TPer)")]
+    #[error("the session is closed")]
     Closed,
     #[error("timed out")]
     TimedOut,
@@ -46,89 +46,26 @@ pub enum ErrorEvent {
     Unspecified,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ErrorAction {
-    Unspecified,
-    Send,
-    Receive,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Error {
-    pub event: ErrorEvent,
-    pub action: ErrorAction,
-}
-
-pub trait ErrorEventExt: Into<ErrorEvent> {
-    fn while_sending(self) -> Error {
-        Error { event: self.into(), action: ErrorAction::Send }
-    }
-    fn while_receiving(self) -> Error {
-        Error { event: self.into(), action: ErrorAction::Receive }
-    }
-    fn as_error(self) -> Error {
-        Error { event: self.into(), action: ErrorAction::Unspecified }
-    }
-}
-
-impl From<TokenStreamError> for ErrorEvent {
+impl From<TokenStreamError> for Error {
     fn from(value: TokenStreamError) -> Self {
-        Self::TokenStreamFailed(value)
+        Error::TokenStreamFailed(value)
     }
 }
 
-impl From<SerializeError> for ErrorEvent {
+impl From<SerializeError> for Error {
     fn from(value: SerializeError) -> Self {
-        Self::SerializationFailed(value)
+        Error::SerializationFailed(value)
     }
 }
 
-impl From<DeviceError> for ErrorEvent {
+impl From<DeviceError> for Error {
     fn from(value: DeviceError) -> Self {
-        Self::SecurityCommandFailed(value)
-    }
-}
-
-impl From<MethodStatus> for ErrorEvent {
-    fn from(value: MethodStatus) -> Self {
-        Self::MethodFailed(value)
+        Error::SecurityCommandFailed(value)
     }
 }
 
 impl From<MethodStatus> for Error {
     fn from(value: MethodStatus) -> Self {
-        value.as_error()
+        Error::MethodFailed(value)
     }
 }
-
-impl From<ErrorEvent> for Error {
-    fn from(value: ErrorEvent) -> Self {
-        value.as_error()
-    }
-}
-
-impl<T: Into<ErrorEvent>> ErrorEventExt for T {}
-
-impl Error {
-    pub fn while_sending(self) -> Self {
-        Self { event: self.event, action: ErrorAction::Send }
-    }
-    pub fn while_receiving(self) -> Self {
-        Self { event: self.event, action: ErrorAction::Receive }
-    }
-    pub fn as_error(self) -> Self {
-        self
-    }
-}
-
-impl core::fmt::Display for Error {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        match self.action {
-            ErrorAction::Unspecified => write!(f, "{}", self.event),
-            ErrorAction::Send => write!(f, "[sending] {}", self.event),
-            ErrorAction::Receive => write!(f, "[receiving] {}", self.event),
-        }
-    }
-}
-
-impl core::error::Error for Error {}

@@ -155,6 +155,7 @@ impl AppState {
         Some(tper)
     }
 
+    #[allow(unused)]
     pub fn get_session(&self, device_idx: usize) -> Option<Arc<Session>> {
         self.sessions.get(device_idx).cloned().flatten()
     }

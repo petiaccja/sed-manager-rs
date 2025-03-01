@@ -4,7 +4,6 @@ use sed_manager::fake_device::FakeDevice;
 use sed_manager::fake_device::MSID_PASSWORD;
 use sed_manager::messaging::uid::UID;
 use sed_manager::rpc::Error as RPCError;
-use sed_manager::rpc::ErrorEventExt;
 use sed_manager::rpc::MethodStatus;
 use sed_manager::spec::column_types::LifeCycleState;
 use sed_manager::spec::column_types::Password;
@@ -41,7 +40,7 @@ async fn authenticate_invalid_authority() -> Result<(), RPCError> {
     let session = tper.start_session(sp::ADMIN, None, None).await?;
     let invalid_authority = UID::new(0x0000_0009_2342_2342).try_into().unwrap();
     let result = session.authenticate(invalid_authority, Some(MSID_PASSWORD.as_bytes())).await;
-    assert_eq!(result, Err(MethodStatus::InvalidParameter.as_error()));
+    assert_eq!(result, Err(MethodStatus::InvalidParameter.into()));
     Ok(())
 }
 
@@ -61,7 +60,7 @@ async fn get_missing_object() -> Result<(), RPCError> {
     let tper = TPer::new_on_default_com_id(Arc::new(device))?;
     let session = tper.start_session(sp::ADMIN, None, None).await?;
     let result = session.get::<Password>(UID::new(table_id::C_PIN.as_u64() + 0x2360_4327), 3).await;
-    assert_eq!(result, Err(MethodStatus::InvalidParameter.as_error()));
+    assert_eq!(result, Err(MethodStatus::InvalidParameter.into()));
     Ok(())
 }
 
@@ -71,7 +70,7 @@ async fn get_invalid_column() -> Result<(), RPCError> {
     let tper = TPer::new_on_default_com_id(Arc::new(device))?;
     let session = tper.start_session(sp::ADMIN, None, None).await?;
     let result = session.get::<Password>(UID::new(table_id::C_PIN.as_u64() + 0x2360_4327), 57).await;
-    assert_eq!(result, Err(MethodStatus::InvalidParameter.as_error()));
+    assert_eq!(result, Err(MethodStatus::InvalidParameter.into()));
     Ok(())
 }
 
@@ -90,7 +89,7 @@ async fn set_missing_object() -> Result<(), RPCError> {
     let tper = TPer::new_on_default_com_id(Arc::new(device))?;
     let session = tper.start_session(sp::ADMIN, None, None).await?;
     let result = session.set(UID::new(table_id::C_PIN.as_u64() + 0x2360_4327), 3, Password::from("1234")).await;
-    assert_eq!(result, Err(MethodStatus::InvalidParameter.as_error()));
+    assert_eq!(result, Err(MethodStatus::InvalidParameter.into()));
     Ok(())
 }
 
@@ -100,7 +99,7 @@ async fn set_invalid_column() -> Result<(), RPCError> {
     let tper = TPer::new_on_default_com_id(Arc::new(device))?;
     let session = tper.start_session(sp::ADMIN, None, None).await?;
     let result = session.set(UID::new(table_id::C_PIN.as_u64() + 0x2360_4327), 57, Password::from("1234")).await;
-    assert_eq!(result, Err(MethodStatus::InvalidParameter.as_error()));
+    assert_eq!(result, Err(MethodStatus::InvalidParameter.into()));
     Ok(())
 }
 
@@ -110,7 +109,7 @@ async fn set_invalid_type() -> Result<(), RPCError> {
     let tper = TPer::new_on_default_com_id(Arc::new(device))?;
     let session = tper.start_session(sp::ADMIN, None, None).await?;
     let result = session.set(UID::new(table_id::C_PIN.as_u64() + 0x2360_4327), 3, 35678u32).await;
-    assert_eq!(result, Err(MethodStatus::InvalidParameter.as_error()));
+    assert_eq!(result, Err(MethodStatus::InvalidParameter.into()));
     Ok(())
 }
 

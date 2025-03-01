@@ -7,11 +7,7 @@ use tokio::sync::Mutex;
 use crate::device::Device;
 use crate::messaging::com_id::{ComIdState, StackResetStatus};
 use crate::messaging::discovery::Discovery;
-use crate::rpc::{
-    Error as RPCError, ErrorEvent as RPCErrorEvent, ErrorEventExt, Message, MessageSender, MessageStack, Properties,
-    SessionIdentifier, ThreadedMessageLoop, Tracked,
-};
-use crate::serialization::DeserializeBinary;
+use crate::rpc::{CommandSender, Error as RPCError, Properties, Protocol, SessionIdentifier};
 use crate::spec::column_types::{AuthorityRef, SPRef};
 
 use super::com_session::ComSession;
@@ -24,17 +20,12 @@ pub struct TPer {
     next_hsn: AtomicU32,
     capabilities: Properties,
     properties: Mutex<Option<Properties>>,
-    message_sender: MessageSender,
+    message_sender: CommandSender,
     com_session: ComSession,
     control_session: ControlSession,
-    #[allow(unused)]
-    message_loop: ThreadedMessageLoop, // Drop last! Needs all the senders to be dropped first for thread join.
 }
 
-pub fn discover(device: &dyn Device) -> Result<Discovery, RPCError> {
-    let data = device.security_recv(0x01, 0x0001_u16.to_be_bytes(), 4096).map_err(|err| err.while_receiving())?;
-    Discovery::from_bytes(data).map_err(|err| err.while_receiving()).map(|d| d.remove_empty())
-}
+pub use crate::rpc::discover;
 
 pub fn get_primary_ssc_com_id(discovery: &Discovery) -> Option<(u16, u16)> {
     discovery.get_primary_ssc().map(|ssc| (ssc.base_com_id(), 0))
@@ -42,16 +33,14 @@ pub fn get_primary_ssc_com_id(discovery: &Discovery) -> Option<(u16, u16)> {
 
 impl TPer {
     pub fn new(device: Arc<dyn Device>, com_id: u16, com_id_ext: u16) -> Self {
-        let message_stack = MessageStack::new(com_id, com_id_ext);
-        let capabilities = message_stack.capabilities();
-        let (message_loop, message_sender) = ThreadedMessageLoop::new(device.clone(), message_stack);
+        let capabilities = Protocol::capabilities();
+        let (message_sender, _) = Protocol::spawn(device, com_id, com_id_ext, capabilities.clone());
         Self {
             com_id,
             com_id_ext,
             next_hsn: 1.into(),
             capabilities,
             properties: None.into(),
-            message_loop,
             message_sender: message_sender.clone(),
             com_session: ComSession::new(message_sender.clone()),
             control_session: ControlSession::new(message_sender.clone()),
@@ -63,7 +52,7 @@ impl TPer {
         if let Some((com_id, com_id_ext)) = get_primary_ssc_com_id(&discovery) {
             Ok(Self::new(device, com_id, com_id_ext))
         } else {
-            Err(RPCErrorEvent::NotSupported.as_error())
+            Err(RPCError::NotSupported)
         }
     }
 
@@ -80,12 +69,7 @@ impl TPer {
     }
 
     pub async fn discover(&self) -> Result<Discovery, RPCError> {
-        let (tx, rx) = tokio::sync::oneshot::channel();
-        let _ = self.message_sender.send(Message::Discover { content: Tracked { item: (), promises: vec![tx] } });
-        match rx.await {
-            Ok(result) => result,
-            Err(_) => Err(RPCErrorEvent::Aborted.while_receiving()),
-        }
+        self.message_sender.discover().await
     }
 
     pub async fn current_properties(&self) -> Properties {
@@ -129,7 +113,7 @@ impl TPer {
             .start_session(hsn, sp, true, password, None, None, authority, None, None, None, None, None)
             .await?;
         if sync_session.hsn != hsn {
-            return Err(RPCErrorEvent::Unspecified.as_error());
+            return Err(RPCError::Unspecified);
         };
         let trans_timeout = sync_session
             .trans_timeout
