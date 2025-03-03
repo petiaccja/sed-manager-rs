@@ -1,0 +1,46 @@
+import { DeviceDescription } from "data/device_description.slint";
+import { ExtendedStatus } from "data/status.slint";
+import { LockingRange } from "data/locking_range.slint";
+import { UnavailableDevice } from "data/unavailable_device.slint";
+
+export struct LockingRangeState {
+    errors: [string],
+    names: [string],
+    properties: [LockingRange],
+}
+
+export struct ConfigureState {
+    extended-status: ExtendedStatus,
+    locking-ranges: LockingRangeState,
+}
+
+export struct TroubleshootState {
+    extended-status: ExtendedStatus,
+    com-id: int,
+    com-id-ext: int,
+    com-id-status: string,
+}
+
+export global State {
+    in property <[string]> tab-names;
+    in property <[UnavailableDevice]> unavailable-devices;
+    in property <[DeviceDescription]> descriptions;
+    in property <[ConfigureState]> configure;
+    in property <[TroubleshootState]> troubleshoot;
+
+    // Global
+    callback list-devices();
+    // Device-related.
+    callback discover(device-idx: int);
+    callback cleanup-session(device-idx: int);
+    // Configuration.
+    callback take-ownership(device-idx: int, new-password: string);
+    callback activate-locking(device-idx: int, sid-password: string, new-admin1-password: string);
+    callback login-locking-ranges(device-idx: int, password: string);
+    callback list-locking-ranges(device-idx: int, );
+    callback set-locking-range(device-idx: int, range-idx: int, value: LockingRange);
+    callback revert(device-idx: int, use-psid: bool, password: string, revert-admin: bool);
+    // Troubleshooting.
+    callback get-com-id-status(device-idx: int);
+    callback reset-stack(device-idx: int);
+}

@@ -1,0 +1,41 @@
+import { LineEdit, GroupBox, Button, Palette } from "std-widgets.slint";
+import { Island, PaletteExtra } from "../widgets/visual.slint";
+import { Status } from "../data/status.slint";
+import { ActivityLauncher } from "device_description/launcher.slint";
+import { Discovery } from "device_description/discovery.slint";
+import { Identity } from "device_description/identity.slint";
+import { DeviceDescription, ExampleData } from "../data/device_description.slint";
+
+export component Description {
+    in property <DeviceDescription> description;
+    callback select-activity <=> launcher.select-activity;
+    VerticalLayout {
+        spacing: 20px;
+        Identity {
+            identity: description.identity;
+            security-subsystem-classes: description.discovery.security-subsystem-classes;
+            vertical-stretch: 0.0;
+        }
+
+        HorizontalLayout {
+            spacing: 20px;
+            alignment: stretch;
+            vertical-stretch: 1.0;
+            Discovery {
+                horizontal-stretch: 1.0;
+                extended-status: description.discovery-status;
+                discovery: description.discovery;
+            }
+
+            launcher := ActivityLauncher {
+                horizontal-stretch: 0.0;
+                activity-support: description.activity-support;
+                security-providers: description.discovery.security-providers;
+            }
+        }
+    }
+}
+
+export component LivePreviewTest_Page inherits Description {
+    description: ExampleData.description;
+}

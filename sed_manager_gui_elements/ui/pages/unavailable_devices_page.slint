@@ -1,6 +1,6 @@
-import { NameValueListView } from "../widgets/name_value_list_view.slint";
-import { TextLoadingIndicator } from "../widgets/loading.slint";
-import { ContentStatus } from "../data/content_status.slint";
+import { PairList } from "../widgets/pair_list.slint";
+import { TextLoadingIndicator } from "../widgets/progress.slint";
+import { Status } from "../data/status.slint";
 import { HorizontalBox, Palette, LineEdit } from "std-widgets.slint";
 import { HorizontalSeparator, Island, PaletteExtra } from "../widgets/visual.slint";
 import { UnavailableDevice } from "../data/unavailable_device.slint";
@@ -8,8 +8,8 @@ import { UnavailableDevice } from "../data/unavailable_device.slint";
 component UnavailableDeviceView inherits Island {
     in property <UnavailableDevice> unavailable-device;
     preferred-width: 100%;
-    preferred-height: self.min-height;
-    VerticalLayout {
+    preferred-height: content.min-height;
+    content := VerticalLayout {
         padding: root.corner-padding(4px);
         spacing: 6px;
         alignment: start;

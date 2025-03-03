@@ -1,17 +1,14 @@
 import { GroupBox, Button, Palette, ScrollView } from "std-widgets.slint";
-import { CollapsibleView } from "../../widgets/collapsible_view.slint";
+import { Collapsible } from "../../widgets/collapsible.slint";
 import { NavigationButton, NavigationDirection } from "../../widgets/navigation_button.slint";
 import { HorizontalSeparator, PaletteExtra } from "../../widgets/visual.slint";
+import { Activity, ActivitySupport } from "../../data/activity.slint";
 
-export component ActionView {
+export component ActivityLauncher {
+    in property <ActivitySupport> activity-support;
     in property <[string]> security-providers;
     private property <length> button-height: 32px;
-    callback take-ownership();
-    callback activate-locking();
-    callback configure-ranges();
-    callback revert();
-    callback update-com-id-status();
-    callback stack-reset();
+    callback select-activity(activity: Activity);
     ScrollView {
         horizontal-scrollbar-policy: always-off;
         min-width: viewport.min-width;
@@ -19,7 +16,7 @@ export component ActionView {
         viewport := VerticalLayout {
             alignment: start;
             spacing: 12px;
-            CollapsibleView {
+            Collapsible {
                 text: "Configure";
                 icon: @image-url("../../../images/action/8666615_settings_icon.svg");
                 preferred-height: self.min-height;
@@ -33,12 +30,14 @@ export component ActionView {
 
                     NavigationButton {
                         text: "Take ownership";
-                        icon: @image-url("../../../images/action/8666628_user_check_icon.svg");
+                        icon: @image-url("../../../images/action/home_24dp.svg");
                         height: button-height;
                         navigation-direction: NavigationDirection.left;
                         background: #00000000;
+                        icon-color: PaletteExtra.success-foreground;
+                        enabled: activity-support.take-ownership;
                         clicked => {
-                            take-ownership();
+                            select-activity(Activity.take-ownership);
                         }
                     }
 
@@ -52,8 +51,10 @@ export component ActionView {
                         height: button-height;
                         navigation-direction: NavigationDirection.left;
                         background: #00000000;
+                        icon-color: PaletteExtra.make-accented(#ffc400, Palette.control-foreground, Palette.control-background);
+                        enabled: activity-support.activate-locking;
                         clicked => {
-                            activate-locking();
+                            select-activity(Activity.activate-locking);
                         }
                     }
 
@@ -62,13 +63,66 @@ export component ActionView {
                     }
 
                     NavigationButton {
-                        text: "Configure ranges";
-                        icon: @image-url("../../../images/action/menu.svg");
+                        text: "Locking ranges";
+                        icon: @image-url("../../../images/shape/arrow_range_24dp.svg");
                         height: button-height;
                         navigation-direction: NavigationDirection.left;
                         background: #00000000;
+                        icon-color: PaletteExtra.make-accented(#9900ff, Palette.control-foreground, Palette.control-background);
+                        enabled: activity-support.locking-ranges;
                         clicked => {
-                            configure-ranges();
+                            select-activity(Activity.locking-ranges);
+                        }
+                    }
+
+                    HorizontalSeparator {
+                        background: Palette.background;
+                    }
+
+                    NavigationButton {
+                        text: "Users";
+                        icon: @image-url("../../../images/action/users.svg");
+                        height: button-height;
+                        navigation-direction: NavigationDirection.left;
+                        background: #00000000;
+                        icon-color: PaletteExtra.make-accented(#006eff, Palette.control-foreground, Palette.control-background);
+                        enabled: activity-support.users;
+                        clicked => {
+                            select-activity(Activity.users);
+                        }
+                    }
+
+                    HorizontalSeparator {
+                        background: Palette.background;
+                    }
+
+                    NavigationButton {
+                        text: "Permissions";
+                        icon: @image-url("../../../images/action/award.svg");
+                        height: button-height;
+                        navigation-direction: NavigationDirection.left;
+                        background: #00000000;
+                        icon-color: PaletteExtra.success-foreground;
+                        enabled: activity-support.permissions;
+                        clicked => {
+                            select-activity(Activity.permissions);
+                        }
+                    }
+
+                    HorizontalSeparator {
+                        background: Palette.background;
+                    }
+
+                    NavigationButton {
+                        text: "MBR Shadowing";
+                        icon: @image-url("../../../images/action/tonality_24dp.svg");
+                        height: button-height;
+                        navigation-direction: NavigationDirection.left;
+                        background: #00000000;
+                        icon-color: PaletteExtra.make-accented(#96fcff, Palette.control-foreground, Palette.control-background);
+                        enabled: activity-support.shadow-mbr;
+                        clicked => {
+                            select-activity(Activity.shadow-mbr);
                         }
                     }
 
@@ -78,18 +132,20 @@ export component ActionView {
 
                     NavigationButton {
                         text: "Revert";
-                        icon: @image-url("../../../images/action/user-x.svg");
+                        icon: @image-url("../../../images/action/lock_reset_24dp.svg");
                         height: button-height;
                         navigation-direction: NavigationDirection.left;
                         background: #00000000;
+                        icon-color: PaletteExtra.error-foreground;
+                        enabled: activity-support.revert;
                         clicked => {
-                            revert();
+                            select-activity(Activity.revert);
                         }
                     }
                 }
             }
 
-            CollapsibleView {
+            Collapsible {
                 text: "Troubleshoot";
                 icon: @image-url("../../../images/action/construction_24dp_E3E3E3.svg");
                 preferred-height: self.min-height;
@@ -106,8 +162,10 @@ export component ActionView {
                         icon: @image-url("../../../images/action/activity.svg");
                         height: button-height;
                         background: #00000000;
+                        icon-color: PaletteExtra.make-accented(#ff46ff, Palette.control-foreground, Palette.control-background);
+                        enabled: activity-support.com-id-status;
                         clicked => {
-                            update-com-id-status()
+                            select-activity(Activity.com-id-status);
                         }
                     }
 
@@ -120,14 +178,16 @@ export component ActionView {
                         icon: @image-url("../../../images/action/restart_alt_24dp_E3E3E3.svg");
                         height: button-height;
                         background: #00000000;
+                        icon-color: PaletteExtra.make-accented(#00a2ff, Palette.control-foreground, Palette.control-background);
+                        enabled: activity-support.stack-reset;
                         clicked => {
-                            stack-reset()
+                            select-activity(Activity.stack-reset);
                         }
                     }
                 }
             }
 
-            if root.security-providers.length > 0: CollapsibleView {
+            if root.security-providers.length > 0: Collapsible {
                 text: "Table editor";
                 icon: @image-url("../../../images/action/9111030_table_icon.svg");
                 preferred-height: self.min-height;
@@ -147,6 +207,7 @@ export component ActionView {
                             height: button-height;
                             navigation-direction: NavigationDirection.left;
                             background: #00000000;
+                            icon-color: PaletteExtra.make-accented(#ffc400, Palette.control-foreground, Palette.control-background);
                             enabled: false;
                         }
                     }
@@ -156,6 +217,6 @@ export component ActionView {
     }
 }
 
-export component LivePreviewTest inherits ActionView {
+export component LivePreviewTest inherits ActivityLauncher {
     security-providers: ["Admin", "Locking"];
 }

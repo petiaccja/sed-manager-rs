@@ -27,7 +27,6 @@ impl From<NativeDeviceIdentity> for ui::DeviceIdentity {
 impl From<NativeLockingRange> for ui::LockingRange {
     fn from(value: NativeLockingRange) -> Self {
         Self::new(
-            value.name,
             value.start_lba,
             value.end_lba,
             value.read_lock_enabled,

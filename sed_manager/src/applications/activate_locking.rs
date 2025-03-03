@@ -1,5 +1,5 @@
 use crate::applications::utility::get_locking_admins;
-use crate::messaging::discovery::Discovery;
+use crate::messaging::discovery::{Discovery, LockingDescriptor};
 use crate::spec::column_types::LifeCycleState;
 use crate::spec::core;
 use crate::tper::TPer;
@@ -8,8 +8,8 @@ use super::error::Error;
 use super::utility::{get_admin_sp, get_locking_admin_c_pins, get_locking_sp};
 use super::with_session::with_session;
 
-pub async fn is_activating_locking_supported(_discovery: &Discovery) -> bool {
-    true
+pub fn is_activating_locking_supported(discovery: &Discovery) -> bool {
+    discovery.get::<LockingDescriptor>().map(|desc| !desc.locking_enabled).unwrap_or(false)
 }
 
 pub async fn activate_locking(

@@ -1,0 +1,132 @@
+import { LineEdit, Button, Switch } from "std-widgets.slint";
+import { PaletteExtra } from "../widgets/visual.slint";
+import { Password } from "../widgets/password.slint";
+import { Status, ExtendedStatus} from "../data/status.slint";
+import { ResultPopup } from "../widgets/result_popup.slint";
+import { ConfigView } from "config_view.slint";
+import { Password } from "../widgets/password.slint";
+
+component Form {
+    out property <string> sid-password;
+    out property <string> new-admin1-password: {
+        if same-as-owner.checked {
+            sid-password
+        } else {
+            admin1-password.text
+        }
+    };
+    in property <bool> enabled;
+    private property <string> password-feedback;
+    callback executed();
+    VerticalLayout {
+        alignment: LayoutAlignment.center;
+        padding: 8px;
+        spacing: 6px;
+        min-width: 200px;
+        Text {
+            text: "Enter owner password:";
+        }
+
+        owner-password := LineEdit {
+            input-type: InputType.password;
+            text <=> sid-password;
+        }
+
+        Rectangle {
+            height: 12px;
+        }
+
+        Text {
+            text: "New Admin1 password:";
+            opacity: same-as-owner.checked ? 0.5 : 1.0;
+        }
+
+        admin1-password := LineEdit {
+            input-type: InputType.password;
+            edited(text) => {
+                root.password-feedback = Password.validate(admin1-password.text, admin1-repeat.text);
+            }
+            enabled: !same-as-owner.checked;
+        }
+
+        Text {
+            text: "Repeat password:";
+            opacity: same-as-owner.checked ? 0.5 : 1.0;
+        }
+
+        admin1-repeat := LineEdit {
+            input-type: InputType.password;
+            edited(text) => {
+                root.password-feedback = Password.validate(admin1-password.text, admin1-repeat.text);
+            }
+            enabled: !same-as-owner.checked;
+        }
+
+        same-as-owner := Switch {
+            text: "Same as owner password";
+        }
+
+        Rectangle {
+            height: 12px;
+        }
+
+        Button {
+            text: "Activate locking";
+            primary: true;
+            enabled: (same-as-owner.checked || password-feedback == "") && enabled;
+            clicked => {
+                executed();
+            }
+        }
+
+        Text {
+            text: same-as-owner.checked ? "" : password-feedback;
+            color: PaletteExtra.error-foreground;
+            horizontal-alignment: center;
+        }
+    }
+}
+
+export component ActivateLocking inherits ConfigView {
+    in-out property <ExtendedStatus> extended-status: { status: Status.error };
+    callback activate-locking(sid-password: string, new-admin1-password: string);
+    config-name: "Activate locking";
+    config-icon: @image-url("../../images/device/9111193_lock_icon.svg");
+    back-enabled: extended-status.status != Status.loading;
+    result-popup := ResultPopup {
+        x: (root.width - self.width) / 2;
+        y: (root.height - self.height) / 2;
+        icon: root.config-icon;
+        finish-enabled: root.back-enabled;
+        retry-enabled: root.back-enabled;
+        status: extended-status.status;
+        message: {
+            if extended-status.status == Status.success {
+                "Ownership set up successfully!"
+            } else if extended-status.status == Status.error {
+                "Failed to take ownership:\n" + extended-status.message
+            } else {
+                "Taking ownership..."
+            }
+        }
+        finished => {
+            self.close();
+            root.back();
+        }
+        retried => {
+            self.close();
+        }
+    }
+
+    HorizontalLayout {
+        alignment: center;
+        vertical-stretch: 1.0;
+        form := Form {
+            enabled: root.back-enabled;
+            executed => {
+                root.activate-locking(self.sid-password, self.new-admin1-password);
+                result-popup.show();
+            }
+        }
+    }
+}

@@ -1,110 +1,84 @@
-import { DeviceDescriptionView } from "../views/device_description_view.slint";
 import { DeviceDescription } from "../data/device_description.slint";
-import { ActionResult } from "../data/action_result.slint";
-import { SwitchContent, SwitchContainer } from "../widgets/switch_content.slint";
-import { TakeOwnershipView } from "../views/take_owneship_view.slint";
-import { ActivateLockingView } from "../views/activate_locking_view.slint";
-import { ContentStatus } from "../data/content_status.slint";
-import { RevertView } from "../views/revert_view.slint";
+import { AlternativeChild, AlternativeLayout } from "../widgets/alternative_layout.slint";
+import { ExtendedStatus, Status } from "../data/status.slint";
+import { Activity } from "../data/activity.slint";
 import { LockingRange } from "../data/locking_range.slint";
-import { ConfigureRangesView } from "../views/configure_ranges_view.slint";
 
-enum ActivePage {
-    device-description,
-    take-ownership,
-    activate-locking,
-    configure-ranges,
-    revert,
-}
+import { Description } from "../info/description.slint";
+import { TakeOwnership } from "../configure/take_owneship.slint";
+import { ActivateLocking } from "../configure/activate_locking.slint";
+import { LockingRanges } from "../configure/locking_ranges.slint";
+import { Revert } from "../configure/revert.slint";
+import { State } from "../state.slint";
 
 export component DevicePage {
-    in property <DeviceDescription> description;
-    in property <ActionResult> action-result;
-    in property <[string]> locking-range-error-log;
-    in property <[LockingRange]> locking-ranges;
-    private property <ActivePage> active-page: ActivePage.device-description;
-    callback update-device-discovery();
-    callback reset-session();
-    callback take-ownership(new-password: string);
-    callback activate-locking(sid-password: string, new-admin1-password: string);
-    callback update-range(range-idx: int, value: LockingRange);
-    callback query-ranges(password: string);
-    callback revert(use-psid: bool, password: string, include-admin: bool);
-    callback update-com-id-status();
-    callback stack-reset();
-    function set-active-page(active-page: ActivePage) {
-        reset-session();
-        self.active-page = active-page;
-        if active-page == ActivePage.device-description {
-            // Discovery may change upon TPer modifications.
-            update-device-discovery();
+    in property <int> device-idx: 0;
+    private property <Activity> current-activity: Activity.description;
+    function set-current-activity(activity: Activity) {
+        State.cleanup-session(device-idx);
+        if current-activity == Activity.description {
+            State.discover(device-idx);
+        }
+        self.current-activity = activity;
+    }
+    public function gained-focus() {
+        if current-activity == Activity.description && State.descriptions[device-idx].discovery-status.status == Status.loading {
+            State.discover(device-idx);
         }
     }
     VerticalLayout {
-        if active-page == ActivePage.device-description: DeviceDescriptionView {
-            description: root.description;
-            take-ownership => {
-                set-active-page(ActivePage.take-ownership);
-            }
-            activate-locking => {
-                set-active-page(ActivePage.activate-locking);
-            }
-            configure-ranges => {
-                set-active-page(ActivePage.configure-ranges);
-            }
-            revert => {
-                set-active-page(ActivePage.revert);
-            }
-            update-com-id-status => {
-                update-com-id-status();
-            }
-            stack-reset => {
-                stack-reset();
+        if current-activity == Activity.description: Description {
+            description: State.descriptions[device-idx];
+            select-activity(activity) => {
+                set-current-activity(activity);
             }
         }
-        if active-page == ActivePage.take-ownership: TakeOwnershipView {
-            device-name: description.identity.name;
-            result <=> action-result;
+        if current-activity == Activity.take-ownership: TakeOwnership {
+            device-name: State.descriptions[device-idx].identity.name;
+            extended-status: State.configure[device-idx].extended-status;
             back => {
-                set-active-page(ActivePage.device-description);
+                set-current-activity(Activity.description);
             }
             take-ownership(new-password) => {
-                root.take-ownership(new-password)
+                State.take-ownership(device-idx, new-password);
             }
         }
-        if active-page == ActivePage.activate-locking: ActivateLockingView {
-            device-name: description.identity.name;
-            result: action-result;
+        if current-activity == Activity.activate-locking: ActivateLocking {
+            device-name: State.descriptions[device-idx].identity.name;
+            extended-status: State.configure[device-idx].extended-status;
             back => {
-                set-active-page(ActivePage.device-description);
+                set-current-activity(Activity.description);
             }
             activate-locking(sid-password, new-admin1-password) => {
-                root.activate-locking(sid-password, new-admin1-password)
             }
         }
-        if active-page == ActivePage.configure-ranges: ConfigureRangesView {
-            device-name: description.identity.name;
-            query-result: action-result;
-            error-log: locking-range-error-log;
-            locking-ranges: locking-ranges;
+        if current-activity == Activity.locking-ranges: LockingRanges {
+            device-name: State.descriptions[device-idx].identity.name;
+            login-status: State.configure[device-idx].extended-status;
+            errors: State.configure[device-idx].locking-ranges.errors;
+            range-names: State.configure[device-idx].locking-ranges.names;
+            range-properties: State.configure[device-idx].locking-ranges.properties;
             back => {
-                set-active-page(ActivePage.device-description);
+                set-current-activity(Activity.description);
             }
-            query-ranges(password) => {
-                root.query-ranges(password);
+            login-locking-ranges(password) => {
+                State.login-locking-ranges(device-idx, password);
             }
-            update-range(range-idx, value) => {
-                root.update-range(range-idx, value);
+            list-locking-ranges => {
+                State.list-locking-ranges(device-idx);
+            }
+            set-locking-range(range-idx, value) => {
+                State.set-locking-range(device-idx, range-idx, value);
             }
         }
-        if active-page == ActivePage.revert: RevertView {
-            device-name: description.identity.name;
-            result: action-result;
+        if current-activity == Activity.revert: Revert {
+            device-name: State.descriptions[device-idx].identity.name;
+            extended-status: State.configure[device-idx].extended-status;
             back => {
-                set-active-page(ActivePage.device-description);
+                set-current-activity(Activity.description);
             }
             revert(use-psid, password, include-admin) => {
-                root.revert(use-psid, password, include-admin)
+                State.revert(device-idx, use-psid, password, include-admin);
             }
         }
     }

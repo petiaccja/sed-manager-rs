@@ -1,4 +1,4 @@
-export component SwitchContent {
+export component AlternativeChild {
     in property <bool> selected: true;
     visible <=> selected;
     min-height: selected ? content.min-height : 0px;
@@ -9,7 +9,7 @@ export component SwitchContent {
     }
 }
 
-export component SwitchContainer {
+export component AlternativeLayout {
     max-width: 100000px;
     max-height: 100000px;
     VerticalLayout {

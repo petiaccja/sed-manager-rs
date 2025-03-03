@@ -1,5 +1,6 @@
 import { NameValuePair } from "name_value_pair.slint";
-import { ContentStatus } from "content_status.slint";
+import { ExtendedStatus, Status } from "status.slint";
+import { ActivitySupport } from "activity.slint";
 
 export struct DeviceIdentity {
     name: string,
@@ -24,9 +25,9 @@ export struct DeviceDiscovery {
 
 export struct DeviceDescription {
     identity: DeviceIdentity,
-    discovery-status: ContentStatus,
-    discovery-error-message: string,
-    discovery: DeviceDiscovery, 
+    discovery-status: ExtendedStatus,
+    discovery: DeviceDiscovery,
+    activity-support: ActivitySupport,
 }
 
 
@@ -39,8 +40,7 @@ export global ExampleData {
             firmware: "FW1.0",
             interface: "NVMe",
         },
-        discovery-status: ContentStatus.success,
-        discovery-error-message: "",
+        discovery-status: { status: Status.success },
         discovery: {
             security-subsystem-classes: ["Opal 2.0"],
             security-providers: ["Admin", "Locking"],
@@ -62,6 +62,17 @@ export global ExampleData {
                     properties: [{ name: "Num admins supported", value: "4" }],
                 },
             ],
+        },
+        activity-support: {
+            take-ownership: true,
+            activate-locking: true,
+            locking-ranges: true,
+            users: true,
+            permissions: true,
+            shadow-mbr: false,
+            revert: true,
+            com-id-status: true,
+            stack-reset: true,
         }
     };
 }

@@ -1,0 +1,24 @@
+export enum Activity { 
+    description,
+    take-ownership,
+    activate-locking,
+    locking-ranges,
+    users,
+    permissions,
+    shadow-mbr,
+    revert,
+    com-id-status,
+    stack-reset,
+}
+
+export struct ActivitySupport {
+    take-ownership: bool,
+    activate-locking: bool,
+    locking-ranges: bool,
+    users: bool,
+    permissions: bool,
+    shadow-mbr: bool,
+    revert: bool,
+    com-id-status: bool,
+    stack-reset: bool,
+}

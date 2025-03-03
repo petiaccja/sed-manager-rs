@@ -32,7 +32,7 @@ component Cell {
     }
 }
 
-export component NameValueListView {
+export component PairList {
     in property <[NameValuePair]> name_value_pairs;
     min-height: names.min-height;
     min-width: rows.min-width;
@@ -63,6 +63,6 @@ export component NameValueListView {
     }
 }
 
-export component LivePreviewTest inherits NameValueListView {
+export component LivePreviewTest inherits PairList {
     name_value_pairs: [{ name: "pi", value: "3.14159" }, { name: "e", value: "2.71828182845904" }];
 }

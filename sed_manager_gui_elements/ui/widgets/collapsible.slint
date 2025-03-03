@@ -2,7 +2,7 @@ import { Palette } from "std-widgets.slint";
 import { HorizontalSeparator, Island } from "visual.slint";
 import { NavigationButton, NavigationDirection } from "navigation_button.slint";
 
-export component CollapsibleView inherits Island {
+export component Collapsible inherits Island {
     in property <string> text;
     in property <image> icon;
     in-out property <bool> collapsed: false;
@@ -33,7 +33,7 @@ export component CollapsibleView inherits Island {
     }
 }
 
-export component LivePreviewTest inherits CollapsibleView {
+export component LivePreviewTest inherits Collapsible {
     text: "Title";
     VerticalLayout {
         Text {

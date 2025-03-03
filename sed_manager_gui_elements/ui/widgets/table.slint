@@ -1,0 +1,117 @@
+import { VerticalSeparator, HorizontalSeparator, PaletteExtra } from "visual.slint";
+import { ScrollView, Palette } from "std-widgets.slint";
+
+global Background {
+    out property <color> header-border: Palette.background.mix(PaletteExtra.accented-control-background, 0.5);
+    out property <color> cell-border: PaletteExtra.accented-control-background;
+    public pure function background(row-idx: int, column-idx: int, header: bool) -> color {
+        PaletteExtra.accented-control-background.with-alpha(PaletteExtra.accented-control-background.alpha * opacity(row-idx, column-idx, header) / 255)
+    }
+    pure function opacity(row-idx: int, column-idx: int, header: bool) -> float {
+        if header {
+            1.0
+        } else {
+            0.2 - (Math.mod(row-idx, 2) == 0 ? 0.2 : 0.0)
+        }
+    }
+}
+
+export component Cell {
+    in property <int> row-idx;
+    in property <int> column-idx;
+    Rectangle {
+        border-width: 1px;
+        border-color: Background.cell-border;
+        background: Background.background(row-idx, column-idx, false);
+    }
+
+    @children
+}
+
+export component Table {
+    in property <[string]> column-names;
+    in property <[string]> row-names;
+    in property <[length]> column-widths;
+    in property <[length]> row-heights;
+    GridLayout {
+        Rectangle {
+            row: 0;
+            col: 0;
+            background: Background.background(0, 0, true);
+        }
+
+        Rectangle {
+            row: 0;
+            col: 1;
+            clip: true;
+            height: column-name-layout.min-height;
+            column-name-layout := HorizontalLayout {
+                x: content.viewport-x;
+                for name[i] in column-names: Rectangle {
+                    width: column-widths[i];
+                    background: Background.background(0, i, true);
+                    HorizontalLayout {
+                        padding: 4px;
+                        Text {
+                            z: 100;
+                            text: name;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                    }
+                }
+            }
+        }
+
+        Rectangle {
+            row: 1;
+            col: 0;
+            clip: true;
+            width: row-name-layout.min-width;
+            row-name-layout := VerticalLayout {
+                y: content.viewport-y;
+                for name[i] in row-names: Rectangle {
+                    height: i < row-heights.length ? row-heights[i] : row-heights[0];
+                    background: Background.background(i, 0, true);
+                    VerticalLayout {
+                        padding: 4px;
+                        Text {
+                            text: name;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                    }
+                }
+            }
+        }
+
+        content := ScrollView {
+            viewport-width: column-name-layout.min-width;
+            viewport-height: row-name-layout.min-height;
+            preferred-width: column-name-layout.min-width;
+            @children
+        }
+    }
+}
+
+export component LivePreviewTest inherits Table {
+    column-names: ["A", "B", "C", "D", "E"];
+    row-names: ["1", "2", "3", "4", "5", "6"];
+    column-widths: [200px, 100px, 100px, 100px, 100px];
+    row-heights: [32px, 32px, 32px, 32px, 32px, 32px];
+    VerticalLayout {
+        for row[row-idx] in root.row-names: HorizontalLayout {
+            for column[column-idx] in root.column-names: Cell {
+                width: root.column-widths[column-idx];
+                height: root.row-heights[row-idx];
+                row-idx: row-idx;
+                column-idx: column-idx;
+                Text {
+                    text: column + row;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+            }
+        }
+    }
+}

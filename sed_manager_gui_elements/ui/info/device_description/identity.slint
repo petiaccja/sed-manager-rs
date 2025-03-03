@@ -3,7 +3,7 @@ import { Island, PaletteExtra } from "../../widgets/visual.slint";
 import { LineEdit } from "std-widgets.slint";
 
 
-export component IdentityView inherits Island {
+export component Identity inherits Island {
     in property <DeviceIdentity> identity;
     in property <[string]> security-subsystem-classes;
     HorizontalLayout {
@@ -31,6 +31,7 @@ export component IdentityView inherits Island {
 
             HorizontalLayout {
                 alignment: space-between;
+                spacing: 24px;
                 Text {
                     text: identity.interface;
                     font-size: 16px;
@@ -87,7 +88,7 @@ export component IdentityView inherits Island {
     }
 }
 
-export component LivePreviewTest inherits IdentityView {
+export component LivePreviewTest inherits Identity {
     identity: ExampleData.description.identity;
     security-subsystem-classes: ExampleData.description.discovery.security-subsystem-classes;
 }

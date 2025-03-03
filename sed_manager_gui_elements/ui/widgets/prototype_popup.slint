@@ -1,6 +1,6 @@
 import { Palette } from "std-widgets.slint";
 
-export component SolidPopupWindow inherits PopupWindow {
+export component PrototypePopup inherits PopupWindow {
     Rectangle {
         background: Palette.background;
         border-radius: 16px;
@@ -16,4 +16,6 @@ export component SolidPopupWindow inherits PopupWindow {
         border-radius: 16px;
         opacity: 95%;
     }
+
+    @children
 }

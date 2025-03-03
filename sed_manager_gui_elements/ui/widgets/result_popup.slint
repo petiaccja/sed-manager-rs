@@ -1,0 +1,118 @@
+import { PrototypePopup } from "prototype_popup.slint";
+import { Button, Palette } from "std-widgets.slint";
+import { PaletteExtra } from "visual.slint";
+import { StatusIndicator } from "progress.slint";
+import { ExtendedStatus, Status } from "../data/status.slint";
+
+export component ResultPopup inherits PrototypePopup {
+    width: 400px;
+    height: self.min-height;
+    close-policy: no-auto-close;
+    in property <bool> finish-present: true;
+    in property <bool> retry-present: true;
+    in property <bool> finish-enabled: true;
+    in property <bool> retry-enabled: true;
+    in property <string> finish-text: "Finish";
+    in property <string> retry-text: "Retry";
+    in property <Status> status;
+    in property <string> message;
+    in property <image> icon;
+    in property <bool> hide-on-success: false;
+    callback finished();
+    callback retried();
+    changed status => {
+        if status == Status.success && hide-on-success {
+            self.close()
+        }
+    }
+    content := VerticalLayout {
+        spacing: 12px;
+        padding: 12px;
+        HorizontalLayout {
+            alignment: stretch;
+            spacing: 6px;
+            VerticalLayout {
+                alignment: center;
+                StatusIndicator {
+                    width: 80px;
+                    height: 80px;
+                    status: status;
+                    icon: icon;
+                }
+            }
+
+            Text {
+                text: message;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+                color: {
+                    if status == Status.success {
+                        PaletteExtra.success-foreground
+                    } else if status == Status.error {
+                        PaletteExtra.error-foreground
+                    } else {
+                        Palette.control-foreground
+                    }
+                }
+            }
+        }
+
+        HorizontalLayout {
+            alignment: end;
+            spacing: 6px;
+            if root.finish-present: Button {
+                text: root.finish-text;
+                width: 96px;
+                enabled: root.finish-enabled;
+                clicked => {
+                    finished();
+                }
+            }
+            if root.retry-present: Button {
+                text: root.retry-text;
+                width: 96px;
+                enabled: root.retry-enabled;
+                clicked => {
+                    retried();
+                }
+            }
+        }
+    }
+}
+
+export component LivePreviewTest {
+    in-out property <Status> status;
+    in-out property <string> message;
+    function update() {
+        if status == Status.loading {
+            self.status = Status.success;
+            self.message = "Task successful!";
+        } else if status == Status.success {
+            self.status = Status.error;
+            self.message = "Task failed:\nuseful error message"
+        } else {
+            self.status = Status.loading;
+            self.message = "Please wait...";
+        }
+    }
+    warning := ResultPopup {
+        x: (root.width - self.width) / 2;
+        y: (root.height - self.height) / 2;
+        status <=> status;
+        message <=> message;
+        icon: @image-url("../../images/shape/hash.svg");
+        finished => {
+            self.close();
+        }
+        retried => {
+            update()
+        }
+    }
+
+    Button {
+        text: "Show result";
+        clicked => {
+            warning.show();
+        }
+    }
+}

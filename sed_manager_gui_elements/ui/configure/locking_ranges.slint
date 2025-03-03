@@ -1,0 +1,374 @@
+import { ConfigView } from "config_view.slint";
+import { LineEdit, Button, CheckBox, ScrollView, Palette } from "std-widgets.slint";
+import { ExtendedStatus, Status } from "../data/status.slint";
+import { LockingRange } from "../data/locking_range.slint";
+import { PaletteExtra, VerticalSeparator } from "../widgets/visual.slint";
+import { NavigationButton, NavigationDirection } from "../widgets/navigation_button.slint";
+import { ResultPopup } from "../widgets/result_popup.slint";
+import { Table, Cell } from "../widgets/table.slint";
+import { Types } from "../data/types.slint";
+import { WarningPopup } from "../widgets/warning_popup.slint";
+
+component LoginForm {
+    out property <string> admin1_password;
+    in property <bool> enabled;
+    callback executed();
+    HorizontalLayout {
+        alignment: center;
+        VerticalLayout {
+            vertical-stretch: 1.0;
+            padding: 8px;
+            spacing: 6px;
+            alignment: center;
+            Text {
+                text: "Enter Admin1 password:";
+            }
+
+            password := LineEdit {
+                input-type: InputType.password;
+                text <=> root.admin1_password;
+            }
+
+            Button {
+                primary: true;
+                text: "Configure locking ranges";
+                clicked => {
+                    executed();
+                }
+            }
+        }
+    }
+}
+
+component LoginView {
+    in property <ExtendedStatus> extended-status;
+    out property <bool> back-enabled: extended-status.status != Status.loading;
+    callback back();
+    callback login(admin1_password: string);
+    Rectangle {
+        result-popup := ResultPopup {
+            x: (root.width - self.width) / 2;
+            y: (root.height - self.height) / 2;
+            finish-enabled: root.back-enabled;
+            retry-enabled: root.back-enabled;
+            finish-text: "Back";
+            status: extended-status.status;
+            hide-on-success: true;
+            message: {
+                if extended-status.status == Status.success {
+                    "Session started!"
+                } else if extended-status.status == Status.error {
+                    "Failed to start session:\n" + extended-status.message
+                } else {
+                    "Starting Admin1 session..."
+                }
+            }
+            finished => {
+                self.close();
+                root.back();
+            }
+            retried => {
+                self.close();
+            }
+        }
+    }
+
+    HorizontalLayout {
+        alignment: center;
+        vertical-stretch: 1.0;
+        form := LoginForm {
+            enabled: root.back-enabled;
+            executed => {
+                result-popup.show();
+                login(self.admin1_password);
+            }
+        }
+    }
+}
+
+global TableDesc {
+    out property <[string]> column-names: [
+        "Start LBA",
+        "End LBA",
+        "Read lock\n enabled",
+        "Write lock\n enabled",
+        "Read locked",
+        "Write locked",
+        "Erase",
+    ];
+    out property <[length]> column-widths: [
+        100px,
+        100px,
+        80px,
+        80px,
+        80px,
+        80px,
+        100px,
+    ];
+    out property <length> row-height: 32px;
+}
+
+component EraseWarningMessage {
+    in property <string> range-name;
+    VerticalLayout {
+        alignment: center;
+        spacing: 8px;
+        Text {
+            text: "Erase " + range-name + "?";
+            font-weight: 600;
+        }
+
+        Text {
+            text: "The data is erased cryptographically, and there is no way to recover it.";
+        }
+    }
+}
+
+component Range {
+    in property <[length]> column-widths: TableDesc.column-widths;
+    in property <length> row-height: TableDesc.row-height;
+    in property <int> range-idx;
+    in-out property <LockingRange> range-properties;
+    callback set-locking-range(range-idx: int, value: LockingRange);
+    callback erase-locking-range(range-idx: int);
+    HorizontalLayout {
+        Cell {
+            width: root.column-widths[0];
+            height: row-height;
+            row-idx: range-idx;
+            column-idx: 0;
+            start-lba := LineEdit {
+                width: parent.width;
+                input-type: number;
+                horizontal-alignment: right;
+                text: range-properties.range-start;
+                accepted(text) => {
+                    range-properties.range-start = Types.str-to-int(text);
+                    range-properties.range-end = Math.max(range-properties.range-start, range-properties.range-end);
+                    end-lba.text = range-properties.range-end;
+                    set-locking-range(range-idx, range-properties);
+                }
+            }
+        }
+
+        Cell {
+            width: root.column-widths[1];
+            height: row-height;
+            row-idx: range-idx;
+            column-idx: 1;
+            end-lba := LineEdit {
+                width: parent.width;
+                input-type: number;
+                horizontal-alignment: right;
+                text: range-properties.range-end;
+                accepted(text) => {
+                    range-properties.range-end = Types.str-to-int(text);
+                    range-properties.range-start = Math.min(range-properties.range-start, range-properties.range-end);
+                    start-lba.text = range-properties.range-start;
+                    set-locking-range(range-idx, range-properties);
+                }
+            }
+        }
+
+        Cell {
+            width: root.column-widths[2];
+            height: row-height;
+            row-idx: range-idx;
+            column-idx: 2;
+            CheckBox {
+                checked: range-properties.read-lock-enabled;
+                toggled => {
+                    range-properties.read-lock-enabled = self.checked;
+                    set-locking-range(range-idx, range-properties);
+                }
+            }
+        }
+
+        Cell {
+            width: root.column-widths[3];
+            height: row-height;
+            row-idx: range-idx;
+            column-idx: 3;
+            CheckBox {
+                checked: range-properties.write-lock-enabled;
+                toggled => {
+                    range-properties.write-lock-enabled = self.checked;
+                    set-locking-range(range-idx, range-properties);
+                }
+            }
+        }
+
+        Cell {
+            width: root.column-widths[4];
+            height: row-height;
+            row-idx: range-idx;
+            column-idx: 4;
+            CheckBox {
+                checked: range-properties.read-locked;
+                toggled => {
+                    range-properties.read-locked = self.checked;
+                    set-locking-range(range-idx, range-properties);
+                }
+            }
+        }
+
+        Cell {
+            width: root.column-widths[5];
+            height: row-height;
+            row-idx: range-idx;
+            column-idx: 5;
+            CheckBox {
+                checked: range-properties.write-locked;
+                toggled => {
+                    range-properties.write-locked = self.checked;
+                    set-locking-range(range-idx, range-properties);
+                }
+            }
+        }
+
+        Cell {
+            width: root.column-widths[6];
+            height: row-height;
+            row-idx: range-idx;
+            column-idx: 6;
+            Button {
+                icon: @image-url("../../images/action/delete_forever.svg");
+                clicked => {
+                    erase-locking-range(range-idx);
+                }
+            }
+        }
+    }
+}
+
+component RangeTable {
+    in property <[string]> range-names;
+    in property <[LockingRange]> range-properties;
+    callback set-locking-range(range-idx: int, value: LockingRange);
+    callback erase-locking-range(range-idx: int);
+    private property <int> warned-range-idx;
+    erase-warning := WarningPopup {
+        x: (root.width - self.width) / 2;
+        y: (root.height - self.height) / 2;
+        continue-text: "Erase";
+        EraseWarningMessage {
+            range-name: range-names[warned-range-idx];
+        }
+
+        continued => {
+            self.close();
+            erase-locking-range(warned-range-idx);
+        }
+        cancelled => {
+            self.close();
+        }
+    }
+
+    HorizontalLayout {
+        alignment: stretch;
+        VerticalLayout {
+            alignment: stretch;
+            padding-top: 16px;
+            table := Table {
+                column-names: TableDesc.column-names;
+                column-widths: TableDesc.column-widths;
+                row-names: range-names;
+                row-heights: [TableDesc.row-height];
+                VerticalLayout {
+                    for row[range-idx] in root.range-names: Range {
+                        column-widths: table.column-widths;
+                        range-idx: range-idx;
+                        row-height: table.row-heights[0];
+                        set-locking-range(range-idx, value) => {
+                            set-locking-range(range-idx, value);
+                        }
+                        erase-locking-range(range-idx) => {
+                            warned-range-idx = range-idx;
+                            erase-warning.show();
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+export component LockingRanges inherits ConfigView {
+    config-name: "Locking ranges";
+    config-icon: @image-url("../../images/shape/hash.svg");
+    in property <ExtendedStatus> login-status: { status: Status.error };
+    in property <[string]> errors;
+    in property <[string]> range-names;
+    in property <[LockingRange]> range-properties;
+    callback login-locking-ranges(password: string);
+    callback list-locking-ranges();
+    callback set-locking-range(range-idx: int, value: LockingRange);
+    changed login-status => {
+        if login-status.status == Status.success {
+            list-locking-ranges();
+        }
+    }
+    form := VerticalLayout {
+        if login-status.status != Status.success: LoginView {
+            back => {
+                root.back();
+            }
+            login(password) => {
+                login-locking-ranges(password);
+            }
+        }
+        if login-status.status == Status.success: RangeTable {
+            range-names: range-names;
+            range-properties: range-properties;
+        }
+    }
+}
+
+global ExampleRanges {
+    out property <[string]> range-names: [
+        "GlobalRange",
+        "Range1",
+        "Range2",
+    ];
+    out property <[LockingRange]> range-properties: [
+        {
+            range-start: 0,
+            range-end: 0,
+            read-lock-enabled: false,
+            write-lock-enabled: false,
+            read-locked: false,
+            write-locked: false,
+        },
+        {
+            range-start: 0,
+            range-end: 0,
+            read-lock-enabled: false,
+            write-lock-enabled: false,
+            read-locked: false,
+            write-locked: false,
+        },
+        {
+            range-start: 0,
+            range-end: 0,
+            read-lock-enabled: false,
+            write-lock-enabled: false,
+            read-locked: false,
+            write-locked: false,
+        },
+    ];
+}
+
+export component LivePreviewTest_Ranges inherits LockingRanges {
+    device-name: "Foo Device";
+    range-names: ExampleRanges.range-names;
+    range-properties: ExampleRanges.range-properties;
+    login-status: { status: Status.success };
+    timer := Timer {
+        interval: 1s;
+        running: false;
+        triggered => {
+            self.running = false;
+            root.login-status.status = Status.success;
+        }
+    }
+}

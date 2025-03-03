@@ -1,8 +1,6 @@
 import { Island, PaletteExtra } from "../widgets/visual.slint";
-import { ContentStatus } from "../data/content_status.slint";
+import { Status } from "../data/status.slint";
 import { Button, Palette, Spinner } from "std-widgets.slint";
-import { ActionResult} from "../data/action_result.slint";
-import { SolidPopupWindow } from "../widgets/solid_popup_window.slint";
 
 
 component BackButton inherits Rectangle {
@@ -75,13 +73,16 @@ export component ConfigView {
     in property <string> config-name;
     in property <image> config-icon;
     in property <bool> back-enabled: true;
-    callback back <=> header.back;
+    callback back();
     VerticalLayout {
         header := Header {
             vertical-stretch: 0;
             device-name: device-name;
             config-name: config-name;
             back-enabled: back-enabled;
+            back => {
+                back()
+            }
         }
 
         @children
