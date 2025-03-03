@@ -52,6 +52,11 @@ export component AppWindow inherits Window {
                         device-idx: device-idx;
                     }
 
+                    init => {
+                        if self.selected {
+                            device-page.gained-focus();
+                        }
+                    }
                     changed selected => {
                         if self.selected {
                             device-page.gained-focus();
