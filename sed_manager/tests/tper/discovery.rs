@@ -19,7 +19,7 @@ fn discovery_normal() -> Result<(), RPCError> {
     };
 
     assert_eq!(tper_desc.sync_supported, true);
-    assert_eq!(tper_desc.async_supported, false);
+    assert_eq!(tper_desc.async_supported, true);
     assert_eq!(tper_desc.ack_nak_supported, false);
     assert_eq!(tper_desc.buffer_mgmt_supported, false);
     assert_eq!(tper_desc.streaming_supported, true);
@@ -28,10 +28,10 @@ fn discovery_normal() -> Result<(), RPCError> {
     assert_eq!(locking_desc.locking_supported, true);
     assert_eq!(locking_desc.locking_enabled, false);
     assert_eq!(locking_desc.locked, false);
-    assert_eq!(locking_desc.media_encryption, true);
+    assert_eq!(locking_desc.media_encryption, false);
     assert_eq!(locking_desc.mbr_enabled, false);
     assert_eq!(locking_desc.mbr_done, false);
-    assert_eq!(locking_desc.mbr_shadowing_not_supported, false);
+    assert_eq!(locking_desc.mbr_shadowing_not_supported, true);
     assert_eq!(locking_desc.hw_reset_supported, true);
 
     assert_eq!(opal_desc.base_com_id, 4100);

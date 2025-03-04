@@ -119,7 +119,9 @@ impl Device for FakeDevice {
         let route = Route { protocol: security_protocol, com_id };
 
         if route == ROUTE_DISCOVERY {
-            write_discovery(&get_discovery(Properties::ASSUMED), len)
+            let controller = self.controller.lock().unwrap();
+            let discovery = get_discovery(&self.capabilities, &controller);
+            write_discovery(&discovery, len)
         } else if route == ROUTE_GET_COMID {
             unimplemented!("dynamic com ID management is not implemented for the fake device")
         } else if let Some(session) = self.sessions.lock().unwrap().get_mut(&com_id) {
