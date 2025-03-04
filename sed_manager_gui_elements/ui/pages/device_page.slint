@@ -59,6 +59,7 @@ export component DevicePage {
             errors: State.configure[device-idx].locking-ranges.errors;
             range-names: State.configure[device-idx].locking-ranges.names;
             range-properties: State.configure[device-idx].locking-ranges.properties;
+            range-statuses: State.configure[device-idx].locking-ranges.statuses;
             back => {
                 set-current-activity(Activity.description);
             }
@@ -70,6 +71,9 @@ export component DevicePage {
             }
             set-locking-range(range-idx, value) => {
                 State.set-locking-range(device-idx, range-idx, value);
+            }
+            erase-locking-range(range-idx) => {
+                State.erase-locking-range(device-idx, range-idx);
             }
         }
         if current-activity == Activity.revert: Revert {

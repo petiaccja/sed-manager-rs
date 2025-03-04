@@ -19,7 +19,7 @@ impl<Backend: Clone + 'static> AsyncState<Backend> {
         Self { backend, window }
     }
 
-    fn with<F: FnOnce(&ui::State) -> ()>(&self, f: F) {
+    pub fn with<F: FnOnce(&ui::State) -> ()>(&self, f: F) {
         if let Some(window) = self.window.upgrade() {
             let state = window.global::<ui::State>();
             f(&state);
@@ -136,6 +136,19 @@ impl<Backend: Clone + 'static> AsyncState<Backend> {
         });
     }
 
+    pub fn on_list_locking_ranges(&self, callback: impl AsyncFn(Backend, usize, AsyncState<Backend>) + 'static) {
+        self.with(move |state| {
+            let (backend, async_state, callback) = (self.backend.clone(), self.clone(), Rc::new(callback));
+
+            state.on_list_locking_ranges(move |device_idx: i32| {
+                let (backend, callback, async_state) = (backend.clone(), callback.clone(), async_state.clone());
+                let _ = slint::spawn_local(async move {
+                    callback(backend, device_idx as usize, async_state).await;
+                });
+            });
+        });
+    }
+
     pub fn on_revert(
         &self,
         callback: impl AsyncFn(Backend, usize, bool, String, bool) -> ui::ExtendedStatus + 'static,
@@ -171,6 +184,8 @@ pub trait StateExt {
     fn respond_take_ownership(&self, device_idx: usize, status: ui::ExtendedStatus);
     fn respond_activate_locking(&self, device_idx: usize, status: ui::ExtendedStatus);
     fn respond_login_locking_ranges(&self, device_idx: usize, status: ui::ExtendedStatus);
+    fn push_locking_range(&self, device_idx: usize, name: String, range: ui::LockingRange);
+    fn push_locking_range_error(&self, device_idx: usize, error: String);
     fn respond_revert(&self, device_idx: usize, status: ui::ExtendedStatus);
 }
 
@@ -254,6 +269,28 @@ impl<'a> StateExt for ui::State<'a> {
 
     fn respond_login_locking_ranges(&self, device_idx: usize, status: ui::ExtendedStatus) {
         respond_configure(self, device_idx, status);
+    }
+
+    fn push_locking_range(&self, device_idx: usize, name: String, range: ui::LockingRange) {
+        let config = self.get_configure();
+        let config_vec = as_vec_model(&config);
+        let Some(dev_config) = config_vec.row_data(device_idx) else {
+            return;
+        };
+        as_vec_model(&dev_config.locking_ranges.names).push(name.into());
+        as_vec_model(&dev_config.locking_ranges.properties).push(range.into());
+        as_vec_model(&dev_config.locking_ranges.statuses).push(ui::Status::Success);
+        config_vec.set_row_data(device_idx, dev_config);
+    }
+
+    fn push_locking_range_error(&self, device_idx: usize, error: String) {
+        let config = self.get_configure();
+        let config_vec = as_vec_model(&config);
+        let Some(dev_config) = config_vec.row_data(device_idx) else {
+            return;
+        };
+        as_vec_model(&dev_config.locking_ranges.errors).push(error.into());
+        config_vec.set_row_data(device_idx, dev_config);
     }
 
     fn respond_revert(&self, device_idx: usize, status: ui::ExtendedStatus) {

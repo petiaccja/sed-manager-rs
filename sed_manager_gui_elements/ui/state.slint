@@ -7,6 +7,7 @@ export struct LockingRangeState {
     errors: [string],
     names: [string],
     properties: [LockingRange],
+    statuses: [Status],
 }
 
 export struct ConfigureState {
@@ -40,6 +41,7 @@ export global State {
     callback login-locking-ranges(device-idx: int, password: string);
     callback list-locking-ranges(device-idx: int, );
     callback set-locking-range(device-idx: int, range-idx: int, value: LockingRange);
+    callback erase-locking-range(device-idx: int, range-idx: int);
     callback revert(device-idx: int, use-psid: bool, password: string, revert-admin: bool);
     // Troubleshooting.
     callback get-com-id-status(device-idx: int);

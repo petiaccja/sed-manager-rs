@@ -2,15 +2,20 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use sed_manager::applications::{
-    activate_locking, get_admin_sp, get_locking_admins, get_locking_sp, revert, take_ownership, Error as AppError,
+    activate_locking, get_admin_sp, get_locking_admins, get_locking_sp, get_lookup, revert, take_ownership,
+    Error as AppError,
 };
 use sed_manager::device::{Device, Error as DeviceError};
-use sed_manager::messaging::discovery::Discovery;
+use sed_manager::messaging::discovery::{Discovery, Feature};
+use sed_manager::messaging::uid::UID;
 use sed_manager::rpc::{discover, Error as RPCError};
-use sed_manager::spec;
+use sed_manager::spec::column_types::SPRef;
+use sed_manager::spec::{self, ObjectLookup as _};
 use sed_manager::tper::{Session, TPer};
 
+use crate::async_state::{AsyncState, StateExt};
 use crate::device_list::{get_device_identity, DeviceList};
+use crate::native_data::NativeLockingRange;
 use crate::ui;
 use crate::utility::{run_in_thread, PeekCell};
 
@@ -26,8 +31,7 @@ impl Backend {
         Self { devices: Vec::new(), discoveries: Vec::new(), tpers: Vec::new(), sessions: Vec::new() }
     }
 
-    #[allow(unused)]
-    fn get_discovery(&mut self, device_idx: usize) -> Result<&Discovery, RPCError> {
+    fn get_discovery(&self, device_idx: usize) -> Result<&Discovery, RPCError> {
         self.discoveries.get(device_idx).and_then(|x| x.as_ref()).ok_or(DeviceError::DeviceNotFound.into())
     }
 
@@ -171,6 +175,44 @@ impl Backend {
         }
     }
 
+    pub async fn list_locking_ranges(
+        this: Rc<PeekCell<Self>>,
+        device_idx: usize,
+        async_state: AsyncState<Rc<PeekCell<Self>>>,
+    ) {
+        async fn inner(
+            this: Rc<PeekCell<Backend>>,
+            device_idx: usize,
+            async_state: AsyncState<Rc<PeekCell<Backend>>>,
+        ) -> Result<(), RPCError> {
+            let Some(session) = this.peek_mut(|this| this.take_session(device_idx)) else {
+                return Err(RPCError::Unspecified);
+            };
+            let discovery = this.peek(|this| this.get_discovery(device_idx).ok().cloned());
+            let ssc = discovery.as_ref().and_then(|x| x.get_primary_ssc());
+            let locking_sp = ssc.and_then(|ssc| get_locking_sp(ssc.feature_code()).ok());
+            let ranges = session.next(spec::core::table_id::LOCKING, None, None).await?;
+            for range in ranges.iter() {
+                let name = get_object_name(discovery.as_ref(), *range, locking_sp);
+                let properties = get_locking_range_properties(&session, *range).await;
+                match properties {
+                    Ok(properties) => {
+                        async_state.with(|state| state.push_locking_range(device_idx, name, properties.into()));
+                    }
+                    Err(error) => {
+                        async_state.with(|state| state.push_locking_range_error(device_idx, error.to_string()))
+                    }
+                }
+            }
+            Ok(())
+        }
+        let result = inner(this, device_idx, async_state.clone()).await;
+        async_state.with(|state| match result {
+            Ok(_) => (),
+            Err(error) => state.respond_login_locking_ranges(device_idx, error.into()),
+        });
+    }
+
     pub async fn revert(
         this: Rc<PeekCell<Self>>,
         device_idx: usize,
@@ -203,4 +245,39 @@ impl Backend {
             Err(error) => ui::ExtendedStatus::error(error.to_string()),
         }
     }
+}
+
+fn get_object_name(discovery: Option<&Discovery>, uid: UID, sp: Option<SPRef>) -> String {
+    // Try all present feature descriptors.
+    let empty = Discovery::new(vec![]);
+    for desc in discovery.unwrap_or(&empty).iter() {
+        let lookup = get_lookup(desc.feature_code());
+        if let Some(name) = lookup.by_uid(uid, sp.map(|sp| sp.as_uid())) {
+            return name;
+        }
+    }
+    // Try features sets that don't have a feature desriptor.
+    if let Some(name) = spec::psid::OBJECT_LOOKUP.by_uid(uid, sp.map(|sp| sp.as_uid())) {
+        return name;
+    }
+    // Format the UID as a hex number.
+    format!("{:16x}", uid.as_u64())
+}
+
+async fn get_locking_range_properties(session: &Session, range: UID) -> Result<NativeLockingRange, RPCError> {
+    // TODO: implement this with a single get over a column range for speed.
+    let start_lba: u64 = session.get(range, 3).await?;
+    let length_lba: u64 = session.get(range, 4).await?;
+    let read_lock_enabled: bool = session.get(range, 5).await?;
+    let write_lock_enabled: bool = session.get(range, 6).await?;
+    let read_locked: bool = session.get(range, 7).await?;
+    let write_locked: bool = session.get(range, 8).await?;
+    Ok(NativeLockingRange {
+        start_lba,
+        end_lba: start_lba + length_lba,
+        read_lock_enabled,
+        write_lock_enabled,
+        read_locked,
+        write_locked,
+    })
 }

@@ -9,7 +9,6 @@ pub struct NativeDeviceIdentity {
 }
 
 pub struct NativeLockingRange {
-    pub name: String,
     pub start_lba: u64,
     pub end_lba: u64,
     pub read_lock_enabled: bool,

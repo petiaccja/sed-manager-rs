@@ -21,9 +21,9 @@ impl ExtendedStatus {
 // This help us use ExtendedStatus with the ? operator.
 impl<Error> From<Error> for ExtendedStatus
 where
-    Error: Into<String>,
+    Error: core::error::Error,
 {
     fn from(value: Error) -> Self {
-        Self::error(value.into())
+        Self::error(value.to_string())
     }
 }

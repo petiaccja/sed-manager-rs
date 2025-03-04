@@ -1,7 +1,7 @@
 use sed_manager::messaging::com_id::ComIdState;
 use slint::{ModelRc, VecModel};
 
-use crate::{ConfigureState, ExtendedStatus, LockingRange, LockingRangeState, TroubleshootState};
+use crate::{ConfigureState, ExtendedStatus, LockingRange, LockingRangeState, Status, TroubleshootState};
 
 impl ConfigureState {
     pub fn new(extended_status: ExtendedStatus, locking_ranges: LockingRangeState) -> Self {
@@ -35,7 +35,7 @@ impl TroubleshootState {
 }
 
 impl LockingRangeState {
-    pub fn new(errors: Vec<String>, names: Vec<String>, properties: Vec<LockingRange>) -> Self {
+    pub fn new(errors: Vec<String>, names: Vec<String>, properties: Vec<LockingRange>, statuses: Vec<Status>) -> Self {
         let errors: Vec<_> = errors.into_iter().map(|x| x.into()).collect();
         let names: Vec<_> = names.into_iter().map(|x| x.into()).collect();
 
@@ -43,10 +43,11 @@ impl LockingRangeState {
             errors: ModelRc::new(VecModel::from(errors)),
             names: ModelRc::new(VecModel::from(names)),
             properties: ModelRc::new(VecModel::from(properties)),
+            statuses: ModelRc::new(VecModel::from(statuses)),
         }
     }
 
     pub fn empty() -> Self {
-        Self::new(Vec::new(), Vec::new(), Vec::new())
+        Self::new(Vec::new(), Vec::new(), Vec::new(), Vec::new())
     }
 }
