@@ -2,7 +2,9 @@ use sed_manager::messaging::discovery::{Discovery, FeatureCode};
 use slint::{SharedString, ToSharedString as _, VecModel};
 use std::rc::Rc;
 
-use crate::{ContentStatus, DeviceDescription, DeviceDiscovery, DeviceDiscoveryFeature, DeviceIdentity};
+use crate::{
+    ActivitySupport, DeviceDescription, DeviceDiscovery, DeviceDiscoveryFeature, DeviceIdentity, ExtendedStatus,
+};
 
 impl DeviceIdentity {
     pub fn new(name: String, serial: String, path: String, firmware: String, interface: String) -> Self {
@@ -68,20 +70,25 @@ impl DeviceDiscovery {
 impl DeviceDescription {
     pub fn new(
         identity: DeviceIdentity,
-        discovery_status: ContentStatus,
-        discovery_error_message: String,
+        discovery_status: ExtendedStatus,
         discovery: DeviceDiscovery,
+        activity_support: ActivitySupport,
     ) -> Self {
         Self {
             discovery: discovery,
-            discovery_error_message: discovery_error_message.into(),
             discovery_status: discovery_status,
             identity: identity,
+            activity_support: activity_support,
         }
     }
 
     pub fn empty() -> Self {
-        Self::new(DeviceIdentity::empty(), ContentStatus::Loading, String::new(), DeviceDiscovery::empty())
+        Self::new(
+            DeviceIdentity::empty(),
+            ExtendedStatus::error("".into()),
+            DeviceDiscovery::empty(),
+            ActivitySupport::none(),
+        )
     }
 }
 

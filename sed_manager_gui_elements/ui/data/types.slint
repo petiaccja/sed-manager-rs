@@ -1,0 +1,7 @@
+export global Types {
+    callback str-to-int(s: string) -> int;
+    // Override this from Rust to get the full 32 bit precision.
+    str-to-int(s) => {
+        s.to-float()
+    }
+}

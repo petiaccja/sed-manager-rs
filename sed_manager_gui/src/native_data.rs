@@ -9,7 +9,6 @@ pub struct NativeDeviceIdentity {
 }
 
 pub struct NativeLockingRange {
-    pub name: String,
     pub start_lba: u64,
     pub end_lba: u64,
     pub read_lock_enabled: bool,
@@ -27,7 +26,6 @@ impl From<NativeDeviceIdentity> for ui::DeviceIdentity {
 impl From<NativeLockingRange> for ui::LockingRange {
     fn from(value: NativeLockingRange) -> Self {
         Self::new(
-            value.name,
             value.start_lba,
             value.end_lba,
             value.read_lock_enabled,

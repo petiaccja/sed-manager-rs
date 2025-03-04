@@ -1,0 +1,80 @@
+import { PrototypePopup } from "prototype_popup.slint";
+import { Button } from "std-widgets.slint";
+import { PaletteExtra } from "visual.slint";
+
+export component WarningPopup inherits PrototypePopup {
+    width: 400px;
+    height: self.min-height;
+    close-policy: no-auto-close;
+    in property <bool> continue-present: true;
+    in property <bool> cancel-present: true;
+    in property <bool> continue-enabled: true;
+    in property <bool> cancel-enabled: true;
+    in property <string> continue-text: "Continue";
+    in property <string> cancel-text: "Cancel";
+    callback continued();
+    callback cancelled();
+    content := VerticalLayout {
+        spacing: 12px;
+        padding: 12px;
+        HorizontalLayout {
+            alignment: stretch;
+            spacing: 6px;
+            VerticalLayout {
+                alignment: center;
+                Image {
+                    source: @image-url("../../images/error/8666599_alert_triangle_icon.svg");
+                    colorize: PaletteExtra.warning-foreground;
+                    width: 80px;
+                    height: 80px;
+                }
+            }
+
+            @children
+        }
+
+        HorizontalLayout {
+            alignment: end;
+            spacing: 6px;
+            if root.continue-present: Button {
+                text: root.continue-text;
+                width: 96px;
+                enabled: root.continue-enabled;
+                clicked => {
+                    continued();
+                }
+            }
+            if root.cancel-present: Button {
+                text: root.cancel-text;
+                width: 96px;
+                enabled: root.cancel-enabled;
+                clicked => {
+                    cancelled();
+                }
+            }
+        }
+    }
+}
+
+export component LivePreviewTest {
+    warning := WarningPopup {
+        x: (root.width - self.width) / 2;
+        y: (root.height - self.height) / 2;
+        VerticalLayout {
+            Text {
+                text: "Bad things might happen!";
+            }
+        }
+
+        continued => {
+            self.close();
+        }
+    }
+
+    Button {
+        text: "Show warning";
+        clicked => {
+            warning.show();
+        }
+    }
+}

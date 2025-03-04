@@ -1,8 +1,7 @@
-mod atomic_borrow;
+mod peek_cell;
 mod run_in_thread;
-mod versioned;
+mod vec_model;
 
-pub use atomic_borrow::AtomicBorrow;
+pub use peek_cell::PeekCell;
 pub use run_in_thread::run_in_thread;
-#[allow(unused)]
-pub use versioned::{Snapshot, Versioned};
+pub use vec_model::{as_vec_model, into_vec_model};

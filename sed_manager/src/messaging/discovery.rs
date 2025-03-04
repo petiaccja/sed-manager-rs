@@ -555,7 +555,18 @@ macro_rules! impl_desc_try_from {
 
 impl_desc_try_from!(TPerDescriptor, TPer);
 impl_desc_try_from!(LockingDescriptor, Locking);
+impl_desc_try_from!(GeometryDescriptor, Geometry);
+impl_desc_try_from!(DataRemovalDescriptor, DataRemoval);
+impl_desc_try_from!(BlockSIDAuthDescriptor, BlockSIDAuth);
+impl_desc_try_from!(AdditionalDataStoreTablesDescriptor, AdditionalDataStoreTables);
 impl_desc_try_from!(OpalV2Descriptor, OpalV2);
+impl_desc_try_from!(EnterpriseDescriptor, Enterprise);
+impl_desc_try_from!(OpalV1Descriptor, OpalV1);
+impl_desc_try_from!(OpaliteDescriptor, Opalite);
+impl_desc_try_from!(PyriteV1Descriptor, PyriteV1);
+impl_desc_try_from!(PyriteV2Descriptor, PyriteV2);
+impl_desc_try_from!(RubyDescriptor, Ruby);
+impl_desc_try_from!(KeyPerIODescriptor, KeyPerIO);
 
 impl Serialize<u8> for FeatureDescriptor {
     type Error = SerializeError;

@@ -3,6 +3,10 @@ use crate::messaging::discovery::{
 };
 use crate::rpc::Properties;
 use crate::serialization::{OutputStream, Serialize};
+use crate::spec;
+use crate::spec::column_types::LifeCycleState;
+
+use super::data::OpalV2Controller;
 
 pub const BASE_COM_ID: u16 = 4100;
 pub const NUM_COM_IDS: u16 = 1;
@@ -15,15 +19,15 @@ pub fn write_discovery(discovery: &Discovery, len: usize) -> Result<Vec<u8>, cra
     Ok(buffer)
 }
 
-pub fn get_discovery(properties: Properties) -> Discovery {
+pub fn get_discovery(properties: &Properties, controller: &OpalV2Controller) -> Discovery {
     Discovery::new(vec![
         get_tper_feature_desc(properties),
-        get_locking_feature_desc(),
+        get_locking_feature_desc(controller),
         get_ssc_feature_desc(),
     ])
 }
 
-fn get_tper_feature_desc(properties: Properties) -> FeatureDescriptor {
+fn get_tper_feature_desc(properties: &Properties) -> FeatureDescriptor {
     let desc = TPerDescriptor {
         sync_supported: true,
         async_supported: properties.asynchronous,
@@ -35,16 +39,20 @@ fn get_tper_feature_desc(properties: Properties) -> FeatureDescriptor {
     FeatureDescriptor::TPer(desc)
 }
 
-fn get_locking_feature_desc() -> FeatureDescriptor {
+fn get_locking_feature_desc(controller: &OpalV2Controller) -> FeatureDescriptor {
+    let locking_sp = controller.admin_sp.sp_specific.sp.get(&spec::opal::admin::sp::LOCKING).unwrap();
+    let locking_enabled = locking_sp.life_cycle_state != LifeCycleState::ManufacturedInactive;
+    let locking = &controller.locking_sp.sp_specific.locking;
+    let locked = locking.values().any(|range| range.read_lock_enabled || range.write_lock_enabled);
     let desc = LockingDescriptor {
         hw_reset_supported: true,
-        locked: false,
-        locking_enabled: false,
+        locked,
+        locking_enabled,
         locking_supported: true,
-        media_encryption: true,
+        media_encryption: false,
         mbr_enabled: false,
         mbr_done: false,
-        mbr_shadowing_not_supported: false,
+        mbr_shadowing_not_supported: true, // Not yet implement for fake device.
     };
     FeatureDescriptor::Locking(desc)
 }

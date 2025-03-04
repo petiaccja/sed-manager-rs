@@ -15,7 +15,10 @@ component Cell {
     height: text-box.min-height;
     min-width: Math.min(60px, text-box.min-width + 12px);
     Rectangle {
-        border-radius: 8px;
+        border-top-left-radius: cell-type == CellType.name ? 8px : 0px;
+        border-bottom-left-radius: cell-type == CellType.name ? 8px : 0px;
+        border-top-right-radius: cell-type == CellType.name ? 0px : 8px;
+        border-bottom-right-radius: cell-type == CellType.name ? 0px : 8px;
         background: row-color;
     }
 
@@ -32,7 +35,7 @@ component Cell {
     }
 }
 
-export component NameValueListView {
+export component PairList {
     in property <[NameValuePair]> name_value_pairs;
     min-height: names.min-height;
     min-width: rows.min-width;
@@ -63,6 +66,6 @@ export component NameValueListView {
     }
 }
 
-export component LivePreviewTest inherits NameValueListView {
+export component LivePreviewTest inherits PairList {
     name_value_pairs: [{ name: "pi", value: "3.14159" }, { name: "e", value: "2.71828182845904" }];
 }

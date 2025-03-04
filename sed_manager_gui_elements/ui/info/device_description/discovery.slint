@@ -1,9 +1,9 @@
 import { ScrollView, GridBox, HorizontalBox, Palette } from "std-widgets.slint";
 import { VerticalSeparator, PaletteExtra, HorizontalSeparator } from "../../widgets/visual.slint";
-import { CollapsibleView } from "../../widgets/collapsible_view.slint";
-import { NameValueListView } from "../../widgets/name_value_list_view.slint";
-import { TextLoadingIndicator } from "../../widgets/loading.slint";
-import { ContentStatus } from "../../data/content_status.slint";
+import { Collapsible } from "../../widgets/collapsible.slint";
+import { PairList } from "../../widgets/pair_list.slint";
+import { TextLoadingIndicator } from "../../widgets/progress.slint";
+import { ExtendedStatus, Status } from "../../data/status.slint";
 import { DeviceDiscovery, DeviceDiscoveryFeature, ExampleData } from "../../data/device_description.slint";
 
 component LoadingView {
@@ -12,7 +12,7 @@ component LoadingView {
         spacing: 12px;
         VerticalLayout {
             alignment: start;
-            CollapsibleView {
+            Collapsible {
                 text: "Common features";
                 preferred-height: self.min-height;
                 font-color: PaletteExtra.accented-control-foreground;
@@ -29,7 +29,7 @@ component LoadingView {
 
         VerticalLayout {
             alignment: start;
-            CollapsibleView {
+            Collapsible {
                 text: "SSC features";
                 preferred-height: self.min-height;
                 font-color: PaletteExtra.accented-control-foreground;
@@ -85,7 +85,7 @@ component SplitView {
             viewport-height: common_feature_view.min-height;
             common_feature_view := VerticalLayout {
                 spacing: 12px;
-                for feature in root.common-features: CollapsibleView {
+                for feature in root.common-features: Collapsible {
                     text: feature.name;
                     font-color: PaletteExtra.accented-control-foreground;
                     VerticalLayout {
@@ -94,7 +94,7 @@ component SplitView {
                             background: Palette.background;
                         }
 
-                        NameValueListView {
+                        PairList {
                             name_value_pairs: feature.properties;
                         }
                     }
@@ -107,7 +107,7 @@ component SplitView {
             viewport-height: ssc_feature_view.min-height;
             ssc_feature_view := VerticalLayout {
                 spacing: 16px;
-                for feature in root.ssc-features: CollapsibleView {
+                for feature in root.ssc-features: Collapsible {
                     text: feature.name;
                     font-color: PaletteExtra.accented-control-foreground;
                     VerticalLayout {
@@ -116,7 +116,7 @@ component SplitView {
                             background: Palette.background;
                         }
 
-                        NameValueListView {
+                        PairList {
                             name_value_pairs: feature.properties;
                         }
                     }
@@ -126,23 +126,22 @@ component SplitView {
     }
 }
 
-export component DiscoveryView {
-    in property <ContentStatus> status;
-    in property <string> error-message;
+export component Discovery {
+    in property <ExtendedStatus> extended-status;
     in property <DeviceDiscovery> discovery;
     HorizontalLayout {
-        if root.status == ContentStatus.loading: LoadingView { }
-        if root.status == ContentStatus.error: ErrorView {
-            error: root.error-message;
+        if extended-status.status == Status.loading: LoadingView { }
+        if extended-status.status == Status.error: ErrorView {
+            error: extended-status.message;
         }
-        if root.status == ContentStatus.success: SplitView {
-            common-features: root.discovery.common-features;
-            ssc-features: root.discovery.ssc-features;
+        if extended-status.status == Status.success: SplitView {
+            common-features: discovery.common-features;
+            ssc-features: discovery.ssc-features;
         }
     }
 }
 
-export component LivePreviewTest_Success inherits DiscoveryView {
-    status: ContentStatus.success;
+export component LivePreviewTest_Success inherits Discovery {
+    extended-status: { status: Status.success };
     discovery: ExampleData.description.discovery;
 }

@@ -7,7 +7,7 @@ use crate::tper::TPer;
 use super::error::Error;
 use super::with_session::with_session;
 
-pub async fn is_taking_ownership_supported(_discovery: &Discovery) -> bool {
+pub fn is_taking_ownership_supported(_discovery: &Discovery) -> bool {
     true
 }
 

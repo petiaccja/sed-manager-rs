@@ -10,9 +10,9 @@ build = "build.rs"
 sed-manager = { path = "../sed_manager" }
 
 [dependencies.slint]
-version = "1.9.2"
+version = "1.10.0"
 default-features = false
 features = ["std", "compat-1-2", "backend-winit", "renderer-skia", "renderer-femtovg"]
 
 [build-dependencies]
-slint-build = "1.9.2"
+slint-build = "1.10.0"

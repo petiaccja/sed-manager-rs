@@ -1,13 +1,119 @@
 import { DeviceDescription, ExampleData as DeviceDescriptionExampleData } from "data/device_description.slint";
-import { UnavailableDevice } from "data/unavailable_device.slint";
-import { ActionResult } from "data/action_result.slint";
 import { UnavailableDevicesPage} from "pages/unavailable_devices_page.slint";
-import { ContentStatus } from "data/content_Status.slint";
 import { TabBar } from "widgets/tab_bar.slint";
-import { SwitchContainer, SwitchContent } from "widgets/switch_content.slint";
-import { Button, Spinner } from "std-widgets.slint";
+import { AlternativeLayout, AlternativeChild } from "widgets/alternative_layout.slint";
+import { State } from "state.slint";
+import { Button, Spinner, Palette } from "std-widgets.slint";
 import { DevicePage } from "pages/device_page.slint";
-import { LockingRange } from "data/locking_range.slint";
+import { UnavailableDevicesPage } from "pages/unavailable_devices_page.slint";
+import { Status } from "data/status.slint";
+import { StatusIndicator } from "widgets/progress.slint";
+import { PaletteExtra } from "widgets/visual.slint";
+
+export { State }
+
+component DriveTabView {
+    private property <int> current-tab;
+    VerticalLayout {
+        alignment: stretch;
+        padding-left: 16px;
+        padding-right: 16px;
+        padding-bottom: 16px;
+        padding-top: 6px;
+        HorizontalLayout {
+            vertical-stretch: 0.0;
+            TabBar {
+                titles: State.tab-names;
+                selected: Math.max(0, Math.min(State.tab-names.length - 1, current-tab));
+                tab-selected(index) => {
+                    current-tab = index;
+                }
+            }
+
+            Button {
+                height: 32px;
+                icon: @image-url("../images/action/8666728_refresh_cw_icon.svg");
+                colorize-icon: true;
+                clicked => {
+                    State.list-devices();
+                }
+            }
+        }
+
+        AlternativeLayout {
+            vertical-stretch: 1.0;
+            for device-idx in State.descriptions.length: AlternativeChild {
+                selected: current-tab == device-idx;
+                device-page := DevicePage {
+                    device-idx: device-idx;
+                }
+
+                init => {
+                    if self.selected {
+                        device-page.gained-focus();
+                    }
+                }
+                changed selected => {
+                    if self.selected {
+                        device-page.gained-focus();
+                    }
+                }
+            }
+            AlternativeChild {
+                selected: current-tab >= State.descriptions.length;
+                UnavailableDevicesPage {
+                    unavailable-devices: State.unavailable-devices;
+                }
+            }
+        }
+    }
+}
+
+component LoadingView {
+    HorizontalLayout {
+        alignment: center;
+        VerticalLayout {
+            alignment: center;
+            HorizontalLayout {
+                alignment: center;
+                StatusIndicator {
+                    status: State.device-list-status.status;
+                    icon: @image-url("../images/device/8666570_hard_drive_icon.svg");
+                    width: 80px;
+                    height: 80px;
+                }
+            }
+
+            Text {
+                text: {
+                    if State.device-list-status.status == Status.loading {
+                        "Loading devices..."
+                    } else if State.device-list-status.status == Status.error {
+                        "Failed to load devices:"
+                    } else {
+                        "No compatible devices found"
+                    }
+                };
+                font-size: 24px;
+                horizontal-alignment: center;
+                color: State.device-list-status.status == Status.error ? PaletteExtra.error-foreground : Palette.foreground;
+            }
+
+            Text {
+                text: {
+                    if State.device-list-status.status == Status.loading {
+                        "This can take up to 20 seconds while hard drives spin up."
+                    } else if State.device-list-status.status == Status.error {
+                        State.device-list-status.message
+                    } else {
+                        "Some interfaces are not supported by SEDManager.\nYou may also be running a VM."
+                    }
+                }
+                horizontal-alignment: center;
+            }
+        }
+    }
+}
 
 export component AppWindow inherits Window {
     title: "SED Manager";
@@ -16,130 +122,11 @@ export component AppWindow inherits Window {
     preferred-height: 600px;
     min-width: 640px;
     min-height: 360px;
-    in property <[string]> device-tabs;
-    in property <[DeviceDescription]> device-descriptions;
-    in property <[UnavailableDevice]> unavailable-devices;
-    in property <[ActionResult]> action-results;
-    in property <[[string]]> locking-range-error-logs;
-    in property <[[LockingRange]]> locking-ranges;
-    private property <int> selected-device-tab;
-    callback update-devices();
-    callback update-device-discovery(device-idx: int);
-    callback reset-session(device-idx: int);
-    callback take-ownership(device-idx: int, new-password: string);
-    callback activate-locking(device-idx: int, sid-password: string, new-admin1-password: string);
-    callback query-ranges(device-idx: int, password: string);
-    callback update-range(device-idx: int, range-idx: int, value: LockingRange);
-    callback revert(device-idx: int, use-psid: bool, password: string, include-admin: bool);
-    callback update-com-id-status(device-idx: int);
-    callback stack-reset(device-idx: int);
+    private property <bool> loaded: State.device-list-status.status == Status.success && State.tab-names.length != 0;
     VerticalLayout {
-        if device-tabs.length != 0: VerticalLayout {
-            alignment: stretch;
-            padding-left: 16px;
-            padding-right: 16px;
-            padding-bottom: 16px;
-            padding-top: 6px;
-            HorizontalLayout {
-                vertical-stretch: 0.0;
-                TabBar {
-                    titles: root.device-tabs;
-                    tab-selected(index) => {
-                        root.selected-device-tab = index;
-                    }
-                }
-
-                Button {
-                    height: 32px;
-                    icon: @image-url("../images/action/8666728_refresh_cw_icon.svg");
-                    colorize-icon: true;
-                    clicked => {
-                        update-devices();
-                    }
-                }
-            }
-
-            SwitchContainer {
-                vertical-stretch: 1.0;
-                for description[i] in root.device-descriptions: SwitchContent {
-                    selected: i == selected-device-tab;
-                    DevicePage {
-                        description: description;
-                        action-result: i < action-results.length ? action-results[i] : { };
-                        locking-range-error-log: i < locking-range-error-logs.length ? locking-range-error-logs[i] : [];
-                        locking-ranges: i < locking-ranges.length ? locking-ranges[i] : [];
-                        update-device-discovery => {
-                            update-device-discovery(i);
-                        }
-                        reset-session => {
-                            reset-session(i);
-                        }
-                        take-ownership(new-password) => {
-                            take-ownership(i, new-password);
-                        }
-                        activate-locking(sid-password, new-admin1-password) => {
-                            activate-locking(i, sid-password, new-admin1-password);
-                        }
-                        query-ranges(password) => {
-                            query-ranges(i, password);
-                        }
-                        update-range(range-idx, value) => {
-                            update-range(i, range-idx, value);
-                        }
-                        revert(use-psid, password, include-admin) => {
-                            revert(i, use-psid, password, include-admin);
-                        }
-                    }
-                }
-                SwitchContent {
-                    selected: selected-device-tab >= root.device-descriptions.length;
-                    UnavailableDevicesPage {
-                        unavailable-devices: root.unavailable-devices;
-                    }
-                }
-            }
-        }
-        if device-tabs.length == 0: HorizontalLayout {
-            alignment: space-around;
-            VerticalLayout {
-                Rectangle {
-                    preferred-height: 100%;
-                }
-
-                HorizontalLayout {
-                    alignment: space-around;
-                    Spinner {
-                        width: 80px;
-                        height: 80px;
-                        indeterminate: true;
-                    }
-                }
-
-                Text {
-                    text: "Loading devices...";
-                    font-size: 24px;
-                    horizontal-alignment: center;
-                }
-
-                Text {
-                    text: "This might take 10-20 seconds if drives need to spin up.";
-                    horizontal-alignment: center;
-                }
-
-                Rectangle {
-                    preferred-height: 100%;
-                }
-            }
-        }
+        if loaded: DriveTabView { }
+        if !loaded: LoadingView { }
     }
 }
 
 export component LivePreviewTest_Loading inherits AppWindow { }
-
-export component LivePreviewTest_Success inherits AppWindow {
-    device-tabs: ["Foo Device", "Bar Device", "Unavailable drives"];
-    device-descriptions: [
-        DeviceDescriptionExampleData.description,
-        DeviceDescriptionExampleData.description
-    ];
-}

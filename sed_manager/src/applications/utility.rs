@@ -71,6 +71,7 @@ pub fn get_lookup(ssc: FeatureCode) -> &'static dyn ObjectLookup {
         FeatureCode::PyriteV2 => &spec::pyrite::OBJECT_LOOKUP,
         FeatureCode::Ruby => &spec::ruby::OBJECT_LOOKUP,
         FeatureCode::KeyPerIO => &spec::kpio::OBJECT_LOOKUP,
+        FeatureCode::AdditionalDataStoreTables => &spec::data_store::OBJECT_LOOKUP,
         _ => &spec::core::OBJECT_LOOKUP,
     }
 }

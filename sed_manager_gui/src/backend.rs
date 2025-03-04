@@ -1,0 +1,283 @@
+use std::rc::Rc;
+use std::sync::Arc;
+
+use sed_manager::applications::{
+    activate_locking, get_admin_sp, get_locking_admins, get_locking_sp, get_lookup, revert, take_ownership,
+    Error as AppError,
+};
+use sed_manager::device::{Device, Error as DeviceError};
+use sed_manager::messaging::discovery::{Discovery, Feature};
+use sed_manager::messaging::uid::UID;
+use sed_manager::rpc::{discover, Error as RPCError};
+use sed_manager::spec::column_types::SPRef;
+use sed_manager::spec::{self, ObjectLookup as _};
+use sed_manager::tper::{Session, TPer};
+
+use crate::async_state::{AsyncState, StateExt};
+use crate::device_list::{get_device_identity, DeviceList};
+use crate::native_data::NativeLockingRange;
+use crate::ui;
+use crate::utility::{run_in_thread, PeekCell};
+
+pub struct Backend {
+    devices: Vec<Arc<dyn Device>>,
+    discoveries: Vec<Option<Discovery>>,
+    tpers: Vec<Option<Arc<TPer>>>,
+    sessions: Vec<Option<Session>>,
+}
+
+impl Backend {
+    pub fn new() -> Self {
+        Self { devices: Vec::new(), discoveries: Vec::new(), tpers: Vec::new(), sessions: Vec::new() }
+    }
+
+    fn get_discovery(&self, device_idx: usize) -> Result<&Discovery, RPCError> {
+        self.discoveries.get(device_idx).and_then(|x| x.as_ref()).ok_or(DeviceError::DeviceNotFound.into())
+    }
+
+    fn get_tper(&mut self, device_idx: usize) -> Result<Arc<TPer>, RPCError> {
+        let maybe_tper = self.tpers.get_mut(device_idx).ok_or(DeviceError::DeviceNotFound)?;
+        if let Some(tper) = maybe_tper {
+            return Ok(tper.clone());
+        }
+        let device = self.devices.get(device_idx).ok_or(DeviceError::DeviceNotFound)?;
+        let maybe_discovery = self.discoveries.get(device_idx).ok_or(RPCError::Unspecified)?; // GUI should never allow this state.
+        let discovery = maybe_discovery.as_ref().ok_or(RPCError::Unspecified)?; // GUI should never allow this state.
+        let ssc = discovery.get_primary_ssc().ok_or(RPCError::NotSupported)?;
+        let com_id = ssc.base_com_id();
+        let com_id_ext = 0;
+        let tper = Arc::new(TPer::new(device.clone(), com_id, com_id_ext));
+        drop(maybe_tper.replace(tper.clone()));
+        Ok(tper)
+    }
+
+    fn replace_session(&mut self, device_idx: usize, session: Session) -> Option<Session> {
+        self.sessions.resize_with(std::cmp::max(self.sessions.len(), device_idx + 1), || None);
+        self.sessions[device_idx].replace(session)
+    }
+
+    fn take_session(&mut self, device_idx: usize) -> Option<Session> {
+        self.sessions.get_mut(device_idx).map(|x| x.take()).flatten()
+    }
+
+    pub async fn list_devices(
+        this: Rc<PeekCell<Self>>,
+    ) -> Result<(Vec<ui::DeviceIdentity>, Vec<ui::UnavailableDevice>), ui::ExtendedStatus> {
+        this.peek_mut(|this| {
+            this.devices.clear();
+            this.discoveries.clear();
+            this.tpers.clear();
+            this.sessions.clear();
+        });
+        let device_list = match DeviceList::query().await {
+            Ok(value) => value,
+            Err(error) => return Err(ui::ExtendedStatus::error(error.to_string())),
+        };
+        let mut identities = Vec::<ui::DeviceIdentity>::new();
+        for device in &device_list.devices {
+            identities.push(get_device_identity(device.clone()).await.into());
+        }
+        let unavailable_devices = device_list
+            .unavailable_devices
+            .into_iter()
+            .map(|(path, error)| ui::UnavailableDevice::new(path, error.to_string()))
+            .collect();
+        this.peek_mut(move |this| {
+            let num_devices = device_list.devices.len();
+            this.devices = device_list.devices;
+            this.discoveries = std::iter::repeat_with(|| None).take(num_devices).collect();
+            this.tpers = std::iter::repeat_with(|| None).take(num_devices).collect();
+            this.sessions = std::iter::repeat_with(|| None).take(num_devices).collect();
+        });
+        Ok((identities, unavailable_devices))
+    }
+
+    pub async fn discover(
+        this: Rc<PeekCell<Self>>,
+        device_idx: usize,
+    ) -> Result<(ui::DeviceDiscovery, ui::ActivitySupport), ui::ExtendedStatus> {
+        let Some(device) = this.peek(|this| this.devices.get(device_idx).cloned()) else {
+            return Err(ui::ExtendedStatus::error(format!("device {device_idx} not found (this is a bug)")));
+        };
+        let discovery = match run_in_thread(move || discover(&*device)).await {
+            Ok(value) => value,
+            Err(error) => return Err(ui::ExtendedStatus::error(error.to_string())),
+        };
+        let ui_discovery = ui::DeviceDiscovery::from_discovery(&discovery);
+        let ui_activity_support = ui::ActivitySupport::from_discovery(&discovery);
+        this.peek_mut(|this| this.discoveries.get_mut(device_idx).map(|opt| opt.replace(discovery)));
+        Ok((ui_discovery, ui_activity_support))
+    }
+
+    pub async fn cleanup_session(this: Rc<PeekCell<Self>>, device_idx: usize) {
+        let Some(session) = this.peek_mut(|this| this.take_session(device_idx)) else {
+            return;
+        };
+        let _ = session.end_session().await;
+    }
+
+    pub async fn take_ownership(this: Rc<PeekCell<Self>>, device_idx: usize, sid_pw: String) -> ui::ExtendedStatus {
+        async fn inner(this: Rc<PeekCell<Backend>>, device_idx: usize, sid_pw: String) -> Result<(), AppError> {
+            let tper = this.peek_mut(|this| this.get_tper(device_idx))?;
+            take_ownership(&*tper, sid_pw.as_bytes()).await
+        }
+
+        Backend::cleanup_session(this.clone(), device_idx).await;
+        match inner(this, device_idx, sid_pw).await {
+            Ok(_) => ui::ExtendedStatus::success(),
+            Err(error) => ui::ExtendedStatus::error(error.to_string()),
+        }
+    }
+
+    pub async fn activate_locking(
+        this: Rc<PeekCell<Self>>,
+        device_idx: usize,
+        sid_pw: String,
+        admin1_pw: String,
+    ) -> ui::ExtendedStatus {
+        async fn inner(
+            this: Rc<PeekCell<Backend>>,
+            device_idx: usize,
+            sid_pw: String,
+            admin1_pw: String,
+        ) -> Result<(), AppError> {
+            let tper = this.peek_mut(|this| this.get_tper(device_idx))?;
+            activate_locking(&*tper, sid_pw.as_bytes(), Some(admin1_pw.as_bytes())).await
+        }
+
+        Backend::cleanup_session(this.clone(), device_idx).await;
+        match inner(this, device_idx, sid_pw, admin1_pw).await {
+            Ok(_) => ui::ExtendedStatus::success(),
+            Err(error) => ui::ExtendedStatus::error(error.to_string()),
+        }
+    }
+
+    pub async fn login_locking_ranges(
+        this: Rc<PeekCell<Self>>,
+        device_idx: usize,
+        admin1_pw: String,
+    ) -> ui::ExtendedStatus {
+        async fn inner(this: Rc<PeekCell<Backend>>, device_idx: usize, admin1_pw: String) -> Result<(), AppError> {
+            let tper = this.peek_mut(|this| this.get_tper(device_idx))?;
+            let discovery = tper.discover().await?;
+            let ssc = discovery.get_primary_ssc().ok_or(AppError::NoAvailableSSC)?;
+            let sp = get_locking_sp(ssc.feature_code())?;
+            let admin1 = get_locking_admins(ssc.feature_code())?.nth(1).unwrap();
+            let session = tper.start_session(sp, Some(admin1), Some(admin1_pw.as_bytes())).await?;
+            this.peek_mut(|this| this.replace_session(device_idx, session));
+            Ok(())
+        }
+
+        Backend::cleanup_session(this.clone(), device_idx).await;
+        match inner(this, device_idx, admin1_pw).await {
+            Ok(_) => ui::ExtendedStatus::success(),
+            Err(error) => ui::ExtendedStatus::error(error.to_string()),
+        }
+    }
+
+    pub async fn list_locking_ranges(
+        this: Rc<PeekCell<Self>>,
+        device_idx: usize,
+        async_state: AsyncState<Rc<PeekCell<Self>>>,
+    ) {
+        async fn inner(
+            this: Rc<PeekCell<Backend>>,
+            device_idx: usize,
+            async_state: AsyncState<Rc<PeekCell<Backend>>>,
+        ) -> Result<(), RPCError> {
+            let Some(session) = this.peek_mut(|this| this.take_session(device_idx)) else {
+                return Err(RPCError::Unspecified);
+            };
+            let discovery = this.peek(|this| this.get_discovery(device_idx).ok().cloned());
+            let ssc = discovery.as_ref().and_then(|x| x.get_primary_ssc());
+            let locking_sp = ssc.and_then(|ssc| get_locking_sp(ssc.feature_code()).ok());
+            let ranges = session.next(spec::core::table_id::LOCKING, None, None).await?;
+            for range in ranges.iter() {
+                let name = get_object_name(discovery.as_ref(), *range, locking_sp);
+                let properties = get_locking_range_properties(&session, *range).await;
+                match properties {
+                    Ok(properties) => {
+                        async_state.with(|state| state.push_locking_range(device_idx, name, properties.into()));
+                    }
+                    Err(error) => {
+                        async_state.with(|state| state.push_locking_range_error(device_idx, error.to_string()))
+                    }
+                }
+            }
+            Ok(())
+        }
+        let result = inner(this, device_idx, async_state.clone()).await;
+        async_state.with(|state| match result {
+            Ok(_) => (),
+            Err(error) => state.respond_login_locking_ranges(device_idx, error.into()),
+        });
+    }
+
+    pub async fn revert(
+        this: Rc<PeekCell<Self>>,
+        device_idx: usize,
+        use_psid: bool,
+        pw: String,
+        revert_admin: bool,
+    ) -> ui::ExtendedStatus {
+        use spec::core::authority::SID;
+        use spec::psid::admin::authority::PSID;
+        async fn inner(
+            this: Rc<PeekCell<Backend>>,
+            device_idx: usize,
+            use_psid: bool,
+            pw: String,
+            revert_admin: bool,
+        ) -> Result<(), AppError> {
+            let tper = this.peek_mut(|this| this.get_tper(device_idx))?;
+            let discovery = tper.discover().await?;
+            let ssc = discovery.get_primary_ssc().ok_or(AppError::NoAvailableSSC)?;
+            let admin_sp = get_admin_sp(ssc.feature_code())?;
+            let locking_sp = get_locking_sp(ssc.feature_code())?;
+            let authority = if use_psid { PSID } else { SID };
+            let sp = if revert_admin { admin_sp } else { locking_sp };
+            revert(&*tper, authority, pw.as_bytes(), sp).await
+        }
+
+        Backend::cleanup_session(this.clone(), device_idx).await;
+        match inner(this, device_idx, use_psid, pw, revert_admin).await {
+            Ok(_) => ui::ExtendedStatus::success(),
+            Err(error) => ui::ExtendedStatus::error(error.to_string()),
+        }
+    }
+}
+
+fn get_object_name(discovery: Option<&Discovery>, uid: UID, sp: Option<SPRef>) -> String {
+    // Try all present feature descriptors.
+    let empty = Discovery::new(vec![]);
+    for desc in discovery.unwrap_or(&empty).iter() {
+        let lookup = get_lookup(desc.feature_code());
+        if let Some(name) = lookup.by_uid(uid, sp.map(|sp| sp.as_uid())) {
+            return name;
+        }
+    }
+    // Try features sets that don't have a feature desriptor.
+    if let Some(name) = spec::psid::OBJECT_LOOKUP.by_uid(uid, sp.map(|sp| sp.as_uid())) {
+        return name;
+    }
+    // Format the UID as a hex number.
+    format!("{:16x}", uid.as_u64())
+}
+
+async fn get_locking_range_properties(session: &Session, range: UID) -> Result<NativeLockingRange, RPCError> {
+    // TODO: implement this with a single get over a column range for speed.
+    let start_lba: u64 = session.get(range, 3).await?;
+    let length_lba: u64 = session.get(range, 4).await?;
+    let read_lock_enabled: bool = session.get(range, 5).await?;
+    let write_lock_enabled: bool = session.get(range, 6).await?;
+    let read_locked: bool = session.get(range, 7).await?;
+    let write_locked: bool = session.get(range, 8).await?;
+    Ok(NativeLockingRange {
+        start_lba,
+        end_lba: start_lba + length_lba,
+        read_lock_enabled,
+        write_lock_enabled,
+        read_locked,
+        write_locked,
+    })
+}

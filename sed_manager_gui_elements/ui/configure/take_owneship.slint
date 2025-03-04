@@ -1,0 +1,138 @@
+import { LineEdit, Button } from "std-widgets.slint";
+import { PaletteExtra } from "../widgets/visual.slint";
+import { Password } from "../widgets/password.slint";
+import { Status, ExtendedStatus} from "../data/status.slint";
+import { WarningPopup } from "../widgets/warning_popup.slint";
+import { ResultPopup } from "../widgets/result_popup.slint";
+import { ConfigView } from "config_view.slint";
+
+component WarningMessage {
+    VerticalLayout {
+        spacing: 8px;
+        alignment: center;
+        Text {
+            text: "Losing the password could render your drive unusable (bricked)!";
+            font-weight: 600;
+            wrap: word-wrap;
+        }
+
+        Text {
+            text: "You need this password to reset the device in case you lose your encryption password.";
+            wrap: word-wrap;
+        }
+
+        Text {
+            text: "Make sure you have your PSID password. The PSID is a second way to reset the drive.";
+            wrap: word-wrap;
+        }
+    }
+}
+
+component Form {
+    in property <bool> enabled: true;
+    out property <string> password;
+    private property <string> password-feedback;
+    callback executed();
+    VerticalLayout {
+        alignment: LayoutAlignment.center;
+        padding: 8px;
+        spacing: 6px;
+        min-width: 200px;
+        Text {
+            text: "New owner password:";
+        }
+
+        password := LineEdit {
+            input-type: InputType.password;
+            text <=> root.password;
+            edited(text) => {
+                password-feedback = Password.validate(text, repeat.text)
+            }
+        }
+
+        Text {
+            text: "Repeat password:";
+        }
+
+        repeat := LineEdit {
+            input-type: InputType.password;
+            edited(text) => {
+                password-feedback = Password.validate(text, repeat.text)
+            }
+        }
+
+        Button {
+            text: "Take ownership";
+            primary: true;
+            enabled: password-feedback == "" && enabled;
+            clicked => {
+                executed()
+            }
+        }
+
+        Text {
+            text: password-feedback;
+            color: PaletteExtra.error-foreground;
+            horizontal-alignment: center;
+        }
+    }
+}
+
+export component TakeOwnership inherits ConfigView {
+    in-out property <ExtendedStatus> extended-status: { status: Status.error };
+    callback take-ownership(new-password: string);
+    config-name: "Take ownership";
+    config-icon: @image-url("../../images/action/8666628_user_check_icon.svg");
+    back-enabled: extended-status.status != Status.loading;
+    warning-popup := WarningPopup {
+        x: (root.width - self.width) / 2;
+        y: (root.height - self.height) / 2;
+        WarningMessage { }
+
+        continued => {
+            self.close();
+            take-ownership(form.password);
+            result-popup.show();
+        }
+        cancelled => {
+            self.close();
+        }
+    }
+
+    result-popup := ResultPopup {
+        x: (root.width - self.width) / 2;
+        y: (root.height - self.height) / 2;
+        icon: root.config-icon;
+        finish-enabled: root.back-enabled;
+        retry-enabled: root.back-enabled;
+        status: extended-status.status;
+        finish-text: "Done";
+        message: {
+            if extended-status.status == Status.success {
+                "Ownership set up successfully!"
+            } else if extended-status.status == Status.error {
+                "Failed to take ownership:\n" + extended-status.message
+            } else {
+                "Taking ownership..."
+            }
+        }
+        finished => {
+            self.close();
+            root.back();
+        }
+        retried => {
+            self.close();
+        }
+    }
+
+    HorizontalLayout {
+        alignment: center;
+        vertical-stretch: 1.0;
+        form := Form {
+            enabled: root.back-enabled;
+            executed => {
+                warning-popup.show();
+            }
+        }
+    }
+}

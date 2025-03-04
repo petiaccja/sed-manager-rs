@@ -1,0 +1,121 @@
+import { LineEdit, Button, ComboBox, Switch } from "std-widgets.slint";
+import { PaletteExtra } from "../widgets/visual.slint";
+import { Password } from "../widgets/password.slint";
+import { Status, ExtendedStatus} from "../data/status.slint";
+import { WarningPopup } from "../widgets/warning_popup.slint";
+import { ResultPopup } from "../widgets/result_popup.slint";
+import { ConfigView } from "config_view.slint";
+
+component WarningMessage {
+    VerticalLayout {
+        alignment: center;
+        spacing: 8px;
+        Text {
+            text: "Erase all from the drive?";
+            wrap: word-wrap;
+            font-weight: 600;
+        }
+
+        Text {
+            text: "The data will be erased cryptographically, and there is no way to later restore it.";
+            wrap: word-wrap;
+        }
+    }
+}
+
+component Form {
+    out property <bool> use-psid: authority.current-index == 1;
+    out property <string> password;
+    out property <bool> revert-admin <=> select-sp.checked;
+    in property <bool> enabled;
+    callback executed();
+    VerticalLayout {
+        alignment: LayoutAlignment.center;
+        padding: 8px;
+        spacing: 6px;
+        min-width: 200px;
+        authority := ComboBox {
+            model: ["Enter owner password:", "Enter PSID password:"];
+        }
+
+        password := LineEdit {
+            input-type: InputType.password;
+            text <=> root.password;
+        }
+
+        select-sp := Switch {
+            text: "Revert admin";
+            checked: false;
+            enabled: !use-psid;
+        }
+
+        Button {
+            text: select-sp.checked || use-psid ? "Revert admin & locking" : "Revert locking";
+            primary: true;
+            enabled <=> enabled;
+            clicked => {
+                executed();
+            }
+        }
+    }
+}
+
+export component Revert inherits ConfigView {
+    in-out property <ExtendedStatus> extended-status: { status: Status.error };
+    config-name: "Revert";
+    config-icon: @image-url("../../images/action/user-x.svg");
+    back-enabled: extended-status.status != Status.loading;
+    callback revert(use-psid: bool, password: string, revert-admin: bool);
+    warning-popup := WarningPopup {
+        x: (root.width - self.width) / 2;
+        y: (root.height - self.height) / 2;
+        continue-text: "Erase";
+        WarningMessage { }
+
+        continued => {
+            self.close();
+            revert(form.use-psid, form.password, form.revert-admin);
+            result-popup.show();
+        }
+        cancelled => {
+            self.close();
+        }
+    }
+
+    result-popup := ResultPopup {
+        x: (root.width - self.width) / 2;
+        y: (root.height - self.height) / 2;
+        icon: root.config-icon;
+        finish-enabled: root.back-enabled;
+        retry-enabled: root.back-enabled;
+        status: extended-status.status;
+        finish-text: "Done";
+        message: {
+            if extended-status.status == Status.success {
+                "Device reverted successfully!"
+            } else if extended-status.status == Status.error {
+                "Failed to revert device:\n" + extended-status.message
+            } else {
+                "Reverting device..."
+            }
+        }
+        finished => {
+            self.close();
+            root.back();
+        }
+        retried => {
+            self.close();
+        }
+    }
+
+    HorizontalLayout {
+        alignment: center;
+        vertical-stretch: 1.0;
+        form := Form {
+            enabled: root.back-enabled;
+            executed => {
+                warning-popup.show();
+            }
+        }
+    }
+}
