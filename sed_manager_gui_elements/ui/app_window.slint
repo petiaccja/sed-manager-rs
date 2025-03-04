@@ -3,11 +3,117 @@ import { UnavailableDevicesPage} from "pages/unavailable_devices_page.slint";
 import { TabBar } from "widgets/tab_bar.slint";
 import { AlternativeLayout, AlternativeChild } from "widgets/alternative_layout.slint";
 import { State } from "state.slint";
-import { Button, Spinner } from "std-widgets.slint";
+import { Button, Spinner, Palette } from "std-widgets.slint";
 import { DevicePage } from "pages/device_page.slint";
 import { UnavailableDevicesPage } from "pages/unavailable_devices_page.slint";
+import { Status } from "data/status.slint";
+import { StatusIndicator } from "widgets/progress.slint";
+import { PaletteExtra } from "widgets/visual.slint";
 
 export { State }
+
+component DriveTabView {
+    private property <int> current-tab;
+    VerticalLayout {
+        alignment: stretch;
+        padding-left: 16px;
+        padding-right: 16px;
+        padding-bottom: 16px;
+        padding-top: 6px;
+        HorizontalLayout {
+            vertical-stretch: 0.0;
+            TabBar {
+                titles: State.tab-names;
+                selected: Math.max(0, Math.min(State.tab-names.length - 1, current-tab));
+                tab-selected(index) => {
+                    current-tab = index;
+                }
+            }
+
+            Button {
+                height: 32px;
+                icon: @image-url("../images/action/8666728_refresh_cw_icon.svg");
+                colorize-icon: true;
+                clicked => {
+                    State.list-devices();
+                }
+            }
+        }
+
+        AlternativeLayout {
+            vertical-stretch: 1.0;
+            for device-idx in State.descriptions.length: AlternativeChild {
+                selected: current-tab == device-idx;
+                device-page := DevicePage {
+                    device-idx: device-idx;
+                }
+
+                init => {
+                    if self.selected {
+                        device-page.gained-focus();
+                    }
+                }
+                changed selected => {
+                    if self.selected {
+                        device-page.gained-focus();
+                    }
+                }
+            }
+            AlternativeChild {
+                selected: current-tab >= State.descriptions.length;
+                UnavailableDevicesPage {
+                    unavailable-devices: State.unavailable-devices;
+                }
+            }
+        }
+    }
+}
+
+component LoadingView {
+    HorizontalLayout {
+        alignment: center;
+        VerticalLayout {
+            alignment: center;
+            HorizontalLayout {
+                alignment: center;
+                StatusIndicator {
+                    status: State.device-list-status.status;
+                    icon: @image-url("../images/device/8666570_hard_drive_icon.svg");
+                    width: 80px;
+                    height: 80px;
+                }
+            }
+
+            Text {
+                text: {
+                    if State.device-list-status.status == Status.loading {
+                        "Loading devices..."
+                    } else if State.device-list-status.status == Status.error {
+                        "Failed to load devices:"
+                    } else {
+                        "No compatible devices found"
+                    }
+                };
+                font-size: 24px;
+                horizontal-alignment: center;
+                color: State.device-list-status.status == Status.error ? PaletteExtra.error-foreground : Palette.foreground;
+            }
+
+            Text {
+                text: {
+                    if State.device-list-status.status == Status.loading {
+                        "This can take up to 20 seconds while hard drives spin up."
+                    } else if State.device-list-status.status == Status.error {
+                        State.device-list-status.message
+                    } else {
+                        "Some interfaces are not supported by SEDManager.\nYou may also be running a VM."
+                    }
+                }
+                horizontal-alignment: center;
+            }
+        }
+    }
+}
 
 export component AppWindow inherits Window {
     title: "SED Manager";
@@ -16,93 +122,10 @@ export component AppWindow inherits Window {
     preferred-height: 600px;
     min-width: 640px;
     min-height: 360px;
-    private property <int> current-tab;
+    private property <bool> loaded: State.device-list-status.status == Status.success && State.tab-names.length != 0;
     VerticalLayout {
-        if State.tab-names.length != 0: VerticalLayout {
-            alignment: stretch;
-            padding-left: 16px;
-            padding-right: 16px;
-            padding-bottom: 16px;
-            padding-top: 6px;
-            HorizontalLayout {
-                vertical-stretch: 0.0;
-                TabBar {
-                    titles: State.tab-names;
-                    selected: Math.max(0, Math.min(State.tab-names.length - 1, current-tab));
-                    tab-selected(index) => {
-                        current-tab = index;
-                    }
-                }
-
-                Button {
-                    height: 32px;
-                    icon: @image-url("../images/action/8666728_refresh_cw_icon.svg");
-                    colorize-icon: true;
-                    clicked => {
-                        State.list-devices();
-                    }
-                }
-            }
-
-            AlternativeLayout {
-                vertical-stretch: 1.0;
-                for device-idx in State.descriptions.length: AlternativeChild {
-                    selected: current-tab == device-idx;
-                    device-page := DevicePage {
-                        device-idx: device-idx;
-                    }
-
-                    init => {
-                        if self.selected {
-                            device-page.gained-focus();
-                        }
-                    }
-                    changed selected => {
-                        if self.selected {
-                            device-page.gained-focus();
-                        }
-                    }
-                }
-                AlternativeChild {
-                    selected: current-tab >= State.descriptions.length;
-                    UnavailableDevicesPage {
-                        unavailable-devices: State.unavailable-devices;
-                    }
-                }
-            }
-        }
-        if State.tab-names.length == 0: HorizontalLayout {
-            alignment: space-around;
-            VerticalLayout {
-                Rectangle {
-                    preferred-height: 100%;
-                }
-
-                HorizontalLayout {
-                    alignment: space-around;
-                    Spinner {
-                        width: 80px;
-                        height: 80px;
-                        indeterminate: true;
-                    }
-                }
-
-                Text {
-                    text: "Loading devices...";
-                    font-size: 24px;
-                    horizontal-alignment: center;
-                }
-
-                Text {
-                    text: "This might take 10-20 seconds if drives need to spin up.";
-                    horizontal-alignment: center;
-                }
-
-                Rectangle {
-                    preferred-height: 100%;
-                }
-            }
-        }
+        if loaded: DriveTabView { }
+        if !loaded: LoadingView { }
     }
 }
 

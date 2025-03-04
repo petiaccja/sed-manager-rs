@@ -27,10 +27,10 @@ impl<Backend: Clone + 'static> AsyncState<Backend> {
 
     pub fn on_list_devices(
         &self,
-        callback: impl AsyncFn(Backend) -> (Vec<ui::DeviceIdentity>, Vec<ui::UnavailableDevice>) + 'static,
+        callback: impl AsyncFn(Backend) -> Result<(Vec<ui::DeviceIdentity>, Vec<ui::UnavailableDevice>), ui::ExtendedStatus>
+            + 'static,
     ) {
         self.with(move |state| {
-            state.wipe();
             let backend = self.backend.clone();
             let async_state = self.clone();
             let callback = Rc::new(callback);
@@ -38,9 +38,10 @@ impl<Backend: Clone + 'static> AsyncState<Backend> {
                 let backend = backend.clone();
                 let callback = callback.clone();
                 let async_state = async_state.clone();
+                async_state.with(|state| state.wipe());
                 let _ = slint::spawn_local(async move {
-                    let (identities, unavailable_devices) = callback(backend).await;
-                    async_state.with(move |state| state.respond_list_devices(identities, unavailable_devices));
+                    let result = callback(backend).await;
+                    async_state.with(move |state| state.respond_list_devices(result));
                 });
             });
         });
@@ -52,7 +53,6 @@ impl<Backend: Clone + 'static> AsyncState<Backend> {
             + 'static,
     ) {
         self.with(move |state| {
-            state.wipe();
             let backend = self.backend.clone();
             let async_state = self.clone();
             let callback = Rc::new(callback);
@@ -60,6 +60,8 @@ impl<Backend: Clone + 'static> AsyncState<Backend> {
                 let backend = backend.clone();
                 let callback = callback.clone();
                 let async_state = async_state.clone();
+                async_state
+                    .with(|state| state.respond_discover(device_idx as usize, Err(ui::ExtendedStatus::loading())));
                 let _ = slint::spawn_local(async move {
                     let result = callback(backend, device_idx as usize).await;
                     async_state.with(move |state| state.respond_discover(device_idx as usize, result));
@@ -74,8 +76,7 @@ pub trait StateExt {
 
     fn respond_list_devices(
         &self,
-        identities: Vec<ui::DeviceIdentity>,
-        unavailable_devices: Vec<ui::UnavailableDevice>,
+        result: Result<(Vec<ui::DeviceIdentity>, Vec<ui::UnavailableDevice>), ui::ExtendedStatus>,
     );
     fn respond_discover(
         &self,
@@ -86,6 +87,7 @@ pub trait StateExt {
 
 impl<'a> StateExt for ui::State<'a> {
     fn wipe(&self) {
+        self.set_device_list_status(ui::ExtendedStatus::loading());
         self.set_tab_names(into_vec_model(vec![]));
         self.set_descriptions(into_vec_model(vec![]));
         self.set_unavailable_devices(into_vec_model(vec![]));
@@ -95,9 +97,15 @@ impl<'a> StateExt for ui::State<'a> {
 
     fn respond_list_devices(
         &self,
-        identities: Vec<ui::DeviceIdentity>,
-        unavailable_devices: Vec<ui::UnavailableDevice>,
+        result: Result<(Vec<ui::DeviceIdentity>, Vec<ui::UnavailableDevice>), ui::ExtendedStatus>,
     ) {
+        let (identities, unavailable_devices) = match result {
+            Ok(value) => value,
+            Err(status) => {
+                self.set_device_list_status(status);
+                return;
+            }
+        };
         let num_devices = identities.len();
         let mut tabs: Vec<_> = identities.iter().map(|identity| identity.name.clone()).collect();
         if !unavailable_devices.is_empty() {
@@ -117,6 +125,7 @@ impl<'a> StateExt for ui::State<'a> {
         let configures: Vec<_> = std::iter::repeat_with(|| ui::ConfigureState::empty()).take(num_devices).collect();
         let troubleshoots: Vec<_> =
             std::iter::repeat_with(|| ui::TroubleshootState::empty()).take(num_devices).collect();
+        self.set_device_list_status(ui::ExtendedStatus::success());
         self.set_descriptions(into_vec_model(descriptions));
         self.set_unavailable_devices(into_vec_model(unavailable_devices));
         self.set_tab_names(into_vec_model(tabs));

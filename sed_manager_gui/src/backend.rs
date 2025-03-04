@@ -22,15 +22,18 @@ impl Backend {
         Self { devices: Vec::new(), discoveries: Vec::new(), tpers: Vec::new(), sessions: Vec::new() }
     }
 
-    pub async fn list_devices(this: Rc<PeekCell<Self>>) -> (Vec<ui::DeviceIdentity>, Vec<ui::UnavailableDevice>) {
+    pub async fn list_devices(
+        this: Rc<PeekCell<Self>>,
+    ) -> Result<(Vec<ui::DeviceIdentity>, Vec<ui::UnavailableDevice>), ui::ExtendedStatus> {
         this.peek_mut(|this| {
             this.devices.clear();
             this.discoveries.clear();
             this.tpers.clear();
             this.sessions.clear();
         });
-        let Ok(device_list) = DeviceList::query().await else {
-            return (vec![], vec![]);
+        let device_list = match DeviceList::query().await {
+            Ok(value) => value,
+            Err(error) => return Err(ui::ExtendedStatus::error(error.to_string())),
         };
         let mut identities = Vec::<ui::DeviceIdentity>::new();
         for device in &device_list.devices {
@@ -48,7 +51,7 @@ impl Backend {
             this.tpers = std::iter::repeat_with(|| None).take(num_devices).collect();
             this.sessions = std::iter::repeat_with(|| None).take(num_devices).collect();
         });
-        (identities, unavailable_devices)
+        Ok((identities, unavailable_devices))
     }
 
     pub async fn discover(

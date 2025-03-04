@@ -1,5 +1,5 @@
 import { DeviceDescription } from "data/device_description.slint";
-import { ExtendedStatus } from "data/status.slint";
+import { ExtendedStatus, Status } from "data/status.slint";
 import { LockingRange } from "data/locking_range.slint";
 import { UnavailableDevice } from "data/unavailable_device.slint";
 
@@ -22,6 +22,7 @@ export struct TroubleshootState {
 }
 
 export global State {
+    in property <ExtendedStatus> device-list-status: { status: Status.loading };
     in property <[string]> tab-names;
     in property <[UnavailableDevice]> unavailable-devices;
     in property <[DeviceDescription]> descriptions;
