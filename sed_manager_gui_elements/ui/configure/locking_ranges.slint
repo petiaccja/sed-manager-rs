@@ -296,20 +296,23 @@ component RangeTable {
 export component LockingRanges inherits ConfigView {
     config-name: "Locking ranges";
     config-icon: @image-url("../../images/shape/hash.svg");
-    in property <ExtendedStatus> login-status: { status: Status.error };
+    in property <ExtendedStatus> login-status;
     in property <[string]> errors;
     in property <[string]> range-names;
     in property <[LockingRange]> range-properties;
+    private property <bool> authenticated: false;
     callback login-locking-ranges(password: string);
     callback list-locking-ranges();
     callback set-locking-range(range-idx: int, value: LockingRange);
     changed login-status => {
         if login-status.status == Status.success {
+            authenticated = true;
             list-locking-ranges();
         }
     }
     form := VerticalLayout {
-        if login-status.status != Status.success: LoginView {
+        if !authenticated: LoginView {
+            extended-status: login-status;
             back => {
                 root.back();
             }
@@ -317,7 +320,7 @@ export component LockingRanges inherits ConfigView {
                 login-locking-ranges(password);
             }
         }
-        if login-status.status == Status.success: RangeTable {
+        if authenticated: RangeTable {
             range-names: range-names;
             range-properties: range-properties;
         }

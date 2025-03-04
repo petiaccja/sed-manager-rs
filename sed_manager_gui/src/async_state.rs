@@ -1,6 +1,7 @@
 use std::rc::Rc;
 
-use slint::{ComponentHandle as _, Model};
+use sed_manager_gui_elements::{ConfigureState, LockingRangeState};
+use slint::{ComponentHandle as _, Model, SharedString};
 
 use crate::{
     ui,
@@ -31,13 +32,11 @@ impl<Backend: Clone + 'static> AsyncState<Backend> {
             + 'static,
     ) {
         self.with(move |state| {
-            let backend = self.backend.clone();
-            let async_state = self.clone();
-            let callback = Rc::new(callback);
+            let (backend, async_state, callback) = (self.backend.clone(), self.clone(), Rc::new(callback));
+
             state.on_list_devices(move || {
-                let backend = backend.clone();
-                let callback = callback.clone();
-                let async_state = async_state.clone();
+                let (backend, callback, async_state) = (backend.clone(), callback.clone(), async_state.clone());
+
                 async_state.with(|state| state.wipe());
                 let _ = slint::spawn_local(async move {
                     let result = callback(backend).await;
@@ -53,18 +52,104 @@ impl<Backend: Clone + 'static> AsyncState<Backend> {
             + 'static,
     ) {
         self.with(move |state| {
-            let backend = self.backend.clone();
-            let async_state = self.clone();
-            let callback = Rc::new(callback);
+            let (backend, async_state, callback) = (self.backend.clone(), self.clone(), Rc::new(callback));
+
             state.on_discover(move |device_idx: i32| {
-                let backend = backend.clone();
-                let callback = callback.clone();
-                let async_state = async_state.clone();
+                let (backend, callback, async_state) = (backend.clone(), callback.clone(), async_state.clone());
                 async_state
                     .with(|state| state.respond_discover(device_idx as usize, Err(ui::ExtendedStatus::loading())));
                 let _ = slint::spawn_local(async move {
                     let result = callback(backend, device_idx as usize).await;
                     async_state.with(move |state| state.respond_discover(device_idx as usize, result));
+                });
+            });
+        });
+    }
+
+    pub fn on_cleanup_session(&self, callback: impl AsyncFn(Backend, usize) -> () + 'static) {
+        self.with(move |state| {
+            let (backend, callback) = (self.backend.clone(), Rc::new(callback));
+            state.on_cleanup_session(move |device_idx: i32| {
+                let (backend, callback) = (backend.clone(), callback.clone());
+                let _ = slint::spawn_local(async move {
+                    let _ = callback(backend, device_idx as usize).await;
+                });
+            });
+        });
+    }
+
+    pub fn on_take_ownership(&self, callback: impl AsyncFn(Backend, usize, String) -> ui::ExtendedStatus + 'static) {
+        self.with(move |state| {
+            let (backend, async_state, callback) = (self.backend.clone(), self.clone(), Rc::new(callback));
+
+            state.on_take_ownership(move |device_idx: i32, password: SharedString| {
+                let (backend, callback, async_state) = (backend.clone(), callback.clone(), async_state.clone());
+
+                async_state
+                    .with(|state| state.respond_take_ownership(device_idx as usize, ui::ExtendedStatus::loading()));
+                let _ = slint::spawn_local(async move {
+                    let result = callback(backend, device_idx as usize, password.into()).await;
+                    async_state.with(move |state| state.respond_take_ownership(device_idx as usize, result));
+                });
+            });
+        });
+    }
+
+    pub fn on_activate_locking(
+        &self,
+        callback: impl AsyncFn(Backend, usize, String, String) -> ui::ExtendedStatus + 'static,
+    ) {
+        self.with(move |state| {
+            let (backend, async_state, callback) = (self.backend.clone(), self.clone(), Rc::new(callback));
+
+            state.on_activate_locking(move |device_idx: i32, sid_pw: SharedString, admin1_pw: SharedString| {
+                let (backend, callback, async_state) = (backend.clone(), callback.clone(), async_state.clone());
+
+                async_state
+                    .with(|state| state.respond_activate_locking(device_idx as usize, ui::ExtendedStatus::loading()));
+                let _ = slint::spawn_local(async move {
+                    let result = callback(backend, device_idx as usize, sid_pw.into(), admin1_pw.into()).await;
+                    async_state.with(move |state| state.respond_activate_locking(device_idx as usize, result));
+                });
+            });
+        });
+    }
+
+    pub fn on_login_locking_ranges(
+        &self,
+        callback: impl AsyncFn(Backend, usize, String) -> ui::ExtendedStatus + 'static,
+    ) {
+        self.with(move |state| {
+            let (backend, async_state, callback) = (self.backend.clone(), self.clone(), Rc::new(callback));
+
+            state.on_login_locking_ranges(move |device_idx: i32, admin1_pw: SharedString| {
+                let (backend, callback, async_state) = (backend.clone(), callback.clone(), async_state.clone());
+
+                async_state.with(|state| {
+                    state.respond_login_locking_ranges(device_idx as usize, ui::ExtendedStatus::loading())
+                });
+                let _ = slint::spawn_local(async move {
+                    let result = callback(backend, device_idx as usize, admin1_pw.into()).await;
+                    async_state.with(move |state| state.respond_login_locking_ranges(device_idx as usize, result));
+                });
+            });
+        });
+    }
+
+    pub fn on_revert(
+        &self,
+        callback: impl AsyncFn(Backend, usize, bool, String, bool) -> ui::ExtendedStatus + 'static,
+    ) {
+        self.with(move |state| {
+            let (backend, async_state, callback) = (self.backend.clone(), self.clone(), Rc::new(callback));
+
+            state.on_revert(move |device_idx: i32, use_psid: bool, password: SharedString, revert_admin: bool| {
+                let (backend, callback, async_state) = (backend.clone(), callback.clone(), async_state.clone());
+
+                async_state.with(|state| state.respond_revert(device_idx as usize, ui::ExtendedStatus::loading()));
+                let _ = slint::spawn_local(async move {
+                    let result = callback(backend, device_idx as usize, use_psid, password.into(), revert_admin).await;
+                    async_state.with(move |state| state.respond_revert(device_idx as usize, result));
                 });
             });
         });
@@ -83,6 +168,10 @@ pub trait StateExt {
         device_idx: usize,
         result: Result<(ui::DeviceDiscovery, ui::ActivitySupport), ui::ExtendedStatus>,
     );
+    fn respond_take_ownership(&self, device_idx: usize, status: ui::ExtendedStatus);
+    fn respond_activate_locking(&self, device_idx: usize, status: ui::ExtendedStatus);
+    fn respond_login_locking_ranges(&self, device_idx: usize, status: ui::ExtendedStatus);
+    fn respond_revert(&self, device_idx: usize, status: ui::ExtendedStatus);
 }
 
 impl<'a> StateExt for ui::State<'a> {
@@ -153,5 +242,30 @@ impl<'a> StateExt for ui::State<'a> {
             Err(error) => ui::DeviceDescription { discovery_status: error, ..desc },
         };
         description_vec.set_row_data(device_idx, new_desc);
+    }
+
+    fn respond_take_ownership(&self, device_idx: usize, status: ui::ExtendedStatus) {
+        respond_configure(self, device_idx, status);
+    }
+
+    fn respond_activate_locking(&self, device_idx: usize, status: ui::ExtendedStatus) {
+        respond_configure(self, device_idx, status);
+    }
+
+    fn respond_login_locking_ranges(&self, device_idx: usize, status: ui::ExtendedStatus) {
+        respond_configure(self, device_idx, status);
+    }
+
+    fn respond_revert(&self, device_idx: usize, status: ui::ExtendedStatus) {
+        respond_configure(self, device_idx, status);
+    }
+}
+
+fn respond_configure(state: &ui::State, device_idx: usize, status: ui::ExtendedStatus) {
+    let configure = state.get_configure();
+    let configure_vec = as_vec_model(&configure);
+    if device_idx < configure_vec.row_count() {
+        let value = ConfigureState::new(status, LockingRangeState::empty());
+        configure_vec.set_row_data(device_idx, value);
     }
 }

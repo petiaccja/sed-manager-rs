@@ -89,6 +89,7 @@ export component Revert inherits ConfigView {
         finish-enabled: root.back-enabled;
         retry-enabled: root.back-enabled;
         status: extended-status.status;
+        finish-text: "Done";
         message: {
             if extended-status.status == Status.success {
                 "Device reverted successfully!"

@@ -17,3 +17,13 @@ impl ExtendedStatus {
         Self::new(Status::Success, String::new())
     }
 }
+
+// This help us use ExtendedStatus with the ? operator.
+impl<Error> From<Error> for ExtendedStatus
+where
+    Error: Into<String>,
+{
+    fn from(value: Error) -> Self {
+        Self::error(value.into())
+    }
+}

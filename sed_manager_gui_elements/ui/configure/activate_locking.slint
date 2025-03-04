@@ -100,13 +100,14 @@ export component ActivateLocking inherits ConfigView {
         finish-enabled: root.back-enabled;
         retry-enabled: root.back-enabled;
         status: extended-status.status;
+        finish-text: "Done";
         message: {
             if extended-status.status == Status.success {
-                "Ownership set up successfully!"
+                "Locking is now active!\nNote: you still have to set up locking ranges."
             } else if extended-status.status == Status.error {
-                "Failed to take ownership:\n" + extended-status.message
+                "Failed to activate locking:\n" + extended-status.message
             } else {
-                "Taking ownership..."
+                "Activating locking..."
             }
         }
         finished => {

@@ -16,10 +16,6 @@ impl DeviceList {
         Self { devices: devices.into_iter().map(|d| Arc::from(d)).collect(), unavailable_devices }
     }
 
-    pub fn empty() -> Self {
-        Self::new(vec![], vec![])
-    }
-
     pub async fn query() -> Result<DeviceList, DeviceError> {
         run_in_thread(Self::query_blocking).await
     }

@@ -16,7 +16,7 @@ export component DevicePage {
     private property <Activity> current-activity: Activity.description;
     function set-current-activity(activity: Activity) {
         State.cleanup-session(device-idx);
-        if current-activity == Activity.description {
+        if activity == Activity.description {
             State.discover(device-idx);
         }
         self.current-activity = activity;
@@ -50,6 +50,7 @@ export component DevicePage {
                 set-current-activity(Activity.description);
             }
             activate-locking(sid-password, new-admin1-password) => {
+                State.activate-locking(device-idx, sid-password, new-admin1-password)
             }
         }
         if current-activity == Activity.locking-ranges: LockingRanges {
