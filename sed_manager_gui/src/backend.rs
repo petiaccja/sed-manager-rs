@@ -23,12 +23,19 @@ pub struct Backend {
     devices: Vec<Arc<dyn Device>>,
     discoveries: Vec<Option<Discovery>>,
     tpers: Vec<Option<Arc<TPer>>>,
-    sessions: Vec<Option<Session>>,
+    sessions: Vec<Option<Arc<Session>>>,
+    locking_ranges: Vec<Vec<UID>>,
 }
 
 impl Backend {
     pub fn new() -> Self {
-        Self { devices: Vec::new(), discoveries: Vec::new(), tpers: Vec::new(), sessions: Vec::new() }
+        Self {
+            devices: Vec::new(),
+            discoveries: Vec::new(),
+            tpers: Vec::new(),
+            sessions: Vec::new(),
+            locking_ranges: Vec::new(),
+        }
     }
 
     fn get_discovery(&self, device_idx: usize) -> Result<&Discovery, RPCError> {
@@ -51,13 +58,32 @@ impl Backend {
         Ok(tper)
     }
 
-    fn replace_session(&mut self, device_idx: usize, session: Session) -> Option<Session> {
-        self.sessions.resize_with(std::cmp::max(self.sessions.len(), device_idx + 1), || None);
-        self.sessions[device_idx].replace(session)
+    fn replace_session(&mut self, device_idx: usize, session: Session) -> Option<Arc<Session>> {
+        if device_idx < self.devices.len() {
+            self.sessions.resize_with(std::cmp::max(self.sessions.len(), device_idx + 1), || None);
+            self.sessions[device_idx].replace(Arc::new(session))
+        } else {
+            None
+        }
     }
 
-    fn take_session(&mut self, device_idx: usize) -> Option<Session> {
+    fn take_session(&mut self, device_idx: usize) -> Option<Arc<Session>> {
         self.sessions.get_mut(device_idx).map(|x| x.take()).flatten()
+    }
+
+    fn get_session(&self, device_idx: usize) -> Option<Arc<Session>> {
+        self.sessions.get(device_idx).cloned().flatten()
+    }
+
+    fn set_locking_ranges(&mut self, device_idx: usize, locking_ranges: Vec<UID>) {
+        if device_idx < self.devices.len() {
+            self.locking_ranges.resize_with(std::cmp::max(self.sessions.len(), device_idx + 1), || vec![]);
+            self.locking_ranges[device_idx] = locking_ranges;
+        }
+    }
+
+    fn get_locking_ranges(&self, device_idx: usize) -> Option<&Vec<UID>> {
+        self.locking_ranges.get(device_idx)
     }
 
     pub async fn list_devices(
@@ -113,7 +139,9 @@ impl Backend {
         let Some(session) = this.peek_mut(|this| this.take_session(device_idx)) else {
             return;
         };
-        let _ = session.end_session().await;
+        if let Some(inner) = Arc::into_inner(session) {
+            let _ = inner.end_session().await;
+        }
     }
 
     pub async fn take_ownership(this: Rc<PeekCell<Self>>, device_idx: usize, sid_pw: String) -> ui::ExtendedStatus {
@@ -185,13 +213,14 @@ impl Backend {
             device_idx: usize,
             async_state: AsyncState<Rc<PeekCell<Backend>>>,
         ) -> Result<(), RPCError> {
-            let Some(session) = this.peek_mut(|this| this.take_session(device_idx)) else {
+            let Some(session) = this.peek_mut(|this| this.get_session(device_idx)) else {
                 return Err(RPCError::Unspecified);
             };
             let discovery = this.peek(|this| this.get_discovery(device_idx).ok().cloned());
             let ssc = discovery.as_ref().and_then(|x| x.get_primary_ssc());
             let locking_sp = ssc.and_then(|ssc| get_locking_sp(ssc.feature_code()).ok());
             let ranges = session.next(spec::core::table_id::LOCKING, None, None).await?;
+            this.peek_mut(|this| this.set_locking_ranges(device_idx, ranges.clone()));
             for range in ranges.iter() {
                 let name = get_object_name(discovery.as_ref(), *range, locking_sp);
                 let properties = get_locking_range_properties(&session, *range).await;
@@ -199,8 +228,9 @@ impl Backend {
                     Ok(properties) => {
                         async_state.with(|state| state.push_locking_range(device_idx, name, properties.into()));
                     }
-                    Err(error) => {
-                        async_state.with(|state| state.push_locking_range_error(device_idx, error.to_string()))
+                    Err(_error) => {
+                        // TODO: display broken ranges as well?
+                        // It's very unlikely that one range would work but another wouldn't.
                     }
                 }
             }
@@ -211,6 +241,41 @@ impl Backend {
             Ok(_) => (),
             Err(error) => state.respond_login_locking_ranges(device_idx, error.into()),
         });
+    }
+
+    pub async fn set_locking_range(
+        this: Rc<PeekCell<Self>>,
+        device_idx: usize,
+        range_idx: usize,
+        properties: ui::LockingRange,
+    ) -> Result<ui::LockingRange, ui::ExtendedStatus> {
+        let Some(range) = this.peek(|this| this.get_locking_ranges(device_idx).and_then(|r| r.get(range_idx).cloned()))
+        else {
+            return Err(RPCError::Unspecified.into());
+        };
+        let Some(session) = this.peek_mut(|this| this.get_session(device_idx)) else {
+            return Err(RPCError::Unspecified.into());
+        };
+        match set_locking_range_properties(&session, range, properties.clone().into()).await {
+            Ok(_) => Ok(properties),
+            Err(error) => Err(error.into()),
+        }
+    }
+
+    pub async fn erase_locking_range(
+        this: Rc<PeekCell<Self>>,
+        device_idx: usize,
+        range_idx: usize,
+    ) -> ui::ExtendedStatus {
+        let Some(range) = this.peek(|this| this.get_locking_ranges(device_idx).and_then(|r| r.get(range_idx).cloned()))
+        else {
+            return RPCError::Unspecified.into();
+        };
+        let Some(session) = this.peek_mut(|this| this.get_session(device_idx)) else {
+            return RPCError::Unspecified.into();
+        };
+        let result = erase_locking_range(&session, range).await;
+        ui::ExtendedStatus::from_result(result)
     }
 
     pub async fn revert(
@@ -280,4 +345,25 @@ async fn get_locking_range_properties(session: &Session, range: UID) -> Result<N
         read_locked,
         write_locked,
     })
+}
+
+async fn set_locking_range_properties(
+    session: &Session,
+    range: UID,
+    properties: NativeLockingRange,
+) -> Result<(), RPCError> {
+    // TODO: implement this with a single set over a column range for speed AND CORRECTNESS.
+    session.set(range, 4, 0u64).await?; // Set length briefly to zero so that it does not surpass drive's end.
+    let length_lba = properties.end_lba - properties.start_lba + 1;
+    session.set(range, 3, properties.start_lba).await?;
+    session.set(range, 4, length_lba).await?;
+    session.set(range, 5, properties.read_lock_enabled).await?;
+    session.set(range, 6, properties.write_lock_enabled).await?;
+    session.set(range, 7, properties.read_locked).await?;
+    session.set(range, 8, properties.write_locked).await?;
+    Ok(())
+}
+
+async fn erase_locking_range(_session: &Session, _range: UID) -> Result<(), RPCError> {
+    Err(RPCError::NotImplemented)
 }

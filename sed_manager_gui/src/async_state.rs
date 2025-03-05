@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use sed_manager_gui_elements::{ConfigureState, LockingRangeState};
+use sed_manager_gui_elements::{ConfigureState, ExtendedStatus, LockingRangeState};
 use slint::{ComponentHandle as _, Model, SharedString};
 
 use crate::{
@@ -149,6 +149,53 @@ impl<Backend: Clone + 'static> AsyncState<Backend> {
         });
     }
 
+    pub fn on_set_locking_range(
+        &self,
+        callback: impl AsyncFn(Backend, usize, usize, ui::LockingRange) -> Result<ui::LockingRange, ui::ExtendedStatus>
+            + 'static,
+    ) {
+        self.with(move |state| {
+            let (backend, async_state, callback) = (self.backend.clone(), self.clone(), Rc::new(callback));
+
+            state.on_set_locking_range(move |device_idx: i32, range_idx: i32, properties: ui::LockingRange| {
+                let (backend, callback, async_state) = (backend.clone(), callback.clone(), async_state.clone());
+                async_state.with(|state| {
+                    let loading = ui::ExtendedStatus::loading();
+                    state.respond_locking_range_status(device_idx as usize, range_idx as usize, loading)
+                });
+                let _ = slint::spawn_local(async move {
+                    let result = callback(backend, device_idx as usize, range_idx as usize, properties).await;
+                    async_state.with(|state| {
+                        state.respond_set_locking_range(device_idx as usize, range_idx as usize, result);
+                    });
+                });
+            });
+        });
+    }
+
+    pub fn on_erase_locking_range(
+        &self,
+        callback: impl AsyncFn(Backend, usize, usize) -> ui::ExtendedStatus + 'static,
+    ) {
+        self.with(move |state| {
+            let (backend, async_state, callback) = (self.backend.clone(), self.clone(), Rc::new(callback));
+
+            state.on_erase_locking_range(move |device_idx: i32, range_idx: i32| {
+                let (backend, callback, async_state) = (backend.clone(), callback.clone(), async_state.clone());
+                async_state.with(|state| {
+                    let loading = ui::ExtendedStatus::loading();
+                    state.respond_locking_range_status(device_idx as usize, range_idx as usize, loading)
+                });
+                let _ = slint::spawn_local(async move {
+                    let result = callback(backend, device_idx as usize, range_idx as usize).await;
+                    async_state.with(|state| {
+                        state.respond_locking_range_status(device_idx as usize, range_idx as usize, result);
+                    });
+                });
+            });
+        });
+    }
+
     pub fn on_revert(
         &self,
         callback: impl AsyncFn(Backend, usize, bool, String, bool) -> ui::ExtendedStatus + 'static,
@@ -185,7 +232,13 @@ pub trait StateExt {
     fn respond_activate_locking(&self, device_idx: usize, status: ui::ExtendedStatus);
     fn respond_login_locking_ranges(&self, device_idx: usize, status: ui::ExtendedStatus);
     fn push_locking_range(&self, device_idx: usize, name: String, range: ui::LockingRange);
-    fn push_locking_range_error(&self, device_idx: usize, error: String);
+    fn respond_set_locking_range(
+        &self,
+        device_idx: usize,
+        range_idx: usize,
+        result: Result<ui::LockingRange, ui::ExtendedStatus>,
+    );
+    fn respond_locking_range_status(&self, device_idx: usize, range_idx: usize, result: ui::ExtendedStatus);
     fn respond_revert(&self, device_idx: usize, status: ui::ExtendedStatus);
 }
 
@@ -279,18 +332,50 @@ impl<'a> StateExt for ui::State<'a> {
         };
         as_vec_model(&dev_config.locking_ranges.names).push(name.into());
         as_vec_model(&dev_config.locking_ranges.properties).push(range.into());
-        as_vec_model(&dev_config.locking_ranges.statuses).push(ui::Status::Success);
+        as_vec_model(&dev_config.locking_ranges.statuses).push(ui::ExtendedStatus::success());
         config_vec.set_row_data(device_idx, dev_config);
     }
 
-    fn push_locking_range_error(&self, device_idx: usize, error: String) {
+    fn respond_set_locking_range(
+        &self,
+        device_idx: usize,
+        range_idx: usize,
+        result: Result<ui::LockingRange, ui::ExtendedStatus>,
+    ) {
         let config = self.get_configure();
         let config_vec = as_vec_model(&config);
         let Some(dev_config) = config_vec.row_data(device_idx) else {
             return;
         };
-        as_vec_model(&dev_config.locking_ranges.errors).push(error.into());
-        config_vec.set_row_data(device_idx, dev_config);
+        let prop_vec = as_vec_model(&dev_config.locking_ranges.properties);
+        let status_vec = as_vec_model(&dev_config.locking_ranges.statuses);
+        match result {
+            Ok(new_props) => {
+                if range_idx < prop_vec.row_count() {
+                    prop_vec.set_row_data(range_idx, new_props);
+                }
+                if range_idx < status_vec.row_count() {
+                    status_vec.set_row_data(range_idx, ExtendedStatus::success());
+                }
+            }
+            Err(error) => {
+                if range_idx < status_vec.row_count() {
+                    status_vec.set_row_data(range_idx, error);
+                }
+            }
+        }
+    }
+
+    fn respond_locking_range_status(&self, device_idx: usize, range_idx: usize, result: ui::ExtendedStatus) {
+        let config = self.get_configure();
+        let config_vec = as_vec_model(&config);
+        let Some(dev_config) = config_vec.row_data(device_idx) else {
+            return;
+        };
+        let status_vec = as_vec_model(&dev_config.locking_ranges.statuses);
+        if range_idx < status_vec.row_count() {
+            status_vec.set_row_data(range_idx, result);
+        }
     }
 
     fn respond_revert(&self, device_idx: usize, status: ui::ExtendedStatus) {

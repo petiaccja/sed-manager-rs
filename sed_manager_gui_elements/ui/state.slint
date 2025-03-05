@@ -4,10 +4,9 @@ import { LockingRange } from "data/locking_range.slint";
 import { UnavailableDevice } from "data/unavailable_device.slint";
 
 export struct LockingRangeState {
-    errors: [string],
     names: [string],
     properties: [LockingRange],
-    statuses: [Status],
+    statuses: [ExtendedStatus],
 }
 
 export struct ConfigureState {

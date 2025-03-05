@@ -28,6 +28,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     async_state.on_activate_locking(Backend::activate_locking);
     async_state.on_login_locking_ranges(Backend::login_locking_ranges);
     async_state.on_list_locking_ranges(Backend::list_locking_ranges);
+    async_state.on_set_locking_range(Backend::set_locking_range);
+    async_state.on_erase_locking_range(Backend::erase_locking_range);
     async_state.on_revert(Backend::revert);
 
     // Refresh device list right after starting.

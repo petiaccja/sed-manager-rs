@@ -16,6 +16,13 @@ impl ExtendedStatus {
     pub fn success() -> Self {
         Self::new(Status::Success, String::new())
     }
+
+    pub fn from_result<T, E: core::error::Error>(result: Result<T, E>) -> Self {
+        match result {
+            Ok(_) => Self::success(),
+            Err(error) => Self::error(error.to_string()),
+        }
+    }
 }
 
 // This help us use ExtendedStatus with the ? operator.

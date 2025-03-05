@@ -9,6 +9,7 @@ import { UnavailableDevicesPage } from "pages/unavailable_devices_page.slint";
 import { Status } from "data/status.slint";
 import { StatusIndicator } from "widgets/progress.slint";
 import { PaletteExtra } from "widgets/visual.slint";
+import { ToastPopup } from "widgets/toast_message.slint";
 
 export { State }
 
@@ -126,6 +127,14 @@ export component AppWindow inherits Window {
     VerticalLayout {
         if loaded: DriveTabView { }
         if !loaded: LoadingView { }
+    }
+
+    toast-popup := ToastPopup {
+        parent-width: parent.width;
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) - 32px;
+        display-time: 3.6s;
+        fade-time: 1.6s;
     }
 }
 

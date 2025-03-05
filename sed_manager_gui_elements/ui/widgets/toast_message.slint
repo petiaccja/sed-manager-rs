@@ -1,0 +1,104 @@
+import { Island } from "visual.slint";
+import { Palette, Button } from "std-widgets.slint";
+
+export global ToastMessage {
+    out property <string> text;
+    out property <color> color;
+    out property <int> id: 0;
+    public function show(text: string, color: color) {
+        self.text = text;
+        self.color = color;
+        id = id + 1;
+    }
+}
+
+export component ToastPopup inherits Rectangle {
+    in property <length> parent-width;
+    in property <duration> display-time: 1s;
+    in property <duration> fade-time: 0.5s;
+    in-out property <int> id: ToastMessage.id;
+    width: Math.min(parent-width * 0.8, message.preferred-width);
+    height: message.min-height;
+    border-radius: island.border-radius;
+    background: Palette.background;
+    visible: false;
+    changed id => {
+        show();
+    }
+    function show() {
+        hide();
+        self.opacity = 100%;
+        self.visible = true;
+        show-timer.running = true;
+        fade-timer.running = false;
+    }
+    function fade() {
+        show-timer.running = false;
+        fade-timer.running = true;
+        self.opacity = 0%;
+    }
+    function hide() {
+        fade-timer.running = false;
+        self.visible = false;
+    }
+    animate opacity { duration: self.visible ? fade-time : 0s; }
+    show-timer := Timer {
+        interval: display-time;
+        running: false;
+        triggered => {
+            fade();
+        }
+    }
+
+    fade-timer := Timer {
+        interval: fade-time;
+        running: false;
+        triggered => {
+            hide();
+        }
+    }
+
+    area := TouchArea {
+        changed has-hover => {
+            if self.has-hover {
+                hide();
+                show();
+            }
+        }
+    }
+
+    island := Island {
+        border-color: Palette.border;
+        border-width: 1px;
+        message := VerticalLayout {
+            alignment: center;
+            padding: 12px;
+            Text {
+                text: ToastMessage.text;
+                color: ToastMessage.color;
+            }
+        }
+    }
+}
+
+export component LivePreviewTest inherits Window {
+    VerticalLayout {
+        alignment: start;
+        Button {
+            text: "Show toast";
+            clicked => {
+                ToastMessage.show("This is a toast message", Palette.control-foreground);
+            }
+        }
+
+        Text {
+            text: toast-popup.id;
+        }
+    }
+
+    toast-popup := ToastPopup {
+        parent-width: parent.width;
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) - 32px;
+    }
+}
