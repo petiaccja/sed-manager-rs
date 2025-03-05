@@ -2,6 +2,7 @@ use core::task::Poll::*;
 
 use crate::messaging::token::{Tag, Token};
 use crate::rpc::protocol::shared::pipe::{SinkPipe, SourcePipe};
+use crate::rpc::protocol::tracing::trace_maybe_method;
 use crate::rpc::{Error, PackagedMethod};
 
 pub type Input = Result<Token, Error>;
@@ -39,6 +40,9 @@ impl AssembleMethod {
                     None
                 }
             };
+            if let Some(method) = &method {
+                trace_maybe_method(method, "recv");
+            }
             match method {
                 Some(Ok(method)) => output.push(Ok(method)),
                 None => (),

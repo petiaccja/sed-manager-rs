@@ -29,6 +29,9 @@ version = "1.41.0"
 default-features = false
 features = ["rt", "sync", "rt-multi-thread", "time", "macros"]
 
+[dependencies.tracing]
+version = "0.1.41"
+
 [build-dependencies]
 quote = "1.0.37"
 proc-macro2 = "1.0.89"

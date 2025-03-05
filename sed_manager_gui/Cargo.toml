@@ -18,7 +18,16 @@ features = ["std", "compat-1-2", "backend-winit", "renderer-skia", "renderer-fem
 [dependencies.tokio]
 version = "1.41.0"
 default-features = false
-features = ["rt", "sync", "macros"]
+features = ["sync"]
+
+[dependencies.tracing]
+version = "0.1.41"
+
+[dependencies.tracing-appender]
+version = "0.2.3"
+
+[dependencies.tracing-subscriber]
+version = "0.3.19"
 
 [build-dependencies]
 slint-build = "1.9.2"

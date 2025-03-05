@@ -115,26 +115,34 @@ impl Protocol {
     }
 
     async fn run(mut self, done: oneshot::Sender<()>) {
-        loop {
-            let command_batches = self.recv_batches().await;
-            for batch in command_batches {
-                self.enqueue_command_batch(batch);
-                self.update_send_packet();
-            }
-            self.update_send_packet(); // In case the above loop was empty. Only slight performance waste.
+        use tracing::Instrument as _;
+        let span = tracing::span!(tracing::Level::DEBUG, "RPC protocol", com_id = self.com_id);
+        async move {
+            tracing::event!(tracing::Level::DEBUG, "Initialized");
+            loop {
+                let command_batches = self.recv_batches().await;
+                for batch in command_batches {
+                    self.enqueue_command_batch(batch);
+                    self.update_send_packet();
+                }
+                self.update_send_packet(); // In case the above loop was empty. Only slight performance waste.
 
-            self.roundtrip_all_com_id().await;
-            self.roundtrip_all_packet().await;
+                self.roundtrip_all_com_id().await;
+                self.roundtrip_all_packet().await;
 
-            if self.com_id_response.is_done()
-                && self.com_id_sender.is_done()
-                && self.send_done.is_done()
-                && self.recv_done.is_done()
-            {
-                break;
+                if self.com_id_response.is_done()
+                    && self.com_id_sender.is_done()
+                    && self.send_done.is_done()
+                    && self.recv_done.is_done()
+                {
+                    break;
+                }
             }
+            let _ = done.send(());
+            tracing::event!(tracing::Level::DEBUG, "Shut down");
         }
-        let _ = done.send(());
+        .instrument(span)
+        .await;
     }
 
     async fn recv_batches(&mut self) -> Vec<CommandBatch> {

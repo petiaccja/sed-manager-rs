@@ -34,6 +34,7 @@ struct Session {
     serialized: Buffer<serialize_method::Output>,
     assembled: Buffer<assemble_packet::Output>,
     assigned: Buffer<assign_session_id::Output>,
+    tracing_span: tracing::Span,
 }
 
 impl SendPacket {
@@ -120,6 +121,11 @@ impl SendPacket {
 
 impl Session {
     pub fn new(id: SessionIdentifier, properties: Properties) -> Self {
+        let tracing_span = tracing::span!(tracing::Level::DEBUG, "session", hsn = id.hsn, tsn = id.tsn);
+        {
+            let _guard = tracing_span.enter();
+            tracing::event!(tracing::Level::DEBUG, "[send] Started");
+        };
         Self {
             id,
             properties,
@@ -127,10 +133,12 @@ impl Session {
             serialized: Buffer::new(),
             assembled: Buffer::new(),
             assigned: Buffer::new(),
+            tracing_span,
         }
     }
 
     pub fn update(&mut self) {
+        let _guard = self.tracing_span.enter();
         serialize_method(&mut self.method, &mut self.serialized);
         assemble_packet(&mut self.serialized, &mut self.assembled, &self.properties);
         assign_session_id(&mut self.assembled, &mut self.assigned, &self.id);
@@ -152,6 +160,13 @@ impl Session {
 
     pub fn is_done(&self) -> bool {
         self.assigned.is_done()
+    }
+}
+
+impl Drop for Session {
+    fn drop(&mut self) {
+        let _guard = self.tracing_span.enter();
+        tracing::event!(tracing::Level::DEBUG, done = self.is_done(), "[send] Ended");
     }
 }
 

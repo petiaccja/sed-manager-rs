@@ -8,6 +8,7 @@ mod send_packet;
 mod session_identifier;
 mod shared;
 mod sync_protocol;
+mod tracing;
 
 pub use command::CommandSender;
 pub use protocol::discover;

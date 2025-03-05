@@ -302,9 +302,15 @@ impl<const TABLE_MASK: u64> From<ObjectUID<TABLE_MASK>> for UID {
     }
 }
 
+impl core::fmt::Display for UID {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{:#010x}_{:08x}", self.table, self.object)
+    }
+}
+
 impl core::fmt::Debug for UID {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "UID::{:#010x}_{:08x}", self.table, self.object)
+        write!(f, "UID::{}", self)
     }
 }
 

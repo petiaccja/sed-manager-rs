@@ -40,6 +40,7 @@ struct Session {
     in_time: Buffer<assemble_method::Output>,
     assemble_method: AssembleMethod,
     timeout: Timeout,
+    tracing_span: tracing::Span,
 }
 
 impl ReceivePacket {
@@ -129,6 +130,11 @@ impl ReceivePacket {
 
 impl Session {
     pub fn new(id: SessionIdentifier, properties: Properties) -> Self {
+        let tracing_span = tracing::span!(tracing::Level::DEBUG, "session", hsn = id.hsn, tsn = id.tsn);
+        {
+            let _guard = tracing_span.enter();
+            tracing::event!(tracing::Level::DEBUG, "[recv] Started");
+        };
         Self {
             id,
             sender: Buffer::new(),
@@ -139,6 +145,7 @@ impl Session {
             in_time: Buffer::new(),
             assemble_method: AssembleMethod::new(),
             timeout: Timeout::new(properties.trans_timeout),
+            tracing_span,
         }
     }
 
@@ -152,6 +159,7 @@ impl Session {
     }
 
     pub fn update(&mut self) {
+        let _guard = self.tracing_span.enter();
         if self.sender.is_empty() {
             self.timeout.reset();
         }
@@ -163,6 +171,7 @@ impl Session {
         if num_comitted > 0 {
             self.timeout.reset();
         }
+        drop(_guard);
         self.restore_control_session();
     }
 
@@ -184,6 +193,13 @@ impl Session {
             self.method = Buffer::new();
             self.in_time = Buffer::new();
         }
+    }
+}
+
+impl Drop for Session {
+    fn drop(&mut self) {
+        let _guard = self.tracing_span.enter();
+        tracing::event!(tracing::Level::DEBUG, done = self.is_done(), aborted = self.is_aborted(), "[recv] Ended");
     }
 }
 
