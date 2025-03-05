@@ -9,7 +9,7 @@ use crate::messaging::packet::{Packet, SubPacket, SubPacketKind};
 use crate::messaging::token::Token;
 use crate::messaging::uid::UID;
 use crate::messaging::value::{Bytes, Value};
-use crate::rpc::args::{DecodeArgs, EncodeArgs, FromEncodedArgs};
+use crate::rpc::args::{IntoMethodArgs, TryFromMethodArgs, UnwrapMethodArgs};
 use crate::rpc::{MethodCall, MethodResult, MethodStatus, PackagedMethod, Properties, SessionIdentifier};
 use crate::serialization::vec_without_len::VecWithoutLen;
 use crate::serialization::{Deserialize, InputStream, OutputStream, Serialize};
@@ -215,7 +215,7 @@ impl PacketStack {
             Some(PackagedMethod::Call(MethodCall {
                 invoking_id: SESSION_MANAGER,
                 method_id: CLOSE_SESSION,
-                args: (id.hsn, id.tsn).encode_args(),
+                args: (id.hsn, id.tsn).into_method_args(),
                 status: MethodStatus::Success,
             }))
         } else {
@@ -232,16 +232,16 @@ fn call_generic_session_manager<This, Function, Output, Tuple>(
 ) -> Option<PackagedMethod>
 where
     Function: CallSelfWithTuple<This, Result<Output, MethodStatus>, Tuple>,
-    Tuple: FromEncodedArgs<Error = MethodStatus>,
-    Output: EncodeArgs,
+    Tuple: TryFromMethodArgs<Error = MethodStatus>,
+    Output: IntoMethodArgs,
 {
-    let result = match args.decode_args() {
+    let result = match args.unwrap_method_args() {
         Ok(args) => f.call_self_with_tuple(this, args),
         Err(_) => return None,
     };
     let invoking_id = SESSION_MANAGER;
     let response_call = match result {
-        Ok(values) => MethodCall::new_success(invoking_id, response_method, values.encode_args()),
+        Ok(values) => MethodCall::new_success(invoking_id, response_method, values.into_method_args()),
         Err(status) => MethodCall { invoking_id, method_id: response_method, args: vec![], status },
     };
     Some(PackagedMethod::Call(response_call))
@@ -254,15 +254,15 @@ fn call_generic_sp_session<This, Function, Output, Tuple>(
 ) -> Option<PackagedMethod>
 where
     Function: CallSelfWithTuple<This, Result<Output, MethodStatus>, Tuple>,
-    Tuple: FromEncodedArgs<Error = MethodStatus>,
-    Output: EncodeArgs,
+    Tuple: TryFromMethodArgs<Error = MethodStatus>,
+    Output: IntoMethodArgs,
 {
-    let result = match args.decode_args() {
+    let result = match args.unwrap_method_args() {
         Ok(args) => f.call_self_with_tuple(this, args),
         Err(_) => Err(MethodStatus::InvalidParameter),
     };
     let response_result = match result {
-        Ok(values) => MethodResult { results: values.encode_args(), status: MethodStatus::Success },
+        Ok(values) => MethodResult { results: values.into_method_args(), status: MethodStatus::Success },
         Err(status) => MethodResult { results: vec![], status },
     };
     Some(PackagedMethod::Result(response_result))

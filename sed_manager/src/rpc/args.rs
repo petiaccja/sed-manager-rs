@@ -146,36 +146,36 @@ pub fn to_value<T: EncodeArgument>(arg: T) -> Value {
     arg.encode()
 }
 
-pub trait EncodeArgs {
-    fn encode_args(self) -> Vec<Value>;
+pub trait IntoMethodArgs {
+    fn into_method_args(self) -> Vec<Value>;
 }
 
-pub trait FromEncodedArgs: Sized {
+pub trait TryFromMethodArgs: Sized {
     type Error;
-    fn from_encoded_args(args: Vec<Value>) -> Result<Self, Self::Error>;
+    fn try_from_method_args(args: Vec<Value>) -> Result<Self, Self::Error>;
 }
 
-pub trait DecodeArgs<Output> {
+pub trait UnwrapMethodArgs<Output> {
     type Error;
-    fn decode_args(self) -> Result<Output, Self::Error>;
+    fn unwrap_method_args(self) -> Result<Output, Self::Error>;
 }
 
-impl<Output> DecodeArgs<Output> for Vec<Value>
+impl<Output> UnwrapMethodArgs<Output> for Vec<Value>
 where
-    Output: FromEncodedArgs,
+    Output: TryFromMethodArgs,
 {
-    type Error = <Output as FromEncodedArgs>::Error;
-    fn decode_args(self) -> Result<Output, Self::Error> {
-        Output::from_encoded_args(self)
+    type Error = <Output as TryFromMethodArgs>::Error;
+    fn unwrap_method_args(self) -> Result<Output, Self::Error> {
+        Output::try_from_method_args(self)
     }
 }
 
-macro_rules! impl_encode_args {
+macro_rules! impl_into_method_args{
     ($($types:ident),*) => {
-        impl<$($types),*> EncodeArgs for ($($types),*,)
+        impl<$($types),*> IntoMethodArgs for ($($types),*,)
             where $($types: EncodeArgument),*
         {
-            fn encode_args(self) -> Vec<Value> {
+            fn into_method_args(self) -> Vec<Value> {
                 #[allow(non_snake_case)]
                 let ($($types),*,) = self;
                 assert!(is_valid(&[$($types.optional(),)*]), "optional parameters must be at the end");
@@ -189,13 +189,13 @@ macro_rules! impl_encode_args {
     };
 }
 
-macro_rules! impl_decode_args {
+macro_rules! impl_unwrap_method_args {
     ($($types:ident),*) => {
-        impl<$($types),*> FromEncodedArgs for ($($types),*,)
+        impl<$($types),*> TryFromMethodArgs for ($($types),*,)
             where $($types: TryDecodeArgument),*
         {
             type Error = MethodStatus;
-            fn from_encoded_args(args: Vec<Value>) -> Result<Self, Self::Error> {
+            fn try_from_method_args(args: Vec<Value>) -> Result<Self, Self::Error> {
                 assert!(is_valid(&[$(<$types>::OPTIONAL,)*]), "optional parameters must be at the end");
                 let mut idx: usize = 0;
                 let mut expanded = expand_args(args, &[$(<$types>::OPTIONAL,)*])?;
@@ -205,18 +205,18 @@ macro_rules! impl_decode_args {
     };
 }
 
-with_variadic_pack!(impl_encode_args);
-with_variadic_pack!(impl_decode_args);
+with_variadic_pack!(impl_into_method_args);
+with_variadic_pack!(impl_unwrap_method_args);
 
-impl EncodeArgs for () {
-    fn encode_args(self) -> Vec<Value> {
+impl IntoMethodArgs for () {
+    fn into_method_args(self) -> Vec<Value> {
         Vec::new()
     }
 }
 
-impl FromEncodedArgs for () {
+impl TryFromMethodArgs for () {
     type Error = MethodStatus;
-    fn from_encoded_args(args: Vec<Value>) -> Result<Self, Self::Error> {
+    fn try_from_method_args(args: Vec<Value>) -> Result<Self, Self::Error> {
         if args.is_empty() {
             Ok(())
         } else {
@@ -298,7 +298,7 @@ mod tests {
 
     #[test]
     fn encode_args_mixed() {
-        let result = (0_u32, 1_u32, Option::<u32>::None, Some(3_u32), Option::<u32>::None).encode_args();
+        let result = (0_u32, 1_u32, Option::<u32>::None, Some(3_u32), Option::<u32>::None).into_method_args();
         let expected = [
             Value::from(0_u32),
             Value::from(1_u32),
@@ -308,13 +308,13 @@ mod tests {
     }
 
     #[test]
-    fn decode_args_mixed() -> Result<(), MethodStatus> {
+    fn unwrap_method_args_mixed() -> Result<(), MethodStatus> {
         let args = vec![
             Value::from(0_u32),
             Value::from(1_u32),
             Value::from(Named { name: 1_u16.into(), value: 3_u32.into() }),
         ];
-        let result: (u32, u32, Option<u32>, Option<u32>, Option<u32>) = args.decode_args()?;
+        let result: (u32, u32, Option<u32>, Option<u32>, Option<u32>) = args.unwrap_method_args()?;
         let expected = (0_u32, 1_u32, None, Some(3_u32), None);
         assert_eq!(result, expected);
         Ok(())

@@ -41,7 +41,7 @@ fn gen_to_value(data_struct: &DataStruct) -> TokenStream2 {
         impl ::core::convert::From<#name> for ::sed_manager::messaging::value::Value {
             fn from(value: #name) -> Self {
                 let tuple = #to_tuple;
-                let args = ::sed_manager::rpc::args::EncodeArgs::encode_args(tuple);
+                let args = ::sed_manager::rpc::args::IntoMethodArgs::into_method_args(tuple);
                 ::sed_manager::messaging::value::Value::from(args)
             }
         }
@@ -57,7 +57,7 @@ fn gen_try_from_alias(data_struct: &DataStruct) -> TokenStream2 {
             type Error = ::sed_manager::messaging::value::Value;
             fn try_from(value: ::sed_manager::messaging::value::Value) -> Result<Self, Self::Error> {
                 let args = ::sed_manager::messaging::value::List::try_from(value)?;
-                let maybe_tuple = <#tuple_ty as ::sed_manager::rpc::args::FromEncodedArgs>::from_encoded_args(args.clone());
+                let maybe_tuple = <#tuple_ty as ::sed_manager::rpc::args::TryFromMethodArgs>::try_from_method_args(args.clone());
                 match maybe_tuple {
                     ::core::result::Result::Ok(tuple) => ::core::result::Result::Ok(#from_tuple),
                     ::core::result::Result::Err(_) => ::core::result::Result::Err(::sed_manager::messaging::value::Value::from(args)),

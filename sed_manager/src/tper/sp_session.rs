@@ -2,7 +2,7 @@ use std::ops::RangeBounds;
 
 use crate::messaging::uid::UID;
 use crate::messaging::value::{Bytes, Value};
-use crate::rpc::args::{DecodeArgs, EncodeArgs, FromEncodedArgs};
+use crate::rpc::args::{IntoMethodArgs, TryFromMethodArgs, UnwrapMethodArgs};
 use crate::rpc::{
     CommandSender, Error as RPCError, MethodCall, MethodResult, MethodStatus, PackagedMethod, Properties,
     SessionIdentifier,
@@ -59,11 +59,11 @@ impl SPSession {
     }
 
     pub async fn authenticate(&self, authority: AuthorityRef, proof: Option<&[u8]>) -> Result<bool, RPCError> {
-        let call = MethodCall::new_success(THIS_SP, AUTHENTICATE.as_uid(), (authority, proof).encode_args());
+        let call = MethodCall::new_success(THIS_SP, AUTHENTICATE.as_uid(), (authority, proof).into_method_args());
         let results = self.do_method_call(call).await?.take_results()?;
         // I'll assume the result is encoded without the typeOr{} NVP.
         // Not clear in spec, no official examples.
-        let (success,) = results.decode_args()?;
+        let (success,) = results.unwrap_method_args()?;
         Ok(success)
     }
 
@@ -71,7 +71,7 @@ impl SPSession {
         Ok(self.get_multiple::<(T,)>(object, column..=column).await?.0)
     }
 
-    pub async fn get_multiple<Tuple: FromEncodedArgs<Error = MethodStatus>>(
+    pub async fn get_multiple<Tuple: TryFromMethodArgs<Error = MethodStatus>>(
         &self,
         object: UID,
         columns: impl RangeBounds<u16>,
@@ -82,11 +82,11 @@ impl SPSession {
             core::ops::Bound::Unbounded => 0,
         };
 
-        let call = MethodCall::new_success(object, GET.as_uid(), (CellBlock::object(columns),).encode_args());
+        let call = MethodCall::new_success(object, GET.as_uid(), (CellBlock::object(columns),).into_method_args());
         let results = self.do_method_call(call).await?;
         let results = results.take_results()?;
         // According to the TCG examples, result is encoded without typeOr{} name-value pair.
-        let (column_values,): (List<NamedValue<u64, Value>>,) = results.decode_args()?;
+        let (column_values,): (List<NamedValue<u64, Value>>,) = results.unwrap_method_args()?;
         let column_values: Vec<_> = column_values
             .0
             .into_iter()
@@ -101,14 +101,14 @@ impl SPSession {
                 linearized[index] = column_value.value;
             }
         }
-        Ok(Tuple::from_encoded_args(linearized)?)
+        Ok(Tuple::try_from_method_args(linearized)?)
     }
 
     pub async fn set<T: Into<Value>>(&self, object: UID, column: u16, value: T) -> Result<(), RPCError> {
         self.set_multiple(object, [column], (value,)).await
     }
 
-    pub async fn set_multiple<Tuple: EncodeArgs, const N: usize>(
+    pub async fn set_multiple<Tuple: IntoMethodArgs, const N: usize>(
         &self,
         object: UID,
         columns: [u16; N],
@@ -116,13 +116,13 @@ impl SPSession {
     ) -> Result<(), RPCError> {
         let where_ = Option::<ObjectReference>::None; // According to the TCG examples, encoded without typeOr{} name-value pair.
         let names = columns;
-        let values = values.encode_args();
+        let values = values.into_method_args();
         if names.len() != values.len() {
             return Err(MethodStatus::InvalidParameter.into());
         }
         let nvps: Vec<_> = core::iter::zip(names, values).map(|(name, value)| NamedValue { name, value }).collect();
         let nvps = List(nvps);
-        let call = MethodCall::new_success(object, SET.as_uid(), (where_, Some(nvps)).encode_args());
+        let call = MethodCall::new_success(object, SET.as_uid(), (where_, Some(nvps)).into_method_args());
         let _ = self.do_method_call(call).await?.take_results()?; // `Set` returns nothing.
         Ok(())
     }
@@ -133,9 +133,9 @@ impl SPSession {
         first: Option<UID>,
         count: Option<u64>,
     ) -> Result<List<UID>, RPCError> {
-        let call = MethodCall::new_success(table.into(), NEXT.as_uid(), (first, count).encode_args());
+        let call = MethodCall::new_success(table.into(), NEXT.as_uid(), (first, count).into_method_args());
         let results = self.do_method_call(call).await?.take_results()?;
-        let (objects,) = results.decode_args()?;
+        let (objects,) = results.unwrap_method_args()?;
         Ok(objects)
     }
 
@@ -155,7 +155,7 @@ impl SPSession {
 
     pub async fn revert_sp(&self, keep_global_range_key: Option<bool>) -> Result<(), RPCError> {
         let call =
-            MethodCall::new_success(THIS_SP.as_uid(), REVERT_SP.as_uid(), (keep_global_range_key,).encode_args());
+            MethodCall::new_success(THIS_SP.as_uid(), REVERT_SP.as_uid(), (keep_global_range_key,).into_method_args());
         let _ = self.do_method_call(call).await?.take_results()?;
         Ok(())
     }
@@ -168,9 +168,9 @@ impl SPSession {
 
     pub async fn random(&self, count: u32, cell: Option<(UID, u16)>) -> Result<Option<Bytes>, RPCError> {
         let cell_block = cell.map(|(object, column)| CellBlock::object_explicit(object, column..=column));
-        let call = MethodCall::new_success(THIS_SP, RANDOM.as_uid(), (count, cell_block).encode_args());
+        let call = MethodCall::new_success(THIS_SP, RANDOM.as_uid(), (count, cell_block).into_method_args());
         let results = self.do_method_call(call).await?.take_results()?;
-        let (bytes,) = results.decode_args()?;
+        let (bytes,) = results.unwrap_method_args()?;
         Ok(bytes)
     }
 }
