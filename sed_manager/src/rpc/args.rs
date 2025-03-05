@@ -1,35 +1,28 @@
 use core::array::from_fn;
 
-use crate::{
-    messaging::value::{Named, Value},
-    variadics::with_variadic_pack,
-};
+use crate::messaging::value::{Named, Value};
+use crate::variadics::with_variadic_pack;
 
 use super::method::MethodStatus;
 
-pub trait ToValue {
+pub trait EncodeArgument {
     const OPTIONAL: bool;
-    fn to_value(self) -> Value;
+    fn encode(self) -> Value;
+    fn optional(&self) -> bool {
+        Self::OPTIONAL
+    }
 }
 
-pub trait TryFromValue: Sized {
-    type Error;
-    fn try_from_value(value: Value) -> Result<Self, Self::Error>;
-}
-
-impl<T: Into<Value>> ToValue for T {
+impl<T: Into<Value>> EncodeArgument for T {
     const OPTIONAL: bool = false;
-    fn to_value(self) -> Value {
+    fn encode(self) -> Value {
         self.into()
     }
 }
 
-impl<T> ToValue for Option<T>
-where
-    Value: From<T>,
-{
+impl<T: Into<Value>> EncodeArgument for Option<T> {
     const OPTIONAL: bool = true;
-    fn to_value(self) -> Value {
+    fn encode(self) -> Value {
         match self {
             Some(content) => content.into(),
             None => Value::empty(),
@@ -37,38 +30,29 @@ where
     }
 }
 
-impl<T> TryFromValue for T
-where
-    // The trait bound should be <NOT Infallible>, but Rust doesn't have
-    // negative bounds or specialization, both of which would solve
-    // the problem.
-    T: TryFrom<Value, Error = Value>,
-{
+pub trait TryDecodeArgument: Sized {
+    const OPTIONAL: bool;
+    type Error;
+    fn try_decode(value: Value) -> Result<Self, Self::Error>;
+}
+
+impl<T: TryFrom<Value, Error = Value>> TryDecodeArgument for T {
+    const OPTIONAL: bool = false;
     type Error = <T as TryFrom<Value>>::Error;
-    fn try_from_value(value: Value) -> Result<Self, Self::Error> {
+    fn try_decode(value: Value) -> Result<Self, Self::Error> {
         T::try_from(value)
     }
 }
 
-impl<T> TryFromValue for Option<T>
-where
-    T: TryFrom<Value>,
-{
+impl<T: TryFrom<Value>> TryDecodeArgument for Option<T> {
+    const OPTIONAL: bool = true;
     type Error = <T as TryFrom<Value>>::Error;
-    fn try_from_value(value: Value) -> Result<Self, Self::Error> {
+    fn try_decode(value: Value) -> Result<Self, Self::Error> {
         match value {
             Value::Empty => Ok(None),
             _ => Ok(Some(T::try_from(value)?)),
         }
     }
-}
-
-pub const fn is_optional_instance<T: ToValue>(_: &T) -> bool {
-    <T as ToValue>::OPTIONAL
-}
-
-pub const fn is_optional_associated<T: ToValue>() -> bool {
-    <T as ToValue>::OPTIONAL
 }
 
 pub const fn is_valid<const N: usize>(optionals: &[bool; N]) -> bool {
@@ -149,14 +133,17 @@ pub fn expand_args<const N: usize>(args: Vec<Value>, optionals: &[bool; N]) -> R
 /// We have to turn an array of `Value`s into a tuple of concrete types,
 /// but there is not `std::index_sequence` in Rust, so I have no idea
 /// how to do it without this ugly mutability.
-pub fn to_concrete<T: TryFromValue>(values: &mut [Value], idx: &mut usize) -> Result<T, <T as TryFromValue>::Error> {
+pub fn to_concrete<T: TryDecodeArgument>(
+    values: &mut [Value],
+    idx: &mut usize,
+) -> Result<T, <T as TryDecodeArgument>::Error> {
     let value = core::mem::replace(&mut values[*idx], Value::empty());
     *idx += 1;
-    T::try_from_value(value)
+    T::try_decode(value)
 }
 
-pub fn to_value<T: ToValue>(arg: T) -> Value {
-    arg.to_value()
+pub fn to_value<T: EncodeArgument>(arg: T) -> Value {
+    arg.encode()
 }
 
 pub trait EncodeArgs {
@@ -186,13 +173,13 @@ where
 macro_rules! impl_encode_args {
     ($($types:ident),*) => {
         impl<$($types),*> EncodeArgs for ($($types),*,)
-            where $($types: ToValue),*
+            where $($types: EncodeArgument),*
         {
             fn encode_args(self) -> Vec<Value> {
                 #[allow(non_snake_case)]
                 let ($($types),*,) = self;
-                assert!(is_valid(&[$(is_optional_instance(&$types),)*]), "optional parameters must be at the end");
-                let predicates = [$(is_optional_instance(&$types),)*];
+                assert!(is_valid(&[$($types.optional(),)*]), "optional parameters must be at the end");
+                let predicates = [$($types.optional(),)*];
                 let values = [$(to_value($types),)*];
                 let labels = get_labels(&predicates);
                 let labelled = add_labels(values, labels);
@@ -205,13 +192,13 @@ macro_rules! impl_encode_args {
 macro_rules! impl_decode_args {
     ($($types:ident),*) => {
         impl<$($types),*> FromEncodedArgs for ($($types),*,)
-            where $($types: TryFromValue + ToValue),*
+            where $($types: TryDecodeArgument),*
         {
             type Error = MethodStatus;
             fn from_encoded_args(args: Vec<Value>) -> Result<Self, Self::Error> {
-                assert!(is_valid(&[$(is_optional_associated::<$types>(),)*]), "optional parameters must be at the end");
+                assert!(is_valid(&[$(<$types>::OPTIONAL,)*]), "optional parameters must be at the end");
                 let mut idx: usize = 0;
-                let mut expanded = expand_args(args, &[$(is_optional_associated::<$types>(),)*])?;
+                let mut expanded = expand_args(args, &[$(<$types>::OPTIONAL,)*])?;
                 Ok(($(to_concrete::<$types>(&mut expanded, &mut idx).map_err(|_| MethodStatus::InvalidParameter)?,)*))
             }
         }

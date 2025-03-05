@@ -1,6 +1,8 @@
+use std::ops::RangeBounds;
+
 use crate::messaging::uid::UID;
 use crate::messaging::value::{Bytes, Value};
-use crate::rpc::args::{DecodeArgs, EncodeArgs};
+use crate::rpc::args::{DecodeArgs, EncodeArgs, FromEncodedArgs};
 use crate::rpc::{
     CommandSender, Error as RPCError, MethodCall, MethodResult, MethodStatus, PackagedMethod, Properties,
     SessionIdentifier,
@@ -65,26 +67,62 @@ impl SPSession {
         Ok(success)
     }
 
-    pub async fn get<T: TryFrom<Value>>(&self, object: UID, column: u16) -> Result<T, RPCError> {
-        let call = MethodCall::new_success(object, GET.as_uid(), (CellBlock::object(column..=column),).encode_args());
-        let results = self.do_method_call(call).await?.take_results()?;
+    pub async fn get<T: TryFrom<Value, Error = Value>>(&self, object: UID, column: u16) -> Result<T, RPCError> {
+        Ok(self.get_multiple::<(T,)>(object, column..=column).await?.0)
+    }
+
+    pub async fn get_multiple<Tuple: FromEncodedArgs<Error = MethodStatus>>(
+        &self,
+        object: UID,
+        columns: impl RangeBounds<u16>,
+    ) -> Result<Tuple, RPCError> {
+        let first_column = match columns.start_bound() {
+            std::ops::Bound::Included(n) => *n,
+            std::ops::Bound::Excluded(n) => *n + 1,
+            core::ops::Bound::Unbounded => 0,
+        };
+
+        let call = MethodCall::new_success(object, GET.as_uid(), (CellBlock::object(columns),).encode_args());
+        let results = self.do_method_call(call).await?;
+        let results = results.take_results()?;
         // According to the TCG examples, result is encoded without typeOr{} name-value pair.
-        let (mut column_values,): (Vec<Value>,) = results.decode_args()?;
-        if let Some(value) = column_values.pop() {
-            if let Ok(nvp) = NamedValue::<u64, T>::try_from(value) {
-                Ok(nvp.value)
-            } else {
-                Err(RPCError::InvalidColumnType)
+        let (column_values,): (List<NamedValue<u64, Value>>,) = results.decode_args()?;
+        let column_values: Vec<_> = column_values
+            .0
+            .into_iter()
+            .map(|nvp| NamedValue { name: nvp.name.wrapping_sub(first_column as u64), ..nvp })
+            .collect();
+        let mut linearized = Vec::new();
+        for column_value in column_values {
+            let index = column_value.name as usize;
+            let new_size = (index + 1).clamp(linearized.len(), 64);
+            linearized.resize(new_size, Value::empty());
+            if index < linearized.len() {
+                linearized[index] = column_value.value;
             }
-        } else {
-            Err(MethodStatus::NotAuthorized.into())
         }
+        Ok(Tuple::from_encoded_args(linearized)?)
     }
 
     pub async fn set<T: Into<Value>>(&self, object: UID, column: u16, value: T) -> Result<(), RPCError> {
+        self.set_multiple(object, [column], (value,)).await
+    }
+
+    pub async fn set_multiple<Tuple: EncodeArgs, const N: usize>(
+        &self,
+        object: UID,
+        columns: [u16; N],
+        values: Tuple,
+    ) -> Result<(), RPCError> {
         let where_ = Option::<ObjectReference>::None; // According to the TCG examples, encoded without typeOr{} name-value pair.
-        let values = Some(vec![Value::from(NamedValue { name: column, value })]); // According to the TCG examples, encoded without typeOr{} name-value pair.
-        let call = MethodCall::new_success(object, SET.as_uid(), (where_, values).encode_args());
+        let names = columns;
+        let values = values.encode_args();
+        if names.len() != values.len() {
+            return Err(MethodStatus::InvalidParameter.into());
+        }
+        let nvps: Vec<_> = core::iter::zip(names, values).map(|(name, value)| NamedValue { name, value }).collect();
+        let nvps = List(nvps);
+        let call = MethodCall::new_success(object, SET.as_uid(), (where_, Some(nvps)).encode_args());
         let _ = self.do_method_call(call).await?.take_results()?; // `Set` returns nothing.
         Ok(())
     }

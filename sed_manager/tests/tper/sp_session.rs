@@ -5,7 +5,9 @@ use sed_manager::fake_device::MSID_PASSWORD;
 use sed_manager::messaging::uid::UID;
 use sed_manager::rpc::Error as RPCError;
 use sed_manager::rpc::MethodStatus;
+use sed_manager::spec::column_types::AuthorityRef;
 use sed_manager::spec::column_types::LifeCycleState;
+use sed_manager::spec::column_types::Name;
 use sed_manager::spec::column_types::Password;
 use sed_manager::spec::opal;
 use sed_manager::spec::table_id;
@@ -49,8 +51,21 @@ async fn get_success() -> Result<(), RPCError> {
     let device = FakeDevice::new();
     let tper = TPer::new_on_default_com_id(Arc::new(device))?;
     let session = tper.start_session(sp::ADMIN, None, None).await?;
-    let result = session.get::<Password>(opal::admin::c_pin::MSID.as_uid(), 3).await?;
+    let object = opal::admin::c_pin::MSID;
+    let result = session.get::<Password>(object.as_uid(), 3).await?;
     assert_eq!(result, MSID_PASSWORD.into());
+    Ok(())
+}
+
+#[tokio::test]
+async fn get_multiple_success() -> Result<(), RPCError> {
+    let device = FakeDevice::new();
+    let tper = TPer::new_on_default_com_id(Arc::new(device))?;
+    let session = tper.start_session(sp::ADMIN, None, None).await?;
+    let object = opal::admin::authority::SID;
+    let result = session.get_multiple::<(AuthorityRef, Name)>(object.as_uid(), 0..=1).await?;
+    assert_eq!(result.0, object);
+    assert_eq!(result.1, "SID".into());
     Ok(())
 }
 
@@ -79,7 +94,18 @@ async fn set_success() -> Result<(), RPCError> {
     let device = FakeDevice::new();
     let tper = TPer::new_on_default_com_id(Arc::new(device))?;
     let session = tper.start_session(sp::ADMIN, None, None).await?;
-    session.set(opal::admin::c_pin::SID.as_uid(), 3, Password::from("1234")).await?;
+    let object = opal::admin::c_pin::SID;
+    session.set(object.as_uid(), 3, Password::from("1234")).await?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn set_multiple_success() -> Result<(), RPCError> {
+    let device = FakeDevice::new();
+    let tper = TPer::new_on_default_com_id(Arc::new(device))?;
+    let session = tper.start_session(sp::ADMIN, None, None).await?;
+    let object = opal::admin::c_pin::SID;
+    session.set_multiple(object.as_uid(), [2, 3], (Name::from("name"), Password::from("1234"))).await?;
     Ok(())
 }
 

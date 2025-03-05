@@ -98,7 +98,7 @@ impl PrettyPrint for Command {
 impl PrettyPrint for Bytes {
     fn fmt(&self, f: &mut super::fmt::PrettyFormatter<'_>) -> Result<(), core::fmt::Error> {
         let item_sep = if f.is_indenting_enabled() { '\n' } else { ' ' };
-        f.write_str("b[")?;
+        f.write_str("bytes:[")?;
         f.write_char(item_sep)?;
         f.indented(|f| {
             for (idx, byte) in self.iter().enumerate() {
@@ -116,7 +116,7 @@ impl PrettyPrint for Bytes {
 impl PrettyPrint for List {
     fn fmt(&self, f: &mut super::fmt::PrettyFormatter<'_>) -> Result<(), core::fmt::Error> {
         let item_sep = if f.is_indenting_enabled() { '\n' } else { ' ' };
-        f.write_str("v[")?;
+        f.write_str("list:[")?;
         f.write_char(item_sep)?;
         f.indented(|f| {
             for item in self {

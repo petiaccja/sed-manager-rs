@@ -14,7 +14,7 @@ macro_rules! format_flat {
 macro_rules! format_indented {
     ($value:expr, $indent:expr) => {{
         let mut s = String::new();
-        let mut f = PrettyFormatter::new(&mut s, Some($indent));
+        let mut f = ::sed_manager::messaging::fmt::PrettyFormatter::new(&mut s, Some($indent));
         let _ = $value.fmt(&mut f);
         s
     }};
