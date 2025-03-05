@@ -5,6 +5,7 @@ import { PairList } from "../../widgets/pair_list.slint";
 import { TextLoadingIndicator } from "../../widgets/progress.slint";
 import { ExtendedStatus, Status } from "../../data/status.slint";
 import { DeviceDiscovery, DeviceDiscoveryFeature, ExampleData } from "../../data/device_description.slint";
+import { Icons } from "../../icons.slint";
 
 component LoadingView {
     property <length> spacing: 16px;
@@ -53,7 +54,7 @@ component ErrorView {
         padding: 12px;
         spacing: 8px;
         Image {
-            source: @image-url("../../../images/device/9111167_lock_no_icon.svg");
+            source: Icons.no-encryption;
             preferred-height: 200px;
             min-height: 80px;
             colorize: PaletteExtra.accented-foreground.with-alpha(0.6);

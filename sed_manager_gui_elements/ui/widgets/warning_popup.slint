@@ -1,6 +1,7 @@
 import { PrototypePopup } from "prototype_popup.slint";
 import { Button } from "std-widgets.slint";
 import { PaletteExtra } from "visual.slint";
+import { Icons } from "../icons.slint";
 
 export component WarningPopup inherits PrototypePopup {
     width: 400px;
@@ -23,7 +24,7 @@ export component WarningPopup inherits PrototypePopup {
             VerticalLayout {
                 alignment: center;
                 Image {
-                    source: @image-url("../../images/error/8666599_alert_triangle_icon.svg");
+                    source: Icons.warning;
                     colorize: PaletteExtra.warning-foreground;
                     width: 80px;
                     height: 80px;

@@ -10,6 +10,7 @@ import { Types } from "../data/types.slint";
 import { WarningPopup } from "../widgets/warning_popup.slint";
 import { StatusIndicator } from "../widgets/progress.slint";
 import { ToastMessage } from "../widgets/toast_message.slint";
+import { Icons } from "../icons.slint";
 
 component LoginForm {
     out property <string> admin1_password;
@@ -252,7 +253,7 @@ component Range {
             Button {
                 height: 100%;
                 width: 100%;
-                icon: @image-url("../../images/action/delete_forever.svg");
+                icon: Icons.delete-forever;
                 enabled: enabled;
                 clicked => {
                     erase-locking-range();
@@ -325,7 +326,7 @@ component RangeTable {
 
 export component LockingRanges inherits ConfigView {
     config-name: "Locking ranges";
-    config-icon: @image-url("../../images/shape/hash.svg");
+    config-icon: Icons.locking-ranges;
     in property <ExtendedStatus> login-status;
     in property <[string]> range-names;
     in property <[LockingRange]> range-properties;

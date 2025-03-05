@@ -3,6 +3,7 @@ import { Button, Palette } from "std-widgets.slint";
 import { PaletteExtra } from "visual.slint";
 import { StatusIndicator } from "progress.slint";
 import { ExtendedStatus, Status } from "../data/status.slint";
+import { Icons } from "../icons.slint";
 
 export component ResultPopup inherits PrototypePopup {
     width: 400px;
@@ -100,7 +101,7 @@ export component LivePreviewTest {
         y: (root.height - self.height) / 2;
         status <=> status;
         message <=> message;
-        icon: @image-url("../../images/shape/hash.svg");
+        icon: Icons.arrow-left;
         finished => {
             self.close();
         }

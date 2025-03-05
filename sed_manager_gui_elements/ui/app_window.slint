@@ -10,6 +10,7 @@ import { Status } from "data/status.slint";
 import { StatusIndicator } from "widgets/progress.slint";
 import { PaletteExtra } from "widgets/visual.slint";
 import { ToastPopup } from "widgets/toast_message.slint";
+import { Icons } from "icons.slint";
 
 export { State }
 
@@ -33,7 +34,7 @@ component DriveTabView {
 
             Button {
                 height: 32px;
-                icon: @image-url("../images/action/8666728_refresh_cw_icon.svg");
+                icon: Icons.refresh;
                 colorize-icon: true;
                 clicked => {
                     State.list-devices();
@@ -79,7 +80,7 @@ component LoadingView {
                 alignment: center;
                 StatusIndicator {
                     status: State.device-list-status.status;
-                    icon: @image-url("../images/device/8666570_hard_drive_icon.svg");
+                    icon: Icons.hard-drive;
                     width: 80px;
                     height: 80px;
                 }
@@ -118,7 +119,7 @@ component LoadingView {
 
 export component AppWindow inherits Window {
     title: "SED Manager";
-    icon: @image-url("../images/temporary_logo.png");
+    icon: Icons.sed-manager;
     preferred-width: 960px;
     preferred-height: 600px;
     min-width: 640px;

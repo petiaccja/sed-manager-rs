@@ -5,6 +5,7 @@ import { Status, ExtendedStatus} from "../data/status.slint";
 import { WarningPopup } from "../widgets/warning_popup.slint";
 import { ResultPopup } from "../widgets/result_popup.slint";
 import { ConfigView } from "config_view.slint";
+import { Icons } from "../icons.slint";
 
 component WarningMessage {
     VerticalLayout {
@@ -63,7 +64,7 @@ component Form {
 export component Revert inherits ConfigView {
     in-out property <ExtendedStatus> extended-status: { status: Status.error };
     config-name: "Revert";
-    config-icon: @image-url("../../images/action/user-x.svg");
+    config-icon: Icons.revert;
     back-enabled: extended-status.status != Status.loading;
     callback revert(use-psid: bool, password: string, revert-admin: bool);
     warning-popup := WarningPopup {

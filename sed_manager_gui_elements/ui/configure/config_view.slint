@@ -1,6 +1,7 @@
 import { Island, PaletteExtra } from "../widgets/visual.slint";
 import { Status } from "../data/status.slint";
 import { Button, Palette, Spinner } from "std-widgets.slint";
+import { Icons } from "../icons.slint";
 
 
 component BackButton inherits Rectangle {
@@ -14,7 +15,7 @@ component BackButton inherits Rectangle {
     border-color: text-color;
     border-width: 2px;
     Image {
-        source: @image-url("../../images/shape/8666600_arrow_left_icon.svg");
+        source: Icons.arrow-left;
         colorize: text-color;
     }
 
@@ -51,7 +52,7 @@ component Header inherits Island {
         }
 
         Image {
-            source: @image-url("../../images/shape/8666777_chevron_right_arrow_icon.svg");
+            source: Icons.chevron-arrow-right;
             colorize: Palette.control-foreground;
             width: 26px;
             vertical-alignment: center;

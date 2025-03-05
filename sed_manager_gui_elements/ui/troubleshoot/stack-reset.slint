@@ -1,11 +1,12 @@
 import { ExtendedStatus, Status } from "../data/status.slint";
 import { ResultPopup } from "../widgets/result_popup.slint";
 import { Button } from "std-widgets.slint";
+import { Icons } from "../icons.slint";
 
 export component StackResetPopup inherits ResultPopup {
     in property <ExtendedStatus> extended-status;
     status: extended-status.status;
-    icon: @image-url("../../images/shape/hash.svg");
+    icon: Icons.stack-reset;
     message: {
         if self.status == Status.loading {
             "Resetting stack..."

@@ -3,6 +3,7 @@ import { Collapsible } from "../../widgets/collapsible.slint";
 import { NavigationButton, NavigationDirection } from "../../widgets/navigation_button.slint";
 import { HorizontalSeparator, PaletteExtra } from "../../widgets/visual.slint";
 import { Activity, ActivitySupport } from "../../data/activity.slint";
+import { Icons } from "../../icons.slint";
 
 export component ActivityLauncher {
     in property <ActivitySupport> activity-support;
@@ -18,7 +19,7 @@ export component ActivityLauncher {
             spacing: 12px;
             Collapsible {
                 text: "Configure";
-                icon: @image-url("../../../images/action/8666615_settings_icon.svg");
+                icon: Icons.settings;
                 preferred-height: self.min-height;
                 font-color: PaletteExtra.accented-control-foreground;
                 header-height: 42px;
@@ -30,7 +31,7 @@ export component ActivityLauncher {
 
                     NavigationButton {
                         text: "Take ownership";
-                        icon: @image-url("../../../images/action/home_24dp.svg");
+                        icon: Icons.take-ownership;
                         height: button-height;
                         navigation-direction: NavigationDirection.left;
                         background: #00000000;
@@ -47,7 +48,7 @@ export component ActivityLauncher {
 
                     NavigationButton {
                         text: "Activate locking";
-                        icon: @image-url("../../../images/device/9111193_lock_icon.svg");
+                        icon: Icons.activate-locking;
                         height: button-height;
                         navigation-direction: NavigationDirection.left;
                         background: #00000000;
@@ -64,7 +65,7 @@ export component ActivityLauncher {
 
                     NavigationButton {
                         text: "Locking ranges";
-                        icon: @image-url("../../../images/shape/arrow_range_24dp.svg");
+                        icon: Icons.locking-ranges;
                         height: button-height;
                         navigation-direction: NavigationDirection.left;
                         background: #00000000;
@@ -81,7 +82,7 @@ export component ActivityLauncher {
 
                     NavigationButton {
                         text: "Users";
-                        icon: @image-url("../../../images/action/users.svg");
+                        icon: Icons.users;
                         height: button-height;
                         navigation-direction: NavigationDirection.left;
                         background: #00000000;
@@ -98,7 +99,7 @@ export component ActivityLauncher {
 
                     NavigationButton {
                         text: "Permissions";
-                        icon: @image-url("../../../images/action/award.svg");
+                        icon: Icons.permissions;
                         height: button-height;
                         navigation-direction: NavigationDirection.left;
                         background: #00000000;
@@ -115,7 +116,7 @@ export component ActivityLauncher {
 
                     NavigationButton {
                         text: "MBR Shadowing";
-                        icon: @image-url("../../../images/action/tonality_24dp.svg");
+                        icon: Icons.mbr-shadowing;
                         height: button-height;
                         navigation-direction: NavigationDirection.left;
                         background: #00000000;
@@ -132,7 +133,7 @@ export component ActivityLauncher {
 
                     NavigationButton {
                         text: "Revert";
-                        icon: @image-url("../../../images/action/lock_reset_24dp.svg");
+                        icon: Icons.revert;
                         height: button-height;
                         navigation-direction: NavigationDirection.left;
                         background: #00000000;
@@ -147,7 +148,7 @@ export component ActivityLauncher {
 
             Collapsible {
                 text: "Troubleshoot";
-                icon: @image-url("../../../images/action/construction_24dp_E3E3E3.svg");
+                icon: Icons.troubleshoot;
                 preferred-height: self.min-height;
                 font-color: PaletteExtra.accented-control-foreground;
                 header-height: 42px;
@@ -159,7 +160,7 @@ export component ActivityLauncher {
 
                     NavigationButton {
                         text: "ComID status";
-                        icon: @image-url("../../../images/action/activity.svg");
+                        icon: Icons.com-id-status;
                         height: button-height;
                         background: #00000000;
                         icon-color: PaletteExtra.make-accented(#ff46ff, Palette.control-foreground, Palette.control-background);
@@ -175,7 +176,7 @@ export component ActivityLauncher {
 
                     NavigationButton {
                         text: "Stack reset";
-                        icon: @image-url("../../../images/action/restart_alt_24dp_E3E3E3.svg");
+                        icon: Icons.stack-reset;
                         height: button-height;
                         background: #00000000;
                         icon-color: PaletteExtra.make-accented(#00a2ff, Palette.control-foreground, Palette.control-background);
@@ -189,7 +190,7 @@ export component ActivityLauncher {
 
             if root.security-providers.length > 0: Collapsible {
                 text: "Table editor";
-                icon: @image-url("../../../images/action/9111030_table_icon.svg");
+                icon: Icons.table-editor;
                 preferred-height: self.min-height;
                 font-color: PaletteExtra.accented-control-foreground;
                 header-height: 42px;
@@ -203,7 +204,7 @@ export component ActivityLauncher {
 
                         NavigationButton {
                             text: sp + " SP";
-                            icon: @image-url("../../../images/device/9111101_key_security_icon.svg");
+                            icon: Icons.security-provider;
                             height: button-height;
                             navigation-direction: NavigationDirection.left;
                             background: #00000000;

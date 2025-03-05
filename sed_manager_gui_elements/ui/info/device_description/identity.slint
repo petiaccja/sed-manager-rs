@@ -1,6 +1,7 @@
 import { DeviceIdentity, ExampleData } from "../../data/device_description.slint";
 import { Island, PaletteExtra } from "../../widgets/visual.slint";
 import { LineEdit } from "std-widgets.slint";
+import { Icons } from "../../icons.slint";
 
 
 export component Identity inherits Island {
@@ -10,7 +11,7 @@ export component Identity inherits Island {
         spacing: 12px;
         padding: 6px;
         Image {
-            source: @image-url("../../../images/device/3671772_ATTRIB_drive_hard_icon.svg");
+            source: Icons.hard-drive-pretty;
             image-fit: ImageFit.contain;
             vertical-alignment: center;
             colorize: PaletteExtra.accented-foreground;

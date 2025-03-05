@@ -5,6 +5,7 @@ import { Status, ExtendedStatus} from "../data/status.slint";
 import { WarningPopup } from "../widgets/warning_popup.slint";
 import { ResultPopup } from "../widgets/result_popup.slint";
 import { ConfigView } from "config_view.slint";
+import { Icons } from "../icons.slint";
 
 component WarningMessage {
     VerticalLayout {
@@ -82,7 +83,7 @@ export component TakeOwnership inherits ConfigView {
     in-out property <ExtendedStatus> extended-status: { status: Status.error };
     callback take-ownership(new-password: string);
     config-name: "Take ownership";
-    config-icon: @image-url("../../images/action/8666628_user_check_icon.svg");
+    config-icon: Icons.take-ownership;
     back-enabled: extended-status.status != Status.loading;
     warning-popup := WarningPopup {
         x: (root.width - self.width) / 2;

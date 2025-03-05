@@ -1,6 +1,7 @@
 import { Palette, Spinner } from "std-widgets.slint";
 import { Status } from "../data/status.slint";
 import { PaletteExtra } from "visual.slint";
+import { Icons } from "../icons.slint";
 
 export component TextLoadingIndicator inherits Rectangle {
     in-out property <duration> time;
@@ -38,7 +39,7 @@ export component StatusIndicator {
     if status == Status.error: Image {
         width: parent.width;
         height: parent.height;
-        source: @image-url("../../images/error/8666566_alert_circle_icon.svg");
+        source: Icons.error;
         colorize: PaletteExtra.error-foreground;
     }
     if status == Status.success: Image {

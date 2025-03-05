@@ -5,6 +5,7 @@ import { Status, ExtendedStatus} from "../data/status.slint";
 import { ResultPopup } from "../widgets/result_popup.slint";
 import { ConfigView } from "config_view.slint";
 import { Password } from "../widgets/password.slint";
+import { Icons } from "../icons.slint";
 
 component Form {
     out property <string> sid-password;
@@ -91,7 +92,7 @@ export component ActivateLocking inherits ConfigView {
     in-out property <ExtendedStatus> extended-status: { status: Status.error };
     callback activate-locking(sid-password: string, new-admin1-password: string);
     config-name: "Activate locking";
-    config-icon: @image-url("../../images/device/9111193_lock_icon.svg");
+    config-icon: Icons.activate-locking;
     back-enabled: extended-status.status != Status.loading;
     result-popup := ResultPopup {
         x: (root.width - self.width) / 2;

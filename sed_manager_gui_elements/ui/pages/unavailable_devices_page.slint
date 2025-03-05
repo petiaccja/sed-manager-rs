@@ -4,6 +4,7 @@ import { Status } from "../data/status.slint";
 import { HorizontalBox, Palette, LineEdit } from "std-widgets.slint";
 import { HorizontalSeparator, Island, PaletteExtra } from "../widgets/visual.slint";
 import { UnavailableDevice } from "../data/unavailable_device.slint";
+import { Icons } from "../icons.slint";
 
 component UnavailableDeviceView inherits Island {
     in property <UnavailableDevice> unavailable-device;
@@ -32,7 +33,7 @@ component UnavailableDeviceView inherits Island {
         HorizontalLayout {
             spacing: 4px;
             Image {
-                source: @image-url("../../images/error/8666566_alert_circle_icon.svg");
+                source: Icons.error;
                 colorize: PaletteExtra.error-foreground;
             }
 

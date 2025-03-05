@@ -1,5 +1,6 @@
 import { Island, PaletteExtra } from "visual.slint";
 import { Palette } from "std-widgets.slint";
+import { Icons } from "../icons.slint";
 
 
 export enum NavigationDirection {
@@ -70,13 +71,13 @@ export component NavigationButton inherits Island {
 
     pure function navigation-image() -> image {
         if self.navigation-direction == NavigationDirection.up {
-            @image-url("../../images/shape/8666673_chevron_up_icon.svg")
+            Icons.chevron-arrow-up
         } else if self.navigation-direction == NavigationDirection.down {
-            @image-url("../../images/shape/8666558_chevron_down_icon.svg")
+            Icons.chevron-arrow-down
         } else if self.navigation-direction == NavigationDirection.left {
-            @image-url("../../images/shape/8666777_chevron_right_arrow_icon.svg")
+            Icons.chevron-arrow-right
         } else {
-            @image-url("")
+            Icons.none
         }
     }
     pure function icon-size() -> length {
@@ -114,7 +115,7 @@ export component LivePreviewTest_NoIcon inherits NavigationButton {
 }
 
 export component LivePreviewTest_WithIcon inherits NavigationButton {
-    icon: @image-url("../../images/device/8666570_hard_drive_icon.svg");
+    icon: Icons.delete-forever;
     text: "Button title";
     navigation-direction: NavigationDirection.none;
     icon-color: PaletteExtra.accented-foreground;
