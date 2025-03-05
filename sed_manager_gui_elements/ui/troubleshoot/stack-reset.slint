@@ -1,0 +1,49 @@
+import { ExtendedStatus, Status } from "../data/status.slint";
+import { ResultPopup } from "../widgets/result_popup.slint";
+import { Button } from "std-widgets.slint";
+
+export component StackResetPopup inherits ResultPopup {
+    in property <ExtendedStatus> extended-status;
+    status: extended-status.status;
+    icon: @image-url("../../images/shape/hash.svg");
+    message: {
+        if self.status == Status.loading {
+            "Resetting stack..."
+        } else if self.status == Status.success {
+            "Stack successfully reset!"
+        } else {
+            "Failed to reset stack: " + extended-status.message
+        }
+    };
+    finish-text: "OK";
+    retry-present: false;
+}
+
+export component LivePreviewTest {
+    in-out property <ExtendedStatus> extended-status;
+    popup := StackResetPopup {
+        x: (root.width - self.width) / 2;
+        y: (root.height - self.height) / 2;
+        extended-status <=> extended-status;
+        finished => {
+            self.close();
+        }
+    }
+
+    timer := Timer {
+        interval: 2s;
+        triggered => {
+            self.running = false;
+            extended-status.status = Status.success;
+        }
+    }
+
+    Button {
+        text: "Show result";
+        clicked => {
+            extended-status.status = Status.loading;
+            popup.show();
+            timer.running = true;
+        }
+    }
+}

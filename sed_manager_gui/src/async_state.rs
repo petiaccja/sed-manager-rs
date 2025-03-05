@@ -1,6 +1,7 @@
 use std::rc::Rc;
 
-use sed_manager_gui_elements::{ConfigureState, ExtendedStatus, LockingRangeState};
+use sed_manager::messaging::com_id::ComIdState;
+use sed_manager_gui_elements::{ConfigureState, ExtendedStatus, LockingRangeState, TroubleshootState};
 use slint::{ComponentHandle as _, Model, SharedString};
 
 use crate::{
@@ -214,6 +215,22 @@ impl<Backend: Clone + 'static> AsyncState<Backend> {
             });
         });
     }
+
+    pub fn on_reset_stack(&self, callback: impl AsyncFn(Backend, usize) -> ui::ExtendedStatus + 'static) {
+        self.with(move |state| {
+            let (backend, async_state, callback) = (self.backend.clone(), self.clone(), Rc::new(callback));
+
+            state.on_reset_stack(move |device_idx: i32| {
+                let (backend, callback, async_state) = (backend.clone(), callback.clone(), async_state.clone());
+
+                async_state.with(|state| state.respond_reset_stack(device_idx as usize, ui::ExtendedStatus::loading()));
+                let _ = slint::spawn_local(async move {
+                    let result = callback(backend, device_idx as usize).await;
+                    async_state.with(move |state| state.respond_reset_stack(device_idx as usize, result));
+                });
+            });
+        });
+    }
 }
 
 pub trait StateExt {
@@ -240,6 +257,7 @@ pub trait StateExt {
     );
     fn respond_locking_range_status(&self, device_idx: usize, range_idx: usize, result: ui::ExtendedStatus);
     fn respond_revert(&self, device_idx: usize, status: ui::ExtendedStatus);
+    fn respond_reset_stack(&self, device_idx: usize, result: ui::ExtendedStatus);
 }
 
 impl<'a> StateExt for ui::State<'a> {
@@ -296,8 +314,7 @@ impl<'a> StateExt for ui::State<'a> {
         result: Result<(ui::DeviceDiscovery, ui::ActivitySupport), ui::ExtendedStatus>,
     ) {
         let descriptions = self.get_descriptions();
-        let description_vec = as_vec_model(&descriptions);
-        let Some(desc) = description_vec.row_data(device_idx) else {
+        let Some(desc) = descriptions.row_data(device_idx) else {
             return;
         };
         let new_desc = match result {
@@ -309,7 +326,7 @@ impl<'a> StateExt for ui::State<'a> {
             },
             Err(error) => ui::DeviceDescription { discovery_status: error, ..desc },
         };
-        description_vec.set_row_data(device_idx, new_desc);
+        descriptions.set_row_data(device_idx, new_desc);
     }
 
     fn respond_take_ownership(&self, device_idx: usize, status: ui::ExtendedStatus) {
@@ -326,14 +343,13 @@ impl<'a> StateExt for ui::State<'a> {
 
     fn push_locking_range(&self, device_idx: usize, name: String, range: ui::LockingRange) {
         let config = self.get_configure();
-        let config_vec = as_vec_model(&config);
-        let Some(dev_config) = config_vec.row_data(device_idx) else {
+        let Some(dev_config) = config.row_data(device_idx) else {
             return;
         };
         as_vec_model(&dev_config.locking_ranges.names).push(name.into());
         as_vec_model(&dev_config.locking_ranges.properties).push(range.into());
         as_vec_model(&dev_config.locking_ranges.statuses).push(ui::ExtendedStatus::success());
-        config_vec.set_row_data(device_idx, dev_config);
+        config.set_row_data(device_idx, dev_config);
     }
 
     fn respond_set_locking_range(
@@ -343,8 +359,7 @@ impl<'a> StateExt for ui::State<'a> {
         result: Result<ui::LockingRange, ui::ExtendedStatus>,
     ) {
         let config = self.get_configure();
-        let config_vec = as_vec_model(&config);
-        let Some(dev_config) = config_vec.row_data(device_idx) else {
+        let Some(dev_config) = config.row_data(device_idx) else {
             return;
         };
         let prop_vec = as_vec_model(&dev_config.locking_ranges.properties);
@@ -368,8 +383,7 @@ impl<'a> StateExt for ui::State<'a> {
 
     fn respond_locking_range_status(&self, device_idx: usize, range_idx: usize, result: ui::ExtendedStatus) {
         let config = self.get_configure();
-        let config_vec = as_vec_model(&config);
-        let Some(dev_config) = config_vec.row_data(device_idx) else {
+        let Some(dev_config) = config.row_data(device_idx) else {
             return;
         };
         let status_vec = as_vec_model(&dev_config.locking_ranges.statuses);
@@ -380,6 +394,14 @@ impl<'a> StateExt for ui::State<'a> {
 
     fn respond_revert(&self, device_idx: usize, status: ui::ExtendedStatus) {
         respond_configure(self, device_idx, status);
+    }
+
+    fn respond_reset_stack(&self, device_idx: usize, result: ui::ExtendedStatus) {
+        let troubleshoot = self.get_troubleshoot();
+        if device_idx < troubleshoot.row_count() {
+            let state = TroubleshootState::new(0, 0, ComIdState::Invalid, result);
+            troubleshoot.set_row_data(device_idx, state);
+        }
     }
 }
 

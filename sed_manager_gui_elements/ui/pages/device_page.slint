@@ -10,16 +10,21 @@ import { ActivateLocking } from "../configure/activate_locking.slint";
 import { LockingRanges } from "../configure/locking_ranges.slint";
 import { Revert } from "../configure/revert.slint";
 import { State } from "../state.slint";
+import { StackResetPopup } from "../troubleshoot/stack-reset.slint";
 
 export component DevicePage {
     in property <int> device-idx: 0;
     private property <Activity> current-activity: Activity.description;
     function set-current-activity(activity: Activity) {
-        State.cleanup-session(device-idx);
-        if activity == Activity.description {
-            State.discover(device-idx);
-        }
         self.current-activity = activity;
+        if activity == Activity.description {
+            State.cleanup-session(device-idx);
+            State.discover(device-idx);
+        } else if activity == Activity.stack-reset {
+            State.reset-stack(device-idx);
+            self.current-activity = Activity.description;
+            stack-reset.show();
+        }
     }
     public function gained-focus() {
         if current-activity == Activity.description && State.descriptions[device-idx].discovery-status.status == Status.loading {
@@ -84,6 +89,15 @@ export component DevicePage {
             revert(use-psid, password, include-admin) => {
                 State.revert(device-idx, use-psid, password, include-admin);
             }
+        }
+    }
+
+    stack-reset := StackResetPopup {
+        extended-status: State.troubleshoot[device-idx].extended-status;
+        x: (root.width - self.width) / 2;
+        y: (root.height - self.height) / 2;
+        finished => {
+            self.close();
         }
     }
 }

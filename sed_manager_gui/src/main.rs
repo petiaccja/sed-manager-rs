@@ -51,6 +51,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     async_state.on_set_locking_range(Backend::set_locking_range);
     async_state.on_erase_locking_range(Backend::erase_locking_range);
     async_state.on_revert(Backend::revert);
+    async_state.on_reset_stack(Backend::reset_stack);
 
     // Refresh device list right after starting.
     app_window.global::<ui::State>().invoke_list_devices();

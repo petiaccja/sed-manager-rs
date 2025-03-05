@@ -6,6 +6,7 @@ use sed_manager::applications::{
     Error as AppError,
 };
 use sed_manager::device::{Device, Error as DeviceError};
+use sed_manager::messaging::com_id::StackResetStatus;
 use sed_manager::messaging::discovery::{Discovery, Feature};
 use sed_manager::messaging::uid::UID;
 use sed_manager::rpc::{discover, Error as RPCError};
@@ -309,6 +310,21 @@ impl Backend {
             Ok(_) => ui::ExtendedStatus::success(),
             Err(error) => ui::ExtendedStatus::error(error.to_string()),
         }
+    }
+
+    pub async fn reset_stack(this: Rc<PeekCell<Self>>, device_idx: usize) -> ui::ExtendedStatus {
+        async fn inner(this: Rc<PeekCell<Backend>>, device_idx: usize) -> Result<(), RPCError> {
+            let tper = this.peek_mut(|this| this.get_tper(device_idx))?;
+            let status = tper.stack_reset(tper.com_id(), tper.com_id_ext()).await?;
+            match status {
+                StackResetStatus::Success => Ok(()),
+                StackResetStatus::Failure => Err(RPCError::Unspecified),
+                StackResetStatus::Pending => Ok(()),
+            }
+        }
+        Backend::cleanup_session(this.clone(), device_idx).await;
+        let result = inner(this, device_idx).await;
+        ui::ExtendedStatus::from_result(result)
     }
 }
 

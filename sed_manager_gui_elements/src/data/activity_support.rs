@@ -27,8 +27,8 @@ impl ActivitySupport {
             locking_ranges: is_locking_ranges_supported(discovery),
             permissions: false, // TODO
             revert: is_revert_supported(discovery),
-            shadow_mbr: false,  // TODO
-            stack_reset: false, // Always supported / TODO.
+            shadow_mbr: false, // TODO
+            stack_reset: true,
             take_ownership: is_taking_ownership_supported(discovery),
             users: false, // TODO
         }
