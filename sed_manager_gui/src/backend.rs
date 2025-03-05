@@ -347,13 +347,9 @@ fn get_object_name(discovery: Option<&Discovery>, uid: UID, sp: Option<SPRef>) -
 }
 
 async fn get_locking_range_properties(session: &Session, range: UID) -> Result<NativeLockingRange, RPCError> {
-    // TODO: implement this with a single get over a column range for speed.
-    let start_lba: u64 = session.get(range, 3).await?;
-    let length_lba: u64 = session.get(range, 4).await?;
-    let read_lock_enabled: bool = session.get(range, 5).await?;
-    let write_lock_enabled: bool = session.get(range, 6).await?;
-    let read_locked: bool = session.get(range, 7).await?;
-    let write_locked: bool = session.get(range, 8).await?;
+    let (start_lba, length_lba, read_lock_enabled, write_lock_enabled, read_locked, write_locked) =
+        session.get_multiple::<(u64, u64, bool, bool, bool, bool)>(range, 3..=8).await?;
+
     Ok(NativeLockingRange {
         start_lba,
         end_lba: start_lba + length_lba,
@@ -367,20 +363,23 @@ async fn get_locking_range_properties(session: &Session, range: UID) -> Result<N
 async fn set_locking_range_properties(
     session: &Session,
     range: UID,
-    properties: NativeLockingRange,
+    value: NativeLockingRange,
 ) -> Result<(), RPCError> {
-    // TODO: implement this with a single set over a column range for speed AND CORRECTNESS.
     if range != spec::opal::locking::locking::GLOBAL_RANGE.as_uid() {
-        let length_lba = properties.end_lba - properties.start_lba;
-        session.set(range, 4, 0u64).await?; // Set length briefly to zero so that it does not surpass drive's end.
-        session.set(range, 3, properties.start_lba).await?;
-        session.set(range, 4, length_lba).await?;
+        let length_lba = value.end_lba - value.start_lba;
+        let values = (
+            value.start_lba,
+            length_lba,
+            value.read_lock_enabled,
+            value.write_lock_enabled,
+            value.read_locked,
+            value.write_locked,
+        );
+        session.set_multiple(range, [3, 4, 5, 6, 7, 8], values).await
+    } else {
+        let values = (value.read_lock_enabled, value.write_lock_enabled, value.read_locked, value.write_locked);
+        session.set_multiple(range, [5, 6, 7, 8], values).await
     }
-    session.set(range, 5, properties.read_lock_enabled).await?;
-    session.set(range, 6, properties.write_lock_enabled).await?;
-    session.set(range, 7, properties.read_locked).await?;
-    session.set(range, 8, properties.write_locked).await?;
-    Ok(())
 }
 
 async fn erase_locking_range(_session: &Session, _range: UID) -> Result<(), RPCError> {
