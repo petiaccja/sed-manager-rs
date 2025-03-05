@@ -369,10 +369,12 @@ async fn set_locking_range_properties(
     properties: NativeLockingRange,
 ) -> Result<(), RPCError> {
     // TODO: implement this with a single set over a column range for speed AND CORRECTNESS.
-    session.set(range, 4, 0u64).await?; // Set length briefly to zero so that it does not surpass drive's end.
-    let length_lba = properties.end_lba - properties.start_lba + 1;
-    session.set(range, 3, properties.start_lba).await?;
-    session.set(range, 4, length_lba).await?;
+    if range != spec::opal::locking::locking::GLOBAL_RANGE.as_uid() {
+        let length_lba = properties.end_lba - properties.start_lba;
+        session.set(range, 4, 0u64).await?; // Set length briefly to zero so that it does not surpass drive's end.
+        session.set(range, 3, properties.start_lba).await?;
+        session.set(range, 4, length_lba).await?;
+    }
     session.set(range, 5, properties.read_lock_enabled).await?;
     session.set(range, 6, properties.write_lock_enabled).await?;
     session.set(range, 7, properties.read_locked).await?;

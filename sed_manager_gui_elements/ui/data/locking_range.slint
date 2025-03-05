@@ -1,7 +1,6 @@
-
 export struct LockingRange {
-    range-start: int,
-    range-end: int,
+    start-lba: int,
+    end-lba: int,
     read-lock-enabled: bool,
     write-lock-enabled: bool,
     read-locked: bool,

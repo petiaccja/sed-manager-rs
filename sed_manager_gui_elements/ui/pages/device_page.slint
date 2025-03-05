@@ -61,9 +61,9 @@ export component DevicePage {
         if current-activity == Activity.locking-ranges: LockingRanges {
             device-name: State.descriptions[device-idx].identity.name;
             login-status: State.configure[device-idx].extended-status;
-            range-names: State.configure[device-idx].locking-ranges.names;
-            range-properties: State.configure[device-idx].locking-ranges.properties;
-            range-statuses: State.configure[device-idx].locking-ranges.statuses;
+            names: State.configure[device-idx].locking-ranges.names;
+            ranges: State.configure[device-idx].locking-ranges.properties;
+            statuses: State.configure[device-idx].locking-ranges.statuses;
             back => {
                 set-current-activity(Activity.description);
             }

@@ -91,8 +91,9 @@ component LoginView {
 
 global TableDesc {
     out property <[string]> column-names: [
-        "Start LBA",
-        "End LBA",
+        "Start\n(LBA)",
+        "Length\n(LBA)",
+        "End\n(LBA)",
         "Read lock\n enabled",
         "Write lock\n enabled",
         "Read locked",
@@ -100,6 +101,7 @@ global TableDesc {
         "Erase",
     ];
     out property <[length]> column-widths: [
+        100px,
         100px,
         100px,
         80px,
@@ -127,23 +129,89 @@ component EraseWarningMessage {
     }
 }
 
+component CheckLockingRange {
+    in property <int> alignment: 1;
+    in-out property <int> start-lba;
+    in-out property <int> length-lba;
+    in-out property <int> end-lba;
+    in-out property <bool> read-lock-enabled;
+    in-out property <bool> write-lock-enabled;
+    in-out property <bool> read-locked;
+    in-out property <bool> write-locked;
+    pure function align(value: int) -> int {
+        Math.floor(value / alignment) * alignment
+    }
+    public function set-start(new-start: int) {
+        start-lba = align(Math.max(0, new-start));
+        end-lba = Math.max(start-lba, end-lba);
+        length-lba = end-lba - start-lba;
+    }
+    public function set-end(new-end: int) {
+        end-lba = align(Math.max(0, new-end));
+        start-lba = Math.min(start-lba, end-lba);
+        length-lba = end-lba - start-lba;
+    }
+    public function set-length(new-length: int) {
+        end-lba = start-lba + align(Math.max(0, new-length));
+        length-lba = end-lba - start-lba;
+    }
+    public function set-range(properties: LockingRange) {
+        start-lba = properties.start-lba;
+        length-lba = properties.end-lba - properties.start-lba;
+        end-lba = properties.end-lba;
+        read-lock-enabled = properties.read-lock-enabled;
+        write-lock-enabled = properties.write-lock-enabled;
+        read-locked = properties.read-locked;
+        write-locked = properties.write-locked;
+    }
+    public function get-range() -> LockingRange {
+        {
+            start-lba: start-lba,
+            end-lba: end-lba,
+            read-lock-enabled: read-lock-enabled,
+            write-lock-enabled: write-lock-enabled,
+            read-locked: read-locked,
+            write-locked: write-locked,
+        }
+    }
+}
+
 component Range {
     in property <[length]> column-widths: TableDesc.column-widths;
     in property <length> row-height: TableDesc.row-height;
     in property <int> range-idx;
-    in-out property <LockingRange> properties;
+    in-out property <LockingRange> range;
     in property <Status> status;
     private property <bool> enabled: status != Status.loading;
     callback set-locking-range(value: LockingRange);
     callback erase-locking-range();
-    changed properties => {
-        start-lba.text = properties.range-start;
-        end-lba.text = properties.range-end;
-        rd-lock-en.checked = properties.read-lock-enabled;
-        wr-lock-en.checked = properties.write-lock-enabled;
-        rd-locked.checked = properties.read-locked;
-        wr-locked.checked = properties.write-locked;
+    changed range => {
+        checked-range.set-range(range);
     }
+    changed status => {
+        if status == Status.error {
+            checked-range.set-range(range);
+        }
+    }
+    checked-range := CheckLockingRange {
+        start-lba: range.start-lba;
+        length-lba: range.end-lba - range.start-lba;
+        end-lba: range.end-lba;
+        read-lock-enabled: range.read-lock-enabled;
+        write-lock-enabled: range.write-lock-enabled;
+        read-locked: range.read-locked;
+        write-locked: range.write-locked;
+        changed start-lba => {
+            start-lba.text = self.start-lba;
+        }
+        changed length-lba => {
+            length-lba.text = self.length-lba;
+        }
+        changed end-lba => {
+            end-lba.text = self.end-lba;
+        }
+    }
+
     HorizontalLayout {
         Cell {
             width: root.column-widths[0];
@@ -154,13 +222,12 @@ component Range {
                 width: parent.width;
                 input-type: number;
                 horizontal-alignment: right;
-                text: properties.range-start;
+                text: checked-range.start-lba;
                 enabled: enabled;
                 accepted(text) => {
-                    properties.range-start = Types.str-to-int(text);
-                    properties.range-end = Math.max(properties.range-start, properties.range-end);
-                    end-lba.text = properties.range-end;
-                    set-locking-range(properties);
+                    self.clear-focus();
+                    checked-range.set-start(Types.str-to-int(text));
+                    set-locking-range(checked-range.get-range());
                 }
             }
         }
@@ -170,17 +237,16 @@ component Range {
             height: row-height;
             row-idx: range-idx;
             column-idx: 1;
-            end-lba := LineEdit {
+            length-lba := LineEdit {
                 width: parent.width;
                 input-type: number;
                 horizontal-alignment: right;
-                text: properties.range-end;
+                text: checked-range.length-lba;
                 enabled: enabled;
                 accepted(text) => {
-                    properties.range-end = Types.str-to-int(text);
-                    properties.range-start = Math.min(properties.range-start, properties.range-end);
-                    start-lba.text = properties.range-start;
-                    set-locking-range(properties);
+                    self.clear-focus();
+                    checked-range.set-length(Types.str-to-int(text));
+                    set-locking-range(checked-range.get-range());
                 }
             }
         }
@@ -190,12 +256,16 @@ component Range {
             height: row-height;
             row-idx: range-idx;
             column-idx: 2;
-            rd-lock-en := CheckBox {
-                checked: properties.read-lock-enabled;
+            end-lba := LineEdit {
+                width: parent.width;
+                input-type: number;
+                horizontal-alignment: right;
+                text: checked-range.end-lba;
                 enabled: enabled;
-                toggled => {
-                    properties.read-lock-enabled = self.checked;
-                    set-locking-range(properties);
+                accepted(text) => {
+                    self.clear-focus();
+                    checked-range.set-end(Types.str-to-int(text));
+                    set-locking-range(checked-range.get-range());
                 }
             }
         }
@@ -205,12 +275,11 @@ component Range {
             height: row-height;
             row-idx: range-idx;
             column-idx: 3;
-            wr-lock-en := CheckBox {
-                checked: properties.write-lock-enabled;
+            rd-lock-en := CheckBox {
+                checked <=> checked-range.read-lock-enabled;
                 enabled: enabled;
                 toggled => {
-                    properties.write-lock-enabled = self.checked;
-                    set-locking-range(properties);
+                    set-locking-range(checked-range.get-range());
                 }
             }
         }
@@ -220,12 +289,11 @@ component Range {
             height: row-height;
             row-idx: range-idx;
             column-idx: 4;
-            rd-locked := CheckBox {
-                checked: properties.read-locked;
+            wr-lock-en := CheckBox {
+                checked <=> checked-range.write-lock-enabled;
                 enabled: enabled;
                 toggled => {
-                    properties.read-locked = self.checked;
-                    set-locking-range(properties);
+                    set-locking-range(checked-range.get-range());
                 }
             }
         }
@@ -235,12 +303,11 @@ component Range {
             height: row-height;
             row-idx: range-idx;
             column-idx: 5;
-            wr-locked := CheckBox {
-                checked: properties.write-locked;
+            rd-locked := CheckBox {
+                checked <=> checked-range.read-locked;
                 enabled: enabled;
                 toggled => {
-                    properties.write-locked = self.checked;
-                    set-locking-range(properties);
+                    set-locking-range(checked-range.get-range());
                 }
             }
         }
@@ -250,6 +317,20 @@ component Range {
             height: row-height;
             row-idx: range-idx;
             column-idx: 6;
+            wr-locked := CheckBox {
+                checked <=> checked-range.write-locked;
+                enabled: enabled;
+                toggled => {
+                    set-locking-range(checked-range.get-range());
+                }
+            }
+        }
+
+        Cell {
+            width: root.column-widths[7];
+            height: row-height;
+            row-idx: range-idx;
+            column-idx: 7;
             Button {
                 height: 100%;
                 width: 100%;
@@ -264,9 +345,9 @@ component Range {
 }
 
 component RangeTable {
-    in property <[string]> range-names;
-    in property <[LockingRange]> range-properties;
-    in property <[ExtendedStatus]> range-statuses;
+    in property <[string]> names;
+    in property <[LockingRange]> ranges;
+    in property <[ExtendedStatus]> statuses;
     callback set-locking-range(range-idx: int, value: LockingRange);
     callback erase-locking-range(range-idx: int);
     private property <int> warned-range-idx;
@@ -275,7 +356,7 @@ component RangeTable {
         y: (root.height - self.height) / 2;
         continue-text: "Erase";
         EraseWarningMessage {
-            range-name: range-names[warned-range-idx];
+            range-name: names[warned-range-idx];
         }
 
         continued => {
@@ -295,12 +376,12 @@ component RangeTable {
             table := Table {
                 column-names: TableDesc.column-names;
                 column-widths: TableDesc.column-widths;
-                row-names: range-names;
+                row-names: names;
                 row-heights: [TableDesc.row-height];
                 VerticalLayout {
-                    for row[range-idx] in root.range-names: Range {
-                        properties: range-properties[range-idx];
-                        status: range-statuses[range-idx].status;
+                    for row[range-idx] in root.names: Range {
+                        range: ranges[range-idx];
+                        status: statuses[range-idx].status;
                         column-widths: table.column-widths;
                         range-idx: range-idx;
                         row-height: table.row-heights[0];
@@ -313,8 +394,8 @@ component RangeTable {
                         }
                         changed status => {
                             if self.status == Status.error {
-                                ToastMessage.show("Could not modify " + range-names[range-idx] + ": " + range-statuses[range-idx].message, PaletteExtra.error-foreground);
-                                self.properties = range-properties[range-idx];
+                                ToastMessage.show("Could not modify " + names[range-idx] + ": " + statuses[range-idx].message, PaletteExtra.error-foreground);
+                                self.range = ranges[range-idx];
                             }
                         }
                     }
@@ -328,9 +409,9 @@ export component LockingRanges inherits ConfigView {
     config-name: "Locking ranges";
     config-icon: Icons.locking-ranges;
     in property <ExtendedStatus> login-status;
-    in property <[string]> range-names;
-    in property <[LockingRange]> range-properties;
-    in property <[ExtendedStatus]> range-statuses;
+    in property <[string]> names;
+    in property <[LockingRange]> ranges;
+    in property <[ExtendedStatus]> statuses;
     private property <bool> authenticated: false;
     callback login-locking-ranges(password: string);
     callback list-locking-ranges();
@@ -353,9 +434,9 @@ export component LockingRanges inherits ConfigView {
             }
         }
         if authenticated: RangeTable {
-            range-names: range-names;
-            range-properties: range-properties;
-            range-statuses: range-statuses;
+            names: names;
+            ranges: ranges;
+            statuses: statuses;
             set-locking-range(range-idx, value) => {
                 set-locking-range(range-idx, value);
             }
@@ -367,38 +448,38 @@ export component LockingRanges inherits ConfigView {
 }
 
 global ExampleRanges {
-    out property <[string]> range-names: [
+    out property <[string]> names: [
         "GlobalRange",
         "Range1",
         "Range2",
     ];
-    out property <[LockingRange]> range-properties: [
+    out property <[LockingRange]> ranges: [
         {
-            range-start: 0,
-            range-end: 0,
+            start-lba: 0,
+            end-lba: 0,
             read-lock-enabled: false,
             write-lock-enabled: false,
             read-locked: false,
             write-locked: false,
         },
         {
-            range-start: 1000,
-            range-end: 2000,
+            start-lba: 1000,
+            end-lba: 2000,
             read-lock-enabled: true,
             write-lock-enabled: true,
             read-locked: false,
             write-locked: false,
         },
         {
-            range-start: 0,
-            range-end: 0,
+            start-lba: 0,
+            end-lba: 0,
             read-lock-enabled: false,
             write-lock-enabled: false,
             read-locked: false,
             write-locked: false,
         },
     ];
-    out property <[ExtendedStatus]> range-statuses: [
+    out property <[ExtendedStatus]> statuses: [
         { status: Status.success },
         { status: Status.loading },
         { status: Status.error, message: "sample error" },
@@ -406,15 +487,15 @@ global ExampleRanges {
 }
 
 export component LivePreviewTest_RangeTable inherits RangeTable {
-    range-names: ExampleRanges.range-names;
-    range-properties: ExampleRanges.range-properties;
-    range-statuses: ExampleRanges.range-statuses;
+    names: ExampleRanges.names;
+    ranges: ExampleRanges.ranges;
+    statuses: ExampleRanges.statuses;
 }
 
 export component LivePreviewTest inherits LockingRanges {
     device-name: "Foo Device";
-    range-names: ExampleRanges.range-names;
-    range-properties: ExampleRanges.range-properties;
+    names: ExampleRanges.names;
+    ranges: ExampleRanges.ranges;
     login-status: { status: Status.success };
     timer := Timer {
         interval: 1s;

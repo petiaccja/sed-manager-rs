@@ -39,8 +39,8 @@ impl From<NativeLockingRange> for ui::LockingRange {
 impl From<ui::LockingRange> for NativeLockingRange {
     fn from(value: ui::LockingRange) -> Self {
         Self {
-            start_lba: value.range_start as u64,
-            end_lba: value.range_end as u64,
+            start_lba: value.start_lba as u64,
+            end_lba: value.end_lba as u64,
             read_lock_enabled: value.read_lock_enabled,
             write_lock_enabled: value.write_lock_enabled,
             read_locked: value.read_locked,
