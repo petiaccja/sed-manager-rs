@@ -42,7 +42,7 @@ impl SPSession {
 
 impl Drop for SPSession {
     fn drop(&mut self) {
-        let _ = self.sender.method(self.session, PackagedMethod::EndOfSession);
+        self.sender.enqueue_method(self.session, PackagedMethod::EndOfSession);
         self.sender.close_session(self.session);
     }
 }

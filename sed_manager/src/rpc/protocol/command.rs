@@ -42,6 +42,12 @@ impl CommandSender {
         let _ = self.tx.send(Command::TryShutdown);
     }
 
+    pub fn enqueue_method(&self, id: SessionIdentifier, request: PackagedMethod) {
+        let (tx, _rx) = oneshot::channel();
+        let promise = Promise::new(request, vec![tx]);
+        let _ = self.tx.send(Command::Method { id, request: promise });
+    }
+
     pub async fn method(&self, id: SessionIdentifier, request: PackagedMethod) -> Result<PackagedMethod, Error> {
         let (tx, rx) = oneshot::channel();
         let promise = Promise::new(request, vec![tx]);
