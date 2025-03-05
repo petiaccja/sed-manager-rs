@@ -1,23 +1,15 @@
 import { LineEdit, Button, Switch } from "std-widgets.slint";
 import { PaletteExtra } from "../widgets/visual.slint";
-import { Password } from "../widgets/password.slint";
 import { Status, ExtendedStatus} from "../data/status.slint";
 import { ResultPopup } from "../widgets/result_popup.slint";
 import { ConfigView } from "config_view.slint";
-import { Password } from "../widgets/password.slint";
+import { RepeatedPasswordEdit } from "../widgets/password.slint";
 import { Icons } from "../icons.slint";
 
 component Form {
     out property <string> sid-password;
-    out property <string> new-admin1-password: {
-        if same-as-owner.checked {
-            sid-password
-        } else {
-            admin1-password.text
-        }
-    };
+    out property <string> admin1-password <=> admin1-password.password;
     in property <bool> enabled;
-    private property <string> password-feedback;
     callback executed();
     VerticalLayout {
         alignment: LayoutAlignment.center;
@@ -37,34 +29,13 @@ component Form {
             height: 12px;
         }
 
-        Text {
-            text: "New Admin1 password:";
-            opacity: same-as-owner.checked ? 0.5 : 1.0;
+        admin1-password := RepeatedPasswordEdit {
+            enabled: !use-owner.checked;
+            prompt-text: "New Admin1 password:";
         }
 
-        admin1-password := LineEdit {
-            input-type: InputType.password;
-            edited(text) => {
-                root.password-feedback = Password.validate(admin1-password.text, admin1-repeat.text);
-            }
-            enabled: !same-as-owner.checked;
-        }
-
-        Text {
-            text: "Repeat password:";
-            opacity: same-as-owner.checked ? 0.5 : 1.0;
-        }
-
-        admin1-repeat := LineEdit {
-            input-type: InputType.password;
-            edited(text) => {
-                root.password-feedback = Password.validate(admin1-password.text, admin1-repeat.text);
-            }
-            enabled: !same-as-owner.checked;
-        }
-
-        same-as-owner := Switch {
-            text: "Same as owner password";
+        use-owner := Switch {
+            text: "Use owner password";
         }
 
         Rectangle {
@@ -74,14 +45,14 @@ component Form {
         Button {
             text: "Activate locking";
             primary: true;
-            enabled: (same-as-owner.checked || password-feedback == "") && enabled;
+            enabled: (use-owner.checked || admin1-password.accepted) && enabled;
             clicked => {
                 executed();
             }
         }
 
         Text {
-            text: same-as-owner.checked ? "" : password-feedback;
+            text: use-owner.checked ? "" : admin1-password.reason;
             color: PaletteExtra.error-foreground;
             horizontal-alignment: center;
         }
@@ -126,7 +97,7 @@ export component ActivateLocking inherits ConfigView {
         form := Form {
             enabled: root.back-enabled;
             executed => {
-                root.activate-locking(self.sid-password, self.new-admin1-password);
+                root.activate-locking(self.sid-password, self.admin1-password);
                 result-popup.show();
             }
         }

@@ -1,6 +1,6 @@
 import { LineEdit, Button } from "std-widgets.slint";
 import { PaletteExtra } from "../widgets/visual.slint";
-import { Password } from "../widgets/password.slint";
+import { RepeatedPasswordEdit } from "../widgets/password.slint";
 import { Status, ExtendedStatus} from "../data/status.slint";
 import { WarningPopup } from "../widgets/warning_popup.slint";
 import { ResultPopup } from "../widgets/result_popup.slint";
@@ -31,48 +31,28 @@ component WarningMessage {
 
 component Form {
     in property <bool> enabled: true;
-    out property <string> password;
-    private property <string> password-feedback;
+    out property <string> password <=> password.password;
     callback executed();
     VerticalLayout {
         alignment: LayoutAlignment.center;
         padding: 8px;
         spacing: 6px;
         min-width: 200px;
-        Text {
-            text: "New owner password:";
-        }
-
-        password := LineEdit {
-            input-type: InputType.password;
-            text <=> root.password;
-            edited(text) => {
-                password-feedback = Password.validate(text, repeat.text)
-            }
-        }
-
-        Text {
-            text: "Repeat password:";
-        }
-
-        repeat := LineEdit {
-            input-type: InputType.password;
-            edited(text) => {
-                password-feedback = Password.validate(text, repeat.text)
-            }
+        password := RepeatedPasswordEdit {
+            prompt-text: "New owner password:";
         }
 
         Button {
             text: "Take ownership";
             primary: true;
-            enabled: password-feedback == "" && enabled;
+            enabled: password.accepted && enabled;
             clicked => {
                 executed()
             }
         }
 
         Text {
-            text: password-feedback;
+            text: password.reason;
             color: PaletteExtra.error-foreground;
             horizontal-alignment: center;
         }
