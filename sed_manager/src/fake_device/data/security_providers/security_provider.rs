@@ -2,6 +2,7 @@ use crate::fake_device::data::table::GenericTable;
 use crate::messaging::uid::{TableUID, UID};
 use crate::messaging::value::{Bytes, Named, Value};
 use crate::rpc::MethodStatus;
+use crate::spec;
 use crate::spec::basic_types::{List, NamedValue};
 use crate::spec::column_types::{AuthorityRef, BoolOrBytes, BytesOrRowValues, CellBlock};
 
@@ -36,6 +37,9 @@ pub trait SecurityProvider {
     }
 
     fn set(&mut self, target: UID, where_: Option<u64>, values: Option<BytesOrRowValues>) -> Result<(), MethodStatus> {
+        if target == spec::opal::locking::locking::RANGE.nth(8).unwrap().as_uid() {
+            return Err(MethodStatus::NotAuthorized); // For testing purposes.
+        }
         if target.is_table() {
             let _ = where_;
             Err(MethodStatus::InvalidParameter) // TODO: Implement for byte tables.
