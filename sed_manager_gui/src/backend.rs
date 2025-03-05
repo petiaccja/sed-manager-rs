@@ -122,7 +122,7 @@ impl Backend {
     pub async fn discover(
         this: Rc<PeekCell<Self>>,
         device_idx: usize,
-    ) -> Result<(ui::DeviceDiscovery, ui::ActivitySupport), ui::ExtendedStatus> {
+    ) -> Result<(ui::DeviceDiscovery, ui::ActivitySupport, ui::DeviceGeometry), ui::ExtendedStatus> {
         let Some(device) = this.peek(|this| this.devices.get(device_idx).cloned()) else {
             return Err(ui::ExtendedStatus::error(format!("device {device_idx} not found (this is a bug)")));
         };
@@ -132,8 +132,9 @@ impl Backend {
         };
         let ui_discovery = ui::DeviceDiscovery::from_discovery(&discovery);
         let ui_activity_support = ui::ActivitySupport::from_discovery(&discovery);
+        let ui_geometry = ui::DeviceGeometry::from_discovery(&discovery);
         this.peek_mut(|this| this.discoveries.get_mut(device_idx).map(|opt| opt.replace(discovery)));
-        Ok((ui_discovery, ui_activity_support))
+        Ok((ui_discovery, ui_activity_support, ui_geometry))
     }
 
     pub async fn cleanup_session(this: Rc<PeekCell<Self>>, device_idx: usize) {

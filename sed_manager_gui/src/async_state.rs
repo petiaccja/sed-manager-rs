@@ -49,7 +49,11 @@ impl<Backend: Clone + 'static> AsyncState<Backend> {
 
     pub fn on_discover(
         &self,
-        callback: impl AsyncFn(Backend, usize) -> Result<(ui::DeviceDiscovery, ui::ActivitySupport), ui::ExtendedStatus>
+        callback: impl AsyncFn(
+                Backend,
+                usize,
+            )
+                -> Result<(ui::DeviceDiscovery, ui::ActivitySupport, ui::DeviceGeometry), ui::ExtendedStatus>
             + 'static,
     ) {
         self.with(move |state| {
@@ -243,7 +247,7 @@ pub trait StateExt {
     fn respond_discover(
         &self,
         device_idx: usize,
-        result: Result<(ui::DeviceDiscovery, ui::ActivitySupport), ui::ExtendedStatus>,
+        result: Result<(ui::DeviceDiscovery, ui::ActivitySupport, ui::DeviceGeometry), ui::ExtendedStatus>,
     );
     fn respond_take_ownership(&self, device_idx: usize, status: ui::ExtendedStatus);
     fn respond_activate_locking(&self, device_idx: usize, status: ui::ExtendedStatus);
@@ -294,6 +298,7 @@ impl<'a> StateExt for ui::State<'a> {
                     ui::ExtendedStatus::loading(),
                     ui::DeviceDiscovery::empty(),
                     ui::ActivitySupport::none(),
+                    ui::DeviceGeometry::unknown(),
                 )
             })
             .collect();
@@ -311,17 +316,18 @@ impl<'a> StateExt for ui::State<'a> {
     fn respond_discover(
         &self,
         device_idx: usize,
-        result: Result<(ui::DeviceDiscovery, ui::ActivitySupport), ui::ExtendedStatus>,
+        result: Result<(ui::DeviceDiscovery, ui::ActivitySupport, ui::DeviceGeometry), ui::ExtendedStatus>,
     ) {
         let descriptions = self.get_descriptions();
         let Some(desc) = descriptions.row_data(device_idx) else {
             return;
         };
         let new_desc = match result {
-            Ok((discovery, activity_support)) => ui::DeviceDescription {
+            Ok((discovery, activity_support, geometry)) => ui::DeviceDescription {
                 discovery_status: ui::ExtendedStatus::success(),
                 discovery,
                 activity_support,
+                geometry,
                 ..desc
             },
             Err(error) => ui::DeviceDescription { discovery_status: error, ..desc },

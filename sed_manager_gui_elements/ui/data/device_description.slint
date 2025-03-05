@@ -23,11 +23,18 @@ export struct DeviceDiscovery {
     ssc-features: [DeviceDiscoveryFeature],    
 }
 
+export struct DeviceGeometry {
+    block-size: int,
+    block-alignment: int,
+    lowest-aligned-block: int,
+}
+
 export struct DeviceDescription {
     identity: DeviceIdentity,
     discovery-status: ExtendedStatus,
     discovery: DeviceDiscovery,
     activity-support: ActivitySupport,
+    geometry: DeviceGeometry,
 }
 
 

@@ -2,6 +2,7 @@ import { ConfigView } from "config_view.slint";
 import { LineEdit, Button, CheckBox, ScrollView, Palette } from "std-widgets.slint";
 import { ExtendedStatus, Status } from "../data/status.slint";
 import { LockingRange } from "../data/locking_range.slint";
+import { DeviceGeometry } from "../data/device_description.slint";
 import { PaletteExtra, VerticalSeparator, Island } from "../widgets/visual.slint";
 import { NavigationButton, NavigationDirection } from "../widgets/navigation_button.slint";
 import { ResultPopup } from "../widgets/result_popup.slint";
@@ -130,7 +131,7 @@ component EraseWarningMessage {
 }
 
 component CheckLockingRange {
-    in property <int> alignment: 1;
+    in property <DeviceGeometry> geometry;
     in-out property <int> start-lba;
     in-out property <int> length-lba;
     in-out property <int> end-lba;
@@ -138,22 +139,26 @@ component CheckLockingRange {
     in-out property <bool> write-lock-enabled;
     in-out property <bool> read-locked;
     in-out property <bool> write-locked;
+    callback udpated();
     pure function align(value: int) -> int {
-        Math.floor(value / alignment) * alignment
+        geometry.lowest-aligned-block + Math.floor(Math.max(0, value - geometry.lowest-aligned-block) / geometry.block-alignment) * geometry.block-alignment
     }
     public function set-start(new-start: int) {
         start-lba = align(Math.max(0, new-start));
         end-lba = Math.max(start-lba, end-lba);
         length-lba = end-lba - start-lba;
+        udpated();
     }
     public function set-end(new-end: int) {
         end-lba = align(Math.max(0, new-end));
         start-lba = Math.min(start-lba, end-lba);
         length-lba = end-lba - start-lba;
+        udpated();
     }
     public function set-length(new-length: int) {
-        end-lba = start-lba + align(Math.max(0, new-length));
+        end-lba = align(start-lba + Math.max(0, new-length));
         length-lba = end-lba - start-lba;
+        udpated();
     }
     public function set-range(properties: LockingRange) {
         start-lba = properties.start-lba;
@@ -177,6 +182,7 @@ component CheckLockingRange {
 }
 
 component Range {
+    in property <DeviceGeometry> geometry;
     in property <[length]> column-widths: TableDesc.column-widths;
     in property <length> row-height: TableDesc.row-height;
     in property <int> range-idx;
@@ -194,6 +200,7 @@ component Range {
         }
     }
     checked-range := CheckLockingRange {
+        geometry: geometry;
         start-lba: range.start-lba;
         length-lba: range.end-lba - range.start-lba;
         end-lba: range.end-lba;
@@ -201,13 +208,9 @@ component Range {
         write-lock-enabled: range.write-lock-enabled;
         read-locked: range.read-locked;
         write-locked: range.write-locked;
-        changed start-lba => {
+        udpated => {
             start-lba.text = self.start-lba;
-        }
-        changed length-lba => {
             length-lba.text = self.length-lba;
-        }
-        changed end-lba => {
             end-lba.text = self.end-lba;
         }
     }
@@ -345,6 +348,7 @@ component Range {
 }
 
 component RangeTable {
+    in property <DeviceGeometry> geometry;
     in property <[string]> names;
     in property <[LockingRange]> ranges;
     in property <[ExtendedStatus]> statuses;
@@ -380,6 +384,7 @@ component RangeTable {
                 row-heights: [TableDesc.row-height];
                 VerticalLayout {
                     for row[range-idx] in root.names: Range {
+                        geometry: geometry;
                         range: ranges[range-idx];
                         status: statuses[range-idx].status;
                         column-widths: table.column-widths;
@@ -409,6 +414,7 @@ export component LockingRanges inherits ConfigView {
     config-name: "Locking ranges";
     config-icon: Icons.locking-ranges;
     in property <ExtendedStatus> login-status;
+    in property <DeviceGeometry> geometry;
     in property <[string]> names;
     in property <[LockingRange]> ranges;
     in property <[ExtendedStatus]> statuses;
@@ -434,6 +440,7 @@ export component LockingRanges inherits ConfigView {
             }
         }
         if authenticated: RangeTable {
+            geometry: geometry;
             names: names;
             ranges: ranges;
             statuses: statuses;
@@ -448,6 +455,7 @@ export component LockingRanges inherits ConfigView {
 }
 
 global ExampleRanges {
+    out property <DeviceGeometry> geometry: { block-alignment: 8, lowest-aligned-block: 0, block-size: 512 };
     out property <[string]> names: [
         "GlobalRange",
         "Range1",
@@ -487,6 +495,7 @@ global ExampleRanges {
 }
 
 export component LivePreviewTest_RangeTable inherits RangeTable {
+    geometry: ExampleRanges.geometry;
     names: ExampleRanges.names;
     ranges: ExampleRanges.ranges;
     statuses: ExampleRanges.statuses;
@@ -494,6 +503,7 @@ export component LivePreviewTest_RangeTable inherits RangeTable {
 
 export component LivePreviewTest inherits LockingRanges {
     device-name: "Foo Device";
+    geometry: ExampleRanges.geometry;
     names: ExampleRanges.names;
     ranges: ExampleRanges.ranges;
     login-status: { status: Status.success };

@@ -1,9 +1,10 @@
-use sed_manager::messaging::discovery::{Discovery, FeatureCode};
+use sed_manager::messaging::discovery::{Discovery, FeatureCode, GeometryDescriptor};
 use slint::{SharedString, ToSharedString as _, VecModel};
 use std::rc::Rc;
 
 use crate::{
-    ActivitySupport, DeviceDescription, DeviceDiscovery, DeviceDiscoveryFeature, DeviceIdentity, ExtendedStatus,
+    ActivitySupport, DeviceDescription, DeviceDiscovery, DeviceDiscoveryFeature, DeviceGeometry, DeviceIdentity,
+    ExtendedStatus,
 };
 
 impl DeviceIdentity {
@@ -73,13 +74,9 @@ impl DeviceDescription {
         discovery_status: ExtendedStatus,
         discovery: DeviceDiscovery,
         activity_support: ActivitySupport,
+        geometry: DeviceGeometry,
     ) -> Self {
-        Self {
-            discovery: discovery,
-            discovery_status: discovery_status,
-            identity: identity,
-            activity_support: activity_support,
-        }
+        Self { discovery, discovery_status, identity, activity_support, geometry }
     }
 
     pub fn empty() -> Self {
@@ -88,7 +85,34 @@ impl DeviceDescription {
             ExtendedStatus::error("".into()),
             DeviceDiscovery::empty(),
             ActivitySupport::none(),
+            DeviceGeometry::unknown(),
         )
+    }
+}
+
+impl DeviceGeometry {
+    pub fn new(block_size: u32, block_alignment: u64, lowest_aligned_block: u64) -> Self {
+        Self {
+            block_size: block_size as i32,
+            block_alignment: block_alignment as i32,
+            lowest_aligned_block: lowest_aligned_block as i32,
+        }
+    }
+
+    pub fn unknown() -> Self {
+        Self::new(0, 1, 0)
+    }
+
+    pub fn from_discovery(discovery: &Discovery) -> Self {
+        if let Some(geometry) = discovery.get::<GeometryDescriptor>() {
+            if geometry.align {
+                Self::new(geometry.logical_block_size, geometry.alignment_granularity, geometry.lowest_aligned_lba)
+            } else {
+                Self::new(geometry.logical_block_size, 1, 0)
+            }
+        } else {
+            Self::unknown()
+        }
     }
 }
 

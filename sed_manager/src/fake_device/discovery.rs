@@ -1,5 +1,6 @@
 use crate::messaging::discovery::{
-    Discovery, FeatureDescriptor, LockingDescriptor, OpalV2Descriptor, OwnerPasswordState, TPerDescriptor,
+    Discovery, FeatureDescriptor, GeometryDescriptor, LockingDescriptor, OpalV2Descriptor, OwnerPasswordState,
+    TPerDescriptor,
 };
 use crate::rpc::Properties;
 use crate::serialization::{OutputStream, Serialize};
@@ -24,6 +25,7 @@ pub fn get_discovery(properties: &Properties, controller: &OpalV2Controller) -> 
         get_tper_feature_desc(properties),
         get_locking_feature_desc(controller),
         get_ssc_feature_desc(),
+        get_geometry_feature_desc(),
     ])
 }
 
@@ -68,4 +70,10 @@ fn get_ssc_feature_desc() -> FeatureDescriptor {
         reverted_owner_pw: OwnerPasswordState::SameAsMSID,
     };
     FeatureDescriptor::OpalV2(desc)
+}
+
+fn get_geometry_feature_desc() -> FeatureDescriptor {
+    let desc =
+        GeometryDescriptor { align: true, logical_block_size: 512, alignment_granularity: 16, lowest_aligned_lba: 4 };
+    FeatureDescriptor::Geometry(desc)
 }
