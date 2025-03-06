@@ -9,7 +9,7 @@ use sed_manager::device::{Device, Error as DeviceError};
 use sed_manager::messaging::com_id::StackResetStatus;
 use sed_manager::messaging::discovery::{Discovery, Feature};
 use sed_manager::messaging::uid::UID;
-use sed_manager::rpc::{discover, Error as RPCError};
+use sed_manager::rpc::{discover, Error as RPCError, MethodStatus};
 use sed_manager::spec::column_types::{CredentialRef, MediaKeyRef, SPRef};
 use sed_manager::spec::{self, ObjectLookup as _};
 use sed_manager::tper::{Session, TPer};
@@ -182,24 +182,32 @@ impl Backend {
         }
     }
 
-    pub async fn login_locking_ranges(
+    pub async fn login_locking_admin(
         this: Rc<PeekCell<Self>>,
         device_idx: usize,
-        admin1_pw: String,
+        admin_idx: usize,
+        password: String,
     ) -> ui::ExtendedStatus {
-        async fn inner(this: Rc<PeekCell<Backend>>, device_idx: usize, admin1_pw: String) -> Result<(), AppError> {
+        async fn inner(
+            this: Rc<PeekCell<Backend>>,
+            device_idx: usize,
+            admin_idx: usize,
+            password: String,
+        ) -> Result<(), AppError> {
             let tper = this.peek_mut(|this| this.get_tper(device_idx))?;
             let discovery = tper.discover().await?;
             let ssc = discovery.get_primary_ssc().ok_or(AppError::NoAvailableSSC)?;
             let sp = get_locking_sp(ssc.feature_code())?;
-            let admin1 = get_locking_admins(ssc.feature_code())?.nth(1).unwrap();
-            let session = tper.start_session(sp, Some(admin1), Some(admin1_pw.as_bytes())).await?;
+            let Some(admin) = get_locking_admins(ssc.feature_code())?.nth(admin_idx as u64) else {
+                return Err(RPCError::from(MethodStatus::InvalidParameter).into());
+            };
+            let session = tper.start_session(sp, Some(admin), Some(password.as_bytes())).await?;
             this.peek_mut(|this| this.replace_session(device_idx, session));
             Ok(())
         }
 
         Backend::cleanup_session(this.clone(), device_idx).await;
-        match inner(this, device_idx, admin1_pw).await {
+        match inner(this, device_idx, admin_idx, password).await {
             Ok(_) => ui::ExtendedStatus::success(),
             Err(error) => ui::ExtendedStatus::error(error.to_string()),
         }
@@ -241,7 +249,7 @@ impl Backend {
         let result = inner(this, device_idx, async_state.clone()).await;
         async_state.with(|state| match result {
             Ok(_) => (),
-            Err(error) => state.respond_login_locking_ranges(device_idx, error.into()),
+            Err(error) => state.respond_login_locking_admin(device_idx, error.into()),
         });
     }
 

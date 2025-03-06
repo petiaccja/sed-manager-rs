@@ -120,22 +120,22 @@ impl<Backend: Clone + 'static> AsyncState<Backend> {
         });
     }
 
-    pub fn on_login_locking_ranges(
+    pub fn on_login_locking_admin(
         &self,
-        callback: impl AsyncFn(Backend, usize, String) -> ui::ExtendedStatus + 'static,
+        callback: impl AsyncFn(Backend, usize, usize, String) -> ui::ExtendedStatus + 'static,
     ) {
         self.with(move |state| {
             let (backend, async_state, callback) = (self.backend.clone(), self.clone(), Rc::new(callback));
 
-            state.on_login_locking_ranges(move |device_idx: i32, admin1_pw: SharedString| {
+            state.on_login_locking_admin(move |device_idx: i32, admin_idx: i32, password: SharedString| {
                 let (backend, callback, async_state) = (backend.clone(), callback.clone(), async_state.clone());
 
                 async_state.with(|state| {
-                    state.respond_login_locking_ranges(device_idx as usize, ui::ExtendedStatus::loading())
+                    state.respond_login_locking_admin(device_idx as usize, ui::ExtendedStatus::loading())
                 });
                 let _ = slint::spawn_local(async move {
-                    let result = callback(backend, device_idx as usize, admin1_pw.into()).await;
-                    async_state.with(move |state| state.respond_login_locking_ranges(device_idx as usize, result));
+                    let result = callback(backend, device_idx as usize, admin_idx as usize, password.into()).await;
+                    async_state.with(move |state| state.respond_login_locking_admin(device_idx as usize, result));
                 });
             });
         });
@@ -251,7 +251,7 @@ pub trait StateExt {
     );
     fn respond_take_ownership(&self, device_idx: usize, status: ui::ExtendedStatus);
     fn respond_activate_locking(&self, device_idx: usize, status: ui::ExtendedStatus);
-    fn respond_login_locking_ranges(&self, device_idx: usize, status: ui::ExtendedStatus);
+    fn respond_login_locking_admin(&self, device_idx: usize, status: ui::ExtendedStatus);
     fn push_locking_range(&self, device_idx: usize, name: String, range: ui::LockingRange);
     fn respond_set_locking_range(
         &self,
@@ -343,7 +343,7 @@ impl<'a> StateExt for ui::State<'a> {
         respond_configure(self, device_idx, status);
     }
 
-    fn respond_login_locking_ranges(&self, device_idx: usize, status: ui::ExtendedStatus) {
+    fn respond_login_locking_admin(&self, device_idx: usize, status: ui::ExtendedStatus) {
         respond_configure(self, device_idx, status);
     }
 

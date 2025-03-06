@@ -12,83 +12,7 @@ import { WarningPopup } from "../widgets/warning_popup.slint";
 import { StatusIndicator } from "../widgets/progress.slint";
 import { ToastMessage } from "../widgets/toast_message.slint";
 import { Icons } from "../icons.slint";
-
-component LoginForm {
-    out property <string> admin1_password;
-    in property <bool> enabled;
-    callback executed();
-    HorizontalLayout {
-        alignment: center;
-        VerticalLayout {
-            vertical-stretch: 1.0;
-            padding: 8px;
-            spacing: 6px;
-            alignment: center;
-            Text {
-                text: "Enter Admin1 password:";
-            }
-
-            password := LineEdit {
-                input-type: InputType.password;
-                text <=> root.admin1_password;
-            }
-
-            Button {
-                primary: true;
-                text: "Configure locking ranges";
-                clicked => {
-                    executed();
-                }
-            }
-        }
-    }
-}
-
-component LoginView {
-    in property <ExtendedStatus> extended-status;
-    out property <bool> back-enabled: extended-status.status != Status.loading;
-    callback back();
-    callback login(admin1_password: string);
-    Rectangle {
-        result-popup := ResultPopup {
-            x: (root.width - self.width) / 2;
-            y: (root.height - self.height) / 2;
-            finish-enabled: root.back-enabled;
-            retry-enabled: root.back-enabled;
-            finish-text: "Back";
-            status: extended-status.status;
-            hide-on-success: true;
-            message: {
-                if extended-status.status == Status.success {
-                    "Session started!"
-                } else if extended-status.status == Status.error {
-                    "Failed to start session:\n" + extended-status.message
-                } else {
-                    "Starting Admin1 session..."
-                }
-            }
-            finished => {
-                self.close();
-                root.back();
-            }
-            retried => {
-                self.close();
-            }
-        }
-    }
-
-    HorizontalLayout {
-        alignment: center;
-        vertical-stretch: 1.0;
-        form := LoginForm {
-            enabled: root.back-enabled;
-            executed => {
-                result-popup.show();
-                login(self.admin1_password);
-            }
-        }
-    }
-}
+import { LoginView } from "login_view.slint";
 
 global TableDesc {
     out property <[string]> column-names: [
@@ -419,7 +343,7 @@ export component LockingRanges inherits ConfigView {
     in property <[LockingRange]> ranges;
     in property <[ExtendedStatus]> statuses;
     private property <bool> authenticated: false;
-    callback login-locking-ranges(password: string);
+    callback login-locking-admin(admin_idx: int, password: string);
     callback list-locking-ranges();
     callback set-locking-range(range-idx: int, value: LockingRange);
     callback erase-locking-range(range-idx: int);
@@ -432,11 +356,13 @@ export component LockingRanges inherits ConfigView {
     form := VerticalLayout {
         if !authenticated: LoginView {
             extended-status: login-status;
+            user-name: "Admin1";
+            login-button-text: "Edit locking ranges";
             back => {
                 root.back();
             }
             login(password) => {
-                login-locking-ranges(password);
+                login-locking-admin(1, password);
             }
         }
         if authenticated: RangeTable {

@@ -68,8 +68,8 @@ export component DevicePage {
             back => {
                 set-current-activity(Activity.description);
             }
-            login-locking-ranges(password) => {
-                State.login-locking-ranges(device-idx, password);
+            login-locking-admin(admin_idx, password) => {
+                State.login-locking-admin(device-idx, admin_idx, password);
             }
             list-locking-ranges => {
                 State.list-locking-ranges(device-idx);

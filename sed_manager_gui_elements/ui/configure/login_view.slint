@@ -1,0 +1,89 @@
+import { ExtendedStatus, Status } from "../data/status.slint";
+import { LineEdit, Button } from "std-widgets.slint";
+import { ResultPopup } from "../widgets/result_popup.slint";
+
+component LoginForm {
+    in property <string> user-name: "Placeholder";
+    in property <string> login-button-text: "Login";
+    in property <bool> enabled;
+    out property <string> password;
+    callback executed();
+    HorizontalLayout {
+        alignment: center;
+        VerticalLayout {
+            vertical-stretch: 1.0;
+            padding: 8px;
+            spacing: 6px;
+            alignment: center;
+            Text {
+                text: user-name + "'s password:";
+            }
+
+            password := LineEdit {
+                input-type: InputType.password;
+                text <=> root.password;
+                accepted(text) => {
+                    executed();
+                }
+            }
+
+            Button {
+                primary: true;
+                text: login-button-text;
+                clicked => {
+                    executed();
+                }
+            }
+        }
+    }
+}
+
+export component LoginView {
+    in property <ExtendedStatus> extended-status;
+    in property <string> user-name;
+    in property <string> login-button-text;
+    out property <bool> back-enabled: extended-status.status != Status.loading;
+    callback back();
+    callback login(password: string);
+    Rectangle {
+        result-popup := ResultPopup {
+            x: (root.width - self.width) / 2;
+            y: (root.height - self.height) / 2;
+            finish-enabled: root.back-enabled;
+            retry-enabled: root.back-enabled;
+            finish-text: "Back";
+            status: extended-status.status;
+            hide-on-success: true;
+            message: {
+                if extended-status.status == Status.success {
+                    "Authenticated successfully!"
+                } else if extended-status.status == Status.error {
+                    "Failed to authenticate:\n" + extended-status.message
+                } else {
+                    "Authenticating..."
+                }
+            }
+            finished => {
+                self.close();
+                root.back();
+            }
+            retried => {
+                self.close();
+            }
+        }
+    }
+
+    HorizontalLayout {
+        alignment: center;
+        vertical-stretch: 1.0;
+        form := LoginForm {
+            enabled: root.back-enabled;
+            user-name: user-name;
+            login-button-text: login-button-text;
+            executed => {
+                result-popup.show();
+                login(self.password);
+            }
+        }
+    }
+}

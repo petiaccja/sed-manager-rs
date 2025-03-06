@@ -37,7 +37,7 @@ export global State {
     // Configuration.
     callback take-ownership(device-idx: int, new-password: string);
     callback activate-locking(device-idx: int, sid-password: string, new-admin1-password: string);
-    callback login-locking-ranges(device-idx: int, password: string);
+    callback login-locking-admin(device-idx: int, admin_idx: int, password: string);
     callback list-locking-ranges(device-idx: int, );
     callback set-locking-range(device-idx: int, range-idx: int, value: LockingRange);
     callback erase-locking-range(device-idx: int, range-idx: int);
