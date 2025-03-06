@@ -25,16 +25,8 @@ global TableDesc {
         "Write locked",
         "Erase",
     ];
-    out property <[length]> column-widths: [
-        100px,
-        100px,
-        100px,
-        80px,
-        80px,
-        80px,
-        80px,
-        60px,
-    ];
+    out property <[length]> column-widths: [100px, 100px, 100px, 80px, 80px, 80px, 80px, 60px];
+    out property <[float]> column-stretches: [1, 1, 1, 0.3, 0.3, 0.3, 0.3, 0.2];
     out property <length> row-height: 32px;
 }
 
@@ -108,6 +100,7 @@ component CheckLockingRange {
 component Range {
     in property <DeviceGeometry> geometry;
     in property <[length]> column-widths: TableDesc.column-widths;
+    in property <[float]> column-stretches: TableDesc.column-stretches;
     in property <length> row-height: TableDesc.row-height;
     in property <int> range-idx;
     in-out property <LockingRange> range;
@@ -123,25 +116,10 @@ component Range {
             checked-range.set-range(range);
         }
     }
-    checked-range := CheckLockingRange {
-        geometry: geometry;
-        start-lba: range.start-lba;
-        length-lba: range.end-lba - range.start-lba;
-        end-lba: range.end-lba;
-        read-lock-enabled: range.read-lock-enabled;
-        write-lock-enabled: range.write-lock-enabled;
-        read-locked: range.read-locked;
-        write-locked: range.write-locked;
-        udpated => {
-            start-lba.text = self.start-lba;
-            length-lba.text = self.length-lba;
-            end-lba.text = self.end-lba;
-        }
-    }
-
     HorizontalLayout {
         Cell {
-            width: root.column-widths[0];
+            min-width: root.column-widths[0];
+            horizontal-stretch: root.column-stretches[0];
             height: row-height;
             row-idx: range-idx;
             column-idx: 0;
@@ -160,7 +138,8 @@ component Range {
         }
 
         Cell {
-            width: root.column-widths[1];
+            min-width: root.column-widths[1];
+            horizontal-stretch: root.column-stretches[1];
             height: row-height;
             row-idx: range-idx;
             column-idx: 1;
@@ -179,7 +158,8 @@ component Range {
         }
 
         Cell {
-            width: root.column-widths[2];
+            min-width: root.column-widths[2];
+            horizontal-stretch: root.column-stretches[2];
             height: row-height;
             row-idx: range-idx;
             column-idx: 2;
@@ -198,7 +178,8 @@ component Range {
         }
 
         Cell {
-            width: root.column-widths[3];
+            min-width: root.column-widths[3];
+            horizontal-stretch: root.column-stretches[3];
             height: row-height;
             row-idx: range-idx;
             column-idx: 3;
@@ -212,7 +193,8 @@ component Range {
         }
 
         Cell {
-            width: root.column-widths[4];
+            min-width: root.column-widths[4];
+            horizontal-stretch: root.column-stretches[4];
             height: row-height;
             row-idx: range-idx;
             column-idx: 4;
@@ -226,7 +208,8 @@ component Range {
         }
 
         Cell {
-            width: root.column-widths[5];
+            min-width: root.column-widths[5];
+            horizontal-stretch: root.column-stretches[5];
             height: row-height;
             row-idx: range-idx;
             column-idx: 5;
@@ -240,7 +223,8 @@ component Range {
         }
 
         Cell {
-            width: root.column-widths[6];
+            min-width: root.column-widths[6];
+            horizontal-stretch: root.column-stretches[6];
             height: row-height;
             row-idx: range-idx;
             column-idx: 6;
@@ -254,7 +238,8 @@ component Range {
         }
 
         Cell {
-            width: root.column-widths[7];
+            min-width: root.column-widths[7];
+            horizontal-stretch: root.column-stretches[7];
             height: row-height;
             row-idx: range-idx;
             column-idx: 7;
@@ -266,6 +251,23 @@ component Range {
                 clicked => {
                     erase-locking-range();
                 }
+            }
+        }
+
+        checked-range := CheckLockingRange {
+            width: 0px;
+            geometry: geometry;
+            start-lba: range.start-lba;
+            length-lba: range.end-lba - range.start-lba;
+            end-lba: range.end-lba;
+            read-lock-enabled: range.read-lock-enabled;
+            write-lock-enabled: range.write-lock-enabled;
+            read-locked: range.read-locked;
+            write-locked: range.write-locked;
+            udpated => {
+                start-lba.text = self.start-lba;
+                length-lba.text = self.length-lba;
+                end-lba.text = self.end-lba;
             }
         }
     }
@@ -304,6 +306,7 @@ component RangeTable {
             table := Table {
                 column-names: TableDesc.column-names;
                 column-widths: TableDesc.column-widths;
+                column-stretches: TableDesc.column-stretches;
                 row-names: names;
                 row-heights: [TableDesc.row-height];
                 VerticalLayout {
@@ -312,6 +315,7 @@ component RangeTable {
                         range: ranges[range-idx];
                         status: statuses[range-idx].status;
                         column-widths: table.column-widths;
+                        column-stretches: table.column-stretches;
                         range-idx: range-idx;
                         row-height: table.row-heights[0];
                         set-locking-range(value) => {

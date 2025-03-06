@@ -32,12 +32,14 @@ export component Table {
     in property <[string]> column-names;
     in property <[string]> row-names;
     in property <[length]> column-widths;
+    in property <[float]> column-stretches;
     in property <[length]> row-heights;
     GridLayout {
         Rectangle {
             row: 0;
             col: 0;
             background: Background.background(0, 0, true);
+            border-top-left-radius: 8px;
         }
 
         Rectangle {
@@ -48,12 +50,13 @@ export component Table {
             column-name-layout := HorizontalLayout {
                 x: content.viewport-x;
                 for name[i] in column-names: Rectangle {
-                    width: column-widths[i];
+                    min-width: column-widths[i];
+                    horizontal-stretch: column-stretches[i];
                     background: Background.background(0, i, true);
+                    border-top-right-radius: i + 1 == column-names.length ? 8px : 0px;
                     HorizontalLayout {
                         padding: 4px;
                         Text {
-                            z: 100;
                             text: name;
                             horizontal-alignment: center;
                             vertical-alignment: center;
@@ -73,6 +76,7 @@ export component Table {
                 for name[i] in row-names: Rectangle {
                     height: i < row-heights.length ? row-heights[i] : row-heights[0];
                     background: Background.background(i, 0, true);
+                    border-bottom-left-radius: i + 1 == row-names.length ? 8px : 0px;
                     VerticalLayout {
                         padding: 4px;
                         Text {
@@ -86,9 +90,9 @@ export component Table {
         }
 
         content := ScrollView {
-            viewport-width: column-name-layout.min-width;
+            viewport-width: Math.max(column-name-layout.width, column-name-layout.min-width);
             viewport-height: row-name-layout.min-height;
-            preferred-width: column-name-layout.min-width;
+            preferred-width: 100%;
             @children
         }
     }
@@ -98,11 +102,14 @@ export component LivePreviewTest inherits Table {
     column-names: ["A", "B", "C", "D", "E"];
     row-names: ["1", "2", "3", "4", "5", "6"];
     column-widths: [200px, 100px, 100px, 100px, 100px];
+    column-stretches: [2.0, 0.5, 0.5, 0.5, 0.5];
     row-heights: [32px, 32px, 32px, 32px, 32px, 32px];
     VerticalLayout {
         for row[row-idx] in root.row-names: HorizontalLayout {
+            preferred-width: 100%;
             for column[column-idx] in root.column-names: Cell {
-                width: root.column-widths[column-idx];
+                min-width: root.column-widths[column-idx];
+                horizontal-stretch: root.column-stretches[column-idx];
                 height: root.row-heights[row-idx];
                 row-idx: row-idx;
                 column-idx: column-idx;

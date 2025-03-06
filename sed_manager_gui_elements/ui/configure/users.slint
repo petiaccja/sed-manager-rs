@@ -11,21 +11,15 @@ import { PrototypePopup } from "../widgets/prototype_popup.slint";
 import { RepeatedPasswordEdit } from "../widgets/password.slint";
 
 global TableDesc {
-    out property <[string]> column-names: [
-        "Enabled",
-        "Friendly name",
-        "Password",
-    ];
-    out property <[length]> column-widths: [
-        80px,
-        140px,
-        80px,
-    ];
+    out property <[string]> column-names: ["Enabled", "Friendly name", "Password"];
+    out property <[length]> column-widths: [80px, 140px, 80px];
+    out property <[float]> column-stretches: [0.2, 1.0, 0.2];
     out property <length> row-height: 32px;
 }
 
 component UserRow {
     in property <[length]> column-widths: TableDesc.column-widths;
+    in property <[float]> column-stretches: TableDesc.column-stretches;
     in property <length> row-height: TableDesc.row-height;
     in property <int> user-idx;
     in property <User> user;
@@ -46,7 +40,8 @@ component UserRow {
     }
     HorizontalLayout {
         Cell {
-            width: root.column-widths[0];
+            min-width: root.column-widths[0];
+            horizontal-stretch: root.column-stretches[0];
             height: row-height;
             row-idx: user-idx;
             column-idx: 0;
@@ -60,7 +55,8 @@ component UserRow {
         }
 
         Cell {
-            width: root.column-widths[1];
+            min-width: root.column-widths[1];
+            horizontal-stretch: root.column-stretches[1];
             height: row-height;
             row-idx: user-idx;
             column-idx: 1;
@@ -78,7 +74,8 @@ component UserRow {
         }
 
         Cell {
-            width: root.column-widths[2];
+            min-width: root.column-widths[2];
+            horizontal-stretch: root.column-stretches[2];
             height: row-height;
             row-idx: user-idx;
             column-idx: 2;
@@ -111,6 +108,7 @@ component UserTable {
             table := Table {
                 column-names: TableDesc.column-names;
                 column-widths: TableDesc.column-widths;
+                column-stretches: TableDesc.column-stretches;
                 row-names: names;
                 row-heights: [TableDesc.row-height];
                 VerticalLayout {
@@ -118,6 +116,7 @@ component UserTable {
                         user: users[user-idx];
                         status: statuses[user-idx].status;
                         column-widths: table.column-widths;
+                        column-stretches: table.column-stretches;
                         user-idx: user-idx;
                         row-height: table.row-heights[0];
                         changed status => {
