@@ -8,7 +8,13 @@ import { Icons } from "../icons.slint";
 
 component Form {
     out property <string> sid-password;
-    out property <string> admin1-password <=> admin1-password.password;
+    out property <string> admin1-password: {
+        if use-owner.checked {
+            sid-password
+        } else {
+            admin1-password.password
+        }
+    }
     in property <bool> enabled;
     callback executed();
     VerticalLayout {
