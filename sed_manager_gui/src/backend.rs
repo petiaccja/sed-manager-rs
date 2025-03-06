@@ -10,13 +10,15 @@ use sed_manager::messaging::com_id::StackResetStatus;
 use sed_manager::messaging::discovery::{Discovery, Feature};
 use sed_manager::messaging::uid::UID;
 use sed_manager::rpc::{discover, Error as RPCError};
-use sed_manager::spec::column_types::{CredentialRef, MediaKeyRef, Name, SPRef};
+use sed_manager::spec::column_types::{CPINRef, CredentialRef, MediaKeyRef, Name, SPRef};
 use sed_manager::spec::{self, ObjectLookup as _};
 use sed_manager::tper::{Session, TPer};
+use slint::SharedString;
 
-use crate::async_state::{AsyncState, StateExt};
+use crate::async_state::AsyncState;
 use crate::device_list::{get_device_identity, DeviceList};
 use crate::native_data::NativeLockingRange;
+use crate::state_ext::StateExt;
 use crate::ui;
 use crate::utility::{run_in_thread, PeekCell};
 
@@ -327,6 +329,69 @@ impl Backend {
             Ok(_) => (),
             Err(error) => state.respond_login_locking_admin(device_idx, error.into()),
         });
+    }
+
+    pub async fn set_locking_user_enabled(
+        this: Rc<PeekCell<Self>>,
+        device_idx: usize,
+        user_idx: usize,
+        enabled: bool,
+    ) -> Result<bool, ui::ExtendedStatus> {
+        let Some(user) = this.peek(|this| this.get_locking_users(device_idx).and_then(|r| r.get(user_idx).cloned()))
+        else {
+            return Err(RPCError::Unspecified.into());
+        };
+        let Some(session) = this.peek_mut(|this| this.get_session(device_idx)) else {
+            return Err(RPCError::Unspecified.into());
+        };
+        session.set(user, 5, enabled).await?;
+        Ok(enabled)
+    }
+
+    pub async fn set_locking_user_name(
+        this: Rc<PeekCell<Self>>,
+        device_idx: usize,
+        user_idx: usize,
+        name: SharedString,
+    ) -> Result<String, ui::ExtendedStatus> {
+        let Some(user) = this.peek(|this| this.get_locking_users(device_idx).and_then(|r| r.get(user_idx).cloned()))
+        else {
+            return Err(RPCError::Unspecified.into());
+        };
+        let Some(session) = this.peek_mut(|this| this.get_session(device_idx)) else {
+            return Err(RPCError::Unspecified.into());
+        };
+        session.set(user, 2, name.as_bytes()).await?;
+        Ok(name.to_string())
+    }
+
+    pub async fn set_locking_user_password(
+        this: Rc<PeekCell<Self>>,
+        device_idx: usize,
+        user_idx: usize,
+        password: SharedString,
+    ) -> ui::ExtendedStatus {
+        async fn inner(
+            this: Rc<PeekCell<Backend>>,
+            device_idx: usize,
+            user_idx: usize,
+            password: SharedString,
+        ) -> Result<(), RPCError> {
+            let Some(user) =
+                this.peek(|this| this.get_locking_users(device_idx).and_then(|r| r.get(user_idx).cloned()))
+            else {
+                return Err(RPCError::Unspecified.into());
+            };
+            let Some(session) = this.peek_mut(|this| this.get_session(device_idx)) else {
+                return Err(RPCError::Unspecified.into());
+            };
+            let credential: CPINRef = session.get(user, 0x0A).await?;
+            session.set(credential.as_uid(), 3, password.as_bytes()).await
+        }
+        match inner(this, device_idx, user_idx, password).await {
+            Ok(_) => ui::ExtendedStatus::success(),
+            Err(error) => error.into(),
+        }
     }
 
     pub async fn revert(

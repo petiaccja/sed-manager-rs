@@ -4,6 +4,7 @@ mod async_state;
 mod backend;
 mod device_list;
 mod native_data;
+mod state_ext;
 mod ui;
 mod utility;
 
@@ -51,6 +52,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     async_state.on_set_locking_range(Backend::set_locking_range);
     async_state.on_erase_locking_range(Backend::erase_locking_range);
     async_state.on_list_locking_users(Backend::list_locking_users);
+    async_state.on_set_locking_user_enabled(Backend::set_locking_user_enabled);
+    async_state.on_set_locking_user_name(Backend::set_locking_user_name);
+    async_state.on_set_locking_user_password(Backend::set_locking_user_password);
     async_state.on_revert(Backend::revert);
     async_state.on_reset_stack(Backend::reset_stack);
 
