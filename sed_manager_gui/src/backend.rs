@@ -10,7 +10,7 @@ use sed_manager::messaging::com_id::StackResetStatus;
 use sed_manager::messaging::discovery::{Discovery, Feature};
 use sed_manager::messaging::uid::UID;
 use sed_manager::rpc::{discover, Error as RPCError};
-use sed_manager::spec::column_types::SPRef;
+use sed_manager::spec::column_types::{CredentialRef, MediaKeyRef, SPRef};
 use sed_manager::spec::{self, ObjectLookup as _};
 use sed_manager::tper::{Session, TPer};
 
@@ -382,6 +382,7 @@ async fn set_locking_range_properties(
     }
 }
 
-async fn erase_locking_range(_session: &Session, _range: UID) -> Result<(), RPCError> {
-    Err(RPCError::NotImplemented)
+async fn erase_locking_range(session: &Session, range: UID) -> Result<(), RPCError> {
+    let active_key_id: MediaKeyRef = session.get(range, 0x0A).await?;
+    session.gen_key(CredentialRef::new_other(active_key_id), None, None).await
 }
