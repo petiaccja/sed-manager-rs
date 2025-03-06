@@ -8,8 +8,8 @@ use crate::rpc::{
     SessionIdentifier,
 };
 use crate::spec::basic_types::{List, NamedValue, ObjectReference, TableReference};
-use crate::spec::column_types::{AuthorityRef, CellBlock, CredentialRef, SPRef};
-use crate::spec::{invoking_id::*, method_id::*};
+use crate::spec::column_types::{ACERef, AuthorityRef, CellBlock, CredentialRef, MethodRef, SPRef};
+use crate::spec::{invoking_id::*, method_id::*, table_id};
 
 pub struct SPSession {
     session: SessionIdentifier,
@@ -139,8 +139,12 @@ impl SPSession {
         Ok(objects)
     }
 
-    pub async fn get_acl(&self) {
-        todo!()
+    pub async fn get_acl(&self, invoking_id: UID, method_id: MethodRef) -> Result<Vec<ACERef>, RPCError> {
+        let args = (invoking_id, method_id).into_method_args();
+        let call = MethodCall::new_success(table_id::ACCESS_CONTROL.as_uid(), GET_ACL.as_uid(), args);
+        let results = self.do_method_call(call).await?.take_results()?;
+        let (objects,): (List<ACERef>,) = results.unwrap_method_args()?;
+        Ok(objects.0)
     }
 
     pub async fn gen_key(

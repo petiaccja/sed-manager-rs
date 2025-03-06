@@ -10,6 +10,7 @@ use sed_manager::spec::column_types::CredentialRef;
 use sed_manager::spec::column_types::LifeCycleState;
 use sed_manager::spec::column_types::Name;
 use sed_manager::spec::column_types::Password;
+use sed_manager::spec::method_id;
 use sed_manager::spec::opal;
 use sed_manager::spec::table_id;
 use sed_manager::tper::TPer;
@@ -186,6 +187,16 @@ async fn gen_key_invalid_object() -> Result<(), RPCError> {
     let session = tper.start_session(sp::LOCKING, None, None).await?;
     let object = CredentialRef::new_other(k_aes_256::RANGE_KEY.nth(364).unwrap());
     assert!(session.gen_key(object, None, None).await.is_err());
+    Ok(())
+}
+
+#[tokio::test]
+async fn get_acl() -> Result<(), RPCError> {
+    let device = FakeDevice::new();
+    let tper = TPer::new_on_default_com_id(Arc::new(device))?;
+    let session = tper.start_session(sp::ADMIN, None, None).await?;
+    let acl = session.get_acl(table_id::TABLE.as_uid(), method_id::GET).await?;
+    assert!(acl.is_empty()); // Currently, no ACLs are returned from FakeDevice, but the method doesn't fail.
     Ok(())
 }
 

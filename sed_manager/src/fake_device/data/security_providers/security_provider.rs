@@ -4,7 +4,9 @@ use crate::messaging::value::{Bytes, Named, Value};
 use crate::rpc::MethodStatus;
 use crate::spec;
 use crate::spec::basic_types::{List, NamedValue};
-use crate::spec::column_types::{AuthorityRef, BoolOrBytes, BytesOrRowValues, CellBlock, CredentialRef};
+use crate::spec::column_types::{
+    ACERef, AuthorityRef, BoolOrBytes, BytesOrRowValues, CellBlock, CredentialRef, MethodRef,
+};
 
 pub trait SecurityProvider {
     fn get_table(&self, table: TableUID) -> Option<&dyn GenericTable>;
@@ -16,6 +18,11 @@ pub trait SecurityProvider {
         public_exponent: Option<u64>,
         pin_length: Option<u16>,
     ) -> Result<(), MethodStatus>;
+
+    fn get_acl(&self, _invoking_id: UID, _method_id: MethodRef) -> Result<List<ACERef>, MethodStatus> {
+        // TODO: implement this later if ever needed for testing.
+        Ok(vec![].into())
+    }
 
     fn get(&self, target: UID, cell_block: CellBlock) -> Result<BytesOrRowValues, MethodStatus> {
         if target.is_table() {

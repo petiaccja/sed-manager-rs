@@ -4,9 +4,12 @@ use crate::messaging::uid::UID;
 use crate::messaging::value::Bytes;
 use crate::rpc::MethodStatus;
 use crate::spec::basic_types::List;
-use crate::spec::column_types::{AuthorityRef, BoolOrBytes, BytesOrRowValues, CellBlock, CredentialRef, SPRef};
+use crate::spec::column_types::{
+    ACERef, AuthorityRef, BoolOrBytes, BytesOrRowValues, CellBlock, CredentialRef, MethodRef, SPRef,
+};
 use crate::spec::invoking_id::THIS_SP;
 use crate::spec::opal::admin::sp;
+use crate::spec::table_id;
 
 use super::data::OpalV2Controller;
 
@@ -93,6 +96,22 @@ impl SecurityProviderSession {
             return Err(MethodStatus::TPerMalfunction);
         };
         security_provider.gen_key(credential_id, public_exponent, pin_length)
+    }
+
+    pub fn get_acl(
+        &self,
+        invoking_id: UID,
+        acl_invoking_id: UID,
+        acl_method_id: MethodRef,
+    ) -> Result<(List<ACERef>,), MethodStatus> {
+        if invoking_id != table_id::ACCESS_CONTROL.as_uid() {
+            return Err(MethodStatus::InvalidParameter);
+        }
+        let mut controller = self.controller.lock().unwrap();
+        let Some(security_provider) = controller.get_security_provider_mut(self.this_sp) else {
+            return Err(MethodStatus::TPerMalfunction);
+        };
+        security_provider.get_acl(acl_invoking_id, acl_method_id).map(|acl| (acl,))
     }
 
     pub fn revert(&mut self, invoking_id: UID) -> Result<(), MethodStatus> {

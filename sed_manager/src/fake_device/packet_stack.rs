@@ -125,6 +125,7 @@ impl PacketStack {
             SET => call_generic_sp_session(sp_session, SecurityProviderSession::set, extended_args),
             NEXT => call_generic_sp_session(sp_session as &_, SecurityProviderSession::next, extended_args),
             GEN_KEY => call_generic_sp_session(sp_session, SecurityProviderSession::gen_key, extended_args),
+            GET_ACL => call_generic_sp_session(sp_session as &_, SecurityProviderSession::get_acl, extended_args),
             REVERT => call_generic_sp_session(sp_session, SecurityProviderSession::revert, extended_args),
             REVERT_SP => call_generic_sp_session(sp_session, SecurityProviderSession::revert_sp, extended_args),
             ACTIVATE => call_generic_sp_session(sp_session as &_, SecurityProviderSession::activate, extended_args),
