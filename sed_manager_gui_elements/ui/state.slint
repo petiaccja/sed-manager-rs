@@ -2,6 +2,7 @@ import { DeviceDescription } from "data/device_description.slint";
 import { ExtendedStatus, Status } from "data/status.slint";
 import { LockingRange } from "data/locking_range.slint";
 import { UnavailableDevice } from "data/unavailable_device.slint";
+import { User } from "data/user.slint";
 
 export struct LockingRangeState {
     names: [string],
@@ -9,9 +10,16 @@ export struct LockingRangeState {
     statuses: [ExtendedStatus],
 }
 
+export struct UserListState {
+    names: [string],
+    properties: [User],
+    statuses: [ExtendedStatus],
+}
+
 export struct ConfigureState {
     extended-status: ExtendedStatus,
     locking-ranges: LockingRangeState,
+    users: UserListState,
 }
 
 export struct TroubleshootState {
@@ -41,6 +49,10 @@ export global State {
     callback list-locking-ranges(device-idx: int, );
     callback set-locking-range(device-idx: int, range-idx: int, value: LockingRange);
     callback erase-locking-range(device-idx: int, range-idx: int);
+    callback list-locking-users(device-idx: int, );
+    callback set-locking-user-enabled(device-idx: int, user-idx: int, enabled: bool);
+    callback set-locking-user-name(device-idx: int, user-idx: int, friendly-name: string);
+    callback set-locking-user-password(device-idx: int, user-idx: int, password: string);
     callback revert(device-idx: int, use-psid: bool, password: string, revert-admin: bool);
     // Troubleshooting.
     callback get-com-id-status(device-idx: int);

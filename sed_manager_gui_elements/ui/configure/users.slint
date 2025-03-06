@@ -1,0 +1,280 @@
+import { ExtendedStatus, Status } from "../data/status.slint";
+import { ConfigView } from "config_view.slint";
+import { LoginView } from "login_view.slint";
+import { User } from "../data/user.slint";
+import { Table, Cell } from "../widgets/table.slint";
+import { LineEdit, CheckBox, Button } from "std-widgets.slint";
+import { Icons } from "../icons.slint";
+import { PaletteExtra } from "../widgets/visual.slint";
+import { ToastMessage } from "../widgets/toast_message.slint";
+import { PrototypePopup } from "../widgets/prototype_popup.slint";
+import { RepeatedPasswordEdit } from "../widgets/password.slint";
+
+global TableDesc {
+    out property <[string]> column-names: [
+        "Enabled",
+        "Friendly name",
+        "Password",
+    ];
+    out property <[length]> column-widths: [
+        80px,
+        140px,
+        80px,
+    ];
+    out property <length> row-height: 32px;
+}
+
+component UserRow {
+    in property <[length]> column-widths: TableDesc.column-widths;
+    in property <length> row-height: TableDesc.row-height;
+    in property <int> user-idx;
+    in property <User> user;
+    in property <Status> status;
+    private property <bool> enabled: status != Status.loading;
+    callback set-locking-user-enabled(enabled: bool);
+    callback set-locking-user-name(friendly-name: string);
+    callback set-locking-user-password();
+    changed user => {
+        friendly-name.text = user.friendly-name;
+        user-enabled.checked = user.enabled;
+    }
+    changed status => {
+        if status == Status.error {
+            friendly-name.text = user.friendly-name;
+            user-enabled.checked = user.enabled;
+        }
+    }
+    HorizontalLayout {
+        Cell {
+            width: root.column-widths[0];
+            height: row-height;
+            row-idx: user-idx;
+            column-idx: 0;
+            user-enabled := CheckBox {
+                checked: user.enabled;
+                enabled: enabled;
+                toggled => {
+                    set-locking-user-enabled(self.checked);
+                }
+            }
+        }
+
+        Cell {
+            width: root.column-widths[1];
+            height: row-height;
+            row-idx: user-idx;
+            column-idx: 1;
+            friendly-name := LineEdit {
+                width: parent.width;
+                input-type: text;
+                horizontal-alignment: right;
+                text: user.friendly-name;
+                enabled: enabled;
+                accepted(text) => {
+                    self.clear-focus();
+                    set-locking-user-name(self.text);
+                }
+            }
+        }
+
+        Cell {
+            width: root.column-widths[2];
+            height: row-height;
+            row-idx: user-idx;
+            column-idx: 2;
+            Button {
+                width: 100%;
+                height: 100%;
+                icon: Icons.password;
+                enabled: enabled;
+                clicked => {
+                    set-locking-user-password();
+                }
+            }
+        }
+    }
+}
+
+component UserTable {
+    in property <[string]> names;
+    in property <[User]> users;
+    in property <[ExtendedStatus]> statuses;
+    out property <int> password-popup-user;
+    callback set-locking-user-enabled(user-idx: int, enabled: bool);
+    callback set-locking-user-name(user-idx: int, friendly-name: string);
+    callback set-locking-user-password(user-idx: int, password: string);
+    HorizontalLayout {
+        alignment: stretch;
+        VerticalLayout {
+            alignment: stretch;
+            padding-top: 16px;
+            table := Table {
+                column-names: TableDesc.column-names;
+                column-widths: TableDesc.column-widths;
+                row-names: names;
+                row-heights: [TableDesc.row-height];
+                VerticalLayout {
+                    for row[user-idx] in root.names: UserRow {
+                        user: users[user-idx];
+                        status: statuses[user-idx].status;
+                        column-widths: table.column-widths;
+                        user-idx: user-idx;
+                        row-height: table.row-heights[0];
+                        changed status => {
+                            if self.status == Status.error {
+                                ToastMessage.show("Could not modify " + names[user-idx] + ": " + statuses[user-idx].message, PaletteExtra.error-foreground);
+                                self.user = users[user-idx];
+                            }
+                        }
+                        set-locking-user-enabled(enabled) => {
+                            set-locking-user-enabled(user-idx, enabled);
+                        }
+                        set-locking-user-name(friendly-name) => {
+                            set-locking-user-name(user-idx, friendly-name);
+                        }
+                        set-locking-user-password => {
+                            password-popup-user = user-idx;
+                            password-popup.show();
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    password-popup := PrototypePopup {
+        x: (root.width - self.width) / 2;
+        y: (root.height - self.height) / 2;
+        width: self.min-width;
+        height: self.min-height;
+        close-policy: no-auto-close;
+        VerticalLayout {
+            padding: 12px;
+            spacing: 8px;
+            password-edit := RepeatedPasswordEdit {
+                prompt-text: "New " + names[password-popup-user] + " password:";
+            }
+
+            HorizontalLayout {
+                spacing: 6px;
+                Button {
+                    text: "Change";
+                    primary: true;
+                    enabled: password-edit.accepted;
+                    clicked => {
+                        password-popup.close();
+                        set-locking-user-password(password-popup-user, password-edit.password);
+                    }
+                }
+
+                Button {
+                    text: "Cancel";
+                    clicked => {
+                        password-popup.close();
+                    }
+                }
+            }
+
+            Text {
+                text: password-edit.reason;
+                color: PaletteExtra.error-foreground;
+            }
+        }
+    }
+}
+
+export component Users inherits ConfigView {
+    config-name: "Users";
+    config-icon: Icons.users;
+    in property <ExtendedStatus> login-status;
+    in property <[string]> names;
+    in property <[User]> users;
+    in property <[ExtendedStatus]> statuses;
+    private property <bool> authenticated: false;
+    callback login-locking-admin(admin_idx: int, password: string);
+    callback list-locking-users();
+    callback set-locking-user-enabled(user-idx: int, enabled: bool);
+    callback set-locking-user-name(user-idx: int, friendly-name: string);
+    callback set-locking-user-password(user-idx: int, password: string);
+    changed login-status => {
+        if login-status.status == Status.success {
+            authenticated = true;
+            list-locking-users();
+        }
+    }
+    form := VerticalLayout {
+        if !authenticated: LoginView {
+            extended-status: login-status;
+            user-name: "Admin1";
+            login-button-text: "Edit users";
+            back => {
+                root.back();
+            }
+            login(password) => {
+                login-locking-admin(1, password);
+            }
+        }
+        if authenticated: UserTable {
+            names: names;
+            users: users;
+            statuses: statuses;
+            set-locking-user-enabled(user-idx, enabled) => {
+                set-locking-user-enabled(user-idx, enabled);
+            }
+            set-locking-user-name(user-idx, friendly-name) => {
+                set-locking-user-name(user-idx, friendly-name);
+            }
+            set-locking-user-password(user-idx, password) => {
+                set-locking-user-password(user-idx, password)
+            }
+        }
+    }
+}
+
+global ExampleUsers {
+    out property <[string]> names: [
+        "Admin1",
+        "User1",
+        "User2",
+    ];
+    out property <[User]> users: [
+        {
+            friendly-name: "Alice",
+            enabled: true,
+        },
+        {
+            friendly-name: "Bob",
+            enabled: false,
+        },
+        {
+            friendly-name: "Charlie",
+            enabled: false,
+        },
+    ];
+    out property <[ExtendedStatus]> statuses: [
+        { status: Status.success },
+        { status: Status.loading },
+        { status: Status.error, message: "sample error" },
+    ];
+}
+
+export component LivePreviewTest_RangeTable inherits UserTable {
+    names: ExampleUsers.names;
+    users: ExampleUsers.users;
+    statuses: ExampleUsers.statuses;
+}
+
+export component LivePreviewTest inherits Users {
+    device-name: "Foo Device";
+    names: ExampleUsers.names;
+    users: ExampleUsers.users;
+    login-status: { status: Status.success };
+    timer := Timer {
+        interval: 1s;
+        running: false;
+        triggered => {
+            self.running = false;
+            root.login-status.status = Status.success;
+        }
+    }
+}

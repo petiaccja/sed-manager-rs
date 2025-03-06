@@ -8,6 +8,7 @@ import { Description } from "../info/description.slint";
 import { TakeOwnership } from "../configure/take_owneship.slint";
 import { ActivateLocking } from "../configure/activate_locking.slint";
 import { LockingRanges } from "../configure/locking_ranges.slint";
+import { Users } from "../configure/users.slint";
 import { Revert } from "../configure/revert.slint";
 import { State } from "../state.slint";
 import { StackResetPopup } from "../troubleshoot/stack-reset.slint";
@@ -79,6 +80,31 @@ export component DevicePage {
             }
             erase-locking-range(range-idx) => {
                 State.erase-locking-range(device-idx, range-idx);
+            }
+        }
+        if current-activity == Activity.users: Users {
+            device-name: State.descriptions[device-idx].identity.name;
+            login-status: State.configure[device-idx].extended-status;
+            names: State.configure[device-idx].users.names;
+            users: State.configure[device-idx].users.properties;
+            statuses: State.configure[device-idx].users.statuses;
+            back => {
+                set-current-activity(Activity.description);
+            }
+            login-locking-admin(admin_idx, password) => {
+                State.login-locking-admin(device-idx, admin_idx, password);
+            }
+            list-locking-users() => {
+                State.list-locking-users(device-idx);
+            }
+            set-locking-user-enabled(user-idx, enabled) => {
+                State.set-locking-user-enabled(device-idx, user-idx, enabled);
+            }
+            set-locking-user-name(user-idx, friendly-name) => {
+                State.set-locking-user-name(device-idx, user-idx, friendly-name);
+            }
+            set-locking-user-password(user-idx, password) => {
+                State.set-locking-user-password(device-idx, user-idx, password);
             }
         }
         if current-activity == Activity.revert: Revert {

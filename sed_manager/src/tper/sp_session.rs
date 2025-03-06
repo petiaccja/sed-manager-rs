@@ -132,11 +132,11 @@ impl SPSession {
         table: TableReference,
         first: Option<UID>,
         count: Option<u64>,
-    ) -> Result<List<UID>, RPCError> {
+    ) -> Result<Vec<UID>, RPCError> {
         let call = MethodCall::new_success(table.into(), NEXT.as_uid(), (first, count).into_method_args());
         let results = self.do_method_call(call).await?.take_results()?;
-        let (objects,) = results.unwrap_method_args()?;
-        Ok(objects)
+        let (objects,): (List<UID>,) = results.unwrap_method_args()?;
+        Ok(objects.0)
     }
 
     pub async fn get_acl(&self, invoking_id: UID, method_id: MethodRef) -> Result<Vec<ACERef>, RPCError> {

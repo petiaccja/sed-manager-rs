@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use sed_manager::messaging::com_id::ComIdState;
-use sed_manager_gui_elements::{ConfigureState, ExtendedStatus, LockingRangeState, TroubleshootState};
+use sed_manager_gui_elements::{ConfigureState, ExtendedStatus, LockingRangeState, TroubleshootState, UserListState};
 use slint::{ComponentHandle as _, Model, SharedString};
 
 use crate::{
@@ -201,6 +201,19 @@ impl<Backend: Clone + 'static> AsyncState<Backend> {
         });
     }
 
+    pub fn on_list_locking_users(&self, callback: impl AsyncFn(Backend, usize, AsyncState<Backend>) + 'static) {
+        self.with(move |state| {
+            let (backend, async_state, callback) = (self.backend.clone(), self.clone(), Rc::new(callback));
+
+            state.on_list_locking_users(move |device_idx: i32| {
+                let (backend, callback, async_state) = (backend.clone(), callback.clone(), async_state.clone());
+                let _ = slint::spawn_local(async move {
+                    callback(backend, device_idx as usize, async_state).await;
+                });
+            });
+        });
+    }
+
     pub fn on_revert(
         &self,
         callback: impl AsyncFn(Backend, usize, bool, String, bool) -> ui::ExtendedStatus + 'static,
@@ -260,6 +273,7 @@ pub trait StateExt {
         result: Result<ui::LockingRange, ui::ExtendedStatus>,
     );
     fn respond_locking_range_status(&self, device_idx: usize, range_idx: usize, result: ui::ExtendedStatus);
+    fn push_user(&self, device_idx: usize, name: String, range: ui::User);
     fn respond_revert(&self, device_idx: usize, status: ui::ExtendedStatus);
     fn respond_reset_stack(&self, device_idx: usize, result: ui::ExtendedStatus);
 }
@@ -398,6 +412,17 @@ impl<'a> StateExt for ui::State<'a> {
         }
     }
 
+    fn push_user(&self, device_idx: usize, name: String, user: ui::User) {
+        let config = self.get_configure();
+        let Some(dev_config) = config.row_data(device_idx) else {
+            return;
+        };
+        as_vec_model(&dev_config.users.names).push(name.into());
+        as_vec_model(&dev_config.users.properties).push(user.into());
+        as_vec_model(&dev_config.users.statuses).push(ui::ExtendedStatus::success());
+        config.set_row_data(device_idx, dev_config);
+    }
+
     fn respond_revert(&self, device_idx: usize, status: ui::ExtendedStatus) {
         respond_configure(self, device_idx, status);
     }
@@ -415,7 +440,7 @@ fn respond_configure(state: &ui::State, device_idx: usize, status: ui::ExtendedS
     let configure = state.get_configure();
     let configure_vec = as_vec_model(&configure);
     if device_idx < configure_vec.row_count() {
-        let value = ConfigureState::new(status, LockingRangeState::empty());
+        let value = ConfigureState::new(status, LockingRangeState::empty(), UserListState::empty());
         configure_vec.set_row_data(device_idx, value);
     }
 }

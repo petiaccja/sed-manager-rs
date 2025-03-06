@@ -102,7 +102,9 @@ fn preconfig_authority() -> AuthorityTable {
     for i in 1..=4 {
         let admin = Authority {
             name: Some(format!("Admin{}", i).into()),
-            enabled: false.into(),
+            common_name: Some("".into()),
+            is_class: false.into(),
+            enabled: (i == 1).into(),
             operation: AuthMethod::Password.into(),
             credential: Some(CredentialRef::new_other(c_pin::ADMIN.nth(i).unwrap())),
             ..Authority::new(authority::ADMIN.nth(i).unwrap())
@@ -112,6 +114,8 @@ fn preconfig_authority() -> AuthorityTable {
     for i in 1..=8 {
         let admin = Authority {
             name: Some(format!("User{}", i).into()),
+            common_name: Some("".into()),
+            is_class: false.into(),
             enabled: false.into(),
             operation: AuthMethod::Password.into(),
             credential: Some(CredentialRef::new_other(c_pin::USER.nth(i).unwrap())),

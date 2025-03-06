@@ -9,8 +9,8 @@ use sed_manager::device::{Device, Error as DeviceError};
 use sed_manager::messaging::com_id::StackResetStatus;
 use sed_manager::messaging::discovery::{Discovery, Feature};
 use sed_manager::messaging::uid::UID;
-use sed_manager::rpc::{discover, Error as RPCError, MethodStatus};
-use sed_manager::spec::column_types::{CredentialRef, MediaKeyRef, SPRef};
+use sed_manager::rpc::{discover, Error as RPCError};
+use sed_manager::spec::column_types::{CredentialRef, MediaKeyRef, Name, SPRef};
 use sed_manager::spec::{self, ObjectLookup as _};
 use sed_manager::tper::{Session, TPer};
 
@@ -26,6 +26,7 @@ pub struct Backend {
     tpers: Vec<Option<Arc<TPer>>>,
     sessions: Vec<Option<Arc<Session>>>,
     locking_ranges: Vec<Vec<UID>>,
+    locking_users: Vec<Vec<UID>>,
 }
 
 impl Backend {
@@ -36,6 +37,7 @@ impl Backend {
             tpers: Vec::new(),
             sessions: Vec::new(),
             locking_ranges: Vec::new(),
+            locking_users: Vec::new(),
         }
     }
 
@@ -85,6 +87,18 @@ impl Backend {
 
     fn get_locking_ranges(&self, device_idx: usize) -> Option<&Vec<UID>> {
         self.locking_ranges.get(device_idx)
+    }
+
+    fn set_locking_users(&mut self, device_idx: usize, locking_users: Vec<UID>) {
+        if device_idx < self.devices.len() {
+            self.locking_users.resize_with(std::cmp::max(self.sessions.len(), device_idx + 1), || vec![]);
+            self.locking_users[device_idx] = locking_users;
+        }
+    }
+
+    #[allow(unused)]
+    fn get_locking_users(&self, device_idx: usize) -> Option<&Vec<UID>> {
+        self.locking_users.get(device_idx)
     }
 
     pub async fn list_devices(
@@ -199,7 +213,7 @@ impl Backend {
             let ssc = discovery.get_primary_ssc().ok_or(AppError::NoAvailableSSC)?;
             let sp = get_locking_sp(ssc.feature_code())?;
             let Some(admin) = get_locking_admins(ssc.feature_code())?.nth(admin_idx as u64) else {
-                return Err(RPCError::from(MethodStatus::InvalidParameter).into());
+                return Err(AppError::IncompatibleSSC);
             };
             let session = tper.start_session(sp, Some(admin), Some(password.as_bytes())).await?;
             this.peek_mut(|this| this.replace_session(device_idx, session));
@@ -233,15 +247,8 @@ impl Backend {
             this.peek_mut(|this| this.set_locking_ranges(device_idx, ranges.clone()));
             for range in ranges.iter() {
                 let name = get_object_name(discovery.as_ref(), *range, locking_sp);
-                let properties = get_locking_range_properties(&session, *range).await;
-                match properties {
-                    Ok(properties) => {
-                        async_state.with(|state| state.push_locking_range(device_idx, name, properties.into()));
-                    }
-                    Err(_error) => {
-                        // TODO: display broken ranges as well?
-                        // It's very unlikely that one range would work but another wouldn't.
-                    }
+                if let Ok(properties) = get_locking_range_properties(&session, *range).await {
+                    async_state.with(|state| state.push_locking_range(device_idx, name, properties.into()));
                 }
             }
             Ok(())
@@ -286,6 +293,40 @@ impl Backend {
         };
         let result = erase_locking_range(&session, range).await;
         ui::ExtendedStatus::from_result(result)
+    }
+
+    pub async fn list_locking_users(
+        this: Rc<PeekCell<Self>>,
+        device_idx: usize,
+        async_state: AsyncState<Rc<PeekCell<Self>>>,
+    ) {
+        async fn inner(
+            this: Rc<PeekCell<Backend>>,
+            device_idx: usize,
+            async_state: AsyncState<Rc<PeekCell<Backend>>>,
+        ) -> Result<(), RPCError> {
+            let Some(session) = this.peek_mut(|this| this.get_session(device_idx)) else {
+                return Err(RPCError::Unspecified);
+            };
+            let discovery = this.peek(|this| this.get_discovery(device_idx).ok().cloned());
+            let ssc = discovery.as_ref().and_then(|x| x.get_primary_ssc());
+            let locking_sp = ssc.and_then(|ssc| get_locking_sp(ssc.feature_code()).ok());
+            let authorities = session.next(spec::core::table_id::AUTHORITY, None, None).await?;
+            let authorities = retain_configurable_authorities(&session, authorities).await;
+            this.peek_mut(|this| this.set_locking_users(device_idx, authorities.clone()));
+            for authority in authorities.iter() {
+                let name = get_object_name(discovery.as_ref(), *authority, locking_sp);
+                if let Ok(properties) = get_authority_properties(&session, *authority).await {
+                    async_state.with(|state| state.push_user(device_idx, name, properties.into()));
+                }
+            }
+            Ok(())
+        }
+        let result = inner(this, device_idx, async_state.clone()).await;
+        async_state.with(|state| match result {
+            Ok(_) => (),
+            Err(error) => state.respond_login_locking_admin(device_idx, error.into()),
+        });
     }
 
     pub async fn revert(
@@ -393,4 +434,23 @@ async fn set_locking_range_properties(
 async fn erase_locking_range(session: &Session, range: UID) -> Result<(), RPCError> {
     let active_key_id: MediaKeyRef = session.get(range, 0x0A).await?;
     session.gen_key(CredentialRef::new_other(active_key_id), None, None).await
+}
+
+async fn retain_configurable_authorities(session: &Session, authorities: Vec<UID>) -> Vec<UID> {
+    let mut non_class = Vec::new();
+    for authority in authorities {
+        let is_not_just_anybody = authority != spec::core::authority::ANYBODY.as_uid();
+        let is_not_class = Ok(false) == session.get(authority, 3).await;
+        if is_not_just_anybody && is_not_class {
+            non_class.push(authority);
+        }
+    }
+    return non_class;
+}
+
+async fn get_authority_properties(session: &Session, authority: UID) -> Result<ui::User, RPCError> {
+    let name: Name = session.get(authority, 2).await?;
+    let enabled: bool = session.get(authority, 5).await?;
+
+    Ok(ui::User { friendly_name: String::try_from(name).unwrap_or("".into()).into(), enabled })
 }

@@ -1,3 +1,5 @@
+use std::string::FromUtf8Error;
+
 use sed_manager_macros::AliasType;
 
 use crate::{messaging::value::Bytes, spec::basic_types::MaxBytes};
@@ -38,21 +40,16 @@ impl From<&str> for Name {
     }
 }
 
-impl From<&Name> for &str {
-    fn from(value: &Name) -> Self {
-        value.into()
-    }
-}
-
 impl From<String> for Name {
     fn from(value: String) -> Self {
         Self(value.into())
     }
 }
 
-impl From<&Name> for String {
-    fn from(value: &Name) -> Self {
-        value.into()
+impl TryFrom<Name> for String {
+    type Error = FromUtf8Error;
+    fn try_from(value: Name) -> Result<Self, Self::Error> {
+        String::from_utf8(value.0 .0)
     }
 }
 
@@ -62,20 +59,15 @@ impl From<&str> for Password {
     }
 }
 
-impl From<&Password> for &str {
-    fn from(value: &Password) -> Self {
-        value.into()
-    }
-}
-
 impl From<String> for Password {
     fn from(value: String) -> Self {
         Self(value.into())
     }
 }
 
-impl From<&Password> for String {
-    fn from(value: &Password) -> Self {
-        value.into()
+impl TryFrom<Password> for String {
+    type Error = FromUtf8Error;
+    fn try_from(value: Password) -> Result<Self, Self::Error> {
+        String::from_utf8(value.0 .0)
     }
 }

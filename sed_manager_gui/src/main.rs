@@ -50,6 +50,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     async_state.on_list_locking_ranges(Backend::list_locking_ranges);
     async_state.on_set_locking_range(Backend::set_locking_range);
     async_state.on_erase_locking_range(Backend::erase_locking_range);
+    async_state.on_list_locking_users(Backend::list_locking_users);
     async_state.on_revert(Backend::revert);
     async_state.on_reset_stack(Backend::reset_stack);
 

@@ -1,15 +1,15 @@
 use sed_manager::messaging::com_id::ComIdState;
 use slint::{ModelRc, VecModel};
 
-use crate::{ConfigureState, ExtendedStatus, LockingRange, LockingRangeState, TroubleshootState};
+use crate::{ConfigureState, ExtendedStatus, LockingRange, LockingRangeState, TroubleshootState, User, UserListState};
 
 impl ConfigureState {
-    pub fn new(extended_status: ExtendedStatus, locking_ranges: LockingRangeState) -> Self {
-        Self { extended_status, locking_ranges }
+    pub fn new(extended_status: ExtendedStatus, locking_ranges: LockingRangeState, user_list: UserListState) -> Self {
+        Self { extended_status, locking_ranges, users: user_list }
     }
 
     pub fn empty() -> Self {
-        Self::new(ExtendedStatus::error("not implemented".into()), LockingRangeState::empty())
+        Self::new(ExtendedStatus::error("not implemented".into()), LockingRangeState::empty(), UserListState::empty())
     }
 }
 
@@ -36,6 +36,21 @@ impl TroubleshootState {
 
 impl LockingRangeState {
     pub fn new(names: Vec<String>, properties: Vec<LockingRange>, statuses: Vec<ExtendedStatus>) -> Self {
+        let names: Vec<_> = names.into_iter().map(|x| x.into()).collect();
+        Self {
+            names: ModelRc::new(VecModel::from(names)),
+            properties: ModelRc::new(VecModel::from(properties)),
+            statuses: ModelRc::new(VecModel::from(statuses)),
+        }
+    }
+
+    pub fn empty() -> Self {
+        Self::new(Vec::new(), Vec::new(), Vec::new())
+    }
+}
+
+impl UserListState {
+    pub fn new(names: Vec<String>, properties: Vec<User>, statuses: Vec<ExtendedStatus>) -> Self {
         let names: Vec<_> = names.into_iter().map(|x| x.into()).collect();
         Self {
             names: ModelRc::new(VecModel::from(names)),
