@@ -8,7 +8,7 @@ use crate::rpc::{
     SessionIdentifier,
 };
 use crate::spec::basic_types::{List, NamedValue, ObjectReference, TableReference};
-use crate::spec::column_types::{AuthorityRef, CellBlock, SPRef};
+use crate::spec::column_types::{AuthorityRef, CellBlock, CredentialRef, SPRef};
 use crate::spec::{invoking_id::*, method_id::*};
 
 pub struct SPSession {
@@ -143,8 +143,16 @@ impl SPSession {
         todo!()
     }
 
-    pub async fn gen_key(&self) {
-        todo!()
+    pub async fn gen_key(
+        &self,
+        credential_id: CredentialRef,
+        public_exponent: Option<u64>,
+        pin_length: Option<u16>,
+    ) -> Result<(), RPCError> {
+        let args = (public_exponent, pin_length).into_method_args();
+        let call = MethodCall::new_success(credential_id.into(), GEN_KEY.as_uid(), args);
+        let _ = self.do_method_call(call).await?.take_results()?;
+        Ok(())
     }
 
     pub async fn revert(&self, sp: SPRef) -> Result<(), RPCError> {

@@ -4,12 +4,18 @@ use crate::messaging::value::{Bytes, Named, Value};
 use crate::rpc::MethodStatus;
 use crate::spec;
 use crate::spec::basic_types::{List, NamedValue};
-use crate::spec::column_types::{AuthorityRef, BoolOrBytes, BytesOrRowValues, CellBlock};
+use crate::spec::column_types::{AuthorityRef, BoolOrBytes, BytesOrRowValues, CellBlock, CredentialRef};
 
 pub trait SecurityProvider {
     fn get_table(&self, table: TableUID) -> Option<&dyn GenericTable>;
     fn get_table_mut(&mut self, table: TableUID) -> Option<&mut dyn GenericTable>;
     fn authenticate(&self, authority_id: AuthorityRef, proof: Option<Bytes>) -> Result<BoolOrBytes, MethodStatus>;
+    fn gen_key(
+        &mut self,
+        credential_id: CredentialRef,
+        public_exponent: Option<u64>,
+        pin_length: Option<u16>,
+    ) -> Result<(), MethodStatus>;
 
     fn get(&self, target: UID, cell_block: CellBlock) -> Result<BytesOrRowValues, MethodStatus> {
         if target.is_table() {

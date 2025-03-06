@@ -1,3 +1,4 @@
+mod alternative_types;
 mod byte_types;
 mod enumeration_types;
 mod method_types;
@@ -21,6 +22,7 @@ pub(crate) use define_column_type;
 
 use crate::messaging::uid::UID;
 
+pub use alternative_types::*;
 pub use byte_types::*;
 pub use enumeration_types::*;
 pub use method_types::*;

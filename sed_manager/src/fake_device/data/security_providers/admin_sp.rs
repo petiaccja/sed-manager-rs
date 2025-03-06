@@ -62,6 +62,15 @@ impl SecurityProvider for AdminSP {
     fn authenticate(&self, authority_id: AuthorityRef, proof: Option<Bytes>) -> Result<BoolOrBytes, MethodStatus> {
         self.basic_sp.authenticate(authority_id, proof)
     }
+
+    fn gen_key(
+        &mut self,
+        _credential_id: CredentialRef,
+        _public_exponent: Option<u64>,
+        _pin_length: Option<u16>,
+    ) -> Result<(), MethodStatus> {
+        Err(MethodStatus::NotAuthorized)
+    }
 }
 
 impl Default for AdminSP {

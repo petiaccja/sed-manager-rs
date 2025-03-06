@@ -4,7 +4,7 @@ use crate::messaging::uid::UID;
 use crate::messaging::value::Bytes;
 use crate::rpc::MethodStatus;
 use crate::spec::basic_types::List;
-use crate::spec::column_types::{AuthorityRef, BoolOrBytes, BytesOrRowValues, CellBlock, SPRef};
+use crate::spec::column_types::{AuthorityRef, BoolOrBytes, BytesOrRowValues, CellBlock, CredentialRef, SPRef};
 use crate::spec::invoking_id::THIS_SP;
 use crate::spec::opal::admin::sp;
 
@@ -77,6 +77,22 @@ impl SecurityProviderSession {
             return Err(MethodStatus::InvalidParameter);
         };
         security_provider.next(table, from, count).map(|out| (out,))
+    }
+
+    pub fn gen_key(
+        &mut self,
+        invoking_id: UID,
+        public_exponent: Option<u64>,
+        pin_length: Option<u16>,
+    ) -> Result<(), MethodStatus> {
+        let Ok(credential_id) = CredentialRef::try_from(invoking_id) else {
+            return Err(MethodStatus::InvalidParameter);
+        };
+        let mut controller = self.controller.lock().unwrap();
+        let Some(security_provider) = controller.get_security_provider_mut(self.this_sp) else {
+            return Err(MethodStatus::TPerMalfunction);
+        };
+        security_provider.gen_key(credential_id, public_exponent, pin_length)
     }
 
     pub fn revert(&mut self, invoking_id: UID) -> Result<(), MethodStatus> {

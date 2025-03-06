@@ -1,11 +1,13 @@
 use as_array::AsArray;
 
-use crate::fake_device::data::objects::{Authority, AuthorityTable, CPINTable, LockingRange, LockingTable, CPIN};
+use crate::fake_device::data::objects::{
+    Authority, AuthorityTable, CPINTable, KAES256Table, LockingRange, LockingTable, CPIN, KAES256,
+};
 use crate::fake_device::data::table::GenericTable;
-use crate::messaging::uid::TableUID;
+use crate::messaging::uid::{ObjectUID, TableUID};
 use crate::messaging::value::Bytes;
 use crate::rpc::MethodStatus;
-use crate::spec::column_types::{AuthMethod, AuthorityRef, BoolOrBytes, CredentialRef};
+use crate::spec::column_types::{AuthMethod, AuthorityRef, BoolOrBytes, CredentialRef, KAES256Ref, Key256};
 use crate::spec::opal::locking::*;
 
 use super::basic_sp::BasicSP;
@@ -40,6 +42,7 @@ pub struct LockingSP {
 #[as_array_traits(GenericTable)]
 pub struct SPSpecific {
     pub locking: LockingTable,
+    pub k_aes_256: KAES256Table,
 }
 
 impl LockingSP {
@@ -64,6 +67,24 @@ impl SecurityProvider for LockingSP {
     fn authenticate(&self, authority_id: AuthorityRef, proof: Option<Bytes>) -> Result<BoolOrBytes, MethodStatus> {
         self.basic_sp.authenticate(authority_id, proof)
     }
+
+    fn gen_key(
+        &mut self,
+        credential_id: CredentialRef,
+        _public_exponent: Option<u64>,
+        _pin_length: Option<u16>,
+    ) -> Result<(), MethodStatus> {
+        if let Ok(k_aes_256_id) = KAES256Ref::try_new_other(credential_id) {
+            if let Some(object) = self.sp_specific.k_aes_256.get_mut(&k_aes_256_id) {
+                object.key = Some(Key256::Bytes64([0xFF; 64]));
+                Ok(())
+            } else {
+                Err(MethodStatus::InvalidParameter)
+            }
+        } else {
+            Err(MethodStatus::InvalidParameter)
+        }
+    }
 }
 
 impl Default for LockingSP {
@@ -71,7 +92,8 @@ impl Default for LockingSP {
         let authorities = preconfig_authority();
         let c_pin = preconfig_c_pin();
         let locking = preconfig_locking();
-        Self { basic_sp: BasicSP { authorities, c_pin }, sp_specific: SPSpecific { locking } }
+        let k_aes_256 = preconfig_k_aes_256();
+        Self { basic_sp: BasicSP { authorities, c_pin }, sp_specific: SPSpecific { locking, k_aes_256 } }
     }
 }
 
@@ -116,13 +138,33 @@ fn preconfig_c_pin() -> CPINTable {
 fn preconfig_locking() -> LockingTable {
     let mut locking = LockingTable::new();
 
-    let global_range = LockingRange::new(locking::GLOBAL_RANGE);
+    let global_range = LockingRange {
+        active_key: ObjectUID::new_other(k_aes_256::GLOBAL_RANGE_KEY),
+        ..LockingRange::new(locking::GLOBAL_RANGE)
+    };
     locking.insert(global_range.uid, global_range);
 
     for i in 1..=8 {
-        let range = LockingRange::new(locking::RANGE.nth(i).unwrap());
+        let range = LockingRange {
+            active_key: ObjectUID::new_other(k_aes_256::RANGE_KEY.nth(i).unwrap()),
+            ..LockingRange::new(locking::RANGE.nth(i).unwrap())
+        };
         locking.insert(range.uid, range);
     }
 
     locking
+}
+
+fn preconfig_k_aes_256() -> KAES256Table {
+    let mut k_aes_256 = KAES256Table::new();
+
+    let global_range = KAES256::new(k_aes_256::GLOBAL_RANGE_KEY);
+    k_aes_256.insert(global_range.uid, global_range);
+
+    for i in 1..=8 {
+        let range = KAES256::new(k_aes_256::RANGE_KEY.nth(i).unwrap());
+        k_aes_256.insert(range.uid, range);
+    }
+
+    k_aes_256
 }

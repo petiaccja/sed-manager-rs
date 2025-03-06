@@ -108,7 +108,6 @@ pub struct Month(u8);
 #[derive(AliasType, PartialEq, Eq, Clone, Debug, Default)]
 pub struct Day(u8);
 
-#[allow(non_camel_case_types)]
 #[repr(u8)]
 #[derive(EnumerationType, PartialEq, Eq, Clone, Debug)]
 pub enum ResetTypes {
@@ -119,7 +118,6 @@ pub enum ResetTypes {
     Unknown = 31,
 }
 
-#[allow(non_camel_case_types)]
 #[repr(u8)]
 #[derive(EnumerationType, PartialEq, Eq, Clone, Debug)]
 pub enum ReencryptState {
@@ -132,7 +130,6 @@ pub enum ReencryptState {
     Unknown = 16,
 }
 
-#[allow(non_camel_case_types)]
 #[repr(u8)]
 #[derive(EnumerationType, PartialEq, Eq, Clone, Debug)]
 pub enum ReencryptRequest {
@@ -142,7 +139,6 @@ pub enum ReencryptRequest {
     Unknown = 16,
 }
 
-#[allow(non_camel_case_types)]
 #[repr(u8)]
 #[derive(EnumerationType, PartialEq, Eq, Clone, Debug)]
 pub enum AdvKeyMode {
@@ -152,7 +148,6 @@ pub enum AdvKeyMode {
     Unknown = 7,
 }
 
-#[allow(non_camel_case_types)]
 #[repr(u8)]
 #[derive(EnumerationType, PartialEq, Eq, Clone, Debug)]
 pub enum VerifyMode {
@@ -162,7 +157,6 @@ pub enum VerifyMode {
     Unknown = 7,
 }
 
-#[allow(non_camel_case_types)]
 #[repr(u8)]
 #[derive(EnumerationType, PartialEq, Eq, Clone, Debug)]
 pub enum LastReencStatus {
@@ -174,7 +168,6 @@ pub enum LastReencStatus {
     Unknown = 7,
 }
 
-#[allow(non_camel_case_types)]
 #[repr(u8)]
 #[derive(EnumerationType, PartialEq, Eq, Clone, Debug)]
 pub enum GeneralStatus {
@@ -190,4 +183,24 @@ pub enum GeneralStatus {
     ActiveResetStopDetected = 34,
     #[fallback]
     Unknown = 63,
+}
+
+#[repr(u8)]
+#[derive(EnumerationType, PartialEq, Eq, Clone, Debug)]
+pub enum SymmetricModeMedia {
+    ECB = 0,
+    CBC = 1,
+    CFB = 2,
+    OFB = 3,
+    GCM = 4,
+    CTR = 5,
+    CCM = 6,
+    XTS = 7,
+    LRW = 8,
+    EME = 9,
+    CMC = 10,
+    XEX = 11,
+    MediaEncryption = 23,
+    #[fallback]
+    Unknown = 22,
 }

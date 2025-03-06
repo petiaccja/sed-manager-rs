@@ -6,6 +6,7 @@ use sed_manager::messaging::uid::UID;
 use sed_manager::rpc::Error as RPCError;
 use sed_manager::rpc::MethodStatus;
 use sed_manager::spec::column_types::AuthorityRef;
+use sed_manager::spec::column_types::CredentialRef;
 use sed_manager::spec::column_types::LifeCycleState;
 use sed_manager::spec::column_types::Name;
 use sed_manager::spec::column_types::Password;
@@ -163,6 +164,28 @@ async fn next_success_no_uid() -> Result<(), RPCError> {
     let session = tper.start_session(sp::ADMIN, None, None).await?;
     let result = session.next(table_id::SP, None, None).await?;
     assert_eq!(result.0, vec![sp::ADMIN.as_uid(), sp::LOCKING.as_uid(),]);
+    Ok(())
+}
+
+#[tokio::test]
+async fn gen_key_success() -> Result<(), RPCError> {
+    use opal::locking::k_aes_256;
+    let device = FakeDevice::new();
+    let tper = TPer::new_on_default_com_id(Arc::new(device))?;
+    let session = tper.start_session(sp::LOCKING, None, None).await?;
+    let object = CredentialRef::new_other(k_aes_256::GLOBAL_RANGE_KEY);
+    let _ = session.gen_key(object, None, None).await?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn gen_key_invalid_object() -> Result<(), RPCError> {
+    use opal::locking::k_aes_256;
+    let device = FakeDevice::new();
+    let tper = TPer::new_on_default_com_id(Arc::new(device))?;
+    let session = tper.start_session(sp::LOCKING, None, None).await?;
+    let object = CredentialRef::new_other(k_aes_256::RANGE_KEY.nth(364).unwrap());
+    assert!(session.gen_key(object, None, None).await.is_err());
     Ok(())
 }
 

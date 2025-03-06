@@ -14,13 +14,22 @@ pub type SPRef = ObjectUID<{ SP.mask() }>;
 pub type SPRefRange = ObjectUIDRange<{ SP.mask() }>;
 pub type CPINRef = ObjectUID<{ C_PIN.mask() }>;
 pub type CPINRefRange = ObjectUIDRange<{ C_PIN.mask() }>;
-pub type CredentialRef = ObjectUID<
-    {
-        C_PIN.mask() | C_AES_128.mask() | C_AES_256.mask() /* More tables... */
-    },
->;
 pub type CredentialRefRange = CPINRefRange;
 pub type LogListRef = ObjectUID<{ LOG_LIST.mask() }>;
 pub type LockingRangeRef = ObjectUID<{ LOCKING.mask() }>;
 pub type MediaKeyRef = ObjectUID<{ K_AES_128.mask() | K_AES_256.mask() }>;
+pub type KAES256Ref = ObjectUID<{ K_AES_256.mask() }>;
 pub type MethodRef = ObjectUID<{ METHOD_ID.mask() }>;
+
+/// UIDs for any of the C_* tables.
+///
+/// Not all tables are currently present in the mask, but they could be added.
+/// I've also added the K_AES_* tables despite the Core Spec not mentioning them.
+/// This is because GenKey is callable on a CredentialObjectUID, but GenKey is
+/// also callable on the K_AES_* objects. Go figure?
+pub type CredentialRef = ObjectUID<
+    {
+        C_PIN.mask() | C_AES_128.mask() | C_AES_256.mask() | K_AES_128.mask() | K_AES_256.mask()
+        /* More tables... */
+    },
+>;
