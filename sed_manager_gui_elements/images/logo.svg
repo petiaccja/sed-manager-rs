@@ -1,0 +1,33 @@
+<svg width="160" height="210" xmlns="http://www.w3.org/2000/svg">
+ <g>
+  <title>Layer 1</title>
+  <rect rx="4" filter="url(#svg_1_blur)" stroke-width="0" fill="#ffff00" stroke="#000" x="15" y="180" width="30" height="30" id="svg_4"/>
+  <rect rx="4" filter="url(#svg_1_blur)" stroke-width="0" fill="#ffff00" stroke="#000" x="55" y="180" width="50" height="30" id="svg_6"/>
+  <rect rx="4" filter="url(#svg_1_blur)" stroke-width="0" fill="#ffff00" stroke="#000" x="115" y="180" width="30" height="30" id="svg_5"/>
+  <ellipse ry="60" rx="50" id="svg_11" cy="70" cx="80" stroke-width="20" stroke="url(#svg_166)" fill="none"/>
+  <rect rx="12" filter="url(#svg_1_blur)" stroke-width="0" fill="url(#svg_14)" stroke="#000" y="75" width="160" height="120" id="svg_3" x="0"/>
+  <rect opacity="0.8" filter="url(#svg_2_blur)" rx="4" id="svg_2" height="50" width="80" y="115" x="45" stroke-width="0" stroke="#000" fill="#000000"/>
+  <!-- <text fill="#ffffff" stroke="#000" stroke-width="0" x="44" y="148" id="svg_10" font-size="40" font-family="'Fira Code'" text-anchor="start" xml:space="preserve" font-weight="bold">SED</text> -->
+  <rect rx="4" id="svg_9" height="50" width="80" y="110" x="40" stroke-width="0" stroke="#000" fill="url(#svg_13)"/>
+ </g>
+ <defs>
+  <filter id="svg_1_blur">
+   <feGaussianBlur stdDeviation="0.1" in="SourceGraphic"/>
+  </filter>
+  <filter height="200%" width="200%" y="-50%" x="-50%" id="svg_2_blur">
+   <feGaussianBlur stdDeviation="6" in="SourceGraphic"/>
+  </filter>
+  <linearGradient y2="0" x2="1" y1="0" x1="0" id="svg_13">
+   <stop offset="0" stop-opacity="0.98438" stop-color="#5b5b5b"/>
+   <stop offset="1" stop-opacity="0.99219" stop-color="#262626"/>
+  </linearGradient>
+  <linearGradient y2="0" x2="1" y1="0" x1="0" id="svg_14">
+   <stop offset="0" stop-opacity="0.99219" stop-color="#00ff00"/>
+   <stop offset="1" stop-opacity="0.99609" stop-color="#007f3f"/>
+  </linearGradient>
+  <radialGradient r="0.5" cy="0.5" cx="0.5" spreadMethod="pad" id="svg_166">
+   <stop offset="0" stop-opacity="0.99609" stop-color="#000000"/>
+   <stop offset="1" stop-opacity="0.99219" stop-color="#7f7f7f"/>
+  </radialGradient>
+ </defs>
+</svg>
