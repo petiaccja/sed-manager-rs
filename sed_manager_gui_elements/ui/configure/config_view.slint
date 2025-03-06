@@ -27,6 +27,7 @@ component BackButton inherits Rectangle {
 component Header inherits Island {
     in property <string> device-name;
     in property <string> config-name;
+    in property <image> config-icon;
     in property <bool> back-enabled: true;
     callback back <=> back-button.clicked;
     preferred-height: content.min-height;
@@ -37,7 +38,7 @@ component Header inherits Island {
         padding-left: 12px;
         padding-right: 12px;
         VerticalLayout {
-            alignment: space-around;
+            alignment: center;
             back-button := BackButton {
                 enabled: back-enabled;
             }
@@ -66,6 +67,15 @@ component Header inherits Island {
             vertical-alignment: center;
             horizontal-stretch: 1;
         }
+
+        Image {
+            source: config-icon;
+            colorize: Palette.control-foreground;
+            width: 32px;
+            vertical-alignment: center;
+            horizontal-alignment: center;
+            image-fit: ImageFit.contain;
+        }
     }
 }
 
@@ -80,6 +90,7 @@ export component ConfigView {
             vertical-stretch: 0;
             device-name: device-name;
             config-name: config-name;
+            config-icon: config-icon;
             back-enabled: back-enabled;
             back => {
                 back()
@@ -93,6 +104,7 @@ export component ConfigView {
 export component LivePreviewTest inherits ConfigView {
     device-name: "Foo Device";
     config-name: "Take ownership";
+    config-icon: Icons.take-ownership;
     VerticalLayout {
         vertical-stretch: 1;
         alignment: center;
