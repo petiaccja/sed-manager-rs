@@ -1,34 +1,21 @@
-use std::rc::Rc;
 use std::sync::Arc;
 
-use sed_manager::applications::{
-    activate_locking, get_admin_sp, get_locking_admins, get_locking_sp, get_lookup, revert, take_ownership,
-    Error as AppError,
-};
+use sed_manager::applications::get_lookup;
 use sed_manager::device::{Device, Error as DeviceError};
-use sed_manager::messaging::com_id::StackResetStatus;
 use sed_manager::messaging::discovery::{Discovery, Feature};
 use sed_manager::messaging::uid::UID;
-use sed_manager::rpc::{discover, Error as RPCError};
-use sed_manager::spec::column_types::{CPINRef, CredentialRef, MediaKeyRef, Name, SPRef};
+use sed_manager::rpc::Error as RPCError;
+use sed_manager::spec::column_types::{AuthorityRef, LockingRangeRef, SPRef};
 use sed_manager::spec::{self, ObjectLookup as _};
 use sed_manager::tper::{Session, TPer};
-use slint::SharedString;
-
-use crate::async_state::AsyncState;
-use crate::device_list::{get_device_identity, DeviceList};
-use crate::native_data::NativeLockingRange;
-use crate::state_ext::StateExt;
-use crate::ui;
-use crate::utility::{run_in_thread, PeekCell};
 
 pub struct Backend {
     devices: Vec<Arc<dyn Device>>,
     discoveries: Vec<Option<Discovery>>,
     tpers: Vec<Option<Arc<TPer>>>,
     sessions: Vec<Option<Arc<Session>>>,
-    locking_ranges: Vec<Vec<UID>>,
-    locking_users: Vec<Vec<UID>>,
+    locking_ranges: Vec<Vec<LockingRangeRef>>,
+    locking_users: Vec<Vec<AuthorityRef>>,
 }
 
 impl Backend {
@@ -43,11 +30,31 @@ impl Backend {
         }
     }
 
-    fn get_discovery(&self, device_idx: usize) -> Result<&Discovery, RPCError> {
+    pub fn set_devices(&mut self, devices: Vec<Arc<dyn Device>>) {
+        let num_devices = devices.len();
+        self.devices = devices;
+        self.discoveries = std::iter::repeat_with(|| None).take(num_devices).collect();
+        self.tpers = std::iter::repeat_with(|| None).take(num_devices).collect();
+        self.sessions = std::iter::repeat_with(|| None).take(num_devices).collect();
+        self.locking_ranges = std::iter::repeat_with(|| vec![]).take(num_devices).collect();
+        self.locking_users = std::iter::repeat_with(|| vec![]).take(num_devices).collect();
+    }
+
+    pub fn get_device(&mut self, device_idx: usize) -> Option<Arc<dyn Device>> {
+        self.devices.get(device_idx).cloned()
+    }
+
+    pub fn set_discovery(&mut self, device_idx: usize, discovery: Discovery) {
+        if device_idx < self.discoveries.len() {
+            self.discoveries[device_idx] = Some(discovery);
+        }
+    }
+
+    pub fn get_discovery(&self, device_idx: usize) -> Result<&Discovery, RPCError> {
         self.discoveries.get(device_idx).and_then(|x| x.as_ref()).ok_or(DeviceError::DeviceNotFound.into())
     }
 
-    fn get_tper(&mut self, device_idx: usize) -> Result<Arc<TPer>, RPCError> {
+    pub fn get_tper(&mut self, device_idx: usize) -> Result<Arc<TPer>, RPCError> {
         let maybe_tper = self.tpers.get_mut(device_idx).ok_or(DeviceError::DeviceNotFound)?;
         if let Some(tper) = maybe_tper {
             return Ok(tper.clone());
@@ -63,7 +70,7 @@ impl Backend {
         Ok(tper)
     }
 
-    fn replace_session(&mut self, device_idx: usize, session: Session) -> Option<Arc<Session>> {
+    pub fn replace_session(&mut self, device_idx: usize, session: Session) -> Option<Arc<Session>> {
         if device_idx < self.devices.len() {
             self.sessions.resize_with(std::cmp::max(self.sessions.len(), device_idx + 1), || None);
             self.sessions[device_idx].replace(Arc::new(session))
@@ -72,378 +79,38 @@ impl Backend {
         }
     }
 
-    fn take_session(&mut self, device_idx: usize) -> Option<Arc<Session>> {
+    pub fn take_session(&mut self, device_idx: usize) -> Option<Arc<Session>> {
         self.sessions.get_mut(device_idx).map(|x| x.take()).flatten()
     }
 
-    fn get_session(&self, device_idx: usize) -> Option<Arc<Session>> {
+    pub fn get_session(&self, device_idx: usize) -> Option<Arc<Session>> {
         self.sessions.get(device_idx).cloned().flatten()
     }
 
-    fn set_locking_ranges(&mut self, device_idx: usize, locking_ranges: Vec<UID>) {
+    pub fn set_range_list(&mut self, device_idx: usize, locking_ranges: Vec<LockingRangeRef>) {
         if device_idx < self.devices.len() {
             self.locking_ranges.resize_with(std::cmp::max(self.sessions.len(), device_idx + 1), || vec![]);
             self.locking_ranges[device_idx] = locking_ranges;
         }
     }
 
-    fn get_locking_ranges(&self, device_idx: usize) -> Option<&Vec<UID>> {
+    pub fn get_range_list(&self, device_idx: usize) -> Option<&Vec<LockingRangeRef>> {
         self.locking_ranges.get(device_idx)
     }
 
-    fn set_locking_users(&mut self, device_idx: usize, locking_users: Vec<UID>) {
+    pub fn set_user_list(&mut self, device_idx: usize, locking_users: Vec<AuthorityRef>) {
         if device_idx < self.devices.len() {
             self.locking_users.resize_with(std::cmp::max(self.sessions.len(), device_idx + 1), || vec![]);
             self.locking_users[device_idx] = locking_users;
         }
     }
 
-    #[allow(unused)]
-    fn get_locking_users(&self, device_idx: usize) -> Option<&Vec<UID>> {
+    pub fn get_user_list(&self, device_idx: usize) -> Option<&Vec<AuthorityRef>> {
         self.locking_users.get(device_idx)
-    }
-
-    pub async fn list_devices(
-        this: Rc<PeekCell<Self>>,
-    ) -> Result<(Vec<ui::DeviceIdentity>, Vec<ui::UnavailableDevice>), ui::ExtendedStatus> {
-        this.peek_mut(|this| {
-            this.devices.clear();
-            this.discoveries.clear();
-            this.tpers.clear();
-            this.sessions.clear();
-        });
-        let device_list = match DeviceList::query().await {
-            Ok(value) => value,
-            Err(error) => return Err(ui::ExtendedStatus::error(error.to_string())),
-        };
-        let mut identities = Vec::<ui::DeviceIdentity>::new();
-        for device in &device_list.devices {
-            identities.push(get_device_identity(device.clone()).await.into());
-        }
-        let unavailable_devices = device_list
-            .unavailable_devices
-            .into_iter()
-            .map(|(path, error)| ui::UnavailableDevice::new(path, error.to_string()))
-            .collect();
-        this.peek_mut(move |this| {
-            let num_devices = device_list.devices.len();
-            this.devices = device_list.devices;
-            this.discoveries = std::iter::repeat_with(|| None).take(num_devices).collect();
-            this.tpers = std::iter::repeat_with(|| None).take(num_devices).collect();
-            this.sessions = std::iter::repeat_with(|| None).take(num_devices).collect();
-        });
-        Ok((identities, unavailable_devices))
-    }
-
-    pub async fn discover(
-        this: Rc<PeekCell<Self>>,
-        device_idx: usize,
-    ) -> Result<(ui::DeviceDiscovery, ui::ActivitySupport, ui::DeviceGeometry), ui::ExtendedStatus> {
-        let Some(device) = this.peek(|this| this.devices.get(device_idx).cloned()) else {
-            return Err(ui::ExtendedStatus::error(format!("device {device_idx} not found (this is a bug)")));
-        };
-        let discovery = match run_in_thread(move || discover(&*device)).await {
-            Ok(value) => value,
-            Err(error) => return Err(ui::ExtendedStatus::error(error.to_string())),
-        };
-        let ui_discovery = ui::DeviceDiscovery::from_discovery(&discovery);
-        let ui_activity_support = ui::ActivitySupport::from_discovery(&discovery);
-        let ui_geometry = ui::DeviceGeometry::from_discovery(&discovery);
-        this.peek_mut(|this| this.discoveries.get_mut(device_idx).map(|opt| opt.replace(discovery)));
-        Ok((ui_discovery, ui_activity_support, ui_geometry))
-    }
-
-    pub async fn cleanup_session(this: Rc<PeekCell<Self>>, device_idx: usize) {
-        let Some(session) = this.peek_mut(|this| this.take_session(device_idx)) else {
-            return;
-        };
-        if let Some(inner) = Arc::into_inner(session) {
-            let _ = inner.end_session().await;
-        }
-    }
-
-    pub async fn take_ownership(this: Rc<PeekCell<Self>>, device_idx: usize, sid_pw: String) -> ui::ExtendedStatus {
-        async fn inner(this: Rc<PeekCell<Backend>>, device_idx: usize, sid_pw: String) -> Result<(), AppError> {
-            let tper = this.peek_mut(|this| this.get_tper(device_idx))?;
-            take_ownership(&*tper, sid_pw.as_bytes()).await
-        }
-
-        Backend::cleanup_session(this.clone(), device_idx).await;
-        match inner(this, device_idx, sid_pw).await {
-            Ok(_) => ui::ExtendedStatus::success(),
-            Err(error) => ui::ExtendedStatus::error(error.to_string()),
-        }
-    }
-
-    pub async fn activate_locking(
-        this: Rc<PeekCell<Self>>,
-        device_idx: usize,
-        sid_pw: String,
-        admin1_pw: String,
-    ) -> ui::ExtendedStatus {
-        async fn inner(
-            this: Rc<PeekCell<Backend>>,
-            device_idx: usize,
-            sid_pw: String,
-            admin1_pw: String,
-        ) -> Result<(), AppError> {
-            let tper = this.peek_mut(|this| this.get_tper(device_idx))?;
-            activate_locking(&*tper, sid_pw.as_bytes(), Some(admin1_pw.as_bytes())).await
-        }
-
-        Backend::cleanup_session(this.clone(), device_idx).await;
-        match inner(this, device_idx, sid_pw, admin1_pw).await {
-            Ok(_) => ui::ExtendedStatus::success(),
-            Err(error) => ui::ExtendedStatus::error(error.to_string()),
-        }
-    }
-
-    pub async fn login_locking_admin(
-        this: Rc<PeekCell<Self>>,
-        device_idx: usize,
-        admin_idx: usize,
-        password: String,
-    ) -> ui::ExtendedStatus {
-        async fn inner(
-            this: Rc<PeekCell<Backend>>,
-            device_idx: usize,
-            admin_idx: usize,
-            password: String,
-        ) -> Result<(), AppError> {
-            let tper = this.peek_mut(|this| this.get_tper(device_idx))?;
-            let discovery = tper.discover().await?;
-            let ssc = discovery.get_primary_ssc().ok_or(AppError::NoAvailableSSC)?;
-            let sp = get_locking_sp(ssc.feature_code())?;
-            let Some(admin) = get_locking_admins(ssc.feature_code())?.nth(admin_idx as u64) else {
-                return Err(AppError::IncompatibleSSC);
-            };
-            let session = tper.start_session(sp, Some(admin), Some(password.as_bytes())).await?;
-            this.peek_mut(|this| this.replace_session(device_idx, session));
-            Ok(())
-        }
-
-        Backend::cleanup_session(this.clone(), device_idx).await;
-        match inner(this, device_idx, admin_idx, password).await {
-            Ok(_) => ui::ExtendedStatus::success(),
-            Err(error) => ui::ExtendedStatus::error(error.to_string()),
-        }
-    }
-
-    pub async fn list_locking_ranges(
-        this: Rc<PeekCell<Self>>,
-        device_idx: usize,
-        async_state: AsyncState<Rc<PeekCell<Self>>>,
-    ) {
-        async fn inner(
-            this: Rc<PeekCell<Backend>>,
-            device_idx: usize,
-            async_state: AsyncState<Rc<PeekCell<Backend>>>,
-        ) -> Result<(), RPCError> {
-            let Some(session) = this.peek_mut(|this| this.get_session(device_idx)) else {
-                return Err(RPCError::Unspecified);
-            };
-            let discovery = this.peek(|this| this.get_discovery(device_idx).ok().cloned());
-            let ssc = discovery.as_ref().and_then(|x| x.get_primary_ssc());
-            let locking_sp = ssc.and_then(|ssc| get_locking_sp(ssc.feature_code()).ok());
-            let ranges = session.next(spec::core::table_id::LOCKING, None, None).await?;
-            this.peek_mut(|this| this.set_locking_ranges(device_idx, ranges.clone()));
-            for range in ranges.iter() {
-                let name = get_object_name(discovery.as_ref(), *range, locking_sp);
-                if let Ok(properties) = get_locking_range_properties(&session, *range).await {
-                    async_state.with(|state| state.push_locking_range(device_idx, name, properties.into()));
-                }
-            }
-            Ok(())
-        }
-        let result = inner(this, device_idx, async_state.clone()).await;
-        async_state.with(|state| match result {
-            Ok(_) => (),
-            Err(error) => state.respond_login_locking_admin(device_idx, error.into()),
-        });
-    }
-
-    pub async fn set_locking_range(
-        this: Rc<PeekCell<Self>>,
-        device_idx: usize,
-        range_idx: usize,
-        properties: ui::LockingRange,
-    ) -> Result<ui::LockingRange, ui::ExtendedStatus> {
-        let Some(range) = this.peek(|this| this.get_locking_ranges(device_idx).and_then(|r| r.get(range_idx).cloned()))
-        else {
-            return Err(RPCError::Unspecified.into());
-        };
-        let Some(session) = this.peek_mut(|this| this.get_session(device_idx)) else {
-            return Err(RPCError::Unspecified.into());
-        };
-        match set_locking_range_properties(&session, range, properties.clone().into()).await {
-            Ok(_) => Ok(properties),
-            Err(error) => Err(error.into()),
-        }
-    }
-
-    pub async fn erase_locking_range(
-        this: Rc<PeekCell<Self>>,
-        device_idx: usize,
-        range_idx: usize,
-    ) -> ui::ExtendedStatus {
-        let Some(range) = this.peek(|this| this.get_locking_ranges(device_idx).and_then(|r| r.get(range_idx).cloned()))
-        else {
-            return RPCError::Unspecified.into();
-        };
-        let Some(session) = this.peek_mut(|this| this.get_session(device_idx)) else {
-            return RPCError::Unspecified.into();
-        };
-        let result = erase_locking_range(&session, range).await;
-        ui::ExtendedStatus::from_result(result)
-    }
-
-    pub async fn list_locking_users(
-        this: Rc<PeekCell<Self>>,
-        device_idx: usize,
-        async_state: AsyncState<Rc<PeekCell<Self>>>,
-    ) {
-        async fn inner(
-            this: Rc<PeekCell<Backend>>,
-            device_idx: usize,
-            async_state: AsyncState<Rc<PeekCell<Backend>>>,
-        ) -> Result<(), RPCError> {
-            let Some(session) = this.peek_mut(|this| this.get_session(device_idx)) else {
-                return Err(RPCError::Unspecified);
-            };
-            let discovery = this.peek(|this| this.get_discovery(device_idx).ok().cloned());
-            let ssc = discovery.as_ref().and_then(|x| x.get_primary_ssc());
-            let locking_sp = ssc.and_then(|ssc| get_locking_sp(ssc.feature_code()).ok());
-            let authorities = session.next(spec::core::table_id::AUTHORITY, None, None).await?;
-            let authorities = retain_configurable_authorities(&session, authorities).await;
-            this.peek_mut(|this| this.set_locking_users(device_idx, authorities.clone()));
-            for authority in authorities.iter() {
-                let name = get_object_name(discovery.as_ref(), *authority, locking_sp);
-                if let Ok(properties) = get_authority_properties(&session, *authority).await {
-                    async_state.with(|state| state.push_user(device_idx, name, properties.into()));
-                }
-            }
-            Ok(())
-        }
-        let result = inner(this, device_idx, async_state.clone()).await;
-        async_state.with(|state| match result {
-            Ok(_) => (),
-            Err(error) => state.respond_login_locking_admin(device_idx, error.into()),
-        });
-    }
-
-    pub async fn set_locking_user_enabled(
-        this: Rc<PeekCell<Self>>,
-        device_idx: usize,
-        user_idx: usize,
-        enabled: bool,
-    ) -> Result<bool, ui::ExtendedStatus> {
-        let Some(user) = this.peek(|this| this.get_locking_users(device_idx).and_then(|r| r.get(user_idx).cloned()))
-        else {
-            return Err(RPCError::Unspecified.into());
-        };
-        let Some(session) = this.peek_mut(|this| this.get_session(device_idx)) else {
-            return Err(RPCError::Unspecified.into());
-        };
-        session.set(user, 5, enabled).await?;
-        Ok(enabled)
-    }
-
-    pub async fn set_locking_user_name(
-        this: Rc<PeekCell<Self>>,
-        device_idx: usize,
-        user_idx: usize,
-        name: SharedString,
-    ) -> Result<String, ui::ExtendedStatus> {
-        let Some(user) = this.peek(|this| this.get_locking_users(device_idx).and_then(|r| r.get(user_idx).cloned()))
-        else {
-            return Err(RPCError::Unspecified.into());
-        };
-        let Some(session) = this.peek_mut(|this| this.get_session(device_idx)) else {
-            return Err(RPCError::Unspecified.into());
-        };
-        session.set(user, 2, name.as_bytes()).await?;
-        Ok(name.to_string())
-    }
-
-    pub async fn set_locking_user_password(
-        this: Rc<PeekCell<Self>>,
-        device_idx: usize,
-        user_idx: usize,
-        password: SharedString,
-    ) -> ui::ExtendedStatus {
-        async fn inner(
-            this: Rc<PeekCell<Backend>>,
-            device_idx: usize,
-            user_idx: usize,
-            password: SharedString,
-        ) -> Result<(), RPCError> {
-            let Some(user) =
-                this.peek(|this| this.get_locking_users(device_idx).and_then(|r| r.get(user_idx).cloned()))
-            else {
-                return Err(RPCError::Unspecified.into());
-            };
-            let Some(session) = this.peek_mut(|this| this.get_session(device_idx)) else {
-                return Err(RPCError::Unspecified.into());
-            };
-            let credential: CPINRef = session.get(user, 0x0A).await?;
-            session.set(credential.as_uid(), 3, password.as_bytes()).await
-        }
-        match inner(this, device_idx, user_idx, password).await {
-            Ok(_) => ui::ExtendedStatus::success(),
-            Err(error) => error.into(),
-        }
-    }
-
-    pub async fn revert(
-        this: Rc<PeekCell<Self>>,
-        device_idx: usize,
-        use_psid: bool,
-        pw: String,
-        revert_admin: bool,
-    ) -> ui::ExtendedStatus {
-        use spec::core::authority::SID;
-        use spec::psid::admin::authority::PSID;
-        async fn inner(
-            this: Rc<PeekCell<Backend>>,
-            device_idx: usize,
-            use_psid: bool,
-            pw: String,
-            revert_admin: bool,
-        ) -> Result<(), AppError> {
-            let tper = this.peek_mut(|this| this.get_tper(device_idx))?;
-            let discovery = tper.discover().await?;
-            let ssc = discovery.get_primary_ssc().ok_or(AppError::NoAvailableSSC)?;
-            let admin_sp = get_admin_sp(ssc.feature_code())?;
-            let locking_sp = get_locking_sp(ssc.feature_code())?;
-            let authority = if use_psid { PSID } else { SID };
-            let sp = if revert_admin { admin_sp } else { locking_sp };
-            revert(&*tper, authority, pw.as_bytes(), sp).await
-        }
-
-        Backend::cleanup_session(this.clone(), device_idx).await;
-        match inner(this, device_idx, use_psid, pw, revert_admin).await {
-            Ok(_) => ui::ExtendedStatus::success(),
-            Err(error) => ui::ExtendedStatus::error(error.to_string()),
-        }
-    }
-
-    pub async fn reset_stack(this: Rc<PeekCell<Self>>, device_idx: usize) -> ui::ExtendedStatus {
-        async fn inner(this: Rc<PeekCell<Backend>>, device_idx: usize) -> Result<(), RPCError> {
-            let tper = this.peek_mut(|this| this.get_tper(device_idx))?;
-            let status = tper.stack_reset(tper.com_id(), tper.com_id_ext()).await?;
-            match status {
-                StackResetStatus::Success => Ok(()),
-                StackResetStatus::Failure => Err(RPCError::Unspecified),
-                StackResetStatus::Pending => Ok(()),
-            }
-        }
-        Backend::cleanup_session(this.clone(), device_idx).await;
-        let result = inner(this, device_idx).await;
-        ui::ExtendedStatus::from_result(result)
     }
 }
 
-fn get_object_name(discovery: Option<&Discovery>, uid: UID, sp: Option<SPRef>) -> String {
+pub fn get_object_name(discovery: Option<&Discovery>, uid: UID, sp: Option<SPRef>) -> String {
     // Try all present feature descriptors.
     let empty = Discovery::new(vec![]);
     for desc in discovery.unwrap_or(&empty).iter() {
@@ -458,64 +125,4 @@ fn get_object_name(discovery: Option<&Discovery>, uid: UID, sp: Option<SPRef>) -
     }
     // Format the UID as a hex number.
     format!("{:16x}", uid.as_u64())
-}
-
-async fn get_locking_range_properties(session: &Session, range: UID) -> Result<NativeLockingRange, RPCError> {
-    let (start_lba, length_lba, read_lock_enabled, write_lock_enabled, read_locked, write_locked) =
-        session.get_multiple::<(u64, u64, bool, bool, bool, bool)>(range, 3..=8).await?;
-
-    Ok(NativeLockingRange {
-        start_lba,
-        end_lba: start_lba + length_lba,
-        read_lock_enabled,
-        write_lock_enabled,
-        read_locked,
-        write_locked,
-    })
-}
-
-async fn set_locking_range_properties(
-    session: &Session,
-    range: UID,
-    value: NativeLockingRange,
-) -> Result<(), RPCError> {
-    if range != spec::opal::locking::locking::GLOBAL_RANGE.as_uid() {
-        let length_lba = value.end_lba - value.start_lba;
-        let values = (
-            value.start_lba,
-            length_lba,
-            value.read_lock_enabled,
-            value.write_lock_enabled,
-            value.read_locked,
-            value.write_locked,
-        );
-        session.set_multiple(range, [3, 4, 5, 6, 7, 8], values).await
-    } else {
-        let values = (value.read_lock_enabled, value.write_lock_enabled, value.read_locked, value.write_locked);
-        session.set_multiple(range, [5, 6, 7, 8], values).await
-    }
-}
-
-async fn erase_locking_range(session: &Session, range: UID) -> Result<(), RPCError> {
-    let active_key_id: MediaKeyRef = session.get(range, 0x0A).await?;
-    session.gen_key(CredentialRef::new_other(active_key_id), None, None).await
-}
-
-async fn retain_configurable_authorities(session: &Session, authorities: Vec<UID>) -> Vec<UID> {
-    let mut non_class = Vec::new();
-    for authority in authorities {
-        let is_not_just_anybody = authority != spec::core::authority::ANYBODY.as_uid();
-        let is_not_class = Ok(false) == session.get(authority, 3).await;
-        if is_not_just_anybody && is_not_class {
-            non_class.push(authority);
-        }
-    }
-    return non_class;
-}
-
-async fn get_authority_properties(session: &Session, authority: UID) -> Result<ui::User, RPCError> {
-    let name: Name = session.get(authority, 2).await?;
-    let enabled: bool = session.get(authority, 5).await?;
-
-    Ok(ui::User { friendly_name: String::try_from(name).unwrap_or("".into()).into(), enabled })
 }

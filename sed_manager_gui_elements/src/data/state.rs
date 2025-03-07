@@ -1,65 +1,33 @@
-use sed_manager::messaging::com_id::ComIdState;
-use slint::{ModelRc, VecModel};
+use slint::{ModelRc, ToSharedString, VecModel};
 
-use crate::{ConfigureState, ExtendedStatus, LockingRange, LockingRangeState, TroubleshootState, User, UserListState};
+use crate::{ExtendedStatus, LockingRange, RangeList, User, UserList};
 
-impl ConfigureState {
-    pub fn new(extended_status: ExtendedStatus, locking_ranges: LockingRangeState, user_list: UserListState) -> Self {
-        Self { extended_status, locking_ranges, users: user_list }
-    }
-
-    pub fn empty() -> Self {
-        Self::new(ExtendedStatus::error("not implemented".into()), LockingRangeState::empty(), UserListState::empty())
-    }
-}
-
-impl TroubleshootState {
-    pub fn new(com_id: u16, com_id_ext: u16, com_id_status: ComIdState, extended_status: ExtendedStatus) -> Self {
-        let status_str = match com_id_status {
-            ComIdState::Invalid => "invalid",
-            ComIdState::Inactive => "invactive",
-            ComIdState::Issued => "issued",
-            ComIdState::Associated => "associated",
-        };
-        Self {
-            com_id: com_id as i32,
-            com_id_ext: com_id_ext as i32,
-            com_id_status: status_str.into(),
-            extended_status,
-        }
-    }
-
-    pub fn empty() -> Self {
-        Self::new(0, 0, ComIdState::Invalid, ExtendedStatus::error("not implemented".into()))
-    }
-}
-
-impl LockingRangeState {
-    pub fn new(names: Vec<String>, properties: Vec<LockingRange>, statuses: Vec<ExtendedStatus>) -> Self {
-        let names: Vec<_> = names.into_iter().map(|x| x.into()).collect();
+impl RangeList {
+    pub fn new(names: Vec<String>, values: Vec<LockingRange>, statuses: Vec<ExtendedStatus>) -> Self {
+        let names: Vec<_> = names.into_iter().map(|x| x.to_shared_string()).collect();
         Self {
             names: ModelRc::new(VecModel::from(names)),
-            properties: ModelRc::new(VecModel::from(properties)),
+            values: ModelRc::new(VecModel::from(values)),
             statuses: ModelRc::new(VecModel::from(statuses)),
         }
     }
 
     pub fn empty() -> Self {
-        Self::new(Vec::new(), Vec::new(), Vec::new())
+        Self::new(vec![], vec![], vec![])
     }
 }
 
-impl UserListState {
-    pub fn new(names: Vec<String>, properties: Vec<User>, statuses: Vec<ExtendedStatus>) -> Self {
-        let names: Vec<_> = names.into_iter().map(|x| x.into()).collect();
+impl UserList {
+    pub fn new(names: Vec<String>, values: Vec<User>, statuses: Vec<ExtendedStatus>) -> Self {
+        let names: Vec<_> = names.into_iter().map(|x| x.to_shared_string()).collect();
         Self {
             names: ModelRc::new(VecModel::from(names)),
-            properties: ModelRc::new(VecModel::from(properties)),
+            values: ModelRc::new(VecModel::from(values)),
             statuses: ModelRc::new(VecModel::from(statuses)),
         }
     }
 
     pub fn empty() -> Self {
-        Self::new(Vec::new(), Vec::new(), Vec::new())
+        Self::new(vec![], vec![], vec![])
     }
 }

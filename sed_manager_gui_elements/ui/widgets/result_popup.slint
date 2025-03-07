@@ -18,14 +18,8 @@ export component ResultPopup inherits PrototypePopup {
     in property <Status> status;
     in property <string> message;
     in property <image> icon;
-    in property <bool> hide-on-success: false;
     callback finished();
     callback retried();
-    changed status => {
-        if status == Status.success && hide-on-success {
-            self.close()
-        }
-    }
     content := VerticalLayout {
         spacing: 12px;
         padding: 12px;

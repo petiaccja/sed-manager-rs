@@ -9,6 +9,8 @@ import { PaletteExtra } from "../widgets/visual.slint";
 import { ToastMessage } from "../widgets/toast_message.slint";
 import { PrototypePopup } from "../widgets/prototype_popup.slint";
 import { RepeatedPasswordEdit } from "../widgets/password.slint";
+import { UserEditorState, UserList } from "../state.slint";
+import { StatusIndicator } from "../widgets/progress.slint";
 
 global TableDesc {
     out property <[string]> column-names: ["Enabled", "Friendly name", "Password"];
@@ -25,16 +27,16 @@ component UserRow {
     in property <User> user;
     in property <Status> status;
     private property <bool> enabled: status != Status.loading;
-    callback set-locking-user-enabled(enabled: bool);
-    callback set-locking-user-name(friendly-name: string);
-    callback set-locking-user-password();
+    callback set-enabled(enabled: bool);
+    callback set-name(name: string);
+    callback set-password();
     changed user => {
-        friendly-name.text = user.friendly-name;
+        name.text = user.name;
         user-enabled.checked = user.enabled;
     }
     changed status => {
         if status == Status.error {
-            friendly-name.text = user.friendly-name;
+            name.text = user.name;
             user-enabled.checked = user.enabled;
         }
     }
@@ -49,7 +51,7 @@ component UserRow {
                 checked: user.enabled;
                 enabled: enabled;
                 toggled => {
-                    set-locking-user-enabled(self.checked);
+                    set-enabled(self.checked);
                 }
             }
         }
@@ -60,15 +62,15 @@ component UserRow {
             height: row-height;
             row-idx: user-idx;
             column-idx: 1;
-            friendly-name := LineEdit {
+            name := LineEdit {
                 width: parent.width;
                 input-type: text;
                 horizontal-alignment: right;
-                text: user.friendly-name;
+                text: user.name;
                 enabled: enabled;
                 accepted(text) => {
                     self.clear-focus();
-                    set-locking-user-name(self.text);
+                    set-name(self.text);
                 }
             }
         }
@@ -85,7 +87,7 @@ component UserRow {
                 icon: Icons.password;
                 enabled: enabled;
                 clicked => {
-                    set-locking-user-password();
+                    set-password();
                 }
             }
         }
@@ -97,9 +99,9 @@ component UserTable {
     in property <[User]> users;
     in property <[ExtendedStatus]> statuses;
     out property <int> password-popup-user;
-    callback set-locking-user-enabled(user-idx: int, enabled: bool);
-    callback set-locking-user-name(user-idx: int, friendly-name: string);
-    callback set-locking-user-password(user-idx: int, password: string);
+    callback set-enabled(user-idx: int, enabled: bool);
+    callback set-name(user-idx: int, friendly-name: string);
+    callback set-password(user-idx: int, password: string);
     HorizontalLayout {
         alignment: stretch;
         VerticalLayout {
@@ -125,13 +127,13 @@ component UserTable {
                                 self.user = users[user-idx];
                             }
                         }
-                        set-locking-user-enabled(enabled) => {
-                            set-locking-user-enabled(user-idx, enabled);
+                        set-enabled(enabled) => {
+                            set-enabled(user-idx, enabled);
                         }
-                        set-locking-user-name(friendly-name) => {
-                            set-locking-user-name(user-idx, friendly-name);
+                        set-name(friendly-name) => {
+                            set-name(user-idx, friendly-name);
                         }
-                        set-locking-user-password => {
+                        set-password => {
                             password-popup-user = user-idx;
                             password-popup.show();
                         }
@@ -162,7 +164,7 @@ component UserTable {
                     enabled: password-edit.accepted;
                     clicked => {
                         password-popup.close();
-                        set-locking-user-password(password-popup-user, password-edit.password);
+                        set-password(password-popup-user, password-edit.password);
                     }
                 }
 
@@ -182,26 +184,13 @@ component UserTable {
     }
 }
 
-export component Users inherits ConfigView {
-    config-name: "Users";
+export component UserEditor inherits ConfigView {
+    config-name: "User editor";
     config-icon: Icons.users;
-    in property <ExtendedStatus> login-status;
-    in property <[string]> names;
-    in property <[User]> users;
-    in property <[ExtendedStatus]> statuses;
-    private property <bool> authenticated: false;
-    callback login-locking-admin(admin_idx: int, password: string);
-    callback list-locking-users();
-    callback set-locking-user-enabled(user-idx: int, enabled: bool);
-    callback set-locking-user-name(user-idx: int, friendly-name: string);
-    callback set-locking-user-password(user-idx: int, password: string);
-    changed login-status => {
-        if login-status.status == Status.success {
-            authenticated = true;
-            list-locking-users();
-        }
-    }
-    form := VerticalLayout {
+    in property <ExtendedStatus> login-status: UserEditorState.login-statuses[root.device-idx];
+    in property <UserList> user-list: UserEditorState.user-lists[root.device-idx];
+    in-out property <bool> authenticated: false;
+    VerticalLayout {
         if !authenticated: LoginView {
             extended-status: login-status;
             user-name: "Admin1";
@@ -210,70 +199,95 @@ export component Users inherits ConfigView {
                 root.back();
             }
             login(password) => {
-                login-locking-admin(1, password);
+                UserEditorState.login(root.device-idx, password);
+            }
+            success => {
+                authenticated = true;
+                UserEditorState.list(root.device-idx);
             }
         }
         if authenticated: UserTable {
-            names: names;
-            users: users;
-            statuses: statuses;
-            set-locking-user-enabled(user-idx, enabled) => {
-                set-locking-user-enabled(user-idx, enabled);
+            names: user-list.names;
+            users: user-list.values;
+            statuses: user-list.statuses;
+            set-enabled(user-idx, enabled) => {
+                UserEditorState.set-enabled(root.device-idx, user-idx, enabled);
             }
-            set-locking-user-name(user-idx, friendly-name) => {
-                set-locking-user-name(user-idx, friendly-name);
+            set-name(user-idx, friendly-name) => {
+                UserEditorState.set-name(root.device-idx, user-idx, friendly-name);
             }
-            set-locking-user-password(user-idx, password) => {
-                set-locking-user-password(user-idx, password)
+            set-password(user-idx, password) => {
+                UserEditorState.set-password(root.device-idx, user-idx, password)
+            }
+        }
+        if authenticated && login-status.status != Status.success: Rectangle {
+            height: 0;
+            clip: false;
+            VerticalLayout {
+                y: -self.min-height;
+                height: self.min-height;
+                spacing: 6px;
+                padding: 16px;
+                StatusIndicator {
+                    preferred-width: 100%;
+                    height: 80px;
+                    status: login-status.status;
+                }
+
+                Text {
+                    text: login-status.message;
+                    color: PaletteExtra.error-foreground;
+                    horizontal-alignment: center;
+                }
             }
         }
     }
 }
 
 global ExampleUsers {
-    out property <[string]> names: [
-        "Admin1",
-        "User1",
-        "User2",
-    ];
-    out property <[User]> users: [
-        {
-            friendly-name: "Alice",
-            enabled: true,
-        },
-        {
-            friendly-name: "Bob",
-            enabled: false,
-        },
-        {
-            friendly-name: "Charlie",
-            enabled: false,
-        },
-    ];
-    out property <[ExtendedStatus]> statuses: [
-        { status: Status.success },
-        { status: Status.loading },
-        { status: Status.error, message: "sample error" },
-    ];
+    out property <UserList> user-list: {
+        names: [
+            "Admin1",
+            "User1",
+            "User2",
+        ],
+        values: [
+            {
+                name: "Alice",
+                enabled: true,
+            },
+            {
+                name: "Bob",
+                enabled: false,
+            },
+            {
+                name: "Charlie",
+                enabled: false,
+            },
+        ],
+        statuses: [
+            { status: Status.success },
+            { status: Status.loading },
+            { status: Status.error, message: "sample error" },
+        ],
+    };
 }
 
 export component LivePreviewTest_RangeTable inherits UserTable {
-    names: ExampleUsers.names;
-    users: ExampleUsers.users;
-    statuses: ExampleUsers.statuses;
+    names: ExampleUsers.user-list.names;
+    users: ExampleUsers.user-list.values;
+    statuses: ExampleUsers.user-list.statuses;
 }
 
-export component LivePreviewTest inherits Users {
+export component LivePreviewTest_ListError inherits UserEditor {
     device-name: "Foo Device";
-    names: ExampleUsers.names;
-    users: ExampleUsers.users;
-    login-status: { status: Status.success };
-    timer := Timer {
-        interval: 1s;
-        running: false;
-        triggered => {
-            self.running = false;
-            root.login-status.status = Status.success;
-        }
-    }
+    user-list: ExampleUsers.user-list;
+    login-status: { status: Status.error, message: "sample error" };
+    authenticated: true;
+}
+
+export component LivePreviewTest inherits UserEditor {
+    device-name: "Foo Device";
+    user-list: ExampleUsers.user-list;
+    login-status: { status: Status.loading };
 }

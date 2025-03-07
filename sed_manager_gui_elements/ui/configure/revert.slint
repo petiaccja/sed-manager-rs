@@ -5,6 +5,7 @@ import { WarningPopup } from "../widgets/warning_popup.slint";
 import { ResultPopup } from "../widgets/result_popup.slint";
 import { ConfigView } from "config_view.slint";
 import { Icons } from "../icons.slint";
+import { SingleStepState } from "../state.slint";
 
 component WarningMessage {
     VerticalLayout {
@@ -61,11 +62,10 @@ component Form {
 }
 
 export component Revert inherits ConfigView {
-    in-out property <ExtendedStatus> extended-status: { status: Status.error };
+    in property <ExtendedStatus> extended-status: SingleStepState.statuses[root.device-idx];
     config-name: "Revert";
     config-icon: Icons.revert;
     back-enabled: extended-status.status != Status.loading;
-    callback revert(use-psid: bool, password: string, revert-admin: bool);
     warning-popup := WarningPopup {
         x: (root.width - self.width) / 2;
         y: (root.height - self.height) / 2;
@@ -74,7 +74,7 @@ export component Revert inherits ConfigView {
 
         continued => {
             self.close();
-            revert(form.use-psid, form.password, form.revert-admin);
+            SingleStepState.revert(root.device-idx, form.use-psid, form.password, form.revert-admin);
             result-popup.show();
         }
         cancelled => {

@@ -45,6 +45,13 @@ export component LoginView {
     out property <bool> back-enabled: extended-status.status != Status.loading;
     callback back();
     callback login(password: string);
+    callback success();
+    changed extended-status => {
+        if extended-status.status == Status.success {
+            result-popup.close();
+            success();
+        }
+    }
     Rectangle {
         result-popup := ResultPopup {
             x: (root.width - self.width) / 2;
@@ -53,7 +60,6 @@ export component LoginView {
             retry-enabled: root.back-enabled;
             finish-text: "Back";
             status: extended-status.status;
-            hide-on-success: true;
             message: {
                 if extended-status.status == Status.success {
                     "Authenticated successfully!"

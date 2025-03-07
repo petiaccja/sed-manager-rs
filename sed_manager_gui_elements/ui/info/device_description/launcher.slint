@@ -64,15 +64,15 @@ export component ActivityLauncher {
                     }
 
                     NavigationButton {
-                        text: "Locking ranges";
+                        text: "Edit ranges";
                         icon: Icons.locking-ranges;
                         height: button-height;
                         navigation-direction: NavigationDirection.left;
                         background: #00000000;
                         icon-color: PaletteExtra.make-accented(#9900ff, Palette.control-foreground, Palette.control-background);
-                        enabled: activity-support.locking-ranges;
+                        enabled: activity-support.range-editor;
                         clicked => {
-                            select-activity(Activity.locking-ranges);
+                            select-activity(Activity.range-editor);
                         }
                     }
 
@@ -81,15 +81,15 @@ export component ActivityLauncher {
                     }
 
                     NavigationButton {
-                        text: "Users";
+                        text: "Edit users";
                         icon: Icons.users;
                         height: button-height;
                         navigation-direction: NavigationDirection.left;
                         background: #00000000;
                         icon-color: PaletteExtra.make-accented(#006eff, Palette.control-foreground, Palette.control-background);
-                        enabled: activity-support.users;
+                        enabled: activity-support.user-editor;
                         clicked => {
-                            select-activity(Activity.users);
+                            select-activity(Activity.user-editor);
                         }
                     }
 
@@ -98,15 +98,15 @@ export component ActivityLauncher {
                     }
 
                     NavigationButton {
-                        text: "Permissions";
+                        text: "Access control";
                         icon: Icons.permissions;
                         height: button-height;
                         navigation-direction: NavigationDirection.left;
                         background: #00000000;
                         icon-color: PaletteExtra.success-foreground;
-                        enabled: activity-support.permissions;
+                        enabled: activity-support.access-control-editor;
                         clicked => {
-                            select-activity(Activity.permissions);
+                            select-activity(Activity.access-control-editor);
                         }
                     }
 

@@ -6,6 +6,7 @@ import { WarningPopup } from "../widgets/warning_popup.slint";
 import { ResultPopup } from "../widgets/result_popup.slint";
 import { ConfigView } from "config_view.slint";
 import { Icons } from "../icons.slint";
+import { SingleStepState } from "../state.slint";
 
 component WarningMessage {
     VerticalLayout {
@@ -60,8 +61,7 @@ component Form {
 }
 
 export component TakeOwnership inherits ConfigView {
-    in-out property <ExtendedStatus> extended-status: { status: Status.error };
-    callback take-ownership(new-password: string);
+    in property <ExtendedStatus> extended-status: SingleStepState.statuses[root.device-idx];
     config-name: "Take ownership";
     config-icon: Icons.take-ownership;
     back-enabled: extended-status.status != Status.loading;
@@ -72,7 +72,7 @@ export component TakeOwnership inherits ConfigView {
 
         continued => {
             self.close();
-            take-ownership(form.password);
+            SingleStepState.take-ownership(root.device-idx, form.password);
             result-popup.show();
         }
         cancelled => {

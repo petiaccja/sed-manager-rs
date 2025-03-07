@@ -2,6 +2,7 @@ import { Island, PaletteExtra } from "../widgets/visual.slint";
 import { Status } from "../data/status.slint";
 import { Button, Palette, Spinner } from "std-widgets.slint";
 import { Icons } from "../icons.slint";
+import { DeviceListState } from "../state.slint";
 
 
 component BackButton inherits Rectangle {
@@ -80,7 +81,8 @@ component Header inherits Island {
 }
 
 export component ConfigView {
-    in property <string> device-name;
+    in property <int> device-idx;
+    in property <string> device-name: DeviceListState.descriptions[device-idx].identity.name;
     in property <string> config-name;
     in property <image> config-icon;
     in property <bool> back-enabled: true;

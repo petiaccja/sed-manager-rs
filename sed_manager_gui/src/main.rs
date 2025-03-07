@@ -1,16 +1,17 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod async_state;
 mod backend;
+mod configuration;
 mod device_list;
+mod frontend;
 mod native_data;
-mod state_ext;
+mod troubleshooting;
 mod ui;
 mod utility;
 
-use async_state::AsyncState;
 use backend::Backend;
 use core::error::Error;
+use frontend::Frontend;
 use slint::ComponentHandle;
 use std::{fs::File, rc::Rc};
 use utility::PeekCell;
@@ -37,29 +38,16 @@ fn main() -> Result<(), Box<dyn Error>> {
     let _guard = init_logging();
 
     let _ = slint::BackendSelector::new().backend_name("winit".into()).renderer_name("skia".into()).select();
-    let backend = Rc::new(PeekCell::new(Backend::new()));
     let app_window = ui::AppWindow::new()?;
-    let async_state = AsyncState::new(backend, app_window.as_weak());
+    let backend = Rc::new(PeekCell::new(Backend::new()));
+    let frontend = Frontend::new(app_window.clone_strong());
 
-    // Set up callbacks.
-    async_state.on_list_devices(Backend::list_devices);
-    async_state.on_discover(Backend::discover);
-    async_state.on_cleanup_session(Backend::cleanup_session);
-    async_state.on_take_ownership(Backend::take_ownership);
-    async_state.on_activate_locking(Backend::activate_locking);
-    async_state.on_login_locking_admin(Backend::login_locking_admin);
-    async_state.on_list_locking_ranges(Backend::list_locking_ranges);
-    async_state.on_set_locking_range(Backend::set_locking_range);
-    async_state.on_erase_locking_range(Backend::erase_locking_range);
-    async_state.on_list_locking_users(Backend::list_locking_users);
-    async_state.on_set_locking_user_enabled(Backend::set_locking_user_enabled);
-    async_state.on_set_locking_user_name(Backend::set_locking_user_name);
-    async_state.on_set_locking_user_password(Backend::set_locking_user_password);
-    async_state.on_revert(Backend::revert);
-    async_state.on_reset_stack(Backend::reset_stack);
+    configuration::set_callbacks(backend.clone(), frontend.clone());
+    troubleshooting::set_callbacks(backend.clone(), frontend.clone());
+    device_list::set_callbacks(backend.clone(), frontend.clone());
 
     // Refresh device list right after starting.
-    app_window.global::<ui::State>().invoke_list_devices();
+    app_window.global::<ui::DeviceListState>().invoke_list();
 
     // Display GUI.
     app_window.run()?;

@@ -2,7 +2,7 @@ import { DeviceDescription, ExampleData as DeviceDescriptionExampleData } from "
 import { UnavailableDevicesPage} from "pages/unavailable_devices_page.slint";
 import { TabBar } from "widgets/tab_bar.slint";
 import { AlternativeLayout, AlternativeChild } from "widgets/alternative_layout.slint";
-import { State } from "state.slint";
+import { DeviceListState, TroubleshootingState, UserEditorState, RangeEditorState, SingleStepState } from "state.slint";
 import { Button, Spinner, Palette } from "std-widgets.slint";
 import { DevicePage } from "pages/device_page.slint";
 import { UnavailableDevicesPage } from "pages/unavailable_devices_page.slint";
@@ -12,7 +12,7 @@ import { PaletteExtra } from "widgets/visual.slint";
 import { ToastPopup } from "widgets/toast_message.slint";
 import { Icons } from "icons.slint";
 
-export { State }
+export { DeviceListState, TroubleshootingState, UserEditorState, RangeEditorState, SingleStepState }
 
 component DriveTabView {
     private property <int> current-tab;
@@ -25,8 +25,8 @@ component DriveTabView {
         HorizontalLayout {
             vertical-stretch: 0.0;
             TabBar {
-                titles: State.tab-names;
-                selected: Math.max(0, Math.min(State.tab-names.length - 1, current-tab));
+                titles: DeviceListState.tab-names;
+                selected: Math.max(0, Math.min(DeviceListState.tab-names.length - 1, current-tab));
                 tab-selected(index) => {
                     current-tab = index;
                 }
@@ -37,14 +37,14 @@ component DriveTabView {
                 icon: Icons.refresh;
                 colorize-icon: true;
                 clicked => {
-                    State.list-devices();
+                    DeviceListState.list();
                 }
             }
         }
 
         AlternativeLayout {
             vertical-stretch: 1.0;
-            for device-idx in State.descriptions.length: AlternativeChild {
+            for device-idx in DeviceListState.descriptions.length: AlternativeChild {
                 selected: current-tab == device-idx;
                 device-page := DevicePage {
                     device-idx: device-idx;
@@ -62,9 +62,9 @@ component DriveTabView {
                 }
             }
             AlternativeChild {
-                selected: current-tab >= State.descriptions.length;
+                selected: current-tab >= DeviceListState.descriptions.length;
                 UnavailableDevicesPage {
-                    unavailable-devices: State.unavailable-devices;
+                    unavailable-devices: DeviceListState.unavailable-devices;
                 }
             }
         }
@@ -79,7 +79,7 @@ component LoadingView {
             HorizontalLayout {
                 alignment: center;
                 StatusIndicator {
-                    status: State.device-list-status.status;
+                    status: DeviceListState.extended-status.status;
                     icon: Icons.hard-drive;
                     width: 80px;
                     height: 80px;
@@ -88,9 +88,9 @@ component LoadingView {
 
             Text {
                 text: {
-                    if State.device-list-status.status == Status.loading {
+                    if DeviceListState.extended-status.status == Status.loading {
                         "Loading devices..."
-                    } else if State.device-list-status.status == Status.error {
+                    } else if DeviceListState.extended-status.status == Status.error {
                         "Failed to load devices:"
                     } else {
                         "No compatible devices found"
@@ -98,17 +98,17 @@ component LoadingView {
                 };
                 font-size: 24px;
                 horizontal-alignment: center;
-                color: State.device-list-status.status == Status.error ? PaletteExtra.error-foreground : Palette.foreground;
+                color: DeviceListState.extended-status.status == Status.error ? PaletteExtra.error-foreground : Palette.foreground;
             }
 
             Text {
                 text: {
-                    if State.device-list-status.status == Status.loading {
+                    if DeviceListState.extended-status.status == Status.loading {
                         "This can take up to 20 seconds while hard drives spin up."
-                    } else if State.device-list-status.status == Status.error {
-                        State.device-list-status.message
+                    } else if DeviceListState.extended-status.status == Status.error {
+                        DeviceListState.extended-status.message
                     } else {
-                        "Some interfaces are not supported by SEDManager.\nYou may also be running a VM."
+                        "Not all drive interfaces are supported by SEDManager"
                     }
                 }
                 horizontal-alignment: center;
@@ -124,7 +124,7 @@ export component AppWindow inherits Window {
     preferred-height: 600px;
     min-width: 640px;
     min-height: 360px;
-    private property <bool> loaded: State.device-list-status.status == Status.success && State.tab-names.length != 0;
+    private property <bool> loaded: DeviceListState.extended-status.status == Status.success && DeviceListState.tab-names.length != 0;
     VerticalLayout {
         if loaded: DriveTabView { }
         if !loaded: LoadingView { }

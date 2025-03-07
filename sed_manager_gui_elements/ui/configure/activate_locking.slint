@@ -5,6 +5,7 @@ import { ResultPopup } from "../widgets/result_popup.slint";
 import { ConfigView } from "config_view.slint";
 import { RepeatedPasswordEdit } from "../widgets/password.slint";
 import { Icons } from "../icons.slint";
+import { SingleStepState } from "../state.slint";
 
 component Form {
     out property <string> sid-password;
@@ -66,8 +67,7 @@ component Form {
 }
 
 export component ActivateLocking inherits ConfigView {
-    in-out property <ExtendedStatus> extended-status: { status: Status.error };
-    callback activate-locking(sid-password: string, new-admin1-password: string);
+    in property <ExtendedStatus> extended-status: SingleStepState.statuses[root.device-idx];
     config-name: "Activate locking";
     config-icon: Icons.activate-locking;
     back-enabled: extended-status.status != Status.loading;
@@ -103,7 +103,7 @@ export component ActivateLocking inherits ConfigView {
         form := Form {
             enabled: root.back-enabled;
             executed => {
-                root.activate-locking(self.sid-password, self.admin1-password);
+                SingleStepState.activate-locking(root.device-idx, self.sid-password, self.admin1-password);
                 result-popup.show();
             }
         }

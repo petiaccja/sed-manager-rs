@@ -40,12 +40,14 @@ export component StatusIndicator {
         width: parent.width;
         height: parent.height;
         source: Icons.error;
+        image-fit: contain;
         colorize: PaletteExtra.error-foreground;
     }
     if status == Status.success: Image {
         width: parent.width;
         height: parent.height;
         source: icon;
+        image-fit: contain;
         colorize: PaletteExtra.success-foreground;
     }
 }

@@ -7,120 +7,72 @@ import { LockingRange } from "../data/locking_range.slint";
 import { Description } from "../info/description.slint";
 import { TakeOwnership } from "../configure/take_owneship.slint";
 import { ActivateLocking } from "../configure/activate_locking.slint";
-import { LockingRanges } from "../configure/locking_ranges.slint";
-import { Users } from "../configure/users.slint";
+import { RangeEditor} from "../configure/range_editor.slint";
+import { UserEditor } from "../configure/user_editor.slint";
 import { Revert } from "../configure/revert.slint";
-import { State } from "../state.slint";
+import { DeviceListState, TroubleshootingState } from "../state.slint";
 import { StackResetPopup } from "../troubleshoot/stack-reset.slint";
 
 export component DevicePage {
     in property <int> device-idx: 0;
     private property <Activity> current-activity: Activity.description;
     function set-current-activity(activity: Activity) {
+        DeviceListState.release-session(device-idx);
         self.current-activity = activity;
         if activity == Activity.description {
-            State.cleanup-session(device-idx);
-            State.discover(device-idx);
+            DeviceListState.discover(device-idx);
         } else if activity == Activity.stack-reset {
-            State.reset-stack(device-idx);
+            TroubleshootingState.stack-reset(device-idx);
             self.current-activity = Activity.description;
             stack-reset.show();
         }
     }
     public function gained-focus() {
-        if current-activity == Activity.description && State.descriptions[device-idx].discovery-status.status == Status.loading {
-            State.discover(device-idx);
+        if current-activity == Activity.description && DeviceListState.descriptions[device-idx].discovery-status.status == Status.loading {
+            DeviceListState.discover(device-idx);
         }
     }
     VerticalLayout {
         if current-activity == Activity.description: Description {
-            description: State.descriptions[device-idx];
+            description: DeviceListState.descriptions[device-idx];
             select-activity(activity) => {
                 set-current-activity(activity);
             }
         }
         if current-activity == Activity.take-ownership: TakeOwnership {
-            device-name: State.descriptions[device-idx].identity.name;
-            extended-status: State.configure[device-idx].extended-status;
+            device-idx: device-idx;
             back => {
                 set-current-activity(Activity.description);
-            }
-            take-ownership(new-password) => {
-                State.take-ownership(device-idx, new-password);
             }
         }
         if current-activity == Activity.activate-locking: ActivateLocking {
-            device-name: State.descriptions[device-idx].identity.name;
-            extended-status: State.configure[device-idx].extended-status;
+            device-idx: device-idx;
             back => {
                 set-current-activity(Activity.description);
-            }
-            activate-locking(sid-password, new-admin1-password) => {
-                State.activate-locking(device-idx, sid-password, new-admin1-password)
             }
         }
-        if current-activity == Activity.locking-ranges: LockingRanges {
-            device-name: State.descriptions[device-idx].identity.name;
-            geometry: State.descriptions[device-idx].geometry;
-            login-status: State.configure[device-idx].extended-status;
-            names: State.configure[device-idx].locking-ranges.names;
-            ranges: State.configure[device-idx].locking-ranges.properties;
-            statuses: State.configure[device-idx].locking-ranges.statuses;
+        if current-activity == Activity.range-editor: RangeEditor {
+            device-idx: device-idx;
             back => {
                 set-current-activity(Activity.description);
-            }
-            login-locking-admin(admin_idx, password) => {
-                State.login-locking-admin(device-idx, admin_idx, password);
-            }
-            list-locking-ranges => {
-                State.list-locking-ranges(device-idx);
-            }
-            set-locking-range(range-idx, value) => {
-                State.set-locking-range(device-idx, range-idx, value);
-            }
-            erase-locking-range(range-idx) => {
-                State.erase-locking-range(device-idx, range-idx);
             }
         }
-        if current-activity == Activity.users: Users {
-            device-name: State.descriptions[device-idx].identity.name;
-            login-status: State.configure[device-idx].extended-status;
-            names: State.configure[device-idx].users.names;
-            users: State.configure[device-idx].users.properties;
-            statuses: State.configure[device-idx].users.statuses;
+        if current-activity == Activity.user-editor: UserEditor {
+            device-idx: device-idx;
             back => {
                 set-current-activity(Activity.description);
-            }
-            login-locking-admin(admin_idx, password) => {
-                State.login-locking-admin(device-idx, admin_idx, password);
-            }
-            list-locking-users() => {
-                State.list-locking-users(device-idx);
-            }
-            set-locking-user-enabled(user-idx, enabled) => {
-                State.set-locking-user-enabled(device-idx, user-idx, enabled);
-            }
-            set-locking-user-name(user-idx, friendly-name) => {
-                State.set-locking-user-name(device-idx, user-idx, friendly-name);
-            }
-            set-locking-user-password(user-idx, password) => {
-                State.set-locking-user-password(device-idx, user-idx, password);
             }
         }
         if current-activity == Activity.revert: Revert {
-            device-name: State.descriptions[device-idx].identity.name;
-            extended-status: State.configure[device-idx].extended-status;
+            device-idx: device-idx;
             back => {
                 set-current-activity(Activity.description);
-            }
-            revert(use-psid, password, include-admin) => {
-                State.revert(device-idx, use-psid, password, include-admin);
             }
         }
     }
 
     stack-reset := StackResetPopup {
-        extended-status: State.troubleshoot[device-idx].extended-status;
+        extended-status: TroubleshootingState.statuses[device-idx];
         x: (root.width - self.width) / 2;
         y: (root.height - self.height) / 2;
         finished => {
