@@ -11,10 +11,10 @@ use crate::utility::{into_vec_model, PeekCell};
 
 pub fn init(frontend: &Frontend, num_devices: usize) {
     frontend.with(|window| {
-        let ac_editor_state = window.global::<ui::AccessControlEditorState>();
+        let mbr_editor_state = window.global::<ui::MBREditorState>();
         let initial_status = ui::ExtendedStatus::error("missing callback".into());
-        ac_editor_state.set_login_statuses(into_vec_model(vec![initial_status; num_devices]));
-        ac_editor_state.set_matrices(into_vec_model(vec![ui::AccessControlMatrix::default(); num_devices]));
+        mbr_editor_state.set_login_statuses(into_vec_model(vec![initial_status; num_devices]));
+        mbr_editor_state.set_mbr_control(into_vec_model(vec![ui::MBRControl::default(); num_devices]));
     });
 }
 
@@ -28,9 +28,9 @@ pub fn set_callbacks(backend: Rc<PeekCell<Backend>>, frontend: Frontend) {
 
 fn set_callback_login(backend: Rc<PeekCell<Backend>>, frontend: Frontend) {
     frontend.clone().with(|window| {
-        let ac_editor_state = window.global::<ui::AccessControlEditorState>();
+        let mbr_editor_state = window.global::<ui::MBREditorState>();
 
-        ac_editor_state.on_login(move |device_idx, password| {
+        mbr_editor_state.on_login(move |device_idx, password| {
             let frontend = frontend.clone();
             let backend = backend.clone();
             let device_idx = device_idx as usize;
@@ -57,8 +57,8 @@ async fn login(backend: Rc<PeekCell<Backend>>, device_idx: usize, password: Stri
 
 fn set_login_status(frontend: &Frontend, device_idx: usize, status: ui::ExtendedStatus) {
     frontend.with(|window| {
-        let ac_editor_state = window.global::<ui::AccessControlEditorState>();
-        let login_statuses = ac_editor_state.get_login_statuses();
+        let mbr_editor_state = window.global::<ui::MBREditorState>();
+        let login_statuses = mbr_editor_state.get_login_statuses();
         if device_idx < login_statuses.row_count() {
             login_statuses.set_row_data(device_idx, status);
         }

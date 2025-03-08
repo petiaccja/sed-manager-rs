@@ -54,7 +54,7 @@ fn get_locking_feature_desc(controller: &OpalV2Controller) -> FeatureDescriptor 
         media_encryption: false,
         mbr_enabled: false,
         mbr_done: false,
-        mbr_shadowing_not_supported: true, // Not yet implement for fake device.
+        mbr_shadowing_not_supported: false,
     };
     FeatureDescriptor::Locking(desc)
 }

@@ -302,39 +302,34 @@ component RangeTable {
         }
     }
 
-    HorizontalLayout {
-        alignment: stretch;
+    table := Table {
+        preferred-width: 100%;
+        preferred-height: 100%;
+        column-names: TableDesc.column-names;
+        column-widths: TableDesc.column-widths;
+        column-stretches: TableDesc.column-stretches;
+        row-names: names;
+        row-heights: [TableDesc.row-height];
         VerticalLayout {
-            alignment: stretch;
-            padding-top: 16px;
-            table := Table {
-                column-names: TableDesc.column-names;
-                column-widths: TableDesc.column-widths;
-                column-stretches: TableDesc.column-stretches;
-                row-names: names;
-                row-heights: [TableDesc.row-height];
-                VerticalLayout {
-                    for row[range-idx] in root.names: RangeRow {
-                        geometry: geometry;
-                        range: ranges[range-idx];
-                        status: statuses[range-idx].status;
-                        column-widths: table.column-widths;
-                        column-stretches: table.column-stretches;
-                        range-idx: range-idx;
-                        row-height: table.row-heights[0];
-                        set-value(value) => {
-                            set-value(range-idx, value);
-                        }
-                        erase() => {
-                            warned-range-idx = range-idx;
-                            erase-warning.show();
-                        }
-                        changed status => {
-                            if self.status == Status.error {
-                                ToastMessage.show("Could not modify " + names[range-idx] + ": " + statuses[range-idx].message, PaletteExtra.error-foreground);
-                                self.range = ranges[range-idx];
-                            }
-                        }
+            for row[range-idx] in root.names: RangeRow {
+                geometry: geometry;
+                range: ranges[range-idx];
+                status: statuses[range-idx].status;
+                column-widths: table.column-widths;
+                column-stretches: table.column-stretches;
+                range-idx: range-idx;
+                row-height: table.row-heights[0];
+                set-value(value) => {
+                    set-value(range-idx, value);
+                }
+                erase() => {
+                    warned-range-idx = range-idx;
+                    erase-warning.show();
+                }
+                changed status => {
+                    if self.status == Status.error {
+                        ToastMessage.show("Could not modify " + names[range-idx] + ": " + statuses[range-idx].message, PaletteExtra.error-foreground);
+                        self.range = ranges[range-idx];
                     }
                 }
             }

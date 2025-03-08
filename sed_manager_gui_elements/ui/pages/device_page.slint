@@ -9,6 +9,8 @@ import { TakeOwnership } from "../configure/take_owneship.slint";
 import { ActivateLocking } from "../configure/activate_locking.slint";
 import { RangeEditor} from "../configure/range_editor.slint";
 import { UserEditor } from "../configure/user_editor.slint";
+import { AccessControlEditor } from "../configure/access_control_editor.slint";
+import { MBREditor } from "../configure/mbr_editor.slint";
 import { Revert } from "../configure/revert.slint";
 import { DeviceListState, TroubleshootingState } from "../state.slint";
 import { StackResetPopup } from "../troubleshoot/stack-reset.slint";
@@ -58,6 +60,18 @@ export component DevicePage {
             }
         }
         if current-activity == Activity.user-editor: UserEditor {
+            device-idx: device-idx;
+            back => {
+                set-current-activity(Activity.description);
+            }
+        }
+        if current-activity == Activity.access-control-editor: AccessControlEditor {
+            device-idx: device-idx;
+            back => {
+                set-current-activity(Activity.description);
+            }
+        }
+        if current-activity == Activity.shadow-mbr: MBREditor {
             device-idx: device-idx;
             back => {
                 set-current-activity(Activity.description);

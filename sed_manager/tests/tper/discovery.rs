@@ -31,7 +31,7 @@ fn discovery_normal() -> Result<(), RPCError> {
     assert_eq!(locking_desc.media_encryption, false);
     assert_eq!(locking_desc.mbr_enabled, false);
     assert_eq!(locking_desc.mbr_done, false);
-    assert_eq!(locking_desc.mbr_shadowing_not_supported, true);
+    assert_eq!(locking_desc.mbr_shadowing_not_supported, false);
     assert_eq!(locking_desc.hw_reset_supported, true);
 
     assert_eq!(opal_desc.base_com_id, 4100);

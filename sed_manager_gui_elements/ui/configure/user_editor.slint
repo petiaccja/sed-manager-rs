@@ -102,42 +102,37 @@ component UserTable {
     callback set-enabled(user-idx: int, enabled: bool);
     callback set-name(user-idx: int, friendly-name: string);
     callback set-password(user-idx: int, password: string);
-    HorizontalLayout {
-        alignment: stretch;
+    table := Table {
+        preferred-width: 100%;
+        preferred-height: 100%;
+        column-names: TableDesc.column-names;
+        column-widths: TableDesc.column-widths;
+        column-stretches: TableDesc.column-stretches;
+        row-names: names;
+        row-heights: [TableDesc.row-height];
         VerticalLayout {
-            alignment: stretch;
-            padding-top: 16px;
-            table := Table {
-                column-names: TableDesc.column-names;
-                column-widths: TableDesc.column-widths;
-                column-stretches: TableDesc.column-stretches;
-                row-names: names;
-                row-heights: [TableDesc.row-height];
-                VerticalLayout {
-                    for row[user-idx] in root.names: UserRow {
-                        user: users[user-idx];
-                        status: statuses[user-idx].status;
-                        column-widths: table.column-widths;
-                        column-stretches: table.column-stretches;
-                        user-idx: user-idx;
-                        row-height: table.row-heights[0];
-                        changed status => {
-                            if self.status == Status.error {
-                                ToastMessage.show("Could not modify " + names[user-idx] + ": " + statuses[user-idx].message, PaletteExtra.error-foreground);
-                                self.user = users[user-idx];
-                            }
-                        }
-                        set-enabled(enabled) => {
-                            set-enabled(user-idx, enabled);
-                        }
-                        set-name(friendly-name) => {
-                            set-name(user-idx, friendly-name);
-                        }
-                        set-password => {
-                            password-popup-user = user-idx;
-                            password-popup.show();
-                        }
+            for row[user-idx] in root.names: UserRow {
+                user: users[user-idx];
+                status: statuses[user-idx].status;
+                column-widths: table.column-widths;
+                column-stretches: table.column-stretches;
+                user-idx: user-idx;
+                row-height: table.row-heights[0];
+                changed status => {
+                    if self.status == Status.error {
+                        ToastMessage.show("Could not modify " + names[user-idx] + ": " + statuses[user-idx].message, PaletteExtra.error-foreground);
+                        self.user = users[user-idx];
                     }
+                }
+                set-enabled(enabled) => {
+                    set-enabled(user-idx, enabled);
+                }
+                set-name(friendly-name) => {
+                    set-name(user-idx, friendly-name);
+                }
+                set-password => {
+                    password-popup-user = user-idx;
+                    password-popup.show();
                 }
             }
         }

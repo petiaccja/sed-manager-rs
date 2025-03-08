@@ -1,0 +1,156 @@
+import { ExtendedStatus, Status } from "../data/status.slint";
+import { ConfigView } from "config_view.slint";
+import { LoginView } from "login_view.slint";
+import { MBRControl } from "../data/mbr_control.slint";
+import { Table, Cell } from "../widgets/table.slint";
+import { LineEdit, CheckBox, Button, Switch, Palette, ProgressIndicator } from "std-widgets.slint";
+import { Icons } from "../icons.slint";
+import { PaletteExtra, Island, HorizontalSeparator } from "../widgets/visual.slint";
+import { ToastMessage } from "../widgets/toast_message.slint";
+import { PrototypePopup } from "../widgets/prototype_popup.slint";
+import { RepeatedPasswordEdit } from "../widgets/password.slint";
+import { MBREditorState } from "../state.slint";
+import { StatusIndicator } from "../widgets/progress.slint";
+import { IconButton } from "../widgets/icon_button.slint";
+
+component MBRView {
+    VerticalLayout {
+        spacing: 12px;
+        Island {
+            HorizontalLayout {
+                alignment: start;
+                vertical-stretch: 0;
+                GridLayout {
+                    padding: 8px;
+                    spacing-vertical: 12px;
+                    spacing-horizontal: 16px;
+                    Text {
+                        row: 0;
+                        text: "Size:";
+                        vertical-alignment: center;
+                    }
+
+                    Text {
+                        text: "128 MiB";
+                        vertical-alignment: center;
+                    }
+
+                    Text {
+                        row: 1;
+                        text: "Shadowing:";
+                        vertical-alignment: center;
+                    }
+
+                    Switch {
+                        text: self.checked ? "Enabled" : "Disabled";
+                        enabled: false;
+                    }
+
+                    Text {
+                        row: 2;
+                        text: "Current state:";
+                        vertical-alignment: center;
+                    }
+
+                    Switch {
+                        text: self.checked ? "Shadowed" : "Not shadowed";
+                        enabled: false;
+                    }
+                }
+            }
+        }
+
+        VerticalLayout {
+            vertical-stretch: 1;
+            alignment: center;
+            HorizontalLayout {
+                alignment: center;
+                IconButton {
+                    icon: Icons.upload;
+                    width: 120px;
+                    height: 120px;
+                    enabled: false;
+                }
+            }
+        }
+
+        HorizontalLayout {
+            spacing: 8px;
+            ProgressIndicator {
+                indeterminate: false;
+                progress: 0%;
+            }
+
+            Button {
+                text: "Cancel";
+                enabled: false;
+            }
+        }
+    }
+}
+
+export component MBREditor inherits ConfigView {
+    config-name: "MBR editor";
+    config-icon: Icons.mbr-shadowing;
+    in property <ExtendedStatus> login-status: MBREditorState.login-statuses[root.device-idx];
+    in property <MBRControl> mbr-control: MBREditorState.mbr-control[root.device-idx];
+    in-out property <bool> authenticated: false;
+    VerticalLayout {
+        if !authenticated: LoginView {
+            extended-status: login-status;
+            user-name: "Admin1";
+            login-button-text: "Edit users";
+            back => {
+                root.back();
+            }
+            login(password) => {
+                MBREditorState.login(root.device-idx, password);
+            }
+            success => {
+                authenticated = true;
+                MBREditorState.query(root.device-idx);
+            }
+        }
+        if authenticated: MBRView { }
+        if authenticated && login-status.status != Status.success: Rectangle {
+            height: 0;
+            clip: false;
+            VerticalLayout {
+                y: -self.min-height;
+                height: self.min-height;
+                spacing: 6px;
+                padding: 16px;
+                StatusIndicator {
+                    preferred-width: 100%;
+                    height: 80px;
+                    status: login-status.status;
+                }
+
+                Text {
+                    text: login-status.message;
+                    color: PaletteExtra.error-foreground;
+                    horizontal-alignment: center;
+                }
+            }
+        }
+    }
+}
+
+global ExampleData { }
+
+export component LivePreviewTest_ParamsError inherits MBREditor {
+    device-name: "Foo Device";
+    login-status: { status: Status.error, message: "sample error" };
+    authenticated: true;
+}
+
+export component LivePreviewTest_ParamsSuccess inherits MBREditor {
+    device-name: "Foo Device";
+    login-status: { status: Status.success };
+    authenticated: true;
+}
+
+export component LivePreviewTest inherits MBREditor {
+    device-name: "Foo Device";
+    login-status: { status: Status.loading };
+}

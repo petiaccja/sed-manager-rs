@@ -1,8 +1,10 @@
 import { ExtendedStatus, Status } from "data/status.slint";
 import { LockingRange } from "data/locking_range.slint";
 import { User } from "data/user.slint";
+import { RangeAccess } from "data/range_access.slint";
 import { DeviceDescription } from "data/device_description.slint";
 import { UnavailableDevice } from "data/unavailable_device.slint";
+import { MBRControl } from "data/mbr_control.slint";
 
 export struct RangeList {
     names: [string],
@@ -14,6 +16,20 @@ export struct UserList {
     names: [string],
     values: [User],
     statuses: [ExtendedStatus],
+}
+
+
+export struct AccessControlUser {
+    unshadow-mbr: bool,
+    range-names: [string],
+    range-accesses: [RangeAccess],
+    range-statuses: [ExtendedStatus],
+
+}
+
+export struct AccessControlMatrix {
+    user-names: [string],
+    user-accesses: [AccessControlUser],
 }
 
 export struct ComIdState {
@@ -46,6 +62,20 @@ export global UserEditorState {
     callback set-enabled(device-idx: int, user-idx: int, enabled: bool);
     callback set-name(device-idx: int, user-idx: int, name: string);
     callback set-password(device-idx: int, user-idx: int, password: string);
+}
+
+export global AccessControlEditorState {
+    in property <[ExtendedStatus]> login-statuses;
+    in property <[AccessControlMatrix]> matrices;
+    callback login(device-idx: int, password: string);
+    callback list(device-idx: int);
+}
+
+export global MBREditorState {
+    in property <[ExtendedStatus]> login-statuses;
+    in property <[MBRControl]> mbr-control;
+    callback login(device-idx: int, password: string);
+    callback query(device-idx: int);
 }
 
 export global TroubleshootingState {

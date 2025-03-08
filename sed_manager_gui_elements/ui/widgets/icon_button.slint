@@ -1,0 +1,62 @@
+import { PaletteExtra } from "visual.slint";
+import { Palette } from "std-widgets.slint";
+import { Icons } from "../icons.slint";
+
+export component IconButton {
+    preferred-height: 32px;
+    padding: 4px;
+    min-width: label.min-width + 2 * self.padding;
+    min-height: 1px + 2 * self.padding;
+    in property <image> icon;
+    in property <string> text;
+    in property <length> font-size: self.height / 7;
+    in property <bool> enabled <=> area.enabled;
+    out property <bool> has-hover <=> area.has-hover;
+    private property <color> foreground:  {
+        if area.enabled && area.has-hover {
+            PaletteExtra.accented-control-foreground
+        } else if area.enabled {
+            Palette.control-foreground
+        } else {
+            Palette.control-foreground.with-alpha(0.6)
+        }
+    };
+    private property <length> text-height: 0;
+    callback clicked <=> area.clicked;
+    image := Image {
+        y: parent.padding;
+        width: parent.width - 2 * parent.padding;
+        height: text.character-count > 0 ? parent.height - label.height - 2 * parent.padding : parent.height - 2 * parent.padding;
+        source: icon;
+        image-fit: contain;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        colorize: foreground;
+    }
+
+    label := Text {
+        y: parent.height - self.height - parent.padding;
+        height: self.min-height;
+        text: text;
+        horizontal-alignment: center;
+        color: foreground;
+        font-size: font-size;
+    }
+
+    area := TouchArea { }
+}
+
+export component LivePreviewTest_WithText inherits IconButton {
+    icon: Icons.upload;
+    text: "Upload";
+}
+
+export component LivePreviewTest_FontSize inherits IconButton {
+    icon: Icons.upload;
+    text: "Upload";
+    font-size: 16px;
+}
+
+export component LivePreviewTest_NoText inherits IconButton {
+    icon: Icons.upload;
+}
