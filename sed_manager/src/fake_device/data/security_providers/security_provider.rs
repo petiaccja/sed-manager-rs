@@ -39,7 +39,7 @@ pub trait SecurityProvider {
             Ok(BytesOrRowValues::RowValues(
                 (first..last)
                     .into_iter()
-                    .map(|idx| (idx, object.get_column(idx as usize)))
+                    .map(|idx| (idx, object.get(idx as usize)))
                     .filter(|(_n, v)| !v.is_empty())
                     .map(|(n, value)| Value::from(Named { name: n.into(), value }))
                     .collect(),
@@ -74,8 +74,8 @@ pub trait SecurityProvider {
 
             let mut rollback_idx = None;
             for (idx, NamedValue { name, value }) in nvps.iter_mut().enumerate() {
-                let old = object.get_column(*name as usize);
-                if object.try_set_column(*name as usize, core::mem::replace(value, old)).is_err() {
+                let old = object.get(*name as usize);
+                if object.try_replace(*name as usize, core::mem::replace(value, old)).is_err() {
                     rollback_idx = Some(idx);
                     break;
                 }
@@ -83,7 +83,7 @@ pub trait SecurityProvider {
 
             if let Some(rollback_idx) = rollback_idx {
                 for NamedValue { name, value } in nvps.into_iter().take(rollback_idx as usize) {
-                    object.try_set_column(name as usize, value).expect("error in From<Value> impl");
+                    object.try_replace(name as usize, value).expect("error in From<Value> impl");
                 }
                 return Err(MethodStatus::InvalidParameter);
             } else {

@@ -1,10 +1,38 @@
 use crate::messaging::uid::UID;
 use crate::messaging::value::Value;
+use crate::spec::objects::{Authority, LockingRange, CPIN, KAES256, SP};
 
 pub trait GenericObject {
     fn uid(&self) -> UID;
     fn len(&self) -> usize;
-    fn is_column_empty(&self, column: usize) -> bool;
-    fn get_column(&self, column: usize) -> Value;
-    fn try_set_column(&mut self, column: usize, value: Value) -> Result<(), Value>;
+    fn get(&self, column: usize) -> Value;
+    fn try_replace(&mut self, column: usize, value: Value) -> Result<Value, Value>;
 }
+
+macro_rules! impl_generic_object {
+    ($type:ty) => {
+        impl GenericObject for $type {
+            fn uid(&self) -> UID {
+                UID::try_from(self.get(0)).unwrap()
+            }
+
+            fn len(&self) -> usize {
+                self.as_array().len()
+            }
+
+            fn get(&self, column: usize) -> Value {
+                self.as_array()[column].get()
+            }
+
+            fn try_replace(&mut self, column: usize, value: Value) -> Result<Value, Value> {
+                self.as_array_mut()[column].try_replace(value)
+            }
+        }
+    };
+}
+
+impl_generic_object!(Authority);
+impl_generic_object!(CPIN);
+impl_generic_object!(KAES256);
+impl_generic_object!(LockingRange);
+impl_generic_object!(SP);

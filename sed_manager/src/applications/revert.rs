@@ -2,6 +2,7 @@ use crate::applications::utility::get_admin_sp;
 use crate::messaging::discovery::Discovery;
 use crate::spec;
 use crate::spec::column_types::{AuthorityRef, Password, SPRef};
+use crate::spec::objects::CPIN;
 use crate::tper::TPer;
 
 use super::error::Error;
@@ -36,7 +37,7 @@ pub async fn verify_reverted(tper: &TPer) -> Result<bool, Error> {
 
     let anybody_session = tper.start_session(admin_sp, None, None).await?;
     let msid_password: Password = with_session!(session = anybody_session => {
-        session.get(c_pin::MSID.as_uid(), 3).await
+        session.get(c_pin::MSID.as_uid(), CPIN::PIN).await
     })?;
     with_session!(session = tper.start_session(admin_sp, Some(authority::SID), Some(&msid_password)).await? => {});
     Ok(true)
@@ -58,7 +59,7 @@ mod tests {
             let controller = device.controller();
             let mut controller = controller.lock().unwrap();
             let sid = controller.admin_sp.basic_sp.c_pin.get_mut(&spec::opal::admin::c_pin::SID).unwrap();
-            sid.pin = Some(sid_password.into());
+            sid.pin = sid_password.into();
         };
         let tper = TPer::new_on_default_com_id(device)?;
         revert(&tper, spec::core::authority::SID, sid_password.as_bytes(), spec::opal::admin::sp::ADMIN).await?;
@@ -74,7 +75,7 @@ mod tests {
             let controller = device.controller();
             let mut controller = controller.lock().unwrap();
             let sid = controller.admin_sp.basic_sp.c_pin.get_mut(&spec::opal::admin::c_pin::SID).unwrap();
-            sid.pin = Some(sid_password.into());
+            sid.pin = sid_password.into();
         };
         let tper = TPer::new_on_default_com_id(device)?;
         revert(&tper, spec::core::authority::SID, sid_password.as_bytes(), spec::opal::admin::sp::LOCKING).await?;

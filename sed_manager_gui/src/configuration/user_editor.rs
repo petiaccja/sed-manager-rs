@@ -1,6 +1,7 @@
 use std::rc::Rc;
 
 use sed_manager::spec::column_types::{AuthorityRef, CPINRef, Name};
+use sed_manager::spec::objects::{Authority, CPIN};
 use sed_manager::spec::{self, table_id};
 use sed_manager::tper::Session;
 use slint::{ComponentHandle as _, Model};
@@ -184,7 +185,7 @@ async fn set_enabled(
         user_list.get(user_idx).ok_or(RPCError::Unspecified).cloned()
     })?;
     let session = backend.peek_mut(|backend| backend.get_session(device_idx)).ok_or(RPCError::Unspecified)?;
-    session.set(user.as_uid(), 5, enabled).await?;
+    session.set(user.as_uid(), Authority::ENABLED, enabled).await?;
     Ok(())
 }
 
@@ -199,7 +200,7 @@ async fn set_name(
         user_list.get(user_idx).ok_or(RPCError::Unspecified).cloned()
     })?;
     let session = backend.peek_mut(|backend| backend.get_session(device_idx)).ok_or(RPCError::Unspecified)?;
-    session.set(user.as_uid(), 2, name.as_bytes()).await?;
+    session.set(user.as_uid(), Authority::COMMON_NAME, name.as_bytes()).await?;
     Ok(())
 }
 
@@ -214,8 +215,8 @@ async fn set_password(
         user_list.get(user_idx).ok_or(RPCError::Unspecified).cloned()
     })?;
     let session = backend.peek_mut(|backend| backend.get_session(device_idx)).ok_or(RPCError::Unspecified)?;
-    let credential: CPINRef = session.get(user.as_uid(), 0x0A).await?;
-    session.set(credential.as_uid(), 3, password.as_bytes()).await?;
+    let credential: CPINRef = session.get(user.as_uid(), Authority::CREDENTIAL).await?;
+    session.set(credential.as_uid(), CPIN::PIN, password.as_bytes()).await?;
     Ok(())
 }
 
@@ -305,7 +306,7 @@ mod helpers {
         let mut non_class = Vec::new();
         for authority in authorities {
             let is_not_just_anybody = authority != spec::core::authority::ANYBODY;
-            let is_not_class = Ok(false) == session.get(authority.as_uid(), 3).await;
+            let is_not_class = Ok(false) == session.get(authority.as_uid(), Authority::IS_CLASS).await;
             if is_not_just_anybody && is_not_class {
                 non_class.push(authority);
             }
@@ -314,8 +315,8 @@ mod helpers {
     }
 
     pub async fn get_authority_properties(session: &Session, authority: AuthorityRef) -> Result<ui::User, RPCError> {
-        let name: Name = session.get(authority.as_uid(), 2).await?;
-        let enabled: bool = session.get(authority.as_uid(), 5).await?;
+        let name: Name = session.get(authority.as_uid(), Authority::COMMON_NAME).await?;
+        let enabled: bool = session.get(authority.as_uid(), Authority::ENABLED).await?;
 
         Ok(ui::User { name: String::try_from(name).unwrap_or("".into()).into(), enabled })
     }

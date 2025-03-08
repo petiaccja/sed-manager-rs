@@ -2,6 +2,7 @@ use crate::applications::utility::get_locking_admins;
 use crate::messaging::discovery::{Discovery, LockingDescriptor};
 use crate::spec::column_types::LifeCycleState;
 use crate::spec::core;
+use crate::spec::objects::{CPIN, SP};
 use crate::tper::TPer;
 
 use super::error::Error;
@@ -25,7 +26,7 @@ pub async fn activate_locking(
     // Activate the locking SP.
     let admin_session = tper.start_session(admin_sp, Some(core::authority::SID), Some(sid_password)).await?;
     with_session!(session = admin_session => {
-        let life_cycle_state : LifeCycleState = session.get(locking_sp.as_uid(), 0x06).await?;
+        let life_cycle_state : LifeCycleState = session.get(locking_sp.as_uid(), SP::LIFE_CYCLE_STATE).await?;
         if life_cycle_state != LifeCycleState::ManufacturedInactive {
             return Err(Error::AlreadyActivated);
         }
@@ -39,7 +40,7 @@ pub async fn activate_locking(
     if let (Some(admin1_pw), Some(admin1), Some(admin1_c_pin)) = (new_admin1_password, admin1, admin1_c_pin) {
         let locking_session = tper.start_session(locking_sp, Some(admin1), Some(sid_password)).await?;
         with_session!(session = locking_session => {
-            session.set(admin1_c_pin.as_uid(), 0x03, admin1_pw).await
+            session.set(admin1_c_pin.as_uid(), CPIN::PIN, admin1_pw).await
         })?;
     }
 

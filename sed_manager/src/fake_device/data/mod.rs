@@ -1,6 +1,5 @@
 pub mod field;
 pub mod object;
-pub mod objects;
 pub mod opal_v2_controller;
 pub mod security_providers;
 pub mod table;

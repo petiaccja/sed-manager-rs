@@ -237,13 +237,14 @@ fn set_range_status(frontend: &Frontend, device_idx: usize, range_idx: usize, st
 }
 
 mod helpers {
-    use sed_manager::spec::column_types::LockingRangeRef;
+    use sed_manager::spec::{column_types::LockingRangeRef, objects::LockingRange};
 
     use super::*;
 
     pub async fn get_range_properties(session: &Session, range: LockingRangeRef) -> Result<ui::LockingRange, RPCError> {
+        let columns = LockingRange::RANGE_START..=LockingRange::WRITE_LOCKED;
         let (start_lba, length_lba, read_lock_enabled, write_lock_enabled, read_locked, write_locked) =
-            session.get_multiple::<(u64, u64, bool, bool, bool, bool)>(range.as_uid(), 3..=8).await?;
+            session.get_multiple::<(u64, u64, bool, bool, bool, bool)>(range.as_uid(), columns).await?;
 
         Ok(ui::LockingRange {
             start_lba: start_lba as i32,
@@ -270,15 +271,17 @@ mod helpers {
                 value.read_locked,
                 value.write_locked,
             );
-            session.set_multiple(range.as_uid(), [3, 4, 5, 6, 7, 8], values).await
+            let columns: [u16; 6] = core::array::from_fn(|i| LockingRange::RANGE_START + (i as u16));
+            session.set_multiple(range.as_uid(), columns, values).await
         } else {
             let values = (value.read_lock_enabled, value.write_lock_enabled, value.read_locked, value.write_locked);
-            session.set_multiple(range.as_uid(), [5, 6, 7, 8], values).await
+            let columns: [u16; 4] = core::array::from_fn(|i| LockingRange::READ_LOCK_ENABLED + (i as u16));
+            session.set_multiple(range.as_uid(), columns, values).await
         }
     }
 
     pub async fn erase_locking_range(session: &Session, range: LockingRangeRef) -> Result<(), RPCError> {
-        let active_key_id: MediaKeyRef = session.get(range.as_uid(), 0x0A).await?;
+        let active_key_id: MediaKeyRef = session.get(range.as_uid(), LockingRange::ACTIVE_KEY).await?;
         session.gen_key(CredentialRef::new_other(active_key_id), None, None).await
     }
 }

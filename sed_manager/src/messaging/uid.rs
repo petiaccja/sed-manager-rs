@@ -81,6 +81,10 @@ impl TableUID {
         Self(UID::new(value))
     }
 
+    pub const fn null() -> Self {
+        Self(UID::null())
+    }
+
     pub const fn try_new(value: u64) -> Result<Self, u64> {
         if Self::is_value_accepted(value) {
             Ok(Self(UID::new(value)))

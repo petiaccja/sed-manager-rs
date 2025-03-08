@@ -1,21 +1,18 @@
 use as_array::AsArray;
 
-use crate::messaging::uid::UID;
-use crate::messaging::value::Value;
 use crate::spec::column_types::{
     AdvKeyMode, GeneralStatus, LastReencStatus, LockingRangeRef, MediaKeyRef, Name, ReencryptRequest, ReencryptState,
     ResetTypes, VerifyMode,
 };
 
-use super::super::field::Field;
-use super::super::object::GenericObject;
+use super::cell::Cell;
 
 #[derive(AsArray)]
-#[as_array_traits(Field)]
+#[as_array_traits(Cell)]
 pub struct LockingRange {
     pub uid: LockingRangeRef,
-    pub name: Option<Name>,
-    pub common_name: Option<Name>,
+    pub name: Name,
+    pub common_name: Name,
     pub range_start: u64,
     pub range_length: u64,
     pub read_lock_enabled: bool,
@@ -36,11 +33,34 @@ pub struct LockingRange {
 }
 
 impl LockingRange {
-    pub fn new(uid: LockingRangeRef) -> Self {
+    pub const UID: u16 = 0;
+    pub const NAME: u16 = 1;
+    pub const COMMON_NAME: u16 = 2;
+    pub const RANGE_START: u16 = 3;
+    pub const RANGE_LENGTH: u16 = 4;
+    pub const READ_LOCK_ENABLED: u16 = 5;
+    pub const WRITE_LOCK_ENABLED: u16 = 6;
+    pub const READ_LOCKED: u16 = 7;
+    pub const WRITE_LOCKED: u16 = 8;
+    pub const LOCK_ON_RESET: u16 = 9;
+    pub const ACTIVE_KEY: u16 = 10;
+    pub const NEXT_KEY: u16 = 11;
+    pub const REENCRYPT_STATE: u16 = 12;
+    pub const REENCRYPT_REQUEST: u16 = 13;
+    pub const ADV_KEY_MODE: u16 = 14;
+    pub const VERIFY_MODE: u16 = 15;
+    pub const CONST_ON_RESET: u16 = 16;
+    pub const LAST_REENCRYPT_LBA: u16 = 17;
+    pub const LAST_REENC_STAT: u16 = 18;
+    pub const GENERAL_STATUS: u16 = 19;
+}
+
+impl Default for LockingRange {
+    fn default() -> Self {
         Self {
-            uid,
-            name: None,
-            common_name: None,
+            uid: LockingRangeRef::null(),
+            name: Name::default(),
+            common_name: Name::default(),
             range_start: 0,
             range_length: 0,
             read_lock_enabled: false,
@@ -59,27 +79,5 @@ impl LockingRange {
             last_reenc_stat: LastReencStatus::Success,
             general_status: GeneralStatus::None,
         }
-    }
-}
-
-impl GenericObject for LockingRange {
-    fn uid(&self) -> UID {
-        self.uid.into()
-    }
-
-    fn len(&self) -> usize {
-        self.as_array().len()
-    }
-
-    fn is_column_empty(&self, column: usize) -> bool {
-        self.as_array()[column].is_empty()
-    }
-
-    fn get_column(&self, column: usize) -> crate::messaging::value::Value {
-        self.as_array()[column].to_value()
-    }
-
-    fn try_set_column(&mut self, column: usize, value: Value) -> Result<(), Value> {
-        self.as_array_mut()[column].try_replace_with_value(value)
     }
 }

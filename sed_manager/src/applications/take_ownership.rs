@@ -2,6 +2,7 @@ use crate::applications::utility::get_admin_sp;
 use crate::messaging::discovery::Discovery;
 use crate::spec;
 use crate::spec::column_types::Password;
+use crate::spec::objects::CPIN;
 use crate::tper::TPer;
 
 use super::error::Error;
@@ -21,11 +22,11 @@ pub async fn take_ownership(tper: &TPer, new_password: &[u8]) -> Result<(), Erro
 
     let anybody_session = tper.start_session(admin_sp, None, None).await?;
     let msid_password: Password = with_session!(session = anybody_session => {
-        session.get(c_pin::MSID.as_uid(), 3).await
+        session.get(c_pin::MSID.as_uid(), CPIN::PIN).await
     })?;
     let sid_session = tper.start_session(admin_sp, Some(authority::SID), Some(&msid_password)).await?;
     with_session!(session = sid_session => {
-        session.set(c_pin::SID.as_uid(), 3, new_password).await
+        session.set(c_pin::SID.as_uid(), CPIN::PIN, new_password).await
     })?;
 
     Ok(())

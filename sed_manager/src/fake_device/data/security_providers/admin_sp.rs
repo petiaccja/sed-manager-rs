@@ -1,13 +1,13 @@
 use as_array::AsArray;
 
-use crate::fake_device::data::objects::{Authority, AuthorityTable, CPINTable, SPTable, CPIN, SP};
-use crate::fake_device::data::table::GenericTable;
+use crate::fake_device::data::table::{AuthorityTable, CPINTable, GenericTable, SPTable};
 use crate::fake_device::{MSID_PASSWORD, PSID_PASSWORD};
 use crate::messaging::uid::TableUID;
 use crate::messaging::value::Bytes;
 use crate::rpc::MethodStatus;
 use crate::spec;
 use crate::spec::column_types::{AuthMethod, AuthorityRef, BoolOrBytes, CredentialRef, LifeCycleState};
+use crate::spec::objects::{Authority, CPIN, SP};
 use crate::spec::opal::admin::*;
 
 use super::basic_sp::BasicSP;
@@ -84,75 +84,63 @@ impl Default for AdminSP {
 
 fn preconfig_authorities() -> AuthorityTable {
     let mut authorities = AuthorityTable::new();
-    let anybody = Authority {
-        name: Some("Anybody".into()),
-        operation: AuthMethod::None.into(),
-        credential: None,
-        ..Authority::new(authority::ANYBODY)
-    };
-    let admins = Authority {
-        name: Some("Admins".into()),
-        enabled: true.into(),
-        operation: AuthMethod::None.into(),
-        credential: None,
-        ..Authority::new(authority::ADMINS)
-    };
-    let makers = Authority {
-        name: Some("Makers".into()),
-        enabled: true.into(),
-        operation: AuthMethod::None.into(),
-        credential: None,
-        ..Authority::new(authority::MAKERS)
-    };
-    let sid = Authority {
-        name: Some("SID".into()),
-        enabled: true.into(),
-        operation: AuthMethod::Password.into(),
-        credential: Some(CredentialRef::new_other(c_pin::SID)),
-        ..Authority::new(authority::SID)
-    };
-    let psid = Authority {
-        name: Some("PSID".into()),
-        enabled: true.into(),
-        operation: AuthMethod::Password.into(),
-        credential: Some(CredentialRef::new_other(spec::psid::admin::c_pin::PSID)),
-        ..Authority::new(spec::psid::admin::authority::PSID)
-    };
-
-    authorities.insert(anybody.uid, anybody);
-    authorities.insert(admins.uid, admins);
-    authorities.insert(makers.uid, makers);
-    authorities.insert(sid.uid, sid);
-    authorities.insert(psid.uid, psid);
-
-    for i in 1..=4 {
-        let admin = Authority {
-            name: Some(format!("Admin{}", i).into()),
-            enabled: false.into(),
+    let basic = [
+        Authority { uid: authority::ANYBODY, name: "Anybody".into(), ..Default::default() },
+        Authority { uid: authority::ADMINS, name: "Admins".into(), ..Default::default() },
+        Authority { uid: authority::MAKERS, name: "Makers".into(), ..Default::default() },
+        Authority {
+            uid: authority::SID,
+            name: "SID".into(),
+            operation: AuthMethod::Password,
+            credential: CredentialRef::new_other(c_pin::SID),
+            ..Default::default()
+        },
+        Authority {
+            uid: spec::psid::admin::authority::PSID,
+            name: "PSID".into(),
             operation: AuthMethod::Password.into(),
-            credential: Some(CredentialRef::new_other(c_pin::ADMIN.nth(i).unwrap())),
-            ..Authority::new(authority::ADMIN.nth(i).unwrap())
-        };
-        authorities.insert(admin.uid, admin);
-    }
+            credential: CredentialRef::new_other(spec::psid::admin::c_pin::PSID),
+            ..Default::default()
+        },
+    ];
 
+    let admins = (1..=4).into_iter().map(|index| Authority {
+        uid: authority::ADMIN.nth(index).unwrap(),
+        name: format!("Admin{}", index).into(),
+        enabled: false,
+        operation: AuthMethod::Password,
+        credential: CredentialRef::new_other(c_pin::ADMIN.nth(index).unwrap()),
+        ..Default::default()
+    });
+
+    for authority in basic {
+        authorities.insert(authority.uid, authority);
+    }
+    for authority in admins {
+        authorities.insert(authority.uid, authority);
+    }
     authorities
 }
 
 fn preconfig_c_pin() -> CPINTable {
     let mut c_pins = CPINTable::new();
 
-    let sid = CPIN { pin: Some(MSID_PASSWORD.into()), ..CPIN::new(c_pin::SID) };
-    let msid = CPIN { pin: Some(MSID_PASSWORD.into()), ..CPIN::new(c_pin::MSID) };
-    let psid = CPIN { pin: Some(PSID_PASSWORD.into()), ..CPIN::new(spec::psid::admin::c_pin::PSID) };
+    let basic = [
+        CPIN { uid: c_pin::SID, pin: MSID_PASSWORD.into(), ..Default::default() },
+        CPIN { uid: c_pin::MSID, pin: MSID_PASSWORD.into(), ..Default::default() },
+        CPIN { uid: spec::psid::admin::c_pin::PSID, pin: PSID_PASSWORD.into(), ..Default::default() },
+    ];
+    let admins = (1..=4).into_iter().map(|index| CPIN {
+        uid: c_pin::ADMIN.nth(index).unwrap(),
+        pin: "8965823nz987gt346".into(),
+        ..Default::default()
+    });
 
-    c_pins.insert(sid.uid, sid);
-    c_pins.insert(msid.uid, msid);
-    c_pins.insert(psid.uid, psid);
-
-    for i in 1..=4 {
-        let admin = CPIN { pin: Some("8965823nz987gt346".into()), ..CPIN::new(c_pin::ADMIN.nth(i).unwrap()) };
-        c_pins.insert(admin.uid, admin);
+    for pin in basic {
+        c_pins.insert(pin.uid, pin);
+    }
+    for pin in admins {
+        c_pins.insert(pin.uid, pin);
     }
 
     c_pins
@@ -160,9 +148,22 @@ fn preconfig_c_pin() -> CPINTable {
 
 fn preconfig_sp() -> SPTable {
     let mut sp = SPTable::new();
-    let admin = SP::new(sp::ADMIN, "Admin".into(), LifeCycleState::Manufactured);
-    let locking = SP::new(sp::LOCKING, "Locking".into(), LifeCycleState::ManufacturedInactive);
-    sp.insert(admin.uid, admin);
-    sp.insert(locking.uid, locking);
+    let basic = [
+        SP {
+            uid: sp::ADMIN,
+            name: "Admin".into(),
+            life_cycle_state: LifeCycleState::Manufactured,
+            ..Default::default()
+        },
+        SP {
+            uid: sp::LOCKING,
+            name: "Locking".into(),
+            life_cycle_state: LifeCycleState::ManufacturedInactive,
+            ..Default::default()
+        },
+    ];
+    for spobj in basic {
+        sp.insert(spobj.uid, spobj);
+    }
     sp
 }

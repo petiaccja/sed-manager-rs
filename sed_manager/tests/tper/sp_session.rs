@@ -11,6 +11,7 @@ use sed_manager::spec::column_types::LifeCycleState;
 use sed_manager::spec::column_types::Name;
 use sed_manager::spec::column_types::Password;
 use sed_manager::spec::method_id;
+use sed_manager::spec::objects::CPIN;
 use sed_manager::spec::opal;
 use sed_manager::spec::table_id;
 use sed_manager::tper::TPer;
@@ -54,7 +55,7 @@ async fn get_success() -> Result<(), RPCError> {
     let tper = TPer::new_on_default_com_id(Arc::new(device))?;
     let session = tper.start_session(sp::ADMIN, None, None).await?;
     let object = opal::admin::c_pin::MSID;
-    let result = session.get::<Password>(object.as_uid(), 3).await?;
+    let result = session.get::<Password>(object.as_uid(), CPIN::PIN).await?;
     assert_eq!(result, MSID_PASSWORD.into());
     Ok(())
 }
@@ -97,7 +98,7 @@ async fn set_success() -> Result<(), RPCError> {
     let tper = TPer::new_on_default_com_id(Arc::new(device))?;
     let session = tper.start_session(sp::ADMIN, None, None).await?;
     let object = opal::admin::c_pin::SID;
-    session.set(object.as_uid(), 3, Password::from("1234")).await?;
+    session.set(object.as_uid(), CPIN::PIN, Password::from("1234")).await?;
     Ok(())
 }
 
@@ -107,7 +108,8 @@ async fn set_multiple_success() -> Result<(), RPCError> {
     let tper = TPer::new_on_default_com_id(Arc::new(device))?;
     let session = tper.start_session(sp::ADMIN, None, None).await?;
     let object = opal::admin::c_pin::SID;
-    session.set_multiple(object.as_uid(), [2, 3], (Name::from("name"), Password::from("1234"))).await?;
+    let columns = [CPIN::COMMON_NAME, CPIN::PIN];
+    session.set_multiple(object.as_uid(), columns, (Name::from("name"), Password::from("1234"))).await?;
     Ok(())
 }
 
@@ -116,7 +118,9 @@ async fn set_missing_object() -> Result<(), RPCError> {
     let device = FakeDevice::new();
     let tper = TPer::new_on_default_com_id(Arc::new(device))?;
     let session = tper.start_session(sp::ADMIN, None, None).await?;
-    let result = session.set(UID::new(table_id::C_PIN.as_u64() + 0x2360_4327), 3, Password::from("1234")).await;
+    let result = session
+        .set(UID::new(table_id::C_PIN.as_u64() + 0x2360_4327), CPIN::PIN, Password::from("1234"))
+        .await;
     assert_eq!(result, Err(MethodStatus::InvalidParameter.into()));
     Ok(())
 }
@@ -213,7 +217,7 @@ async fn activate() -> Result<(), RPCError> {
     let locking_sp = controller.admin_sp.sp_specific.sp.get(&sp::LOCKING).unwrap();
     let admin1_c_pin = controller.locking_sp.basic_sp.c_pin.get(&opal::locking::c_pin::ADMIN.nth(1).unwrap()).unwrap();
     assert_eq!(locking_sp.life_cycle_state, LifeCycleState::Manufactured);
-    assert_eq!(admin1_c_pin.pin.as_ref().unwrap().as_slice(), MSID_PASSWORD.as_bytes());
+    assert_eq!(admin1_c_pin.pin.as_slice(), MSID_PASSWORD.as_bytes());
 
     Ok(())
 }

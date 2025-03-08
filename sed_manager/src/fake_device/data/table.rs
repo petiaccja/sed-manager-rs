@@ -1,9 +1,22 @@
 use core::ops::{Deref, DerefMut};
 use std::collections::BTreeMap;
 
-use crate::messaging::uid::{TableUID, UID};
+use crate::{
+    messaging::uid::{TableUID, UID},
+    spec::{
+        column_types::{AuthorityRef, CPINRef, KAES256Ref, LockingRangeRef, SPRef},
+        objects::{Authority, LockingRange, CPIN, KAES256, SP},
+        table_id,
+    },
+};
 
 use super::object::GenericObject;
+
+pub type AuthorityTable = Table<Authority, AuthorityRef, { table_id::AUTHORITY.as_u64() }>;
+pub type CPINTable = Table<CPIN, CPINRef, { table_id::C_PIN.as_u64() }>;
+pub type KAES256Table = Table<KAES256, KAES256Ref, { table_id::K_AES_256.as_u64() }>;
+pub type LockingTable = Table<LockingRange, LockingRangeRef, { table_id::LOCKING.as_u64() }>;
+pub type SPTable = Table<SP, SPRef, { table_id::SP.as_u64() }>;
 
 pub trait GenericTable {
     fn uid(&self) -> TableUID;

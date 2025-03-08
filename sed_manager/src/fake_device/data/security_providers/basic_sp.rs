@@ -2,11 +2,10 @@ use core::ops::Deref;
 
 use as_array::AsArray;
 
-use crate::fake_device::data::objects::{AuthorityTable, CPINTable};
-use crate::fake_device::data::table::GenericTable;
+use crate::fake_device::data::table::{AuthorityTable, CPINTable, GenericTable};
 use crate::messaging::value::Bytes;
 use crate::rpc::MethodStatus;
-use crate::spec::column_types::{AuthorityRef, BoolOrBytes, CPINRef, Password};
+use crate::spec::column_types::{AuthorityRef, BoolOrBytes, CPINRef};
 
 // Admin SP tables:
 // --- Basic ---
@@ -36,16 +35,15 @@ impl BasicSP {
         let Some(authority) = self.authorities.get(&authority_id) else {
             return Err(MethodStatus::InvalidParameter);
         };
-        let Some(credential_id) = authority.credential else {
+        let credential_id = authority.credential;
+        if credential_id.is_null() {
             return Ok(BoolOrBytes::Bool(true));
         };
         if let Ok(c_pin_id) = CPINRef::try_new_other(credential_id) {
             if let Some(credential) = self.c_pin.get(&c_pin_id) {
                 let empty_provided_password = vec![];
-                let empty_authority_password = Password::default();
                 let provided_password = proof.as_ref().unwrap_or(&empty_provided_password);
-                let authority_password = credential.pin.as_ref().unwrap_or(&empty_authority_password);
-                let success = provided_password == authority_password.deref().deref();
+                let success = provided_password == credential.pin.deref().deref();
                 Ok(BoolOrBytes::Bool(success))
             } else {
                 Err(MethodStatus::TPerMalfunction)
