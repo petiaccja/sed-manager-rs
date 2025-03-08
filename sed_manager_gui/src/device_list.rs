@@ -128,9 +128,7 @@ async fn discover(backend: Rc<PeekCell<Backend>>, device_idx: usize) -> Result<D
 
 async fn release_session(backend: Rc<PeekCell<Backend>>, device_idx: usize) {
     if let Some(session) = backend.peek_mut(|backend| backend.take_session(device_idx)) {
-        if let Some(session) = Arc::into_inner(session) {
-            let _ = session.end_session().await;
-        }
+        let _ = session.end().await;
     }
 }
 

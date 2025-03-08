@@ -1,15 +1,10 @@
 use std::rc::Rc;
 
-use sed_manager::spec::column_types::{AuthorityRef, CPINRef, Name};
-use sed_manager::spec::objects::{Authority, CPIN};
-use sed_manager::spec::{self, table_id};
-use sed_manager::tper::Session;
 use slint::{ComponentHandle as _, Model};
 
-use sed_manager::applications::{get_locking_admins, get_locking_sp, Error as AppError};
-use sed_manager::rpc::Error as RPCError;
+use sed_manager::applications::{get_locking_sp, Error as AppError, UserEditSession};
 
-use crate::backend::{get_object_name, Backend};
+use crate::backend::{get_object_name, Backend, EditorSession};
 use crate::frontend::Frontend;
 use crate::ui;
 use crate::utility::{as_vec_model, into_vec_model, PeekCell};
@@ -139,12 +134,9 @@ fn set_callback_set_password(backend: Rc<PeekCell<Backend>>, frontend: Frontend)
 
 async fn login(backend: Rc<PeekCell<Backend>>, device_idx: usize, password: String) -> Result<(), AppError> {
     let tper = backend.peek_mut(|backend| backend.get_tper(device_idx))?;
-    let discovery = backend.peek_mut(|backend| backend.get_discovery(device_idx).cloned())?;
-    let ssc = discovery.get_primary_ssc().ok_or(AppError::IncompatibleSSC)?;
-    let locking_sp = get_locking_sp(ssc.feature_code())?;
-    let admin1 = get_locking_admins(ssc.feature_code())?.nth(1).unwrap();
-    let session = tper.start_session(locking_sp, Some(admin1), Some(password.as_bytes())).await?;
-    backend.peek_mut(|backend| backend.replace_session(device_idx, session));
+    let session = UserEditSession::start(&tper, password.as_bytes()).await?;
+    let editor_session = EditorSession::from(session);
+    backend.peek_mut(|backend| backend.replace_session(device_idx, editor_session));
     Ok(())
 }
 
@@ -153,23 +145,22 @@ async fn list(
     device_idx: usize,
     on_found: impl Fn(String, ui::User),
 ) -> Result<(), AppError> {
-    let session = backend.peek(|backend| backend.get_session(device_idx)).ok_or(RPCError::Unspecified)?;
+    let session = backend.peek(|backend| backend.get_user_session(device_idx))?;
     let discovery = backend.peek(|backend| backend.get_discovery(device_idx).cloned())?;
     let ssc = discovery.get_primary_ssc().ok_or(AppError::NoAvailableSSC)?;
     let locking_sp = get_locking_sp(ssc.feature_code());
-    let authorities = session
-        .next(table_id::AUTHORITY, None, None)
-        .await?
-        .into_iter()
-        .filter_map(|uid| AuthorityRef::try_from(uid).ok())
-        .collect();
-    let authorities = helpers::retain_configurable_authorities(&session, authorities).await;
-    backend.peek_mut(|backend| backend.set_user_list(device_idx, authorities.clone()));
-    for authority in authorities.iter() {
-        let name = get_object_name(Some(&discovery), authority.as_uid(), locking_sp.clone().ok());
-        if let Ok(user) = helpers::get_authority_properties(&session, *authority).await {
-            on_found(name, user);
-        }
+    let users: Vec<_> = session.list_users().await?;
+    backend.peek_mut(|backend| backend.set_user_list(device_idx, users.clone()))?;
+    for user in users.iter() {
+        let name = get_object_name(Some(&discovery), user.as_uid(), locking_sp.clone().ok());
+        let value = session.get_user(*user).await?;
+        on_found(
+            name,
+            ui::User {
+                enabled: value.enabled,
+                name: String::from_utf8_lossy(value.common_name.as_slice()).to_string().into(),
+            },
+        );
     }
     Ok(())
 }
@@ -181,12 +172,11 @@ async fn set_enabled(
     enabled: bool,
 ) -> Result<(), AppError> {
     let user = backend.peek(|backend| {
-        let user_list = backend.get_user_list(device_idx).ok_or(RPCError::Unspecified)?;
-        user_list.get(user_idx).ok_or(RPCError::Unspecified).cloned()
+        let user_list = backend.get_user_list(device_idx)?;
+        user_list.get(user_idx).ok_or(AppError::InternalError).cloned()
     })?;
-    let session = backend.peek_mut(|backend| backend.get_session(device_idx)).ok_or(RPCError::Unspecified)?;
-    session.set(user.as_uid(), Authority::ENABLED, enabled).await?;
-    Ok(())
+    let session = backend.peek_mut(|backend| backend.get_user_session(device_idx))?;
+    session.set_enabled(user, enabled).await
 }
 
 async fn set_name(
@@ -196,12 +186,11 @@ async fn set_name(
     name: String,
 ) -> Result<(), AppError> {
     let user = backend.peek(|backend| {
-        let user_list = backend.get_user_list(device_idx).ok_or(RPCError::Unspecified)?;
-        user_list.get(user_idx).ok_or(RPCError::Unspecified).cloned()
+        let user_list = backend.get_user_list(device_idx)?;
+        user_list.get(user_idx).ok_or(AppError::InternalError).cloned()
     })?;
-    let session = backend.peek_mut(|backend| backend.get_session(device_idx)).ok_or(RPCError::Unspecified)?;
-    session.set(user.as_uid(), Authority::COMMON_NAME, name.as_bytes()).await?;
-    Ok(())
+    let session = backend.peek_mut(|backend| backend.get_user_session(device_idx))?;
+    session.set_name(user, name.as_str()).await
 }
 
 async fn set_password(
@@ -211,13 +200,11 @@ async fn set_password(
     password: String,
 ) -> Result<(), AppError> {
     let user = backend.peek(|backend| {
-        let user_list = backend.get_user_list(device_idx).ok_or(RPCError::Unspecified)?;
-        user_list.get(user_idx).ok_or(RPCError::Unspecified).cloned()
+        let user_list = backend.get_user_list(device_idx)?;
+        user_list.get(user_idx).ok_or(AppError::InternalError).cloned()
     })?;
-    let session = backend.peek_mut(|backend| backend.get_session(device_idx)).ok_or(RPCError::Unspecified)?;
-    let credential: CPINRef = session.get(user.as_uid(), Authority::CREDENTIAL).await?;
-    session.set(credential.as_uid(), CPIN::PIN, password.as_bytes()).await?;
-    Ok(())
+    let session = backend.peek_mut(|backend| backend.get_user_session(device_idx))?;
+    session.set_password(user, password.as_bytes()).await
 }
 
 fn set_login_status(frontend: &Frontend, device_idx: usize, status: ui::ExtendedStatus) {
@@ -294,30 +281,4 @@ fn set_user_status(frontend: &Frontend, device_idx: usize, user_idx: usize, stat
             }
         }
     });
-}
-
-mod helpers {
-    use super::*;
-
-    pub async fn retain_configurable_authorities(
-        session: &Session,
-        authorities: Vec<AuthorityRef>,
-    ) -> Vec<AuthorityRef> {
-        let mut non_class = Vec::new();
-        for authority in authorities {
-            let is_not_just_anybody = authority != spec::core::authority::ANYBODY;
-            let is_not_class = Ok(false) == session.get(authority.as_uid(), Authority::IS_CLASS).await;
-            if is_not_just_anybody && is_not_class {
-                non_class.push(authority);
-            }
-        }
-        return non_class;
-    }
-
-    pub async fn get_authority_properties(session: &Session, authority: AuthorityRef) -> Result<ui::User, RPCError> {
-        let name: Name = session.get(authority.as_uid(), Authority::COMMON_NAME).await?;
-        let enabled: bool = session.get(authority.as_uid(), Authority::ENABLED).await?;
-
-        Ok(ui::User { name: String::try_from(name).unwrap_or("".into()).into(), enabled })
-    }
 }

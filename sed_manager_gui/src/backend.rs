@@ -1,33 +1,62 @@
 use std::sync::Arc;
 
-use sed_manager::applications::get_lookup;
+use sed_manager::applications::{get_lookup, Error as AppError, RangeEditSession, UserEditSession};
 use sed_manager::device::{Device, Error as DeviceError};
 use sed_manager::messaging::discovery::{Discovery, Feature};
 use sed_manager::messaging::uid::UID;
 use sed_manager::rpc::Error as RPCError;
 use sed_manager::spec::column_types::{AuthorityRef, LockingRangeRef, SPRef};
 use sed_manager::spec::{self, ObjectLookup as _};
-use sed_manager::tper::{Session, TPer};
+use sed_manager::tper::TPer;
 
 pub struct Backend {
     devices: Vec<Arc<dyn Device>>,
     discoveries: Vec<Option<Discovery>>,
     tpers: Vec<Option<Arc<TPer>>>,
-    sessions: Vec<Option<Arc<Session>>>,
-    locking_ranges: Vec<Vec<LockingRangeRef>>,
-    locking_users: Vec<Vec<AuthorityRef>>,
+    sessions: Vec<Option<EditorSession>>,
+}
+
+pub enum EditorSession {
+    Range { session: Arc<RangeEditSession>, ranges: Vec<LockingRangeRef> },
+    User { session: Arc<UserEditSession>, users: Vec<AuthorityRef> },
+}
+
+impl EditorSession {
+    pub async fn end(self) -> Result<(), AppError> {
+        match self {
+            EditorSession::Range { session, ranges: _ } => {
+                if let Some(inner) = Arc::into_inner(session) {
+                    inner.end().await
+                } else {
+                    Ok(())
+                }
+            }
+            EditorSession::User { session, users: _ } => {
+                if let Some(inner) = Arc::into_inner(session) {
+                    inner.end().await
+                } else {
+                    Ok(())
+                }
+            }
+        }
+    }
+}
+
+impl From<RangeEditSession> for EditorSession {
+    fn from(value: RangeEditSession) -> Self {
+        Self::Range { session: Arc::new(value), ranges: vec![] }
+    }
+}
+
+impl From<UserEditSession> for EditorSession {
+    fn from(value: UserEditSession) -> Self {
+        Self::User { session: Arc::new(value), users: vec![] }
+    }
 }
 
 impl Backend {
     pub fn new() -> Self {
-        Self {
-            devices: Vec::new(),
-            discoveries: Vec::new(),
-            tpers: Vec::new(),
-            sessions: Vec::new(),
-            locking_ranges: Vec::new(),
-            locking_users: Vec::new(),
-        }
+        Self { devices: Vec::new(), discoveries: Vec::new(), tpers: Vec::new(), sessions: Vec::new() }
     }
 
     pub fn set_devices(&mut self, devices: Vec<Arc<dyn Device>>) {
@@ -36,8 +65,6 @@ impl Backend {
         self.discoveries = std::iter::repeat_with(|| None).take(num_devices).collect();
         self.tpers = std::iter::repeat_with(|| None).take(num_devices).collect();
         self.sessions = std::iter::repeat_with(|| None).take(num_devices).collect();
-        self.locking_ranges = std::iter::repeat_with(|| vec![]).take(num_devices).collect();
-        self.locking_users = std::iter::repeat_with(|| vec![]).take(num_devices).collect();
     }
 
     pub fn get_device(&mut self, device_idx: usize) -> Option<Arc<dyn Device>> {
@@ -70,43 +97,73 @@ impl Backend {
         Ok(tper)
     }
 
-    pub fn replace_session(&mut self, device_idx: usize, session: Session) -> Option<Arc<Session>> {
+    pub fn replace_session(&mut self, device_idx: usize, session: EditorSession) -> Option<EditorSession> {
         if device_idx < self.devices.len() {
             self.sessions.resize_with(std::cmp::max(self.sessions.len(), device_idx + 1), || None);
-            self.sessions[device_idx].replace(Arc::new(session))
+            self.sessions[device_idx].replace(session)
         } else {
             None
         }
     }
 
-    pub fn take_session(&mut self, device_idx: usize) -> Option<Arc<Session>> {
+    pub fn take_session(&mut self, device_idx: usize) -> Option<EditorSession> {
         self.sessions.get_mut(device_idx).map(|x| x.take()).flatten()
     }
 
-    pub fn get_session(&self, device_idx: usize) -> Option<Arc<Session>> {
-        self.sessions.get(device_idx).cloned().flatten()
+    pub fn get_session(&self, device_idx: usize) -> Option<&EditorSession> {
+        self.sessions.get(device_idx).and_then(|x| x.as_ref())
     }
 
-    pub fn set_range_list(&mut self, device_idx: usize, locking_ranges: Vec<LockingRangeRef>) {
-        if device_idx < self.devices.len() {
-            self.locking_ranges.resize_with(std::cmp::max(self.sessions.len(), device_idx + 1), || vec![]);
-            self.locking_ranges[device_idx] = locking_ranges;
+    pub fn get_session_mut(&mut self, device_idx: usize) -> Option<&mut EditorSession> {
+        self.sessions.get_mut(device_idx).and_then(|x| x.as_mut())
+    }
+
+    pub fn get_range_session(&self, device_idx: usize) -> Result<Arc<RangeEditSession>, AppError> {
+        match self.get_session(device_idx) {
+            Some(EditorSession::Range { session, ranges: _ }) => Ok(session.clone()),
+            _ => Err(AppError::InternalError),
         }
     }
 
-    pub fn get_range_list(&self, device_idx: usize) -> Option<&Vec<LockingRangeRef>> {
-        self.locking_ranges.get(device_idx)
-    }
-
-    pub fn set_user_list(&mut self, device_idx: usize, locking_users: Vec<AuthorityRef>) {
-        if device_idx < self.devices.len() {
-            self.locking_users.resize_with(std::cmp::max(self.sessions.len(), device_idx + 1), || vec![]);
-            self.locking_users[device_idx] = locking_users;
+    pub fn set_range_list(&mut self, device_idx: usize, new_ranges: Vec<LockingRangeRef>) -> Result<(), AppError> {
+        match self.get_session_mut(device_idx) {
+            Some(EditorSession::Range { session: _, ranges }) => {
+                *ranges = new_ranges;
+                Ok(())
+            }
+            _ => Err(AppError::InternalError),
         }
     }
 
-    pub fn get_user_list(&self, device_idx: usize) -> Option<&Vec<AuthorityRef>> {
-        self.locking_users.get(device_idx)
+    pub fn get_range_list(&self, device_idx: usize) -> Result<&[LockingRangeRef], AppError> {
+        match self.get_session(device_idx) {
+            Some(EditorSession::Range { session: _, ranges }) => Ok(ranges.as_slice()),
+            _ => Err(AppError::InternalError),
+        }
+    }
+
+    pub fn get_user_session(&self, device_idx: usize) -> Result<Arc<UserEditSession>, AppError> {
+        match self.get_session(device_idx) {
+            Some(EditorSession::User { session, users: _ }) => Ok(session.clone()),
+            _ => Err(AppError::InternalError),
+        }
+    }
+
+    pub fn set_user_list(&mut self, device_idx: usize, new_users: Vec<AuthorityRef>) -> Result<(), AppError> {
+        match self.get_session_mut(device_idx) {
+            Some(EditorSession::User { session: _, users }) => {
+                *users = new_users;
+                Ok(())
+            }
+            _ => Err(AppError::InternalError),
+        }
+    }
+
+    pub fn get_user_list(&self, device_idx: usize) -> Result<&[AuthorityRef], AppError> {
+        match self.get_session(device_idx) {
+            Some(EditorSession::User { session: _, users }) => Ok(users.as_slice()),
+            _ => Err(AppError::InternalError),
+        }
     }
 }
 

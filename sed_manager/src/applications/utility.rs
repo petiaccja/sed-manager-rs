@@ -2,6 +2,7 @@ use crate::messaging::discovery::FeatureCode;
 use crate::messaging::uid_range::ObjectUIDRange;
 use crate::spec::column_types::{AuthorityRefRange, CPINRefRange, SPRef};
 use crate::spec::{self, ObjectLookup};
+use crate::tper::{Session, TPer};
 
 use super::error::Error;
 
@@ -73,5 +74,34 @@ pub fn get_lookup(ssc: FeatureCode) -> &'static dyn ObjectLookup {
         FeatureCode::KeyPerIO => &spec::kpio::OBJECT_LOOKUP,
         FeatureCode::AdditionalDataStoreTables => &spec::data_store::OBJECT_LOOKUP,
         _ => &spec::core::OBJECT_LOOKUP,
+    }
+}
+
+pub async fn start_admin1_session(tper: &TPer, admin1_password: &[u8]) -> Result<Session, Error> {
+    let discovery = tper.discover().await?;
+    let ssc = discovery.get_primary_ssc().ok_or(Error::IncompatibleSSC)?;
+    let locking_sp = get_locking_sp(ssc.feature_code())?;
+    let admin1 = get_locking_admins(ssc.feature_code())?.nth(1).unwrap();
+    Ok(tper.start_session(locking_sp, Some(admin1), Some(admin1_password)).await?)
+}
+
+#[cfg(test)]
+pub mod tests {
+    use std::sync::Arc;
+
+    use crate::device::Device;
+    use crate::fake_device::{FakeDevice, MSID_PASSWORD};
+    use crate::spec;
+    use crate::tper::TPer;
+
+    pub async fn setup_activated_tper() -> TPer {
+        use spec::core::authority::SID;
+        use spec::opal::admin::sp::{ADMIN, LOCKING};
+        let device = Arc::new(FakeDevice::new()) as Arc<dyn Device>;
+        let tper = TPer::new_on_default_com_id(device).unwrap();
+        let session = tper.start_session(ADMIN, Some(SID), Some(MSID_PASSWORD.as_bytes())).await.unwrap();
+        session.activate(LOCKING).await.unwrap();
+        session.end_session().await.unwrap();
+        tper
     }
 }

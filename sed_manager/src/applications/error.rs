@@ -12,6 +12,8 @@ pub enum Error {
     AlreadyOwned,
     #[error("someone has already activated locking on this device")]
     AlreadyActivated,
+    #[error("an internal error occured: this is a bug")]
+    InternalError,
 }
 
 impl From<RPCError> for Error {

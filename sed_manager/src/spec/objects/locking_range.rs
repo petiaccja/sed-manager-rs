@@ -7,7 +7,7 @@ use crate::spec::column_types::{
 
 use super::cell::Cell;
 
-#[derive(AsArray)]
+#[derive(AsArray, PartialEq, Eq, Debug)]
 #[as_array_traits(Cell)]
 pub struct LockingRange {
     pub uid: LockingRangeRef,

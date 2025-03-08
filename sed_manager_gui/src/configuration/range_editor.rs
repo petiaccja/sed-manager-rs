@@ -1,14 +1,11 @@
 use std::rc::Rc;
 
-use sed_manager::spec::column_types::{CredentialRef, LockingRangeRef, MediaKeyRef};
-use sed_manager::spec::{self, table_id};
-use sed_manager::tper::Session;
+use sed_manager::spec::objects::LockingRange;
 use slint::{ComponentHandle as _, Model as _};
 
-use sed_manager::applications::{get_locking_admins, get_locking_sp, Error as AppError};
-use sed_manager::rpc::Error as RPCError;
+use sed_manager::applications::{get_locking_sp, Error as AppError, RangeEditSession};
 
-use crate::backend::{get_object_name, Backend};
+use crate::backend::{get_object_name, Backend, EditorSession};
 use crate::frontend::Frontend;
 use crate::ui;
 use crate::utility::{as_vec_model, into_vec_model, PeekCell};
@@ -111,12 +108,9 @@ fn set_callback_erase(backend: Rc<PeekCell<Backend>>, frontend: Frontend) {
 
 async fn login(backend: Rc<PeekCell<Backend>>, device_idx: usize, password: String) -> Result<(), AppError> {
     let tper = backend.peek_mut(|backend| backend.get_tper(device_idx))?;
-    let discovery = backend.peek_mut(|backend| backend.get_discovery(device_idx).cloned())?;
-    let ssc = discovery.get_primary_ssc().ok_or(AppError::IncompatibleSSC)?;
-    let locking_sp = get_locking_sp(ssc.feature_code())?;
-    let admin1 = get_locking_admins(ssc.feature_code())?.nth(1).unwrap();
-    let session = tper.start_session(locking_sp, Some(admin1), Some(password.as_bytes())).await?;
-    backend.peek_mut(|backend| backend.replace_session(device_idx, session));
+    let session = RangeEditSession::start(&tper, password.as_bytes()).await?;
+    let editor_session = EditorSession::from(session);
+    backend.peek_mut(|backend| backend.replace_session(device_idx, editor_session));
     Ok(())
 }
 
@@ -125,22 +119,26 @@ async fn list(
     device_idx: usize,
     on_found: impl Fn(String, ui::LockingRange),
 ) -> Result<(), AppError> {
-    let session = backend.peek(|backend| backend.get_session(device_idx)).ok_or(RPCError::Unspecified)?;
+    let session = backend.peek(|backend| backend.get_range_session(device_idx))?;
     let discovery = backend.peek(|backend| backend.get_discovery(device_idx).cloned())?;
     let ssc = discovery.get_primary_ssc().ok_or(AppError::NoAvailableSSC)?;
     let locking_sp = get_locking_sp(ssc.feature_code());
-    let ranges: Vec<_> = session
-        .next(table_id::LOCKING, None, None)
-        .await?
-        .into_iter()
-        .filter_map(|uid| LockingRangeRef::try_from(uid).ok())
-        .collect();
-    backend.peek_mut(|backend| backend.set_range_list(device_idx, ranges.clone()));
+    let ranges: Vec<_> = session.list_ranges().await?;
+    backend.peek_mut(|backend| backend.set_range_list(device_idx, ranges.clone()))?;
     for range in ranges.iter() {
         let name = get_object_name(Some(&discovery), range.as_uid(), locking_sp.clone().ok());
-        if let Ok(range) = helpers::get_range_properties(&session, *range).await {
-            on_found(name, range);
-        }
+        let value = session.get_range(*range).await?;
+        on_found(
+            name,
+            ui::LockingRange {
+                start_lba: value.range_start as i32,
+                end_lba: (value.range_start + value.range_length) as i32,
+                read_lock_enabled: value.read_lock_enabled,
+                write_lock_enabled: value.write_lock_enabled,
+                read_locked: value.read_locked,
+                write_locked: value.write_locked,
+            },
+        );
     }
     Ok(())
 }
@@ -152,22 +150,30 @@ async fn set_value(
     value: ui::LockingRange,
 ) -> Result<(), AppError> {
     let range = backend.peek(|backend| {
-        let user_list = backend.get_range_list(device_idx).ok_or(RPCError::Unspecified)?;
-        user_list.get(range_idx).ok_or(RPCError::Unspecified).cloned()
+        let range_list = backend.get_range_list(device_idx)?;
+        range_list.get(range_idx).ok_or(AppError::InternalError).cloned()
     })?;
-    let session = backend.peek_mut(|backend| backend.get_session(device_idx)).ok_or(RPCError::Unspecified)?;
-    helpers::set_range_properties(&session, range, value).await?;
-    Ok(())
+    let session = backend.peek_mut(|backend| backend.get_range_session(device_idx))?;
+    let lr = LockingRange {
+        uid: range,
+        range_start: value.start_lba as u64,
+        range_length: (value.end_lba - value.start_lba) as u64,
+        read_lock_enabled: value.read_lock_enabled,
+        write_lock_enabled: value.write_lock_enabled,
+        read_locked: value.read_locked,
+        write_locked: value.write_locked,
+        ..Default::default()
+    };
+    session.set_range(&lr).await
 }
 
 async fn erase(backend: Rc<PeekCell<Backend>>, device_idx: usize, range_idx: usize) -> Result<(), AppError> {
     let range = backend.peek(|backend| {
-        let user_list = backend.get_range_list(device_idx).ok_or(RPCError::Unspecified)?;
-        user_list.get(range_idx).ok_or(RPCError::Unspecified).cloned()
+        let range_list = backend.get_range_list(device_idx)?;
+        range_list.get(range_idx).ok_or(AppError::InternalError).cloned()
     })?;
-    let session = backend.peek_mut(|backend| backend.get_session(device_idx)).ok_or(RPCError::Unspecified)?;
-    helpers::erase_locking_range(&session, range).await?;
-    Ok(())
+    let session = backend.peek_mut(|backend| backend.get_range_session(device_idx))?;
+    session.erase_range(range).await
 }
 
 fn set_login_status(frontend: &Frontend, device_idx: usize, status: ui::ExtendedStatus) {
@@ -234,54 +240,4 @@ fn set_range_status(frontend: &Frontend, device_idx: usize, range_idx: usize, st
             }
         }
     });
-}
-
-mod helpers {
-    use sed_manager::spec::{column_types::LockingRangeRef, objects::LockingRange};
-
-    use super::*;
-
-    pub async fn get_range_properties(session: &Session, range: LockingRangeRef) -> Result<ui::LockingRange, RPCError> {
-        let columns = LockingRange::RANGE_START..=LockingRange::WRITE_LOCKED;
-        let (start_lba, length_lba, read_lock_enabled, write_lock_enabled, read_locked, write_locked) =
-            session.get_multiple::<(u64, u64, bool, bool, bool, bool)>(range.as_uid(), columns).await?;
-
-        Ok(ui::LockingRange {
-            start_lba: start_lba as i32,
-            end_lba: (start_lba + length_lba) as i32,
-            read_lock_enabled,
-            write_lock_enabled,
-            read_locked,
-            write_locked,
-        })
-    }
-
-    pub async fn set_range_properties(
-        session: &Session,
-        range: LockingRangeRef,
-        value: ui::LockingRange,
-    ) -> Result<(), RPCError> {
-        if range != spec::opal::locking::locking::GLOBAL_RANGE {
-            let length_lba = value.end_lba - value.start_lba;
-            let values = (
-                value.start_lba as u64,
-                length_lba as u64,
-                value.read_lock_enabled,
-                value.write_lock_enabled,
-                value.read_locked,
-                value.write_locked,
-            );
-            let columns: [u16; 6] = core::array::from_fn(|i| LockingRange::RANGE_START + (i as u16));
-            session.set_multiple(range.as_uid(), columns, values).await
-        } else {
-            let values = (value.read_lock_enabled, value.write_lock_enabled, value.read_locked, value.write_locked);
-            let columns: [u16; 4] = core::array::from_fn(|i| LockingRange::READ_LOCK_ENABLED + (i as u16));
-            session.set_multiple(range.as_uid(), columns, values).await
-        }
-    }
-
-    pub async fn erase_locking_range(session: &Session, range: LockingRangeRef) -> Result<(), RPCError> {
-        let active_key_id: MediaKeyRef = session.get(range.as_uid(), LockingRange::ACTIVE_KEY).await?;
-        session.gen_key(CredentialRef::new_other(active_key_id), None, None).await
-    }
 }
