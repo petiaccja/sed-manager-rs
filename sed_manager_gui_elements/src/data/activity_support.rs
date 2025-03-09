@@ -95,5 +95,7 @@ fn is_mbr_editor_supported(discovery: &Discovery) -> bool {
     let Some(locking_desc) = discovery.get::<LockingDescriptor>() else {
         return false;
     };
-    SUPPORTED_SSCS.contains(&ssc.feature_code()) && !locking_desc.mbr_shadowing_not_supported
+    SUPPORTED_SSCS.contains(&ssc.feature_code())
+        && !locking_desc.mbr_shadowing_not_supported
+        && locking_desc.locking_enabled
 }

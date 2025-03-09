@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use sed_manager::applications::{get_lookup, Error as AppError, RangeEditSession, UserEditSession};
+use sed_manager::applications::{get_lookup, Error as AppError, MBREditSession, RangeEditSession, UserEditSession};
 use sed_manager::device::{Device, Error as DeviceError};
 use sed_manager::messaging::discovery::{Discovery, Feature};
 use sed_manager::messaging::uid::UID;
@@ -19,6 +19,7 @@ pub struct Backend {
 pub enum EditorSession {
     Range { session: Arc<RangeEditSession>, ranges: Vec<LockingRangeRef> },
     User { session: Arc<UserEditSession>, users: Vec<AuthorityRef> },
+    MBR { session: Arc<MBREditSession> },
 }
 
 impl EditorSession {
@@ -38,6 +39,13 @@ impl EditorSession {
                     Ok(())
                 }
             }
+            EditorSession::MBR { session } => {
+                if let Some(inner) = Arc::into_inner(session) {
+                    inner.end().await
+                } else {
+                    Ok(())
+                }
+            }
         }
     }
 }
@@ -51,6 +59,12 @@ impl From<RangeEditSession> for EditorSession {
 impl From<UserEditSession> for EditorSession {
     fn from(value: UserEditSession) -> Self {
         Self::User { session: Arc::new(value), users: vec![] }
+    }
+}
+
+impl From<MBREditSession> for EditorSession {
+    fn from(value: MBREditSession) -> Self {
+        Self::MBR { session: Arc::new(value) }
     }
 }
 
@@ -162,6 +176,13 @@ impl Backend {
     pub fn get_user_list(&self, device_idx: usize) -> Result<&[AuthorityRef], AppError> {
         match self.get_session(device_idx) {
             Some(EditorSession::User { session: _, users }) => Ok(users.as_slice()),
+            _ => Err(AppError::InternalError),
+        }
+    }
+
+    pub fn get_mbr_session(&self, device_idx: usize) -> Result<Arc<MBREditSession>, AppError> {
+        match self.get_session(device_idx) {
+            Some(EditorSession::MBR { session }) => Ok(session.clone()),
             _ => Err(AppError::InternalError),
         }
     }

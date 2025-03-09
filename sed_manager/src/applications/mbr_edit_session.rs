@@ -28,6 +28,14 @@ impl MBREditSession {
     pub async fn set_done(&self, done: bool) -> Result<(), Error> {
         Ok(self.session.set(spec::core::mbr_control::MBR_CONTROL.as_uid(), MBRControl::DONE, done).await?)
     }
+
+    pub async fn get_enabled(&self) -> Result<bool, Error> {
+        Ok(self.session.get(spec::core::mbr_control::MBR_CONTROL.as_uid(), MBRControl::ENABLE).await?)
+    }
+
+    pub async fn get_done(&self) -> Result<bool, Error> {
+        Ok(self.session.get(spec::core::mbr_control::MBR_CONTROL.as_uid(), MBRControl::DONE).await?)
+    }
 }
 
 #[cfg(test)]
@@ -64,8 +72,10 @@ mod tests {
         let tper = setup_activated_tper().await;
         let session = MBREditSession::start(&tper, MSID_PASSWORD.as_bytes()).await?;
         assert_eq!(is_mbr_enabled(&tper).await?, false);
+        assert_eq!(session.get_enabled().await?, false);
         session.set_enabled(true).await?;
         assert_eq!(is_mbr_enabled(&tper).await?, true);
+        assert_eq!(session.get_enabled().await?, true);
         Ok(())
     }
 
@@ -74,8 +84,10 @@ mod tests {
         let tper = setup_activated_tper().await;
         let session = MBREditSession::start(&tper, MSID_PASSWORD.as_bytes()).await?;
         assert_eq!(is_mbr_done(&tper).await?, false);
+        assert_eq!(session.get_done().await?, false);
         session.set_done(true).await?;
         assert_eq!(is_mbr_done(&tper).await?, true);
+        assert_eq!(session.get_done().await?, true);
         Ok(())
     }
 }

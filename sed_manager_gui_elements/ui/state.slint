@@ -73,9 +73,12 @@ export global AccessControlEditorState {
 
 export global MBREditorState {
     in property <[ExtendedStatus]> login-statuses;
+    in property <[ExtendedStatus]> update-statuses;
     in property <[MBRControl]> mbr-control;
     callback login(device-idx: int, password: string);
     callback query(device-idx: int);
+    callback set-enabled(device-idx: int, enabled: bool);
+    callback set-done(device-idx: int, done: bool);
 }
 
 export global TroubleshootingState {

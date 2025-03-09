@@ -14,6 +14,16 @@ import { StatusIndicator } from "../widgets/progress.slint";
 import { IconButton } from "../widgets/icon_button.slint";
 
 component MBRView {
+    in property <MBRControl> mbr-control;
+    in property <Status> status;
+    callback set-enabled(enabled: bool);
+    callback set-done(done: bool);
+    changed status => {
+        if status == Status.error {
+            enabled-switch.checked = mbr-control.enabled;
+            done-switch.checked = !mbr-control.done;
+        }
+    }
     VerticalLayout {
         spacing: 12px;
         Island {
@@ -31,7 +41,7 @@ component MBRView {
                     }
 
                     Text {
-                        text: "128 MiB";
+                        text: mbr-control.size + " B";
                         vertical-alignment: center;
                     }
 
@@ -41,9 +51,13 @@ component MBRView {
                         vertical-alignment: center;
                     }
 
-                    Switch {
+                    enabled-switch := Switch {
                         text: self.checked ? "Enabled" : "Disabled";
-                        enabled: false;
+                        checked: mbr-control.enabled;
+                        enabled: status != Status.loading;
+                        toggled => {
+                            set-enabled(self.checked);
+                        }
                     }
 
                     Text {
@@ -52,9 +66,13 @@ component MBRView {
                         vertical-alignment: center;
                     }
 
-                    Switch {
+                    done-switch := Switch {
                         text: self.checked ? "Shadowed" : "Not shadowed";
-                        enabled: false;
+                        checked: !mbr-control.done;
+                        enabled: status != Status.loading;
+                        toggled => {
+                            set-done(!self.checked);
+                        }
                     }
                 }
             }
@@ -90,16 +108,22 @@ component MBRView {
 }
 
 export component MBREditor inherits ConfigView {
-    config-name: "MBR editor";
+    config-name: "Shadow MBR";
     config-icon: Icons.mbr-shadowing;
     in property <ExtendedStatus> login-status: MBREditorState.login-statuses[root.device-idx];
+    in property <ExtendedStatus> update-status: MBREditorState.update-statuses[root.device-idx];
     in property <MBRControl> mbr-control: MBREditorState.mbr-control[root.device-idx];
     in-out property <bool> authenticated: false;
+    changed update-status => {
+        if update-status.status == Status.error {
+            ToastMessage.show("Failed to update MBR: " + update-status.message, PaletteExtra.error-foreground);
+        }
+    }
     VerticalLayout {
         if !authenticated: LoginView {
             extended-status: login-status;
             user-name: "Admin1";
-            login-button-text: "Edit users";
+            login-button-text: "Edit shadow MBR";
             back => {
                 root.back();
             }
@@ -111,7 +135,16 @@ export component MBREditor inherits ConfigView {
                 MBREditorState.query(root.device-idx);
             }
         }
-        if authenticated: MBRView { }
+        if authenticated: MBRView {
+            mbr-control: mbr-control;
+            status: update-status.status;
+            set-enabled(enabled) => {
+                MBREditorState.set-enabled(root.device-idx, enabled);
+            }
+            set-done(done) => {
+                MBREditorState.set-done(root.device-idx, done);
+            }
+        }
         if authenticated && login-status.status != Status.success: Rectangle {
             height: 0;
             clip: false;
