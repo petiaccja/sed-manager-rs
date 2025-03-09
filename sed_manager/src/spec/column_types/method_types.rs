@@ -1,9 +1,9 @@
 use core::ops::{Add, Bound, RangeBounds, Sub};
 use sed_manager_macros::StructType;
 
-use crate::messaging::uid::UID;
+use crate::messaging::uid::{TableUID, UID};
 use crate::messaging::value::{Bytes, List, Value};
-use crate::spec::basic_types::{ByteTableReference, TableReference};
+use crate::spec::basic_types::TableReference;
 
 #[derive(StructType, PartialEq, Eq, Clone, Debug, Default)]
 pub struct CellBlock {
@@ -36,15 +36,20 @@ impl CellBlock {
         Self { table: None, start_row: None, end_row: None, start_column, end_column }
     }
 
-    pub fn object_explicit(object: UID, columns: impl RangeBounds<u16>) -> Self {
+    pub fn object_with_table(object: UID, columns: impl RangeBounds<u16>) -> Self {
         let table = object.containing_table().map(|uid| uid.try_into().unwrap());
         let (start_column, end_column) = Self::map_bounds(columns);
         Self { table, start_row: Some(object.as_u64()), end_row: None, start_column, end_column }
     }
 
-    pub fn byte_range(table: ByteTableReference, bytes: impl RangeBounds<u64>) -> Self {
+    pub fn bytes(bytes: impl RangeBounds<u64>) -> Self {
         let (start_row, end_row) = Self::map_bounds(bytes);
-        Self { table: Some(table.0.into()), start_row, end_row, start_column: None, end_column: None }
+        Self { table: None, start_row, end_row, start_column: None, end_column: None }
+    }
+
+    pub fn bytes_with_table(table: TableUID, bytes: impl RangeBounds<u64>) -> Self {
+        let (start_row, end_row) = Self::map_bounds(bytes);
+        Self { table: Some(table), start_row, end_row, start_column: None, end_column: None }
     }
 
     pub fn map_bounds<T>(bounds: impl RangeBounds<T>) -> (Option<T>, Option<T>)

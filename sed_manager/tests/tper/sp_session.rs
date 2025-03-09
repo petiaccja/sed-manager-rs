@@ -146,6 +146,82 @@ async fn set_invalid_type() -> Result<(), RPCError> {
 }
 
 #[tokio::test]
+async fn read_success() -> Result<(), RPCError> {
+    let device = Arc::new(FakeDevice::new());
+    device.controller().lock().unwrap().activate(sp::LOCKING)?;
+    let tper = TPer::new_on_default_com_id(device.clone())?;
+    let session = tper.start_session(sp::LOCKING, None, None).await?;
+    let bytes = session.read(table_id::MBR, 0, 1000).await?;
+    assert_eq!(bytes.len(), 1000);
+    Ok(())
+}
+
+#[tokio::test]
+async fn read_failure_start_oor() -> Result<(), RPCError> {
+    let device = Arc::new(FakeDevice::new());
+    device.controller().lock().unwrap().activate(sp::LOCKING)?;
+    let tper = TPer::new_on_default_com_id(device.clone())?;
+    let session = tper.start_session(sp::LOCKING, None, None).await?;
+    let result = session.read(table_id::MBR, 1024 * 1024 * 1024, 1000).await;
+    assert_eq!(result, Err(MethodStatus::InsufficientRows.into()));
+    Ok(())
+}
+
+#[tokio::test]
+async fn read_failure_end_oor() -> Result<(), RPCError> {
+    let device = Arc::new(FakeDevice::new());
+    device.controller().lock().unwrap().activate(sp::LOCKING)?;
+    let tper = TPer::new_on_default_com_id(device.clone())?;
+    let session = tper.start_session(sp::LOCKING, None, None).await?;
+    let result = session.read(table_id::MBR, 1000, 1024 * 1024 * 1024).await;
+    assert_eq!(result, Err(MethodStatus::InsufficientRows.into()));
+    Ok(())
+}
+
+#[tokio::test]
+async fn write_success() -> Result<(), RPCError> {
+    let device = Arc::new(FakeDevice::new());
+    device.controller().lock().unwrap().activate(sp::LOCKING)?;
+    let tper = TPer::new_on_default_com_id(device.clone())?;
+    let session = tper.start_session(sp::LOCKING, None, None).await?;
+    session.write(table_id::MBR, 0, &[1, 2, 3, 4]).await?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn write_failure_start_oor() -> Result<(), RPCError> {
+    let device = Arc::new(FakeDevice::new());
+    device.controller().lock().unwrap().activate(sp::LOCKING)?;
+    let tper = TPer::new_on_default_com_id(device.clone())?;
+    let session = tper.start_session(sp::LOCKING, None, None).await?;
+    let result = session.write(table_id::MBR, 1024 * 1024 * 1024, &[1, 2, 3, 4]).await;
+    assert_eq!(result, Err(MethodStatus::InsufficientRows.into()));
+    Ok(())
+}
+
+#[tokio::test]
+async fn write_failure_end_oor() -> Result<(), RPCError> {
+    let device = Arc::new(FakeDevice::new());
+    device.controller().lock().unwrap().activate(sp::LOCKING)?;
+    let tper = TPer::new_on_default_com_id(device.clone())?;
+    let session = tper.start_session(sp::LOCKING, None, None).await?;
+    let result = session.write(table_id::MBR, 128 * 1024 * 1024 - 2, &[1, 2, 3, 4]).await;
+    assert_eq!(result, Err(MethodStatus::InsufficientRows.into()));
+    Ok(())
+}
+
+#[tokio::test]
+async fn write_failure_too_large() -> Result<(), RPCError> {
+    let device = Arc::new(FakeDevice::new());
+    device.controller().lock().unwrap().activate(sp::LOCKING)?;
+    let tper = TPer::new_on_default_com_id(device.clone())?;
+    let session = tper.start_session(sp::LOCKING, None, None).await?;
+    let result = session.write(table_id::MBR, 0, &[0; 1024 * 1024]).await;
+    assert_eq!(result, Err(RPCError::MethodTooLarge));
+    Ok(())
+}
+
+#[tokio::test]
 async fn next_success_with_uid() -> Result<(), RPCError> {
     use opal::admin::authority;
     let device = FakeDevice::new();

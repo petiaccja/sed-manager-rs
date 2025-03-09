@@ -1,3 +1,4 @@
+pub mod byte_table;
 pub mod field;
 pub mod object;
 pub mod opal_v2_controller;

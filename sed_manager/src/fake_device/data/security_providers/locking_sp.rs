@@ -1,15 +1,16 @@
 use as_array::AsArray;
 
+use crate::fake_device::data::byte_table::ByteTable;
 use crate::fake_device::data::table::{
     AuthorityTable, CPINTable, GenericTable, KAES256Table, LockingTable, MBRControlTable, TableTable,
 };
 use crate::messaging::uid::{ObjectUID, TableUID};
 use crate::messaging::value::Bytes;
 use crate::rpc::MethodStatus;
-use crate::spec;
 use crate::spec::column_types::{AuthMethod, AuthorityRef, BoolOrBytes, CredentialRef, KAES256Ref, Key256, TableKind};
 use crate::spec::objects::{Authority, LockingRange, MBRControl, TableDesc, CPIN, KAES256};
 use crate::spec::opal::locking::*;
+use crate::spec::{self, table_id};
 
 use super::basic_sp::BasicSP;
 use super::security_provider::SecurityProvider;
@@ -37,6 +38,7 @@ use super::security_provider::SecurityProvider;
 pub struct LockingSP {
     pub basic_sp: BasicSP,
     pub sp_specific: SPSpecific,
+    pub byte_tables: ByteTables,
 }
 
 #[derive(AsArray)]
@@ -47,23 +49,43 @@ pub struct SPSpecific {
     pub mbr_control: MBRControlTable,
 }
 
+pub struct ByteTables {
+    mbr: ByteTable,
+}
+
 impl LockingSP {
     pub fn new() -> Self {
         Self::default()
     }
 }
 
+const MBR_SIZE: u32 = 0x08000000;
+
 impl SecurityProvider for LockingSP {
-    fn get_table(&self, table: TableUID) -> Option<&dyn GenericTable> {
+    fn get_object_table(&self, table: TableUID) -> Option<&dyn GenericTable> {
         let basic = self.basic_sp.as_array().into_iter().find(|table_| table_.uid() == table);
         let specific = self.sp_specific.as_array().into_iter().find(|table_| table_.uid() == table);
         basic.or(specific)
     }
 
-    fn get_table_mut(&mut self, table: TableUID) -> Option<&mut dyn GenericTable> {
+    fn get_object_table_mut(&mut self, table: TableUID) -> Option<&mut dyn GenericTable> {
         let basic = self.basic_sp.as_array_mut().into_iter().find(|table_| table_.uid() == table);
         let specific = self.sp_specific.as_array_mut().into_iter().find(|table_| table_.uid() == table);
         basic.or(specific)
+    }
+
+    fn get_byte_table(&self, table: TableUID) -> Option<&ByteTable> {
+        match table {
+            table_id::MBR => Some(&self.byte_tables.mbr),
+            _ => None,
+        }
+    }
+
+    fn get_byte_table_mut(&mut self, table: TableUID) -> Option<&mut ByteTable> {
+        match table {
+            table_id::MBR => Some(&mut self.byte_tables.mbr),
+            _ => None,
+        }
     }
 
     fn authenticate(&self, authority_id: AuthorityRef, proof: Option<Bytes>) -> Result<BoolOrBytes, MethodStatus> {
@@ -97,9 +119,11 @@ impl Default for LockingSP {
         let locking = preconfig_locking();
         let k_aes_256 = preconfig_k_aes_256();
         let mbr_control = preconfig_mbr_control();
+        let mbr = ByteTable::new(MBR_SIZE as usize);
         Self {
             basic_sp: BasicSP { table, authorities, c_pin },
             sp_specific: SPSpecific { locking, k_aes_256, mbr_control },
+            byte_tables: ByteTables { mbr },
         }
     }
 }
@@ -122,7 +146,7 @@ fn preconfig_table() -> TableTable {
         uid: spec::core::table::MBR,
         name: "MBR".into(),
         kind: TableKind::Byte,
-        rows: 0x08000000,
+        rows: MBR_SIZE,
         ..Default::default()
     };
 

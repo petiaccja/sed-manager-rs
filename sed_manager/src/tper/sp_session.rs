@@ -1,6 +1,6 @@
 use std::ops::RangeBounds;
 
-use crate::messaging::uid::UID;
+use crate::messaging::uid::{TableUID, UID};
 use crate::messaging::value::{Bytes, Value};
 use crate::rpc::args::{IntoMethodArgs, TryFromMethodArgs, UnwrapMethodArgs};
 use crate::rpc::{
@@ -127,6 +127,24 @@ impl SPSession {
         Ok(())
     }
 
+    pub async fn read(&self, table: TableUID, position: u64, len: u64) -> Result<Vec<u8>, RPCError> {
+        let cell_block = CellBlock::bytes(position..(position + len));
+        let call = MethodCall::new_success(table.as_uid(), GET.as_uid(), (cell_block,).into_method_args());
+        let results = self.do_method_call(call).await?;
+        let results = results.take_results()?;
+        // According to the TCG examples, result is encoded without typeOr{} name-value pair.
+        let (bytes,) = results.unwrap_method_args()?;
+        Ok(bytes)
+    }
+
+    pub async fn write(&self, table: TableUID, position: u64, data: &[u8]) -> Result<(), RPCError> {
+        let args = (Some(position), Some(data));
+        let call = MethodCall::new_success(table.as_uid(), SET.as_uid(), args.into_method_args());
+        let results = self.do_method_call(call).await?;
+        let _ = results.take_results()?;
+        Ok(())
+    }
+
     pub async fn next(
         &self,
         table: TableReference,
@@ -179,7 +197,7 @@ impl SPSession {
     }
 
     pub async fn random(&self, count: u32, cell: Option<(UID, u16)>) -> Result<Option<Bytes>, RPCError> {
-        let cell_block = cell.map(|(object, column)| CellBlock::object_explicit(object, column..=column));
+        let cell_block = cell.map(|(object, column)| CellBlock::object_with_table(object, column..=column));
         let call = MethodCall::new_success(THIS_SP, RANDOM.as_uid(), (count, cell_block).into_method_args());
         let results = self.do_method_call(call).await?.take_results()?;
         let (bytes,) = results.unwrap_method_args()?;

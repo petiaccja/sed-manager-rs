@@ -96,16 +96,16 @@ pub fn collapse<const N: usize>(args: [Value; N]) -> Vec<Value> {
     args.into_iter().filter(|value| !value.is_empty()).collect()
 }
 
-pub fn expand_args<const N: usize>(args: Vec<Value>, optionals: &[bool; N]) -> Result<[Value; N], MethodStatus> {
-    fn get_index_value_pair(
-        pos: usize,
-        arg: Value,
+pub fn expand_args<const N: usize>(args: Vec<Value>, optionality: &[bool; N]) -> Result<[Value; N], MethodStatus> {
+    fn get_target_idx_and_source_value(
+        src_idx: usize,
+        src_value: Value,
         optional: bool,
         optional_offset: usize,
     ) -> Result<(usize, Value), MethodStatus> {
         if !optional {
-            Ok((pos, arg))
-        } else if let Ok(named) = Named::try_from(arg) {
+            Ok((src_idx, src_value))
+        } else if let Ok(named) = Named::try_from(src_value) {
             if let Ok(label) = u64::try_from(named.name) {
                 Ok((label as usize + optional_offset, named.value))
             } else {
@@ -115,13 +115,21 @@ pub fn expand_args<const N: usize>(args: Vec<Value>, optionals: &[bool; N]) -> R
             Err(MethodStatus::InvalidParameter)
         }
     }
-
     let mut expanded = from_fn::<Value, N, _>(|_| Value::empty());
-    let optional_offset = optionals.iter().filter(|x| !*x).count();
-    for (source, arg) in args.into_iter().enumerate() {
-        let (target, value) = get_index_value_pair(source, arg, optionals[source], optional_offset)?;
-        if target < N {
-            expanded[target] = value;
+    let first_optional_idx = optionality.iter().filter(|x| !*x).count();
+    if args.len() < first_optional_idx {
+        return Err(MethodStatus::InvalidParameter);
+    }
+    for (src_idx, src_value) in args.into_iter().enumerate() {
+        if src_idx < N {
+            let optional = optionality[src_idx];
+            let (target_idx, src_value) =
+                get_target_idx_and_source_value(src_idx, src_value, optional, first_optional_idx)?;
+            if target_idx < N {
+                expanded[target_idx] = src_value;
+            } else {
+                return Err(MethodStatus::InvalidParameter);
+            }
         } else {
             return Err(MethodStatus::InvalidParameter);
         }
@@ -293,6 +301,30 @@ mod tests {
             Value::empty(),
         ];
         assert_eq!(result, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn expand_args_more_than_needed() -> Result<(), MethodStatus> {
+        let args = vec![Value::from(0), Value::from(1), Value::from(2)];
+        let result = expand_args(args, &[false, false]);
+        assert_eq!(result, Err(MethodStatus::InvalidParameter));
+        Ok(())
+    }
+
+    #[test]
+    fn expand_args_fewer_than_needed() -> Result<(), MethodStatus> {
+        let args = vec![Value::from(0)];
+        let result = expand_args(args, &[false, false]);
+        assert_eq!(result, Err(MethodStatus::InvalidParameter));
+        Ok(())
+    }
+
+    #[test]
+    fn expand_args_exactly_as_needed() -> Result<(), MethodStatus> {
+        let args = vec![Value::from(0), Value::from(1)];
+        let result = expand_args(args.clone(), &[false, false]);
+        assert_eq!(result, Ok([Value::from(0), Value::from(1)]));
         Ok(())
     }
 

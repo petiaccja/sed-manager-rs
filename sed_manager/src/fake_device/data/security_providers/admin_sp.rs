@@ -47,13 +47,13 @@ impl AdminSP {
 }
 
 impl SecurityProvider for AdminSP {
-    fn get_table(&self, table: TableUID) -> Option<&dyn GenericTable> {
+    fn get_object_table(&self, table: TableUID) -> Option<&dyn GenericTable> {
         let basic = self.basic_sp.as_array().into_iter().find(|table_| table_.uid() == table);
         let specific = self.sp_specific.as_array().into_iter().find(|table_| table_.uid() == table);
         basic.or(specific)
     }
 
-    fn get_table_mut(&mut self, table: TableUID) -> Option<&mut dyn GenericTable> {
+    fn get_object_table_mut(&mut self, table: TableUID) -> Option<&mut dyn GenericTable> {
         let basic = self.basic_sp.as_array_mut().into_iter().find(|table_| table_.uid() == table);
         let specific = self.sp_specific.as_array_mut().into_iter().find(|table_| table_.uid() == table);
         basic.or(specific)

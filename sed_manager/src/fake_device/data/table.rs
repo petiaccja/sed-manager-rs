@@ -1,14 +1,12 @@
 use core::ops::{Deref, DerefMut};
 use std::collections::BTreeMap;
 
-use crate::{
-    messaging::uid::{TableUID, UID},
-    spec::{
-        column_types::{AuthorityRef, CPINRef, KAES256Ref, LockingRangeRef, MBRControlRef, SPRef, TableDescRef},
-        objects::{Authority, LockingRange, MBRControl, TableDesc, CPIN, KAES256, SP},
-        table_id,
-    },
+use crate::messaging::uid::{TableUID, UID};
+use crate::spec::column_types::{
+    AuthorityRef, CPINRef, KAES256Ref, LockingRangeRef, MBRControlRef, SPRef, TableDescRef,
 };
+use crate::spec::objects::{Authority, LockingRange, MBRControl, TableDesc, CPIN, KAES256, SP};
+use crate::spec::table_id;
 
 use super::object::GenericObject;
 
