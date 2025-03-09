@@ -1,6 +1,6 @@
 use as_array::AsArray;
 
-use crate::fake_device::data::table::{AuthorityTable, CPINTable, GenericTable, SPTable};
+use crate::fake_device::data::table::{AuthorityTable, CPINTable, GenericTable, SPTable, TableTable};
 use crate::fake_device::{MSID_PASSWORD, PSID_PASSWORD};
 use crate::messaging::uid::TableUID;
 use crate::messaging::value::Bytes;
@@ -75,11 +75,16 @@ impl SecurityProvider for AdminSP {
 
 impl Default for AdminSP {
     fn default() -> Self {
+        let table = preconfig_table();
         let authorities = preconfig_authorities();
         let c_pin = preconfig_c_pin();
         let sp = preconfig_sp();
-        Self { basic_sp: BasicSP { authorities, c_pin }, sp_specific: SPSpecific { sp } }
+        Self { basic_sp: BasicSP { table, authorities, c_pin }, sp_specific: SPSpecific { sp } }
     }
+}
+
+fn preconfig_table() -> TableTable {
+    TableTable::new()
 }
 
 fn preconfig_authorities() -> AuthorityTable {

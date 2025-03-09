@@ -3,6 +3,7 @@ mod byte_types;
 mod enumeration_types;
 mod method_types;
 mod reference_types;
+mod set_types;
 mod struct_types;
 
 macro_rules! define_column_type {
@@ -27,6 +28,7 @@ pub use byte_types::*;
 pub use enumeration_types::*;
 pub use method_types::*;
 pub use reference_types::*;
+pub use set_types::*;
 pub use struct_types::*;
 
 define_column_type!(UID, 0x0000_0005_0000_0209_u64, "uid");

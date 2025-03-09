@@ -1,6 +1,6 @@
 use crate::messaging::uid::UID;
 use crate::messaging::value::Value;
-use crate::spec::objects::{Authority, LockingRange, CPIN, KAES256, SP};
+use crate::spec::objects::{Authority, LockingRange, MBRControl, TableDesc, CPIN, KAES256, SP};
 
 pub trait GenericObject {
     fn uid(&self) -> UID;
@@ -36,3 +36,5 @@ impl_generic_object!(CPIN);
 impl_generic_object!(KAES256);
 impl_generic_object!(LockingRange);
 impl_generic_object!(SP);
+impl_generic_object!(TableDesc);
+impl_generic_object!(MBRControl);

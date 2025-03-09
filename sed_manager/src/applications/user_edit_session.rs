@@ -1,11 +1,7 @@
-use crate::{
-    spec::{
-        column_types::{AuthMethod, AuthorityRef, CPINRef},
-        objects::{Authority, CPIN},
-        table_id,
-    },
-    tper::{Session, TPer},
-};
+use crate::spec::column_types::{AuthMethod, AuthorityRef, CPINRef};
+use crate::spec::objects::{Authority, CPIN};
+use crate::spec::table_id;
+use crate::tper::{Session, TPer};
 
 use super::{utility::start_admin1_session, Error};
 

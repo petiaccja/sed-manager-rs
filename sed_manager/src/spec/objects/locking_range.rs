@@ -2,7 +2,7 @@ use as_array::AsArray;
 
 use crate::spec::column_types::{
     AdvKeyMode, GeneralStatus, LastReencStatus, LockingRangeRef, MediaKeyRef, Name, ReencryptRequest, ReencryptState,
-    ResetTypes, VerifyMode,
+    ResetType, ResetTypes, VerifyMode,
 };
 
 use super::cell::Cell;
@@ -67,14 +67,14 @@ impl Default for LockingRange {
             write_lock_enabled: false,
             read_locked: false,
             write_locked: false,
-            lock_on_reset: ResetTypes::PowerCycle,
+            lock_on_reset: [ResetType::PowerCycle].into_iter().collect(),
             active_key: MediaKeyRef::null(),
             next_key: MediaKeyRef::null(),
             reencrypt_state: ReencryptState::Idle,
             reencrypt_request: ReencryptRequest::Unknown,
             adv_key_mode: AdvKeyMode::AutoAdvanceKeys,
             verify_mode: VerifyMode::NoVerify,
-            const_on_reset: ResetTypes::PowerCycle,
+            const_on_reset: [ResetType::PowerCycle].into_iter().collect(),
             last_reencrypt_lba: 0,
             last_reenc_stat: LastReencStatus::Success,
             general_status: GeneralStatus::None,

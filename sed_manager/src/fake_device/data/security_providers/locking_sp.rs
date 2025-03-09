@@ -1,11 +1,14 @@
 use as_array::AsArray;
 
-use crate::fake_device::data::table::{AuthorityTable, CPINTable, GenericTable, KAES256Table, LockingTable};
+use crate::fake_device::data::table::{
+    AuthorityTable, CPINTable, GenericTable, KAES256Table, LockingTable, MBRControlTable, TableTable,
+};
 use crate::messaging::uid::{ObjectUID, TableUID};
 use crate::messaging::value::Bytes;
 use crate::rpc::MethodStatus;
-use crate::spec::column_types::{AuthMethod, AuthorityRef, BoolOrBytes, CredentialRef, KAES256Ref, Key256};
-use crate::spec::objects::{Authority, LockingRange, CPIN, KAES256};
+use crate::spec;
+use crate::spec::column_types::{AuthMethod, AuthorityRef, BoolOrBytes, CredentialRef, KAES256Ref, Key256, TableKind};
+use crate::spec::objects::{Authority, LockingRange, MBRControl, TableDesc, CPIN, KAES256};
 use crate::spec::opal::locking::*;
 
 use super::basic_sp::BasicSP;
@@ -41,6 +44,7 @@ pub struct LockingSP {
 pub struct SPSpecific {
     pub locking: LockingTable,
     pub k_aes_256: KAES256Table,
+    pub mbr_control: MBRControlTable,
 }
 
 impl LockingSP {
@@ -87,12 +91,45 @@ impl SecurityProvider for LockingSP {
 
 impl Default for LockingSP {
     fn default() -> Self {
+        let table = preconfig_table();
         let authorities = preconfig_authority();
         let c_pin = preconfig_c_pin();
         let locking = preconfig_locking();
         let k_aes_256 = preconfig_k_aes_256();
-        Self { basic_sp: BasicSP { authorities, c_pin }, sp_specific: SPSpecific { locking, k_aes_256 } }
+        let mbr_control = preconfig_mbr_control();
+        Self {
+            basic_sp: BasicSP { table, authorities, c_pin },
+            sp_specific: SPSpecific { locking, k_aes_256, mbr_control },
+        }
     }
+}
+
+fn preconfig_mbr_control() -> MBRControlTable {
+    let mbr_control = MBRControl { ..Default::default() };
+    let mut mbr_control_table = MBRControlTable::new();
+    mbr_control_table.insert(mbr_control.uid, mbr_control);
+    mbr_control_table
+}
+
+fn preconfig_table() -> TableTable {
+    let mbr_control = TableDesc {
+        uid: spec::core::table::MBR_CONTROL,
+        name: "MBRControl".into(),
+        kind: TableKind::Object,
+        ..Default::default()
+    };
+    let mbr = TableDesc {
+        uid: spec::core::table::MBR,
+        name: "MBR".into(),
+        kind: TableKind::Byte,
+        rows: 0x08000000,
+        ..Default::default()
+    };
+
+    let mut table = TableTable::new();
+    table.insert(mbr_control.uid, mbr_control);
+    table.insert(mbr.uid, mbr);
+    table
 }
 
 fn preconfig_authority() -> AuthorityTable {

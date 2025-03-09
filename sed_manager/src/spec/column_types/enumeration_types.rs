@@ -110,16 +110,6 @@ pub struct Day(u8);
 
 #[repr(u8)]
 #[derive(EnumerationType, PartialEq, Eq, Clone, Debug)]
-pub enum ResetTypes {
-    PowerCycle = 0,
-    Hardware = 1,
-    HotPlug = 2,
-    #[fallback]
-    Unknown = 31,
-}
-
-#[repr(u8)]
-#[derive(EnumerationType, PartialEq, Eq, Clone, Debug)]
 pub enum ReencryptState {
     Idle = 1,
     Pending = 2,
@@ -203,4 +193,13 @@ pub enum SymmetricModeMedia {
     MediaEncryption = 23,
     #[fallback]
     Unknown = 22,
+}
+
+#[repr(u8)]
+#[derive(EnumerationType, PartialEq, Eq, Clone, Debug)]
+pub enum TableKind {
+    Object = 1,
+    Byte = 2,
+    #[fallback]
+    Unknown = 8,
 }

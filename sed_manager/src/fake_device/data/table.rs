@@ -4,8 +4,8 @@ use std::collections::BTreeMap;
 use crate::{
     messaging::uid::{TableUID, UID},
     spec::{
-        column_types::{AuthorityRef, CPINRef, KAES256Ref, LockingRangeRef, SPRef},
-        objects::{Authority, LockingRange, CPIN, KAES256, SP},
+        column_types::{AuthorityRef, CPINRef, KAES256Ref, LockingRangeRef, MBRControlRef, SPRef, TableDescRef},
+        objects::{Authority, LockingRange, MBRControl, TableDesc, CPIN, KAES256, SP},
         table_id,
     },
 };
@@ -13,6 +13,8 @@ use crate::{
 use super::object::GenericObject;
 
 pub type AuthorityTable = Table<Authority, AuthorityRef, { table_id::AUTHORITY.as_u64() }>;
+pub type TableTable = Table<TableDesc, TableDescRef, { table_id::TABLE.as_u64() }>;
+pub type MBRControlTable = Table<MBRControl, MBRControlRef, { table_id::MBR_CONTROL.as_u64() }>;
 pub type CPINTable = Table<CPIN, CPINRef, { table_id::C_PIN.as_u64() }>;
 pub type KAES256Table = Table<KAES256, KAES256Ref, { table_id::K_AES_256.as_u64() }>;
 pub type LockingTable = Table<LockingRange, LockingRangeRef, { table_id::LOCKING.as_u64() }>;

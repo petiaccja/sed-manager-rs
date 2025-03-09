@@ -2,7 +2,7 @@ use core::ops::Deref;
 
 use as_array::AsArray;
 
-use crate::fake_device::data::table::{AuthorityTable, CPINTable, GenericTable};
+use crate::fake_device::data::table::{AuthorityTable, CPINTable, GenericTable, TableTable};
 use crate::messaging::value::Bytes;
 use crate::rpc::MethodStatus;
 use crate::spec::column_types::{AuthorityRef, BoolOrBytes, CPINRef};
@@ -26,6 +26,7 @@ use crate::spec::column_types::{AuthorityRef, BoolOrBytes, CPINRef};
 #[derive(AsArray)]
 #[as_array_traits(GenericTable)]
 pub struct BasicSP {
+    pub table: TableTable,
     pub authorities: AuthorityTable,
     pub c_pin: CPINTable,
 }

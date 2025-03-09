@@ -21,6 +21,10 @@ pub type LockingRangeRef = ObjectUID<{ LOCKING.mask() }>;
 pub type MediaKeyRef = ObjectUID<{ K_AES_128.mask() | K_AES_256.mask() }>;
 pub type KAES256Ref = ObjectUID<{ K_AES_256.mask() }>;
 pub type MethodRef = ObjectUID<{ METHOD_ID.mask() }>;
+pub type MBRControlRef = ObjectUID<{ MBR_CONTROL.mask() }>;
+pub type TableDescRef = ObjectUID<{ TABLE.mask() }>;
+pub type TemplateRef = ObjectUID<{ TEMPLATE.mask() }>;
+pub type ColumnRef = ObjectUID<{ COLUMN.mask() }>;
 
 /// UIDs for any of the C_* tables.
 ///

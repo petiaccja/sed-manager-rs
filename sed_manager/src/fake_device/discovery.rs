@@ -44,16 +44,23 @@ fn get_tper_feature_desc(properties: &Properties) -> FeatureDescriptor {
 fn get_locking_feature_desc(controller: &OpalV2Controller) -> FeatureDescriptor {
     let locking_sp = controller.admin_sp.sp_specific.sp.get(&spec::opal::admin::sp::LOCKING).unwrap();
     let locking_enabled = locking_sp.life_cycle_state != LifeCycleState::ManufacturedInactive;
-    let locking = &controller.locking_sp.sp_specific.locking;
-    let locked = locking.values().any(|range| range.read_lock_enabled || range.write_lock_enabled);
+
+    let locking_table = &controller.locking_sp.sp_specific.locking;
+    let locked = locking_table.values().any(|range| range.read_locked || range.write_locked);
+
+    let mbr_control_table = &controller.locking_sp.sp_specific.mbr_control;
+    let mbr_control_row = mbr_control_table.values().next().unwrap();
+    let mbr_enabled = mbr_control_row.enable;
+    let mbr_done = mbr_control_row.done;
+
     let desc = LockingDescriptor {
         hw_reset_supported: true,
         locked,
         locking_enabled,
         locking_supported: true,
         media_encryption: false,
-        mbr_enabled: false,
-        mbr_done: false,
+        mbr_enabled,
+        mbr_done,
         mbr_shadowing_not_supported: false,
     };
     FeatureDescriptor::Locking(desc)
