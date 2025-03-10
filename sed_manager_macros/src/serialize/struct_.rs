@@ -23,8 +23,8 @@ fn gen_optional_range<T: quote::ToTokens>(opt: &Option<core::ops::Range<T>>) -> 
 
 fn gen_save_struct_pos() -> TokenStream2 {
     quote! {
-        use ::std::io::Seek;
-        let struct_pos = stream.stream_position()?;
+        use ::sed_manager::serialization::Seek;
+        let struct_pos = stream.stream_position();
     }
 }
 
@@ -53,7 +53,7 @@ fn gen_serialize_struct_layout(layout: &LayoutAttr) -> TokenStream2 {
     if let Some(round) = layout.round {
         let round = round as u64;
         quote! {
-            let end_pos = stream.stream_position()?;
+            let end_pos = stream.stream_position();
             let total_len = end_pos - struct_pos;
             let rounded_len = (total_len + #round - 1) / #round * #round;
             ::sed_manager::serialization::extend_with_zeros_until(stream, struct_pos + rounded_len);
@@ -67,10 +67,10 @@ fn gen_deserialize_struct_layout(layout: &LayoutAttr) -> TokenStream2 {
     if let Some(round) = layout.round {
         let round = round as u64;
         quote! {
-            let end_pos = stream.stream_position()?;
+            let end_pos = stream.stream_position();
             let total_len = end_pos - struct_pos;
             let rounded_len = (total_len + #round - 1) / #round * #round;
-            stream.seek(::std::io::SeekFrom::Start(struct_pos + rounded_len))?;
+            stream.seek(::sed_manager::serialization::SeekFrom::Start(struct_pos + rounded_len))?;
         }
     } else {
         TokenStream2::new()

@@ -63,7 +63,7 @@ impl CellBlock {
         };
         let end = match bounds.end_bound() {
             Bound::Unbounded => None,
-            Bound::Excluded(x) => Some(std::cmp::max(1u8.into(), *x) - 1u8.into()),
+            Bound::Excluded(x) => Some(core::cmp::max(1u8.into(), *x) - 1u8.into()),
             Bound::Included(x) => Some(*x),
         };
         (start, end)

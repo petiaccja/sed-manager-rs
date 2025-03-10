@@ -10,4 +10,4 @@ pub use error::{annotate_field, Error};
 pub use fields::{deserialize_field, extend_with_zeros_until, serialize_field};
 pub use sed_manager_macros::{Deserialize, Serialize};
 pub use serialize::{Deserialize, DeserializeBinary, Serialize, SerializeBinary};
-pub use stream::{InputStream, ItemRead, ItemWrite, OutputStream, SeekAlways};
+pub use stream::{InputStream, ItemRead, ItemWrite, OutputStream, Seek, SeekFrom};

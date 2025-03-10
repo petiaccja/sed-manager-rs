@@ -1,4 +1,4 @@
-use super::{annotate_field, stream::SeekAlways, Deserialize, Error, InputStream, OutputStream, Serialize};
+use super::{annotate_field, stream::Seek, Deserialize, Error, InputStream, OutputStream, Serialize};
 use core::{ops::Deref, ops::DerefMut};
 
 /// A vector of `T` with special a serialization format.
@@ -78,7 +78,7 @@ where
     type Error = Error;
     fn deserialize(stream: &mut InputStream<Item>) -> Result<VecWithoutLen<T>, Self::Error> {
         let mut data = Vec::<T>::new();
-        while stream.pos() < stream.len() {
+        while stream.stream_position() < stream.stream_len() {
             let item = annotate_field(T::deserialize(stream), format!("data[{}]", data.len()))?;
             data.push(item);
         }

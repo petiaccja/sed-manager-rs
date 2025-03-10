@@ -45,7 +45,7 @@ impl Deserialize<u8> for Value {
 
 #[cfg(test)]
 mod tests {
-    use std::io::Seek;
+    use crate::serialization::Seek as _;
 
     use super::super::value::Named;
     use super::*;
@@ -63,11 +63,11 @@ mod tests {
         for input in inputs {
             let mut os = OutputStream::<u8>::new();
             input.serialize(&mut os).unwrap();
-            let expected_stream_pos = os.stream_position().unwrap();
+            let expected_stream_pos = os.stream_position();
             0xCCCCCCCCu32.serialize(&mut os).unwrap();
             let mut is = InputStream::from(os.take());
             let output = Value::deserialize(&mut is).unwrap();
-            assert_eq!(is.stream_position().unwrap(), expected_stream_pos);
+            assert_eq!(is.stream_position(), expected_stream_pos);
             assert_eq!(output, input);
         }
     }

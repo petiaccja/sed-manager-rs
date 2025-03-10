@@ -81,8 +81,6 @@ impl MBREditSession {
 
 #[cfg(test)]
 mod tests {
-    use std::u64;
-
     use crate::applications::utility::tests::setup_activated_tper;
     use crate::fake_device::MSID_PASSWORD;
     use crate::messaging::discovery::LockingDescriptor;

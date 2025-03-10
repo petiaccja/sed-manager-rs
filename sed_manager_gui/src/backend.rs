@@ -76,9 +76,9 @@ impl Backend {
     pub fn set_devices(&mut self, devices: Vec<Arc<dyn Device>>) {
         let num_devices = devices.len();
         self.devices = devices;
-        self.discoveries = std::iter::repeat_with(|| None).take(num_devices).collect();
-        self.tpers = std::iter::repeat_with(|| None).take(num_devices).collect();
-        self.sessions = std::iter::repeat_with(|| None).take(num_devices).collect();
+        self.discoveries = core::iter::repeat_with(|| None).take(num_devices).collect();
+        self.tpers = core::iter::repeat_with(|| None).take(num_devices).collect();
+        self.sessions = core::iter::repeat_with(|| None).take(num_devices).collect();
     }
 
     pub fn get_device(&mut self, device_idx: usize) -> Option<Arc<dyn Device>> {
@@ -113,7 +113,7 @@ impl Backend {
 
     pub fn replace_session(&mut self, device_idx: usize, session: EditorSession) -> Option<EditorSession> {
         if device_idx < self.devices.len() {
-            self.sessions.resize_with(std::cmp::max(self.sessions.len(), device_idx + 1), || None);
+            self.sessions.resize_with(core::cmp::max(self.sessions.len(), device_idx + 1), || None);
             self.sessions[device_idx].replace(session)
         } else {
             None

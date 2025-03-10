@@ -1,5 +1,3 @@
-use std::vec::Vec;
-
 use super::fmt::PrettyPrint;
 
 pub type Bytes = Vec<u8>;

@@ -44,7 +44,7 @@ impl Deserialize<Token> for PackagedMethod {
 mod tests {
     use crate::rpc::MethodStatus;
     use crate::serialization::Error as SerializeError;
-    use crate::serialization::SeekAlways;
+    use crate::serialization::Seek;
 
     use super::*;
 
@@ -58,11 +58,11 @@ mod tests {
         });
         let mut os = OutputStream::<Token>::new();
         call.serialize(&mut os)?;
-        let stream_len = os.len();
+        let stream_len = os.stream_len();
         let mut is = InputStream::from(os.take());
         let copy = PackagedMethod::deserialize(&mut is)?;
         assert_eq!(call, copy);
-        assert_eq!(is.pos(), stream_len);
+        assert_eq!(is.stream_position(), stream_len);
         Ok(())
     }
 
@@ -71,11 +71,11 @@ mod tests {
         let call = PackagedMethod::Result(MethodResult { results: vec![], status: MethodStatus::Fail });
         let mut os = OutputStream::<Token>::new();
         call.serialize(&mut os)?;
-        let stream_len = os.len();
+        let stream_len = os.stream_len();
         let mut is = InputStream::from(os.take());
         let copy = PackagedMethod::deserialize(&mut is)?;
         assert_eq!(call, copy);
-        assert_eq!(is.pos(), stream_len);
+        assert_eq!(is.stream_position(), stream_len);
         Ok(())
     }
 
@@ -84,11 +84,11 @@ mod tests {
         let call = PackagedMethod::EndOfSession;
         let mut os = OutputStream::<Token>::new();
         call.serialize(&mut os)?;
-        let stream_len = os.len();
+        let stream_len = os.stream_len();
         let mut is = InputStream::from(os.take());
         let copy = PackagedMethod::deserialize(&mut is)?;
         assert_eq!(call, copy);
-        assert_eq!(is.pos(), stream_len);
+        assert_eq!(is.stream_position(), stream_len);
         Ok(())
     }
 }

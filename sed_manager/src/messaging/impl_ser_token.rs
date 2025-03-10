@@ -1,6 +1,8 @@
 use super::token::{get_tag, is_data, Tag, Token, TokenStreamError};
 use super::value::{Bytes, Command, List, Named, Value};
-use crate::serialization::{Deserialize, InputStream, ItemRead, ItemWrite, OutputStream, Serialize};
+use crate::serialization::{
+    Deserialize, Error as SerializeError, InputStream, ItemRead, ItemWrite, OutputStream, Serialize,
+};
 
 macro_rules! impl_tokenize_integer {
     ($int_ty:ty, $signed:expr) => {
@@ -131,7 +133,7 @@ impl Serialize<Token> for Named {
 impl Deserialize<Token> for Named {
     type Error = TokenStreamError;
     fn deserialize(stream: &mut InputStream<Token>) -> Result<Self, Self::Error> {
-        fn is_terminator(maybe_token: Result<&Token, std::io::Error>) -> bool {
+        fn is_terminator(maybe_token: Result<&Token, SerializeError>) -> bool {
             match maybe_token {
                 Ok(token) => token.tag == Tag::EndName,
                 _ => false,
@@ -211,7 +213,7 @@ impl Serialize<Token> for List {
 impl Deserialize<Token> for List {
     type Error = TokenStreamError;
     fn deserialize(stream: &mut InputStream<Token>) -> Result<Self, Self::Error> {
-        fn is_terminator(token: Result<&Token, std::io::Error>) -> bool {
+        fn is_terminator(token: Result<&Token, SerializeError>) -> bool {
             match token {
                 Ok(token) => token.tag == Tag::EndList,
                 _ => false,

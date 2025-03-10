@@ -1,5 +1,5 @@
+use super::{Seek, SeekFrom};
 use core::ops::Range;
-use std::io::{Seek, SeekFrom};
 
 use super::error::Error;
 use super::serialize::{Deserialize, Serialize};
@@ -33,7 +33,7 @@ fn move_range_to_end(source_bytes: &[u8], pos: &Range<usize>) -> Vec<u8> {
 pub fn extend_with_zeros_until(stream: &mut OutputStream<u8>, stream_pos: u64) {
     if stream.seek(SeekFrom::Start(stream_pos)).is_err() {
         stream.seek(SeekFrom::End(0)).unwrap();
-        while stream.stream_position().unwrap() != stream_pos {
+        while stream.stream_position() != stream_pos {
             stream.write_one(0);
         }
     }
@@ -60,7 +60,7 @@ pub fn serialize_field<T: Serialize<u8>>(
 where
     Error: From<<T as Serialize<u8>>::Error>,
 {
-    let stream_pos = stream.stream_position()?;
+    let stream_pos = stream.stream_position();
     let field_pos = match offset {
         Some(offset) => struct_pos + offset as u64,
         None => stream_pos,
@@ -79,7 +79,7 @@ where
     }
 
     if let Some(round) = round {
-        let final_pos = stream.stream_position()?;
+        let final_pos = stream.stream_position();
         let field_len = final_pos - field_pos;
         let rounded_len = (field_len + round as u64 - 1) / round as u64 * round as u64;
         extend_with_zeros_until(stream, field_pos + rounded_len);
@@ -98,7 +98,7 @@ pub fn deserialize_field<T: Deserialize<u8>>(
 where
     Error: From<<T as Deserialize<u8>>::Error>,
 {
-    let stream_pos = stream.stream_position()?;
+    let stream_pos = stream.stream_position();
     let field_pos = match offset {
         Some(offset) => struct_pos + offset as u64,
         None => stream_pos,
@@ -115,7 +115,7 @@ where
     }?;
 
     if let Some(round) = round {
-        let final_pos = stream.stream_position()?;
+        let final_pos = stream.stream_position();
         let field_len = final_pos - field_pos;
         let rounded_len = (field_len + round as u64 - 1) / round as u64 * round as u64;
         stream.seek(SeekFrom::Start(field_pos + rounded_len))?;
@@ -129,9 +129,9 @@ mod tests {
     use super::*;
 
     fn is_stream_pos_at_end<T>(stream: &mut OutputStream<T>) -> bool {
-        let stream_pos = stream.stream_position().unwrap();
+        let stream_pos = stream.stream_position();
         stream.seek(SeekFrom::End(0)).unwrap();
-        let len = stream.stream_position().unwrap();
+        let len = stream.stream_position();
         stream.seek(SeekFrom::Start(stream_pos)).unwrap();
         stream_pos == len
     }
@@ -164,7 +164,7 @@ mod tests {
     fn serialize_field_simple() {
         let field = 3_u8;
         let mut stream = OutputStream::<u8>::new();
-        let struct_base = stream.stream_position().unwrap();
+        let struct_base = stream.stream_position();
         assert!(serialize_field(&field, &mut stream, struct_base, None, None, None).is_ok());
         assert!(is_stream_pos_at_end(&mut stream));
         assert_eq!(stream.as_slice(), [3u8]);
@@ -175,7 +175,7 @@ mod tests {
         let field = 3_u8;
         let mut stream = OutputStream::<u8>::new();
         assert!(serialize_field(&field, &mut stream, 0, Some(2), None, None).is_ok());
-        assert_eq!(stream.stream_position().unwrap(), 3);
+        assert_eq!(stream.stream_position(), 3);
         assert_eq!(stream.as_slice(), [0u8, 0u8, 3u8]);
     }
 
@@ -186,7 +186,7 @@ mod tests {
         stream.write_exact(&[0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8]);
         stream.seek(SeekFrom::Start(0)).unwrap();
         assert!(serialize_field(&field, &mut stream, 0, Some(2), None, None).is_ok());
-        assert_eq!(stream.stream_position().unwrap(), 3);
+        assert_eq!(stream.stream_position(), 3);
         assert_eq!(stream.as_slice(), [0xFFu8, 0xFFu8, 3u8, 0xFFu8, 0xFFu8]);
     }
 
@@ -236,7 +236,7 @@ mod tests {
         let mut stream = InputStream::<u8>::new(DESERIALIZE_DATA.as_slice());
         let result = deserialize_field::<u16>(&mut stream, 0, None, None, None);
         assert_eq!(result.unwrap(), 0x0123);
-        assert_eq!(stream.stream_position().unwrap(), 2);
+        assert_eq!(stream.stream_position(), 2);
     }
 
     #[test]
@@ -244,7 +244,7 @@ mod tests {
         let mut stream = InputStream::<u8>::new(DESERIALIZE_DATA.as_slice());
         let result = deserialize_field::<u16>(&mut stream, 0, Some(2), None, None);
         assert_eq!(result.unwrap(), 0x4567);
-        assert_eq!(stream.stream_position().unwrap(), 4);
+        assert_eq!(stream.stream_position(), 4);
     }
 
     #[test]
@@ -252,7 +252,7 @@ mod tests {
         let mut stream = InputStream::<u8>::new(DESERIALIZE_DATA.as_slice());
         let result = deserialize_field::<u16>(&mut stream, 0, None, Some(4..20), None);
         assert_eq!(result.unwrap(), 0x1234);
-        assert_eq!(stream.stream_position().unwrap(), 3);
+        assert_eq!(stream.stream_position(), 3);
     }
 
     #[test]
@@ -260,7 +260,7 @@ mod tests {
         let mut stream = InputStream::<u8>::new(DESERIALIZE_DATA.as_slice());
         let result = deserialize_field::<u16>(&mut stream, 0, None, None, Some(6));
         assert_eq!(result.unwrap(), 0x0123);
-        assert_eq!(stream.stream_position().unwrap(), 6);
+        assert_eq!(stream.stream_position(), 6);
     }
 
     #[test]
@@ -268,6 +268,6 @@ mod tests {
         let mut stream = InputStream::<u8>::new(DESERIALIZE_DATA.as_slice());
         let result = deserialize_field::<u64>(&mut stream, 0, None, None, Some(9));
         assert_eq!(result.unwrap(), 0x0123456789ABCDEF);
-        assert_eq!(stream.stream_position().unwrap(), 9);
+        assert_eq!(stream.stream_position(), 9);
     }
 }

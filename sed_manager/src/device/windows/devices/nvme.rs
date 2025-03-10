@@ -5,10 +5,9 @@ use crate::device::windows::utility::file_handle::FileHandle;
 use crate::device::windows::utility::ioctl::{ioctl_in_out, STORAGE_PROTOCOL_SPECIFIC_DATA, STORAGE_PROTOCOL_TYPE};
 use crate::device::windows::Error as WindowsError;
 use crate::device::Error as DeviceError;
-use crate::serialization::{Deserialize, InputStream};
+use crate::serialization::{Deserialize, InputStream, Seek as _, SeekFrom};
 
 use core::mem::offset_of;
-use std::io::Seek;
 use std::os::windows::raw::HANDLE;
 use std::sync::OnceLock;
 use winapi::um::winioctl::{IOCTL_STORAGE_QUERY_PROPERTY, STORAGE_PROPERTY_QUERY};
@@ -125,7 +124,7 @@ fn identify_controller(handle: HANDLE) -> Result<IdentifyController, WindowsErro
     let _ = ioctl_in_out(handle, IOCTL_STORAGE_QUERY_PROPERTY, &mut buffer)?;
 
     let mut stream = InputStream::from(buffer);
-    stream.seek(std::io::SeekFrom::Start((data_offset + response_offset) as u64)).unwrap();
+    stream.seek(SeekFrom::Start((data_offset + response_offset) as u64)).unwrap();
     match IdentifyController::deserialize(&mut stream) {
         Ok(identity) => Ok(identity),
         Err(_) => panic!("controller identify structure deserialization should not fail"),

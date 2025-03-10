@@ -1,6 +1,4 @@
-use std::io::Seek;
-
-use sed_manager::serialization::{Deserialize, InputStream, OutputStream, Serialize};
+use sed_manager::serialization::{Deserialize, InputStream, OutputStream, Seek as _, Serialize};
 
 #[derive(Serialize, Deserialize)]
 struct SimpleData {
@@ -126,7 +124,7 @@ fn deserialize_struct_simple() {
 
     assert_eq!(data.field_a, 0x01234567);
     assert_eq!(data.field_b, 0x89AB);
-    assert_eq!(is.stream_position().unwrap(), 6);
+    assert_eq!(is.stream_position(), 6);
 }
 
 #[test]
@@ -135,7 +133,7 @@ fn deserialize_struct_offset() {
     let data = OffsetData::deserialize(&mut is).unwrap();
 
     assert_eq!(data.field_a, 0x4567);
-    assert_eq!(is.stream_position().unwrap(), 4);
+    assert_eq!(is.stream_position(), 4);
 }
 
 #[test]
@@ -145,7 +143,7 @@ fn deserialize_struct_bitfield() {
 
     assert_eq!(data.field_a, false);
     assert_eq!(data.field_b, 0x4567);
-    assert_eq!(is.stream_position().unwrap(), 4);
+    assert_eq!(is.stream_position(), 4);
 }
 
 #[test]
@@ -154,7 +152,7 @@ fn deserialize_struct_rounded_field() {
     let data = RoundedField::deserialize(&mut is).unwrap();
 
     assert_eq!(data.field_a, 0x0123);
-    assert_eq!(is.stream_position().unwrap(), 8);
+    assert_eq!(is.stream_position(), 8);
 }
 
 #[test]
@@ -163,7 +161,7 @@ fn deserialize_struct_rounded_struct_single() {
     let data = RoundedStructSingle::deserialize(&mut is).unwrap();
 
     assert_eq!(data.field_a, 0x0123);
-    assert_eq!(is.stream_position().unwrap(), 8);
+    assert_eq!(is.stream_position(), 8);
 }
 
 #[test]
@@ -172,7 +170,7 @@ fn deserialize_struct_rounded_struct_multiple() {
     let data = RoundedStructMultiple::deserialize(&mut is).unwrap();
 
     assert_eq!(data.field_a, 0x0123456789ABCDEF);
-    assert_eq!(is.stream_position().unwrap(), 9);
+    assert_eq!(is.stream_position(), 9);
 }
 
 #[test]

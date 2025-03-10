@@ -10,20 +10,6 @@ impl Error {
     pub fn field(name: String, error: Error) -> Self {
         Self::Field { name: name, error: Box::new(error) }
     }
-    pub fn io(error: std::io::Error) -> Self {
-        match error.kind() {
-            std::io::ErrorKind::InvalidData => Error::InvalidData,
-            std::io::ErrorKind::InvalidInput => Error::InvalidData,
-            std::io::ErrorKind::UnexpectedEof => Error::EndOfStream,
-            _ => Error::Unspecified,
-        }
-    }
-}
-
-impl From<std::io::Error> for Error {
-    fn from(value: std::io::Error) -> Self {
-        Error::io(value)
-    }
 }
 
 impl core::error::Error for Error {}

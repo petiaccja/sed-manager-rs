@@ -1,5 +1,8 @@
-use super::{annotate_field, Deserialize, Error, InputStream, OutputStream, Serialize};
-use std::{io::Seek, marker::PhantomData, ops::Deref, ops::DerefMut};
+use super::annotate_field;
+use super::stream::{Seek as _, SeekFrom};
+use super::{Deserialize, Error, InputStream, OutputStream, Serialize};
+
+use core::{marker::PhantomData, ops::Deref, ops::DerefMut};
 
 /// A vector of `T` with special a serialization format.
 ///
@@ -62,7 +65,7 @@ where
 {
     type Error = Error;
     fn serialize(&self, stream: &mut OutputStream<u8>) -> Result<(), Self::Error> {
-        let len_pos = stream.stream_position()?;
+        let len_pos = stream.stream_position();
 
         let Ok(zero) = L::try_from(0usize) else {
             return annotate_field(Err(Error::InvalidData), "length_placeholder".into());
@@ -70,21 +73,21 @@ where
 
         annotate_field(zero.serialize(stream), "length_placeholder".into())?;
 
-        let data_pos = stream.stream_position()?;
+        let data_pos = stream.stream_position();
         let mut idx = 0_usize;
         for value in &self.data {
             annotate_field(value.serialize(stream), format!("data[{}]", idx))?;
             idx += 1;
         }
 
-        let end_pos = stream.stream_position()?;
+        let end_pos = stream.stream_position();
         let value_len = end_pos - data_pos;
-        stream.seek(std::io::SeekFrom::Start(len_pos))?;
+        stream.seek(SeekFrom::Start(len_pos))?;
         let Ok(value_len) = L::try_from(value_len as usize) else {
             return annotate_field(Err(Error::InvalidData), "length".into());
         };
         annotate_field(value_len.serialize(stream), "length".into())?;
-        stream.seek(std::io::SeekFrom::Start(end_pos))?;
+        stream.seek(SeekFrom::Start(end_pos))?;
         Ok(())
     }
 }
@@ -102,14 +105,14 @@ where
         let Ok(len) = TryInto::<usize>::try_into(len) else {
             return annotate_field(Err(Error::InvalidData), "length".into());
         };
-        let data_pos = stream.stream_position().unwrap();
+        let data_pos = stream.stream_position();
         let end_pos = data_pos + len as u64;
         let mut data = Vec::<T>::new();
-        while stream.stream_position().unwrap() < end_pos {
+        while stream.stream_position() < end_pos {
             let item = annotate_field(T::deserialize(stream), format!("data[{}]", data.len()))?;
             data.push(item);
         }
-        if stream.stream_position().unwrap() != end_pos {
+        if stream.stream_position() != end_pos {
             return annotate_field(Err(Error::InvalidData), "data".into());
         }
         Ok(VecWithLen::from(data))
@@ -136,7 +139,7 @@ mod tests {
         0xCCCCCCCCu32.serialize(&mut os).unwrap();
         let mut is = InputStream::from(os.take());
         let output = VecWithLen::<u8, u32>::deserialize(&mut is).unwrap();
-        assert_eq!(is.stream_position().unwrap(), 9);
+        assert_eq!(is.stream_position(), 9);
         assert_eq!(*output, *input);
     }
 }
