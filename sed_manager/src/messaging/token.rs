@@ -172,7 +172,7 @@ impl Serialize<u8> for Token {
                 if len as usize != self.data.len() {
                     return Err(SerializeError::InvalidData);
                 }
-                stream.write_one(header | ((len >> 8) as u8));
+                stream.write_one(header);
                 stream.write_exact(&len.to_be_bytes()[1..]);
                 stream.write_exact(&self.data);
                 Ok(())
@@ -325,6 +325,7 @@ mod tests {
             Token { tag: Tag::LongAtom, is_byte: false, is_signed: false, data: 53u8.to_be_bytes().into() },
             Token { tag: Tag::LongAtom, is_byte: false, is_signed: true, data: (-27i8).to_be_bytes().into() },
             Token { tag: Tag::LongAtom, is_byte: true, is_signed: false, data: vec![0x65; 15] },
+            Token { tag: Tag::LongAtom, is_byte: true, is_signed: false, data: vec![0x65; 2100] },
         ];
         for input in inputs {
             let mut os = OutputStream::<u8>::new();
