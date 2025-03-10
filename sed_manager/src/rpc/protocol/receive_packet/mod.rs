@@ -1,8 +1,10 @@
+use core::task::Poll;
 use std::collections::BTreeMap;
 
 use assemble_method::AssembleMethod;
 pub use commit::commit;
 use deserialize_sub_packet::deserialize_sub_packet;
+use filter_close_session::filter_close_session;
 use flatten_packet::flatten_packet;
 use tokio::sync::oneshot;
 
@@ -20,6 +22,7 @@ use super::shared::timeout::Timeout;
 mod assemble_method;
 mod commit;
 mod deserialize_sub_packet;
+mod filter_close_session;
 mod flatten_com_packet;
 mod flatten_packet;
 
@@ -32,12 +35,14 @@ pub struct ReceivePacket {
 
 struct Session {
     id: SessionIdentifier,
-    sender: Buffer<Sender>,
-    packet: Buffer<flatten_packet::Input>,
-    sub_packet: Buffer<flatten_packet::Output>,
-    token: Buffer<deserialize_sub_packet::Output>,
-    method: Buffer<assemble_method::Output>,
-    in_time: Buffer<assemble_method::Output>,
+    sender: Buffer<Sender>,                        // Channel to send results back to TPer API.
+    packet: Buffer<flatten_packet::Input>,         // Input packets.
+    sub_packet: Buffer<flatten_packet::Output>,    // Input packets broken into sub-packets.
+    token: Buffer<deserialize_sub_packet::Output>, // Input sub-packets deserialized into tokens.
+    method: Buffer<assemble_method::Output>,       // Input tokens assembled into methods.
+    filtered: Buffer<assemble_method::Output>,     // Input methods without CloseSession calls.
+    closed_sessions: Buffer<SessionIdentifier>,    // Subject sessions of CloseSession calls.
+    in_time: Buffer<assemble_method::Output>,      // Input methods after timeout is applied.
     assemble_method: AssembleMethod,
     timeout: Timeout,
     tracing_span: tracing::Span,
@@ -112,17 +117,22 @@ impl ReceivePacket {
     }
 
     fn cleanup_sessions(&mut self, sessions_done: &mut dyn SinkPipe<SessionIdentifier>) {
-        let done: Vec<_> = self
+        let mut closed_sessions: Vec<_> = self
             .sessions
             .iter()
             .filter(|(_, session)| session.is_done() || session.is_aborted())
             .map(|(id, _)| *id)
             .collect();
-        for id in &done {
+        if let Some(control_session) = self.sessions.get_mut(&CONTROL_SESSION_ID) {
+            while let Poll::Ready(Some(id)) = control_session.closed_sessions.pop() {
+                closed_sessions.push(id);
+            }
+        }
+        for id in &closed_sessions {
             self.sessions.remove(id);
             sessions_done.push(*id);
         }
-        if !done.is_empty() && self.sessions.is_empty() {
+        if !closed_sessions.is_empty() && self.sessions.is_empty() {
             sessions_done.close();
         }
     }
@@ -142,6 +152,8 @@ impl Session {
             sub_packet: Buffer::new(),
             token: Buffer::new(),
             method: Buffer::new(),
+            filtered: Buffer::new(),
+            closed_sessions: Buffer::new(),
             in_time: Buffer::new(),
             assemble_method: AssembleMethod::new(),
             timeout: Timeout::new(properties.trans_timeout),
@@ -160,13 +172,17 @@ impl Session {
 
     pub fn update(&mut self) {
         let _guard = self.tracing_span.enter();
+        if self.id != CONTROL_SESSION_ID {
+            self.closed_sessions.close();
+        }
         if self.sender.is_empty() {
             self.timeout.reset();
         }
         flatten_packet(&mut self.packet, &mut self.sub_packet);
         deserialize_sub_packet(&mut self.sub_packet, &mut self.token);
         self.assemble_method.update(&mut self.token, &mut self.method);
-        self.timeout.update(&mut self.method, &mut self.in_time, Some(|| Err(Error::TimedOut)));
+        filter_close_session(&mut self.method, &mut self.filtered, &mut self.closed_sessions);
+        self.timeout.update(&mut self.filtered, &mut self.in_time, Some(|| Err(Error::TimedOut)));
         let num_comitted = commit(&mut self.sender, &mut self.in_time);
         if num_comitted > 0 {
             self.timeout.reset();
@@ -191,6 +207,7 @@ impl Session {
             // Drop anything if queued and reopen buffers.
             self.token = Buffer::new();
             self.method = Buffer::new();
+            self.filtered = Buffer::new();
             self.in_time = Buffer::new();
         }
     }
@@ -208,7 +225,13 @@ mod tests {
     use core::time::Duration;
 
     use crate::messaging::packet::{SubPacket, SubPacketKind};
-    use crate::messaging::token::Tag;
+    use crate::messaging::token::{SerializeTokens, Tag};
+    use crate::rpc::args::IntoMethodArgs;
+    use crate::rpc::MethodCall;
+    use crate::serialization::vec_without_len::VecWithoutLen;
+    use crate::serialization::SerializeBinary;
+    use crate::spec::invoking_id::SESSION_MANAGER;
+    use crate::spec::sm_method_id;
 
     use super::*;
 
@@ -224,6 +247,24 @@ mod tests {
         let packet = Packet {
             host_session_number: id.hsn,
             tper_session_number: id.tsn,
+            payload: vec![sub_packet].into(),
+            ..Default::default()
+        };
+        ComPacket { com_id: 2048, com_id_ext: 0, outstanding_data: 0, min_transfer: 0, payload: vec![packet].into() }
+    }
+
+    fn make_close_session(to_close: SessionIdentifier) -> ComPacket {
+        let method = PackagedMethod::Call(MethodCall::new_success(
+            SESSION_MANAGER,
+            sm_method_id::CLOSE_SESSION,
+            (to_close.hsn, to_close.tsn).into_method_args(),
+        ));
+        let tokens = method.to_tokens().unwrap();
+        let bytes = VecWithoutLen::from(tokens).to_bytes().unwrap();
+        let sub_packet = SubPacket { kind: SubPacketKind::Data, payload: bytes.into() };
+        let packet = Packet {
+            host_session_number: 0,
+            tper_session_number: 0,
             payload: vec![sub_packet].into(),
             ..Default::default()
         };
@@ -269,22 +310,46 @@ mod tests {
         com_packet.push(make_com_packet(id, false));
         let (tx, mut rx) = make_channel();
         sender.push((id, tx));
-        node.open_session(id, SHORT_TIMEOUT);
+        node.open_session(id, Properties::ASSUMED);
         node.update(&mut sender, &mut com_packet, &mut done);
         assert!(rx.try_recv().is_ok_and(|response| response.is_err()));
+        assert_eq!(done.pop(), Poll::Ready(Some(id)));
         assert!(done.is_closed());
+    }
+
+    #[test]
+    fn active_session_abort_by_tper() {
+        let id = SessionIdentifier { hsn: 1, tsn: 1 };
+        let (mut sender, mut com_packet, mut node, mut done) = setup();
+        com_packet.push(make_close_session(id));
+        let (tx, mut rx) = make_channel();
+        sender.push((id, tx));
+        node.open_session(CONTROL_SESSION_ID, Properties::ASSUMED);
+        node.open_session(id, Properties::ASSUMED);
+        node.update(&mut sender, &mut com_packet, &mut done);
+        assert_eq!(rx.try_recv(), Err(oneshot::error::TryRecvError::Closed));
+        assert_eq!(done.pop(), Poll::Ready(Some(id)));
+        assert!(!done.is_closed());
     }
 
     #[test]
     fn active_session_restore_on_error() {
         let id = SessionIdentifier { hsn: 0, tsn: 0 };
         let (mut sender, mut com_packet, mut node, mut done) = setup();
+        node.open_session(id, SHORT_TIMEOUT);
+
         com_packet.push(make_com_packet(id, false));
         let (tx, mut rx) = make_channel();
         sender.push((id, tx));
-        node.open_session(id, SHORT_TIMEOUT);
         node.update(&mut sender, &mut com_packet, &mut done);
         assert!(rx.try_recv().is_ok_and(|response| response.is_err()));
+        assert!(!done.is_closed());
+
+        com_packet.push(make_com_packet(id, true));
+        let (tx, mut rx) = make_channel();
+        sender.push((id, tx));
+        node.update(&mut sender, &mut com_packet, &mut done);
+        assert!(rx.try_recv().is_ok_and(|response| response.is_ok()));
         assert!(!done.is_closed());
     }
 
