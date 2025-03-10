@@ -139,7 +139,7 @@ impl Session {
 
     pub fn update(&mut self) {
         let _guard = self.tracing_span.enter();
-        serialize_method(&mut self.method, &mut self.serialized);
+        serialize_method(&mut self.method, &mut self.serialized, &self.properties);
         assemble_packet(&mut self.serialized, &mut self.assembled, &self.properties);
         assign_session_id(&mut self.assembled, &mut self.assigned, &self.id);
     }

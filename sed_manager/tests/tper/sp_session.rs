@@ -217,7 +217,7 @@ async fn write_failure_too_large() -> Result<(), RPCError> {
     let tper = TPer::new_on_default_com_id(device.clone())?;
     let session = tper.start_session(sp::LOCKING, None, None).await?;
     let result = session.write(table_id::MBR, 0, &[0; 1024 * 1024]).await;
-    assert_eq!(result, Err(RPCError::MethodTooLarge));
+    assert_eq!(result, Err(RPCError::TokenTooLarge));
     Ok(())
 }
 

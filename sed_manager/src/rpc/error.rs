@@ -24,8 +24,10 @@ pub enum Error {
     // Data-related.
     #[error("invalid column type for specified table")]
     InvalidColumnType,
-    #[error("serialized method's size exceeds limits")]
+    #[error("serialized method exceeds size limits")]
     MethodTooLarge,
+    #[error("serialized method contains tokens that exceed size limits")]
+    TokenTooLarge,
     #[error("received another message when a method call was expected")]
     MethodCallExpected,
     #[error("received another message when a method result was expected")]
