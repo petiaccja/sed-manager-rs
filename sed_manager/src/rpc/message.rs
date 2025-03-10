@@ -26,7 +26,7 @@ impl Deserialize<Token> for PackagedMethod {
     type Error = TokenStreamError;
     fn deserialize(stream: &mut InputStream<Token>) -> Result<Self, Self::Error> {
         let Ok(first) = stream.peek_one() else {
-            return Err(TokenStreamError::EndOfStream);
+            return Err(TokenStreamError::MoreTokensExpected);
         };
         match first.tag {
             Tag::Call => Ok(PackagedMethod::Call(MethodCall::deserialize(stream)?)),
@@ -35,7 +35,7 @@ impl Deserialize<Token> for PackagedMethod {
                 let _ = stream.read_one();
                 Ok(PackagedMethod::EndOfSession)
             }
-            _ => Err(TokenStreamError::UnexpectedTag),
+            _ => Err(TokenStreamError::InvalidFormat),
         }
     }
 }

@@ -25,13 +25,17 @@ macro_rules! impl_from_tokens_integer {
         impl Deserialize<Token> for $int_ty {
             type Error = TokenStreamError;
             fn deserialize(stream: &mut InputStream<Token>) -> Result<Self, Self::Error> {
+                let expectation = match $signed {
+                    true => TokenStreamError::ExpectedSignedInteger,
+                    false => TokenStreamError::ExpectedUnsignedInteger,
+                };
                 if let Ok(token) = stream.read_one() {
                     if !is_data(token.tag) {
-                        Err(TokenStreamError::UnexpectedTag)
+                        Err(expectation)
                     } else if token.is_byte {
-                        Err(TokenStreamError::ExpectedInteger)
+                        Err(expectation)
                     } else if token.is_signed != $signed {
-                        Err(TokenStreamError::UnexpectedSignedness)
+                        Err(expectation)
                     } else if token.data.len() > size_of::<$int_ty>() {
                         Err(TokenStreamError::IntegerOverflow)
                     } else {
@@ -46,7 +50,7 @@ macro_rules! impl_from_tokens_integer {
                         Ok(<$int_ty>::from_le_bytes(bytes))
                     }
                 } else {
-                    Err(TokenStreamError::EndOfStream)
+                    Err(TokenStreamError::MoreTokensExpected)
                 }
             }
         }
@@ -102,10 +106,10 @@ impl Deserialize<Token> for Command {
             };
             match command {
                 Some(c) => Ok(c),
-                None => Err(TokenStreamError::UnexpectedTag),
+                None => Err(TokenStreamError::ExpectedCommand),
             }
         } else {
-            Err(TokenStreamError::EndOfStream)
+            Err(TokenStreamError::MoreTokensExpected)
         }
     }
 }
@@ -136,7 +140,7 @@ impl Deserialize<Token> for Named {
 
         if let Ok(token) = stream.read_one() {
             if token.tag != Tag::StartName {
-                Err(TokenStreamError::UnexpectedTag)
+                Err(TokenStreamError::ExpectedNamed)
             } else {
                 let mut named = Named { name: Value::empty(), value: Value::empty() };
 
@@ -151,11 +155,11 @@ impl Deserialize<Token> for Named {
                 if is_terminator(stream.read_one()) {
                     Ok(named)
                 } else {
-                    Err(TokenStreamError::UnexpectedTag)
+                    Err(TokenStreamError::UnclosedName)
                 }
             }
         } else {
-            Err(TokenStreamError::EndOfStream)
+            Err(TokenStreamError::MoreTokensExpected)
         }
     }
 }
@@ -174,7 +178,7 @@ impl Deserialize<Token> for Bytes {
     fn deserialize(stream: &mut InputStream<Token>) -> Result<Self, Self::Error> {
         if let Ok(token) = stream.read_one() {
             if !is_data(token.tag) {
-                Err(TokenStreamError::UnexpectedTag)
+                Err(TokenStreamError::ExpectedBytes)
             } else if !token.is_byte {
                 Err(TokenStreamError::ExpectedBytes)
             } else if token.is_signed != false {
@@ -183,7 +187,7 @@ impl Deserialize<Token> for Bytes {
                 Ok(token.data.clone())
             }
         } else {
-            Err(TokenStreamError::EndOfStream)
+            Err(TokenStreamError::MoreTokensExpected)
         }
     }
 }
@@ -216,7 +220,7 @@ impl Deserialize<Token> for List {
 
         if let Ok(token) = stream.read_one() {
             if token.tag != Tag::StartList {
-                Err(TokenStreamError::UnexpectedTag)
+                Err(TokenStreamError::ExpectedList)
             } else {
                 let mut list = List::new();
 
@@ -224,11 +228,14 @@ impl Deserialize<Token> for List {
                     list.push(Value::deserialize(stream)?);
                 }
 
-                assert!(is_terminator(stream.read_one()));
-                Ok(list)
+                if is_terminator(stream.read_one()) {
+                    Ok(list)
+                } else {
+                    Err(TokenStreamError::UnclosedList)
+                }
             }
         } else {
-            Err(TokenStreamError::EndOfStream)
+            Err(TokenStreamError::MoreTokensExpected)
         }
     }
 }
@@ -290,9 +297,9 @@ impl Deserialize<Token> for Value {
                 Tag::MediumAtom => parse_value(stream),
                 Tag::LongAtom => parse_value(stream),
                 Tag::StartList => Ok(Value::from(List::deserialize(stream)?)),
-                Tag::EndList => Err(TokenStreamError::UnexpectedTag),
+                Tag::EndList => Err(TokenStreamError::UnexpectedEndTag),
                 Tag::StartName => Ok(Value::from(Named::deserialize(stream)?)),
-                Tag::EndName => Err(TokenStreamError::UnexpectedTag),
+                Tag::EndName => Err(TokenStreamError::UnexpectedEndTag),
                 Tag::Call => Ok(Value::from(Command::deserialize(stream)?)),
                 Tag::EndOfData => Ok(Value::from(Command::deserialize(stream)?)),
                 Tag::EndOfSession => Ok(Value::from(Command::deserialize(stream)?)),
@@ -301,7 +308,7 @@ impl Deserialize<Token> for Value {
                 Tag::Empty => Ok(Value::from(Command::deserialize(stream)?)),
             }
         } else {
-            Err(TokenStreamError::EndOfStream)
+            Err(TokenStreamError::MoreTokensExpected)
         }
     }
 }

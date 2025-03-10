@@ -173,7 +173,7 @@ impl Deserialize<Token> for MethodCall {
         let status_value = Value::deserialize(stream)?;
 
         if call != Command::Call {
-            return Err(TokenStreamError::UnexpectedTag);
+            return Err(TokenStreamError::ExpectedCommand);
         };
         let Ok(invoking_id) = UID::try_from(invoking_id_value) else {
             return Err(TokenStreamError::ExpectedBytes);
@@ -185,16 +185,16 @@ impl Deserialize<Token> for MethodCall {
             return Err(TokenStreamError::ExpectedList);
         };
         if eod != Command::EndOfData {
-            return Err(TokenStreamError::UnexpectedTag);
+            return Err(TokenStreamError::ExpectedCommand);
         };
         let Ok(status_list) = List::try_from(status_value) else {
             return Err(TokenStreamError::ExpectedList);
         };
         let Some(status_value_0) = status_list.first() else {
-            return Err(TokenStreamError::InvalidData);
+            return Err(TokenStreamError::InvalidFormat);
         };
         let Ok(status) = MethodStatus::try_from(status_value_0) else {
-            return Err(TokenStreamError::InvalidData);
+            return Err(TokenStreamError::InvalidFormat);
         };
 
         Ok(MethodCall { invoking_id, method_id, args, status })
@@ -212,7 +212,7 @@ impl Deserialize<Token> for MethodResult {
             return Err(TokenStreamError::ExpectedList);
         };
         if eod != Command::EndOfData {
-            return Err(TokenStreamError::UnexpectedTag);
+            return Err(TokenStreamError::ExpectedCommand);
         };
         let Ok(status_list) = List::try_from(status_value) else {
             // This check requires the status list to be a list,
@@ -220,10 +220,10 @@ impl Deserialize<Token> for MethodResult {
             return Err(TokenStreamError::ExpectedList);
         };
         if status_list.len() != 3 {
-            return Err(TokenStreamError::InvalidData);
+            return Err(TokenStreamError::InvalidFormat);
         }
         let Ok(status) = MethodStatus::try_from(&status_list[0]) else {
-            return Err(TokenStreamError::InvalidData);
+            return Err(TokenStreamError::InvalidFormat);
         };
         Ok(MethodResult { results, status })
     }

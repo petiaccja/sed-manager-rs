@@ -30,25 +30,33 @@ pub struct Token {
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq, Clone)]
 pub enum TokenStreamError {
-    #[error("end of stream")]
-    EndOfStream,
-    #[error("end of tokens")]
-    EndOfTokens,
-    #[error("expected an integer")]
+    #[error("Expected more tokens, but the byte stream ended")]
+    MoreTokensExpected,
+    #[error("Expected a signed integer token")]
+    ExpectedSignedInteger,
+    #[error("Expected an unsigned integer token")]
+    ExpectedUnsignedInteger,
+    #[error("Expected an integer token")]
     ExpectedInteger,
-    #[error("expected bytes")]
+    #[error("Expected a byte token")]
     ExpectedBytes,
-    #[error("expected list")]
+    #[error("Expected a StartList token")]
     ExpectedList,
-    #[error("invalid data (but correct token)")]
-    InvalidData,
-    #[error("unexpected tag")]
-    UnexpectedTag,
-    #[error("unexpected signedness")]
-    UnexpectedSignedness,
-    #[error("continued byte tokens are not supported")]
+    #[error("Expected a StartName token")]
+    ExpectedNamed,
+    #[error("Expected a command token")]
+    ExpectedCommand,
+    #[error("Data represented by the token stream has invalid format")]
+    InvalidFormat,
+    #[error("No matching EndList token found")]
+    UnclosedList,
+    #[error("No matching EndName token found")]
+    UnclosedName,
+    #[error("Unexpected EndList/EndName/EndTransaction token")]
+    UnexpectedEndTag,
+    #[error("Continued byte tokens are not supported")]
     ContinuedBytesUnsupported,
-    #[error("integer type too small to represent data")]
+    #[error("Number too large for integer type")]
     IntegerOverflow,
 }
 

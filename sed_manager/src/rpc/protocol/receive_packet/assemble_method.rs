@@ -171,7 +171,7 @@ mod tests {
         let mut assemble = AssembleMethod::new();
         assemble.update(&mut input, &mut output);
 
-        assert_eq!(output.pop(), Poll::Ready(Some(Err(TokenStreamError::UnexpectedTag.into()))));
+        assert_eq!(output.pop(), Poll::Ready(Some(Err(TokenStreamError::UnexpectedEndTag.into()))));
         assert_eq!(output.pop(), Poll::Ready(None));
     }
 
@@ -196,7 +196,7 @@ mod tests {
         let mut assemble = AssembleMethod::new();
         assemble.update(&mut input, &mut output);
 
-        assert_eq!(output.pop(), Poll::Ready(Some(Err(TokenStreamError::InvalidData.into()))));
+        assert_eq!(output.pop(), Poll::Ready(Some(Err(TokenStreamError::InvalidFormat.into()))));
         assert_eq!(output.pop(), Poll::Ready(None));
     }
 }
