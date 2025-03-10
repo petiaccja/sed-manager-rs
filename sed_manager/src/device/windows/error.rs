@@ -31,9 +31,9 @@ impl Display for Error {
         match self {
             Error::Win32(code) => match format_win32_error(*code) {
                 Some(text) => write!(f, "{text}"),
-                None => f.write_fmt(format_args!("WinAPI operation failed: {code}")),
+                None => f.write_fmt(format_args!("Windows API error, code {code}")),
             },
-            Error::COM(hr) => f.write_fmt(format_args!("COM operation failed: {hr:10x}")),
+            Error::COM(hr) => f.write_fmt(format_args!("Windows COM error, code {hr:10x}")),
         }
     }
 }
@@ -58,7 +58,7 @@ impl From<Error> for device::Error {
         };
         match common_error {
             Some(error) => error,
-            None => device::Error::Source(value),
+            None => device::Error::PlatformError(value),
         }
     }
 }

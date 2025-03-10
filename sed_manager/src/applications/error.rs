@@ -4,21 +4,21 @@ use crate::rpc::Error as RPCError;
 pub enum Error {
     #[error("{}", .0)]
     RPCError(RPCError),
-    #[error("the security subsystem class does not support the operation")]
+    #[error("Feature not supported by the TCG Security Subsystem Class")]
     IncompatibleSSC,
-    #[error("the device does not support any security subsystem classes")]
+    #[error("The device does not support any TCG Security Subsystem Classes")]
     NoAvailableSSC,
-    #[error("someone has already taken ownership of this device")]
+    #[error("Ownership has already been set up on this device")]
     AlreadyOwned,
-    #[error("someone has already activated locking on this device")]
+    #[error("Locking has already been activated on this device")]
     AlreadyActivated,
-    #[error("an internal error occured: this is a bug")]
+    #[error("Internal error: this is a bug in SEDManager")]
     InternalError,
-    #[error("the task was cancelled")]
+    #[error("Cancelled")]
     Cancelled,
-    #[error("could not open the file")]
+    #[error("Could not open file")]
     FileNotOpen,
-    #[error("could not read the file")]
+    #[error("Could not read file")]
     FileReadError,
 }
 

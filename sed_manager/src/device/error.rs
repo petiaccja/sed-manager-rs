@@ -1,31 +1,27 @@
-use thiserror::Error;
-
 #[cfg(target_os = "windows")]
 use super::windows::Error as PlatformError;
 
 #[cfg(target_os = "linux")]
 use super::linux::Error as PlatformError;
 
-#[derive(Debug, PartialEq, Eq, Clone, Error)]
+#[derive(Debug, PartialEq, Eq, Clone, thiserror::Error)]
 pub enum Error {
-    #[error("the provided data is too long")]
-    DataTooLong,
-    #[error("the provided buffer is too short to store requested data")]
+    #[error("Buffer too short to receive data")]
     BufferTooShort,
-    #[error("could not find the specified device")]
+    #[error("Could not find device")]
     DeviceNotFound,
-    #[error("the provided arguments were invalid")]
+    #[error("Invalid argument")]
     InvalidArgument,
-    #[error("the provided protocol or com ID for IF-SEND/IF-RECV was invalid")]
+    #[error("Invalid security protocol or ComID")]
     InvalidProtocolOrComID,
-    #[error("the feature is not supported by the application")]
+    #[error("Feature not supported by SEDManager")]
     NotImplemented,
-    #[error("the feature is not supported by the device")]
+    #[error("Feature not supported by the device")]
     NotSupported,
-    #[error("permission denied (are you root/admin?)")]
+    #[error("Permission denied (retry with elevated privileges)")]
     PermissionDenied,
-    #[error("an unspecified error occured (the source could not be determined)")]
+    #[error("Unspecified error occured (the exact cause could not be determined)")]
     Unspecified,
-    #[error("an operating-system-specific error occured {}", .0)]
-    Source(PlatformError),
+    #[error("{}", .0)]
+    PlatformError(PlatformError),
 }

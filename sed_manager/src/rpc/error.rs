@@ -6,45 +6,43 @@ use crate::serialization::Error as SerializeError;
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum Error {
     // Encoding-related.
-    #[error("tokenization failed: {}", .0)]
+    #[error("Tokenization failure: {}", .0)]
     TokenStreamFailed(TokenStreamError),
-    #[error("serialization failed: {}", .0)]
+    #[error("Serialization failure: {}", .0)]
     SerializationFailed(SerializeError),
 
     // Protocol-related.
-    #[error("security command failed: {}", .0)]
+    #[error("Security command failure: {}", .0)]
     SecurityCommandFailed(DeviceError),
-    #[error("operation/session has been aborted")]
+    #[error("The RPC session has been aborted")]
     Aborted,
-    #[error("the session is closed")]
+    #[error("The RPC session is closed")]
     Closed,
-    #[error("timed out")]
+    #[error("The RPC message has timed out")]
     TimedOut,
 
     // Data-related.
-    #[error("invalid column type for specified table")]
-    InvalidColumnType,
-    #[error("serialized method exceeds size limits")]
+    #[error("Method call exceeds packet size limits")]
     MethodTooLarge,
-    #[error("serialized method contains tokens that exceed size limits")]
+    #[error("Token exceeds communication size limits")]
     TokenTooLarge,
-    #[error("received another message when a method call was expected")]
+    #[error("Received another message when a method call was expected")]
     MethodCallExpected,
-    #[error("received another message when a method result was expected")]
+    #[error("Received another message when a method result was expected")]
     MethodResultExpected,
-    #[error("received another message when an end of session message was expected")]
+    #[error("Received another message when an end of session message was expected")]
     EOSExpected,
 
     // Method-related.
-    #[error("method call failed: {}", .0)]
+    #[error("{}", .0)]
     MethodFailed(MethodStatus),
 
     // General
-    #[error("operation not supported by the TPer")]
+    #[error("Operation not supported by the TPer")]
     NotSupported,
-    #[error("operation not implemented by the application")]
+    #[error("Operation not implemented by SEDManager")]
     NotImplemented,
-    #[error("unspecified error occured")]
+    #[error("Unspecified error (cause could not be determined)")]
     Unspecified,
 }
 
