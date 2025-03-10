@@ -89,19 +89,14 @@ pub async fn start_admin1_session(tper: &TPer, admin1_password: &[u8]) -> Result
 pub mod tests {
     use std::sync::Arc;
 
-    use crate::device::Device;
-    use crate::fake_device::{FakeDevice, MSID_PASSWORD};
+    use crate::fake_device::FakeDevice;
     use crate::spec;
     use crate::tper::TPer;
 
     pub async fn setup_activated_tper() -> TPer {
-        use spec::core::authority::SID;
-        use spec::opal::admin::sp::{ADMIN, LOCKING};
-        let device = Arc::new(FakeDevice::new()) as Arc<dyn Device>;
-        let tper = TPer::new_on_default_com_id(device).unwrap();
-        let session = tper.start_session(ADMIN, Some(SID), Some(MSID_PASSWORD.as_bytes())).await.unwrap();
-        session.activate(LOCKING).await.unwrap();
-        session.end_session().await.unwrap();
-        tper
+        use spec::opal::admin::sp::LOCKING;
+        let device = Arc::new(FakeDevice::new());
+        device.controller().lock().unwrap().activate(LOCKING).unwrap();
+        TPer::new_on_default_com_id(device).unwrap()
     }
 }
