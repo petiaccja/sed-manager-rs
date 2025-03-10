@@ -1,5 +1,4 @@
 use core::ops::Deref;
-use core::sync::atomic::AtomicU32;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -25,7 +24,6 @@ pub struct PacketStack {
     capabilities: Properties,
     properties: Properties,
     security_provider_sessions: HashMap<SessionIdentifier, SecurityProviderSession>,
-    next_tsn: AtomicU32,
 }
 
 impl PacketStack {
@@ -35,7 +33,6 @@ impl PacketStack {
             capabilities,
             properties: Properties::ASSUMED,
             security_provider_sessions: HashMap::new(),
-            next_tsn: 1.into(),
         }
     }
 

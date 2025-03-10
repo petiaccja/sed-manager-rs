@@ -16,7 +16,7 @@ pub struct OpalV2Controller {
 
 impl OpalV2Controller {
     pub fn new() -> Self {
-        Self { admin_sp: AdminSP::default(), locking_sp: LockingSP::default(), tper_session_number: 1.into() }
+        Self { admin_sp: AdminSP::default(), locking_sp: LockingSP::default(), tper_session_number: 500.into() }
     }
 
     pub fn get_security_provider(&self, sp: SPRef) -> Option<&dyn SecurityProvider> {
