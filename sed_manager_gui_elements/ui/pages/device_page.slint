@@ -9,7 +9,7 @@ import { TakeOwnership } from "../configure/take_owneship.slint";
 import { ActivateLocking } from "../configure/activate_locking.slint";
 import { RangeEditor} from "../configure/range_editor.slint";
 import { UserEditor } from "../configure/user_editor.slint";
-import { AccessControlEditor } from "../configure/access_control_editor.slint";
+import { PermissionEditor } from "../configure/permission_editor.slint";
 import { MBREditor } from "../configure/mbr_editor.slint";
 import { Revert } from "../configure/revert.slint";
 import { DeviceListState, TroubleshootingState } from "../state.slint";
@@ -65,7 +65,7 @@ export component DevicePage {
                 set-current-activity(Activity.description);
             }
         }
-        if current-activity == Activity.access-control-editor: AccessControlEditor {
+        if current-activity == Activity.access-control-editor: PermissionEditor {
             device-idx: device-idx;
             back => {
                 set-current-activity(Activity.description);

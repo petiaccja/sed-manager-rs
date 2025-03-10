@@ -11,6 +11,7 @@ import { Types } from "../data/types.slint";
 import { WarningPopup } from "../widgets/warning_popup.slint";
 import { StatusIndicator } from "../widgets/progress.slint";
 import { ToastMessage } from "../widgets/toast_message.slint";
+import { StatusOverlay } from "../widgets/status-overlay.slint";
 import { Icons } from "../icons.slint";
 import { LoginView } from "login_view.slint";
 import { RangeEditorState, RangeList, DeviceListState } from "../state.slint";
@@ -372,26 +373,8 @@ export component RangeEditor inherits ConfigView {
                 RangeEditorState.erase(root.device-idx, range-idx);
             }
         }
-        if authenticated && login-status.status != Status.success: Rectangle {
-            height: 0;
-            clip: false;
-            VerticalLayout {
-                y: -self.min-height;
-                height: self.min-height;
-                spacing: 6px;
-                padding: 16px;
-                StatusIndicator {
-                    preferred-width: 100%;
-                    height: 80px;
-                    status: login-status.status;
-                }
-
-                Text {
-                    text: login-status.message;
-                    color: PaletteExtra.error-foreground;
-                    horizontal-alignment: center;
-                }
-            }
+        if login-status.status != Status.success && authenticated: StatusOverlay {
+            status: login-status;
         }
     }
 }

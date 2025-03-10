@@ -5,7 +5,6 @@ use sed_manager::messaging::discovery::Discovery;
 use slint::{ComponentHandle as _, Model};
 
 use sed_manager::device::{list_physical_drives, open_device, Device, Error as DeviceError};
-use sed_manager::fake_device::FakeDevice;
 use sed_manager::rpc::Error as RPCError;
 
 use crate::backend::Backend;
@@ -223,7 +222,7 @@ fn list_blocking() -> Result<HwDeviceList, DeviceError> {
         }
     }
     #[cfg(debug_assertions)]
-    devices.push(Arc::new(FakeDevice::new()) as Arc<dyn Device>);
+    devices.push(Arc::new(sed_manager::fake_device::FakeDevice::new()) as Arc<dyn Device>);
     Ok(HwDeviceList { opened: devices, unavailable: unavailable_devices })
 }
 

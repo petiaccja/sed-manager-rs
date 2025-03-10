@@ -119,7 +119,7 @@ impl<const TABLE_MASK: u64> ObjectUID<TABLE_MASK> {
         let value_uid = UID::new(value);
         match value_uid.containing_table() {
             Some(table) => TableUID::new(table.as_u64()).is_contained_in_mask(TABLE_MASK),
-            None => false,
+            None => value == 0,
         }
     }
 

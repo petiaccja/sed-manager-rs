@@ -222,6 +222,12 @@ impl IntoMethodArgs for () {
     }
 }
 
+impl<T: Into<Value>> IntoMethodArgs for Vec<T> {
+    fn into_method_args(self) -> Vec<Value> {
+        self.into_iter().map(|item| item.into()).collect()
+    }
+}
+
 impl TryFromMethodArgs for () {
     type Error = MethodStatus;
     fn try_from_method_args(args: Vec<Value>) -> Result<Self, Self::Error> {

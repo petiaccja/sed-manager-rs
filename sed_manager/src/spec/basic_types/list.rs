@@ -2,6 +2,7 @@ use core::ops::{Deref, DerefMut};
 
 use crate::messaging::value::Value;
 
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct List<Item>(pub Vec<Item>);
 
 impl<Item> List<Item> {

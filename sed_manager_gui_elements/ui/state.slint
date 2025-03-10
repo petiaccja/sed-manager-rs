@@ -19,17 +19,18 @@ export struct UserList {
 }
 
 
-export struct AccessControlUser {
+export struct PermissionList {
     unshadow-mbr: bool,
-    range-names: [string],
-    range-accesses: [RangeAccess],
+    unshadow-mbr-status: ExtendedStatus,
+    read-unlock: [bool],
+    write-unlock: [bool],
     range-statuses: [ExtendedStatus],
-
 }
 
-export struct AccessControlMatrix {
+export struct PermissionMatrix {
     user-names: [string],
-    user-accesses: [AccessControlUser],
+    range-names: [string],
+    permission-lists: [PermissionList],
 }
 
 export struct ComIdState {
@@ -64,11 +65,12 @@ export global UserEditorState {
     callback set-password(device-idx: int, user-idx: int, password: string);
 }
 
-export global AccessControlEditorState {
+export global PermissionEditorState {
     in property <[ExtendedStatus]> login-statuses;
-    in property <[AccessControlMatrix]> matrices;
+    in property <[PermissionMatrix]> matrices;
     callback login(device-idx: int, password: string);
     callback list(device-idx: int);
+    callback fetch(device-idx: int, user-idx: int);
 }
 
 export global MBREditorState {

@@ -30,7 +30,7 @@ pub trait SecurityProvider {
         pin_length: Option<u16>,
     ) -> Result<(), MethodStatus>;
 
-    fn get_acl(&self, _invoking_id: UID, _method_id: MethodRef) -> Result<List<ACERef>, MethodStatus> {
+    fn get_acl(&self, _invoking_id: UID, _method_id: MethodRef) -> Result<Vec<ACERef>, MethodStatus> {
         // TODO: implement this later if ever needed for testing.
         Ok(vec![].into())
     }

@@ -203,3 +203,11 @@ pub enum TableKind {
     #[fallback]
     Unknown = 8,
 }
+
+#[repr(u8)]
+#[derive(EnumerationType, PartialEq, Eq, Clone, Debug)]
+pub enum BooleanOp {
+    And = 0,
+    Or = 1,
+    Not = 2,
+}

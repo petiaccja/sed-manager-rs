@@ -1,6 +1,7 @@
 mod activate_locking;
 pub mod error;
 mod mbr_edit_session;
+mod permission_session;
 mod range_edit_session;
 mod revert;
 mod take_ownership;
@@ -11,6 +12,7 @@ pub mod with_session;
 pub use activate_locking::{activate_locking, is_activating_locking_supported, verify_locking_activation};
 pub use error::Error;
 pub use mbr_edit_session::MBREditSession;
+pub use permission_session::PermissionEditSession;
 pub use range_edit_session::RangeEditSession;
 pub use revert::{is_revert_supported, revert, verify_reverted};
 pub use take_ownership::{is_taking_ownership_supported, take_ownership, verify_ownership};

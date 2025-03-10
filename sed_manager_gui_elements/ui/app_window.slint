@@ -2,7 +2,7 @@ import { DeviceDescription, ExampleData as DeviceDescriptionExampleData } from "
 import { UnavailableDevicesPage} from "pages/unavailable_devices_page.slint";
 import { TabBar } from "widgets/tab_bar.slint";
 import { AlternativeLayout, AlternativeChild } from "widgets/alternative_layout.slint";
-import { DeviceListState, TroubleshootingState, UserEditorState, RangeEditorState, SingleStepState, AccessControlEditorState, MBREditorState } from "state.slint";
+import { DeviceListState, TroubleshootingState, UserEditorState, RangeEditorState, SingleStepState, PermissionEditorState, MBREditorState } from "state.slint";
 import { Button, Spinner, Palette } from "std-widgets.slint";
 import { DevicePage } from "pages/device_page.slint";
 import { UnavailableDevicesPage } from "pages/unavailable_devices_page.slint";
@@ -12,7 +12,7 @@ import { PaletteExtra } from "widgets/visual.slint";
 import { ToastPopup } from "widgets/toast_message.slint";
 import { Icons } from "icons.slint";
 
-export { DeviceListState, TroubleshootingState, UserEditorState, RangeEditorState, SingleStepState, AccessControlEditorState, MBREditorState }
+export { DeviceListState, TroubleshootingState, UserEditorState, RangeEditorState, SingleStepState, PermissionEditorState, MBREditorState }
 
 component DriveTabView {
     private property <int> current-tab;

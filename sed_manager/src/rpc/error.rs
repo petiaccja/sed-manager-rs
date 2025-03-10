@@ -32,6 +32,8 @@ pub enum Error {
     MethodResultExpected,
     #[error("Received another message when an end of session message was expected")]
     EOSExpected,
+    #[error("The returned values are not of the requested type/format")]
+    ResultTypeMismatch,
 
     // Method-related.
     #[error("{}", .0)]

@@ -63,7 +63,7 @@ impl SPSession {
         let results = self.do_method_call(call).await?.take_results()?;
         // I'll assume the result is encoded without the typeOr{} NVP.
         // Not clear in spec, no official examples.
-        let (success,) = results.unwrap_method_args()?;
+        let (success,) = results.unwrap_method_args().map_err(|_| RPCError::ResultTypeMismatch)?;
         Ok(success)
     }
 
@@ -86,7 +86,8 @@ impl SPSession {
         let results = self.do_method_call(call).await?;
         let results = results.take_results()?;
         // According to the TCG examples, result is encoded without typeOr{} name-value pair.
-        let (column_values,): (List<NamedValue<u64, Value>>,) = results.unwrap_method_args()?;
+        let (column_values,): (List<NamedValue<u64, Value>>,) =
+            results.unwrap_method_args().map_err(|_| RPCError::ResultTypeMismatch)?;
         let column_values: Vec<_> = column_values
             .0
             .into_iter()
@@ -101,7 +102,7 @@ impl SPSession {
                 linearized[index] = column_value.value;
             }
         }
-        Ok(Tuple::try_from_method_args(linearized)?)
+        Ok(Tuple::try_from_method_args(linearized).map_err(|_| RPCError::ResultTypeMismatch)?)
     }
 
     pub async fn set<T: Into<Value>>(&self, object: UID, column: u16, value: T) -> Result<(), RPCError> {
@@ -133,7 +134,7 @@ impl SPSession {
         let results = self.do_method_call(call).await?;
         let results = results.take_results()?;
         // According to the TCG examples, result is encoded without typeOr{} name-value pair.
-        let (bytes,) = results.unwrap_method_args()?;
+        let (bytes,) = results.unwrap_method_args().map_err(|_| RPCError::ResultTypeMismatch)?;
         Ok(bytes)
     }
 
@@ -153,7 +154,7 @@ impl SPSession {
     ) -> Result<Vec<UID>, RPCError> {
         let call = MethodCall::new_success(table.into(), NEXT.as_uid(), (first, count).into_method_args());
         let results = self.do_method_call(call).await?.take_results()?;
-        let (objects,): (List<UID>,) = results.unwrap_method_args()?;
+        let (objects,): (List<UID>,) = results.unwrap_method_args().map_err(|_| RPCError::ResultTypeMismatch)?;
         Ok(objects.0)
     }
 
@@ -161,8 +162,8 @@ impl SPSession {
         let args = (invoking_id, method_id).into_method_args();
         let call = MethodCall::new_success(table_id::ACCESS_CONTROL.as_uid(), GET_ACL.as_uid(), args);
         let results = self.do_method_call(call).await?.take_results()?;
-        let (objects,): (List<ACERef>,) = results.unwrap_method_args()?;
-        Ok(objects.0)
+        let aces: Result<Vec<_>, _> = results.into_iter().map(|value| ACERef::try_from(value)).collect();
+        aces.map_err(|_| RPCError::ResultTypeMismatch)
     }
 
     pub async fn gen_key(
@@ -200,7 +201,7 @@ impl SPSession {
         let cell_block = cell.map(|(object, column)| CellBlock::object_with_table(object, column..=column));
         let call = MethodCall::new_success(THIS_SP, RANDOM.as_uid(), (count, cell_block).into_method_args());
         let results = self.do_method_call(call).await?.take_results()?;
-        let (bytes,) = results.unwrap_method_args()?;
+        let (bytes,) = results.unwrap_method_args().map_err(|_| RPCError::ResultTypeMismatch)?;
         Ok(bytes)
     }
 }

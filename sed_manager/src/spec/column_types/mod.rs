@@ -39,3 +39,4 @@ define_column_type!(u8, 0x0000_0005_0000_0211_u64, "uinteger_1");
 define_column_type!(u16, 0x0000_0005_0000_0216_u64, "uinteger_2");
 define_column_type!(u32, 0x0000_0005_0000_0220_u64, "uinteger_4");
 define_column_type!(u64, 0x0000_0005_0000_0225_u64, "uinteger_8");
+define_column_type!(BooleanOp, 0x0000_0005_0000_040E_u64, "boolean_ACE");

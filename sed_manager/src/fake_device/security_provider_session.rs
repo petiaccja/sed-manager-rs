@@ -103,7 +103,7 @@ impl SecurityProviderSession {
         invoking_id: UID,
         acl_invoking_id: UID,
         acl_method_id: MethodRef,
-    ) -> Result<(List<ACERef>,), MethodStatus> {
+    ) -> Result<Vec<ACERef>, MethodStatus> {
         if invoking_id != table_id::ACCESS_CONTROL.as_uid() {
             return Err(MethodStatus::InvalidParameter);
         }
@@ -111,7 +111,7 @@ impl SecurityProviderSession {
         let Some(security_provider) = controller.get_security_provider_mut(self.this_sp) else {
             return Err(MethodStatus::TPerMalfunction);
         };
-        security_provider.get_acl(acl_invoking_id, acl_method_id).map(|acl| (acl,))
+        security_provider.get_acl(acl_invoking_id, acl_method_id)
     }
 
     pub fn revert(&mut self, invoking_id: UID) -> Result<(), MethodStatus> {

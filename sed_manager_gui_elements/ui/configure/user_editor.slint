@@ -7,6 +7,7 @@ import { LineEdit, CheckBox, Button } from "std-widgets.slint";
 import { Icons } from "../icons.slint";
 import { PaletteExtra } from "../widgets/visual.slint";
 import { ToastMessage } from "../widgets/toast_message.slint";
+import { StatusOverlay } from "../widgets/status-overlay.slint";
 import { PrototypePopup } from "../widgets/prototype_popup.slint";
 import { RepeatedPasswordEdit } from "../widgets/password.slint";
 import { UserEditorState, UserList } from "../state.slint";
@@ -219,26 +220,8 @@ export component UserEditor inherits ConfigView {
                 UserEditorState.set-password(root.device-idx, user-idx, password)
             }
         }
-        if authenticated && login-status.status != Status.success: Rectangle {
-            height: 0;
-            clip: false;
-            VerticalLayout {
-                y: -self.min-height;
-                height: self.min-height;
-                spacing: 6px;
-                padding: 16px;
-                StatusIndicator {
-                    preferred-width: 100%;
-                    height: 80px;
-                    status: login-status.status;
-                }
-
-                Text {
-                    text: login-status.message;
-                    color: PaletteExtra.error-foreground;
-                    horizontal-alignment: center;
-                }
-            }
+        if login-status.status != Status.success && authenticated: StatusOverlay {
+            status: login-status;
         }
     }
 }

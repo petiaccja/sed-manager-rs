@@ -1,6 +1,8 @@
 use std::sync::Arc;
 
-use sed_manager::applications::{get_lookup, Error as AppError, MBREditSession, RangeEditSession, UserEditSession};
+use sed_manager::applications::{
+    get_lookup, Error as AppError, MBREditSession, PermissionEditSession, RangeEditSession, UserEditSession,
+};
 use sed_manager::device::{Device, Error as DeviceError};
 use sed_manager::messaging::discovery::{Discovery, Feature};
 use sed_manager::messaging::uid::UID;
@@ -20,6 +22,7 @@ pub enum EditorSession {
     Range { session: Arc<RangeEditSession>, ranges: Vec<LockingRangeRef> },
     User { session: Arc<UserEditSession>, users: Vec<AuthorityRef> },
     MBR { session: Arc<MBREditSession> },
+    Permission { session: Arc<PermissionEditSession>, matrix: (Vec<AuthorityRef>, Vec<LockingRangeRef>) },
 }
 
 impl EditorSession {
@@ -46,6 +49,13 @@ impl EditorSession {
                     Ok(())
                 }
             }
+            EditorSession::Permission { session, matrix: _ } => {
+                if let Some(inner) = Arc::into_inner(session) {
+                    inner.end().await
+                } else {
+                    Ok(())
+                }
+            }
         }
     }
 }
@@ -65,6 +75,12 @@ impl From<UserEditSession> for EditorSession {
 impl From<MBREditSession> for EditorSession {
     fn from(value: MBREditSession) -> Self {
         Self::MBR { session: Arc::new(value) }
+    }
+}
+
+impl From<PermissionEditSession> for EditorSession {
+    fn from(value: PermissionEditSession) -> Self {
+        Self::Permission { session: Arc::new(value), matrix: (Vec::new(), Vec::new()) }
     }
 }
 
@@ -183,6 +199,34 @@ impl Backend {
     pub fn get_mbr_session(&self, device_idx: usize) -> Result<Arc<MBREditSession>, AppError> {
         match self.get_session(device_idx) {
             Some(EditorSession::MBR { session }) => Ok(session.clone()),
+            _ => Err(AppError::InternalError),
+        }
+    }
+
+    pub fn get_permission_session(&self, device_idx: usize) -> Result<Arc<PermissionEditSession>, AppError> {
+        match self.get_session(device_idx) {
+            Some(EditorSession::Permission { session, matrix: _ }) => Ok(session.clone()),
+            _ => Err(AppError::InternalError),
+        }
+    }
+
+    pub fn get_permission_matrix(&self, device_idx: usize) -> Result<(&[AuthorityRef], &[LockingRangeRef]), AppError> {
+        match self.get_session(device_idx) {
+            Some(EditorSession::Permission { session: _, matrix }) => Ok((&matrix.0, &matrix.1)),
+            _ => Err(AppError::InternalError),
+        }
+    }
+
+    pub fn set_permission_matrix(
+        &mut self,
+        device_idx: usize,
+        new_matrix: (Vec<AuthorityRef>, Vec<LockingRangeRef>),
+    ) -> Result<(), AppError> {
+        match self.get_session_mut(device_idx) {
+            Some(EditorSession::Permission { session: _, matrix }) => {
+                *matrix = new_matrix;
+                Ok(())
+            }
             _ => Err(AppError::InternalError),
         }
     }

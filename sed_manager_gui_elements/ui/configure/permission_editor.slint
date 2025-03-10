@@ -1,0 +1,259 @@
+import { ExtendedStatus, Status } from "../data/status.slint";
+import { ConfigView } from "config_view.slint";
+import { LoginView } from "login_view.slint";
+import { Table, Cell } from "../widgets/table.slint";
+import { LineEdit, CheckBox, Button, ComboBox, Switch } from "std-widgets.slint";
+import { Icons } from "../icons.slint";
+import { PaletteExtra, Island } from "../widgets/visual.slint";
+import { ToastMessage } from "../widgets/toast_message.slint";
+import { StatusOverlay } from "../widgets/status-overlay.slint";
+import { PrototypePopup } from "../widgets/prototype_popup.slint";
+import { RepeatedPasswordEdit } from "../widgets/password.slint";
+import { PermissionEditorState, PermissionMatrix, PermissionList } from "../state.slint";
+import { StatusIndicator } from "../widgets/progress.slint";
+import { RangeAccess } from "../data/range_access.slint";
+
+global RangeTableDesc {
+    out property <[string]> column-names: ["Read unlock", "Write unlock"];
+    out property <[length]> column-widths: [80px, 80px];
+    out property <[float]> column-stretches: [0.2, 0.2];
+    out property <length> row-height: 28px;
+}
+
+component MBRPermissionView {
+    in property <bool> unshadow-mbr;
+    in property <ExtendedStatus> status;
+    private property <bool> enabled: status.status != Status.loading;
+    changed unshadow-mbr => {
+        unshadow-disp.checked = unshadow-mbr;
+    }
+    changed status => {
+        if status.status == Status.error {
+            unshadow-disp.checked = unshadow-mbr;
+            ToastMessage.show("Could not update shadowing permission: " + status.message, PaletteExtra.error-foreground);
+        }
+    }
+    HorizontalLayout {
+        alignment: stretch;
+        Island {
+            horizontal-stretch: 0;
+            background: PaletteExtra.accented-control-background;
+            border-top-right-radius: 0px;
+            border-bottom-right-radius: 0px;
+            HorizontalLayout {
+                padding: 8px;
+                Text {
+                    text: "Shadow MBR";
+                    vertical-alignment: center;
+                }
+            }
+        }
+
+        Island {
+            horizontal-stretch: 1;
+            background: #00000000;
+            border-color: PaletteExtra.accented-control-background;
+            border-top-left-radius: 0px;
+            border-bottom-left-radius: 0px;
+            border-width: 2px;
+            HorizontalLayout {
+                padding: 8px;
+                padding-left: 16px;
+                unshadow-disp := CheckBox {
+                    text: "Unshadow";
+                    checked: unshadow-mbr;
+                    enabled: enabled;
+                }
+            }
+        }
+    }
+}
+
+component RangePermissionRow {
+    in property <[length]> column-widths: RangeTableDesc.column-widths;
+    in property <[float]> column-stretches: RangeTableDesc.column-stretches;
+    in property <length> row-height: RangeTableDesc.row-height;
+    in property <int> range-idx;
+    in property <bool> read-unlock;
+    in property <bool> write-unlock;
+    in property <Status> status;
+    private property <bool> enabled: status != Status.loading;
+    callback set-read-unlock(allowed: bool);
+    callback set-write-unlock(allowed: bool);
+    changed read-unlock => {
+        read-unlock-disp.checked = read-unlock;
+    }
+    changed write-unlock => {
+        write-unlock-disp.checked = write-unlock;
+    }
+    changed status => {
+        if status == Status.error {
+            read-unlock-disp.checked = read-unlock;
+            write-unlock-disp.checked = write-unlock;
+        }
+    }
+    HorizontalLayout {
+        Cell {
+            min-width: root.column-widths[0];
+            horizontal-stretch: root.column-stretches[0];
+            height: row-height;
+            row-idx: range-idx;
+            column-idx: 0;
+            read-unlock-disp := CheckBox {
+                checked: read-unlock;
+                enabled: enabled;
+                toggled => {
+                    set-read-unlock(self.checked);
+                }
+            }
+        }
+
+        Cell {
+            min-width: root.column-widths[1];
+            horizontal-stretch: root.column-stretches[1];
+            height: row-height;
+            row-idx: range-idx;
+            column-idx: 1;
+            write-unlock-disp := CheckBox {
+                checked: write-unlock;
+                enabled: enabled;
+                toggled => {
+                    set-write-unlock(self.checked)
+                }
+            }
+        }
+    }
+}
+
+component RangePermissionTable {
+    in property <[string]> names;
+    in property <[bool]> read-unlock;
+    in property <[bool]> write-unlock;
+    in property <[ExtendedStatus]> statuses;
+    table := Table {
+        preferred-width: 100%;
+        preferred-height: 100%;
+        column-names: RangeTableDesc.column-names;
+        column-widths: RangeTableDesc.column-widths;
+        column-stretches: RangeTableDesc.column-stretches;
+        row-names: names;
+        row-heights: [RangeTableDesc.row-height];
+        VerticalLayout {
+            for row[range-idx] in root.names: RangePermissionRow {
+                read-unlock: read-unlock[range-idx];
+                write-unlock: write-unlock[range-idx];
+                status: statuses[range-idx].status;
+                column-widths: table.column-widths;
+                column-stretches: table.column-stretches;
+                range-idx: range-idx;
+                row-height: table.row-heights[0];
+                changed status => {
+                    if self.status == Status.error {
+                        ToastMessage.show("Could not modify " + names[range-idx] + ": " + statuses[range-idx].message, PaletteExtra.error-foreground);
+                    }
+                }
+            }
+        }
+    }
+}
+
+export component PermissionEditor inherits ConfigView {
+    config-name: "Access control";
+    config-icon: Icons.permissions;
+    in property <ExtendedStatus> login-status: PermissionEditorState.login-statuses[root.device-idx];
+    in property <PermissionMatrix> matrix: PermissionEditorState.matrices[root.device-idx];
+    in-out property <bool> authenticated: false;
+    VerticalLayout {
+        if !authenticated: LoginView {
+            extended-status: login-status;
+            user-name: "Admin1";
+            login-button-text: "Edit permissions";
+            back => {
+                root.back();
+            }
+            login(password) => {
+                PermissionEditorState.login(root.device-idx, password);
+            }
+            success => {
+                authenticated = true;
+                PermissionEditorState.list(root.device-idx);
+            }
+        }
+        if authenticated: VerticalLayout {
+            spacing: 16px;
+            HorizontalLayout {
+                alignment: start;
+                user-selector := ComboBox {
+                    model: matrix.user-names;
+                    preferred-width: Math.max(self.min-width, 240px);
+                    selected(current-value) => {
+                        if matrix.permission-lists[user-selector.current-index].unshadow-mbr-status.status == Status.loading {
+                            PermissionEditorState.fetch(root.device-idx, user-selector.current-index);
+                        }
+                    }
+                }
+            }
+
+            MBRPermissionView {
+                unshadow-mbr: matrix.permission-lists[user-selector.current-index].unshadow-mbr;
+                status: matrix.permission-lists[user-selector.current-index].unshadow-mbr-status;
+            }
+
+            RangePermissionTable {
+                names: matrix.range-names;
+                read-unlock: matrix.permission-lists[user-selector.current-index].read-unlock;
+                write-unlock: matrix.permission-lists[user-selector.current-index].write-unlock;
+                statuses: matrix.permission-lists[user-selector.current-index].range-statuses;
+            }
+
+            if login-status.status != Status.success: StatusOverlay {
+                status: login-status;
+            }
+        }
+    }
+}
+
+global ExampleMatrix {
+    out property <PermissionMatrix> matrix: {
+        user-names: ["User1", "User2"],
+        range-names: ["GlobalRange", "Range1", "Range2"],
+        permission-lists: [
+            {
+                unshadow-mbr: false,
+                unshadow-mbr-status: { status: Status.loading },
+                read-unlock: [true, false, false],
+                write-unlock: [true, false, false],
+                range-statuses: [{ status: Status.success }, { status: Status.success }, { status: Status.loading }]
+            },
+            {
+                unshadow-mbr: true,
+                unshadow-mbr-status: { status: Status.success },
+                read-unlock: [true, true, false],
+                write-unlock: [false, true, false],
+                range-statuses: [{ status: Status.success }, { status: Status.loading }, { status: Status.success }]
+            }
+        ],
+    };
+}
+
+export component LivePreviewTest_RangeTable inherits RangePermissionTable { }
+
+export component LivePreviewTest_ListError inherits PermissionEditor {
+    device-name: "Foo Device";
+    login-status: { status: Status.error, message: "sample error" };
+    authenticated: true;
+    matrix: ExampleMatrix.matrix;
+}
+
+export component LivePreviewTest_Auth inherits PermissionEditor {
+    device-name: "Foo Device";
+    login-status: { status: Status.success };
+    authenticated: true;
+    matrix: ExampleMatrix.matrix;
+}
+
+export component LivePreviewTest inherits PermissionEditor {
+    device-name: "Foo Device";
+    login-status: { status: Status.loading };
+    matrix: ExampleMatrix.matrix;
+}

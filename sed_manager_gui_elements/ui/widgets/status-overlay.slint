@@ -1,0 +1,26 @@
+import { StatusIndicator } from "progress.slint";
+import { ExtendedStatus, Status } from "../data/status.slint";
+import { PaletteExtra } from "visual.slint";
+
+export component StatusOverlay inherits Rectangle {
+    in property <ExtendedStatus> status;
+    height: 0;
+    clip: false;
+    VerticalLayout {
+        y: -self.min-height;
+        height: self.min-height;
+        spacing: 6px;
+        padding: 16px;
+        StatusIndicator {
+            preferred-width: 100%;
+            height: 80px;
+            status: status.status;
+        }
+
+        Text {
+            text: status.message;
+            color: PaletteExtra.error-foreground;
+            horizontal-alignment: center;
+        }
+    }
+}
