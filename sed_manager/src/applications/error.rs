@@ -20,6 +20,8 @@ pub enum Error {
     FileNotOpen,
     #[error("Could not read file")]
     FileReadError,
+    #[error("The file is too large")]
+    FileTooLarge,
 }
 
 impl From<RPCError> for Error {

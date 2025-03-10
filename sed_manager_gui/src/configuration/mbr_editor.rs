@@ -198,6 +198,10 @@ async fn upload_worker(
         return Err(AppError::FileNotOpen);
     };
     let len = file.metadata().await.map(|metadata| metadata.len()).unwrap_or(u64::MAX);
+    let mbr_size = session.get_size().await?;
+    if len > mbr_size {
+        return Err(AppError::FileTooLarge);
+    }
     let read = async move |chunk: &mut [u8]| file.read(chunk).await.map_err(|_| AppError::FileReadError);
     let progress = |written| progress_per_mil.store((written * 1000 / len) as u32, Ordering::Relaxed);
     let cancelled = || cancel_req.load(Ordering::Relaxed);
