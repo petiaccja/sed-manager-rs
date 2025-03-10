@@ -73,12 +73,16 @@ export global AccessControlEditorState {
 
 export global MBREditorState {
     in property <[ExtendedStatus]> login-statuses;
-    in property <[ExtendedStatus]> update-statuses;
     in property <[MBRControl]> mbr-control;
+    in property <[ExtendedStatus]> control-statuses;
+    in property <[ExtendedStatus]> upload-statuses;
+    in property <[float]> upload-progresses;
+    in property <[bool]> upload-cancel_reqs;
     callback login(device-idx: int, password: string);
     callback query(device-idx: int);
     callback set-enabled(device-idx: int, enabled: bool);
     callback set-done(device-idx: int, done: bool);
+    callback upload(device-idx: int);
 }
 
 export global TroubleshootingState {

@@ -14,6 +14,12 @@ pub enum Error {
     AlreadyActivated,
     #[error("an internal error occured: this is a bug")]
     InternalError,
+    #[error("the task was cancelled")]
+    Cancelled,
+    #[error("could not open the file")]
+    FileNotOpen,
+    #[error("could not read the file")]
+    FileReadError,
 }
 
 impl From<RPCError> for Error {

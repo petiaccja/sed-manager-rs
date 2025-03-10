@@ -1,8 +1,12 @@
+use core::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::rc::Rc;
+use std::sync::Arc;
+use std::time::Duration;
 
 use slint::{ComponentHandle as _, Model};
 
 use sed_manager::applications::{Error as AppError, MBREditSession};
+use tokio::io::AsyncReadExt;
 
 use crate::backend::{Backend, EditorSession};
 use crate::frontend::Frontend;
@@ -13,9 +17,13 @@ pub fn init(frontend: &Frontend, num_devices: usize) {
     frontend.with(|window| {
         let mbr_editor_state = window.global::<ui::MBREditorState>();
         let login_status = ui::ExtendedStatus::error("missing callback".into());
-        let update_status = ui::ExtendedStatus::success();
+        let control_status = ui::ExtendedStatus::success();
+        let upload_status = ui::ExtendedStatus::success();
         mbr_editor_state.set_login_statuses(into_vec_model(vec![login_status; num_devices]));
-        mbr_editor_state.set_update_statuses(into_vec_model(vec![update_status; num_devices]));
+        mbr_editor_state.set_control_statuses(into_vec_model(vec![control_status; num_devices]));
+        mbr_editor_state.set_upload_statuses(into_vec_model(vec![upload_status; num_devices]));
+        mbr_editor_state.set_upload_progresses(into_vec_model(vec![0.0; num_devices]));
+        mbr_editor_state.set_upload_cancel_reqs(into_vec_model(vec![false; num_devices]));
         mbr_editor_state.set_mbr_control(into_vec_model(vec![ui::MBRControl::default(); num_devices]));
     });
 }
@@ -29,6 +37,7 @@ pub fn set_callbacks(backend: Rc<PeekCell<Backend>>, frontend: Frontend) {
     set_callback_query(backend.clone(), frontend.clone());
     set_callback_set_enabled(backend.clone(), frontend.clone());
     set_callback_set_done(backend.clone(), frontend.clone());
+    set_callback_upload(backend.clone(), frontend.clone());
 }
 
 fn set_callback_login(backend: Rc<PeekCell<Backend>>, frontend: Frontend) {
@@ -74,15 +83,15 @@ fn set_callback_set_enabled(backend: Rc<PeekCell<Backend>>, frontend: Frontend) 
             let frontend = frontend.clone();
             let backend = backend.clone();
             let device_idx = device_idx as usize;
-            set_update_status(&frontend, device_idx, ui::ExtendedStatus::loading());
+            set_control_status(&frontend, device_idx, ui::ExtendedStatus::loading());
             let _ = slint::spawn_local(async move {
                 let result = set_enabled(backend, device_idx, enabled).await;
                 let current = get_value(&frontend, device_idx);
                 if let (Ok(_), Some(current)) = (&result, current) {
                     set_value(&frontend, device_idx, ui::MBRControl { enabled, ..current });
-                    set_update_status(&frontend, device_idx, ui::ExtendedStatus::success());
+                    set_control_status(&frontend, device_idx, ui::ExtendedStatus::success());
                 } else {
-                    set_update_status(&frontend, device_idx, ui::ExtendedStatus::from_result(result));
+                    set_control_status(&frontend, device_idx, ui::ExtendedStatus::from_result(result));
                 }
             });
         });
@@ -97,16 +106,34 @@ fn set_callback_set_done(backend: Rc<PeekCell<Backend>>, frontend: Frontend) {
             let frontend = frontend.clone();
             let backend = backend.clone();
             let device_idx = device_idx as usize;
-            set_update_status(&frontend, device_idx, ui::ExtendedStatus::loading());
+            set_control_status(&frontend, device_idx, ui::ExtendedStatus::loading());
             let _ = slint::spawn_local(async move {
                 let result = set_done(backend, device_idx, done).await;
                 let current = get_value(&frontend, device_idx);
                 if let (Ok(_), Some(current)) = (&result, current) {
                     set_value(&frontend, device_idx, ui::MBRControl { done, ..current });
-                    set_update_status(&frontend, device_idx, ui::ExtendedStatus::success());
+                    set_control_status(&frontend, device_idx, ui::ExtendedStatus::success());
                 } else {
-                    set_update_status(&frontend, device_idx, ui::ExtendedStatus::from_result(result));
+                    set_control_status(&frontend, device_idx, ui::ExtendedStatus::from_result(result));
                 }
+            });
+        });
+    });
+}
+
+fn set_callback_upload(backend: Rc<PeekCell<Backend>>, frontend: Frontend) {
+    frontend.clone().with(|window| {
+        let mbr_editor_state = window.global::<ui::MBREditorState>();
+
+        mbr_editor_state.on_upload(move |device_idx| {
+            let frontend = frontend.clone();
+            let backend = backend.clone();
+            let device_idx = device_idx as usize;
+            set_upload_status(&frontend, device_idx, ui::ExtendedStatus::loading());
+            let _ = slint::spawn_local(async move {
+                let result = upload(backend, frontend.clone(), device_idx).await;
+                set_upload_progress(&frontend, device_idx, 0.0);
+                set_upload_status(&frontend, device_idx, ui::ExtendedStatus::from_result(result));
             });
         });
     });
@@ -138,6 +165,57 @@ async fn set_done(backend: Rc<PeekCell<Backend>>, device_idx: usize, done: bool)
     Ok(session.set_done(done).await?)
 }
 
+async fn upload(backend: Rc<PeekCell<Backend>>, frontend: Frontend, device_idx: usize) -> Result<(), AppError> {
+    let Some(file_handle) = rfd::AsyncFileDialog::new().pick_file().await else {
+        return Ok(());
+    };
+    let Ok(runtime) = tokio::runtime::Builder::new_multi_thread().enable_all().build() else {
+        return Err(AppError::InternalError);
+    };
+    let session = backend.peek(|backend| backend.get_mbr_session(device_idx))?;
+    let progress_per_mil = Arc::new(AtomicU32::new(0));
+    let cancel_req = Arc::new(AtomicBool::new(false));
+    let worker_task = runtime.spawn(upload_worker(session, file_handle, progress_per_mil.clone(), cancel_req.clone()));
+    let display_callback =
+        move || upload_display(frontend.clone(), device_idx, progress_per_mil.clone(), cancel_req.clone());
+
+    let timer = slint::Timer::default();
+    timer.start(slint::TimerMode::Repeated, Duration::from_millis(16), display_callback);
+    let Ok(result) = worker_task.await else {
+        return Err(AppError::InternalError);
+    };
+    timer.stop();
+    result
+}
+
+async fn upload_worker(
+    session: Arc<MBREditSession>,
+    file_handle: rfd::FileHandle,
+    progress_per_mil: Arc<AtomicU32>,
+    cancel_req: Arc<AtomicBool>,
+) -> Result<(), AppError> {
+    let Ok(mut file) = tokio::fs::OpenOptions::new().read(true).open(file_handle.path()).await else {
+        return Err(AppError::FileNotOpen);
+    };
+    let len = file.metadata().await.map(|metadata| metadata.len()).unwrap_or(u64::MAX);
+    let read = async move |chunk: &mut [u8]| file.read(chunk).await.map_err(|_| AppError::FileReadError);
+    let progress = |written| progress_per_mil.store((written * 1000 / len) as u32, Ordering::Relaxed);
+    let cancelled = || cancel_req.load(Ordering::Relaxed);
+    session.upload(read, progress, cancelled).await
+}
+
+fn upload_display(
+    frontend: Frontend,
+    device_idx: usize,
+    progress_per_mil: Arc<AtomicU32>,
+    cancel_req: Arc<AtomicBool>,
+) {
+    let progress = progress_per_mil.load(Ordering::Relaxed) as f32 / 1000.0;
+    set_upload_progress(&frontend, device_idx, progress);
+    let cancel = get_cancel_req(&frontend, device_idx);
+    cancel_req.store(cancel, Ordering::Relaxed);
+}
+
 fn set_login_status(frontend: &Frontend, device_idx: usize, status: ui::ExtendedStatus) {
     frontend.with(|window| {
         let mbr_editor_state = window.global::<ui::MBREditorState>();
@@ -148,12 +226,32 @@ fn set_login_status(frontend: &Frontend, device_idx: usize, status: ui::Extended
     });
 }
 
-fn set_update_status(frontend: &Frontend, device_idx: usize, status: ui::ExtendedStatus) {
+fn set_control_status(frontend: &Frontend, device_idx: usize, status: ui::ExtendedStatus) {
     frontend.with(|window| {
         let mbr_editor_state = window.global::<ui::MBREditorState>();
-        let update_statuses = mbr_editor_state.get_update_statuses();
-        if device_idx < update_statuses.row_count() {
-            update_statuses.set_row_data(device_idx, status);
+        let control_statuses = mbr_editor_state.get_control_statuses();
+        if device_idx < control_statuses.row_count() {
+            control_statuses.set_row_data(device_idx, status);
+        }
+    });
+}
+
+fn set_upload_status(frontend: &Frontend, device_idx: usize, status: ui::ExtendedStatus) {
+    frontend.with(|window| {
+        let mbr_editor_state = window.global::<ui::MBREditorState>();
+        let upload_statuses = mbr_editor_state.get_upload_statuses();
+        if device_idx < upload_statuses.row_count() {
+            upload_statuses.set_row_data(device_idx, status);
+        }
+    });
+}
+
+fn set_upload_progress(frontend: &Frontend, device_idx: usize, progress: f32) {
+    frontend.with(|window| {
+        let mbr_editor_state = window.global::<ui::MBREditorState>();
+        let upload_progress = mbr_editor_state.get_upload_progresses();
+        if device_idx < upload_progress.row_count() {
+            upload_progress.set_row_data(device_idx, progress);
         }
     });
 }
@@ -185,4 +283,15 @@ fn get_value(frontend: &Frontend, device_idx: usize) -> Option<ui::MBRControl> {
             mbr_control.row_data(device_idx)
         })
         .flatten()
+}
+
+fn get_cancel_req(frontend: &Frontend, device_idx: usize) -> bool {
+    frontend
+        .with(|window| {
+            let mbr_editor_state = window.global::<ui::MBREditorState>();
+            let cancel_reqs = mbr_editor_state.get_upload_cancel_reqs();
+            cancel_reqs.row_data(device_idx)
+        })
+        .flatten()
+        .unwrap_or(false)
 }
