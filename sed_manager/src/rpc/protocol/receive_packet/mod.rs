@@ -205,10 +205,14 @@ impl Drop for Session {
 
 #[cfg(test)]
 mod tests {
+    use core::time::Duration;
+
     use crate::messaging::packet::{SubPacket, SubPacketKind};
     use crate::messaging::token::Tag;
 
     use super::*;
+
+    const SHORT_TIMEOUT: Properties = Properties { trans_timeout: Duration::from_millis(1), ..Properties::ASSUMED };
 
     fn setup() -> (Buffer<(SessionIdentifier, Sender)>, Buffer<ComPacket>, ReceivePacket, Buffer<SessionIdentifier>) {
         (Buffer::new(), Buffer::new(), ReceivePacket::new(), Buffer::new())
@@ -265,7 +269,7 @@ mod tests {
         com_packet.push(make_com_packet(id, false));
         let (tx, mut rx) = make_channel();
         sender.push((id, tx));
-        node.open_session(id, Properties::ASSUMED);
+        node.open_session(id, SHORT_TIMEOUT);
         node.update(&mut sender, &mut com_packet, &mut done);
         assert!(rx.try_recv().is_ok_and(|response| response.is_err()));
         assert!(done.is_closed());
@@ -278,7 +282,7 @@ mod tests {
         com_packet.push(make_com_packet(id, false));
         let (tx, mut rx) = make_channel();
         sender.push((id, tx));
-        node.open_session(id, Properties::ASSUMED);
+        node.open_session(id, SHORT_TIMEOUT);
         node.update(&mut sender, &mut com_packet, &mut done);
         assert!(rx.try_recv().is_ok_and(|response| response.is_err()));
         assert!(!done.is_closed());
