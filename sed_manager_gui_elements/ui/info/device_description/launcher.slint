@@ -98,7 +98,7 @@ export component ActivityLauncher {
                     }
 
                     NavigationButton {
-                        text: "Access control";
+                        text: "Edit permissions";
                         icon: Icons.permissions;
                         height: button-height;
                         navigation-direction: NavigationDirection.left;
@@ -115,7 +115,7 @@ export component ActivityLauncher {
                     }
 
                     NavigationButton {
-                        text: "MBR Shadowing";
+                        text: "Shadow MBR";
                         icon: Icons.mbr-shadowing;
                         height: button-height;
                         navigation-direction: NavigationDirection.left;
@@ -132,7 +132,7 @@ export component ActivityLauncher {
                     }
 
                     NavigationButton {
-                        text: "Revert";
+                        text: "Revert device";
                         icon: Icons.revert;
                         height: button-height;
                         navigation-direction: NavigationDirection.left;
@@ -159,7 +159,7 @@ export component ActivityLauncher {
                     }
 
                     NavigationButton {
-                        text: "ComID status";
+                        text: "Query stack status";
                         icon: Icons.com-id-status;
                         height: button-height;
                         background: #00000000;
@@ -175,7 +175,7 @@ export component ActivityLauncher {
                     }
 
                     NavigationButton {
-                        text: "Stack reset";
+                        text: "Reset stack";
                         icon: Icons.stack-reset;
                         height: button-height;
                         background: #00000000;
@@ -188,7 +188,7 @@ export component ActivityLauncher {
                 }
             }
 
-            if root.security-providers.length > 0: Collapsible {
+            if false && root.security-providers.length > 0: Collapsible {
                 text: "Table editor";
                 icon: Icons.table-editor;
                 preferred-height: self.min-height;

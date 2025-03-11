@@ -33,18 +33,26 @@ impl UserList {
 }
 
 impl PermissionMatrix {
-    pub fn new(users: Vec<String>, ranges: Vec<String>, permission_lists: Vec<PermissionList>) -> Self {
+    pub fn new(
+        users: Vec<String>,
+        ranges: Vec<String>,
+        mbr_supported: bool,
+        user_statuses: Vec<ExtendedStatus>,
+        permission_lists: Vec<PermissionList>,
+    ) -> Self {
         let users: Vec<slint::SharedString> = users.into_iter().map(|x| x.into()).collect();
         let ranges: Vec<slint::SharedString> = ranges.into_iter().map(|x| x.into()).collect();
         Self {
-            permission_lists: ModelRc::new(VecModel::from(permission_lists)),
+            mbr_supported,
             range_names: ModelRc::new(VecModel::from(ranges)),
             user_names: ModelRc::new(VecModel::from(users)),
+            user_statuses: ModelRc::new(VecModel::from(user_statuses)),
+            permission_lists: ModelRc::new(VecModel::from(permission_lists)),
         }
     }
 
     pub fn empty() -> Self {
-        Self::new(vec![], vec![], vec![])
+        Self::new(vec![], vec![], false, vec![], vec![])
     }
 }
 

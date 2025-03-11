@@ -28,8 +28,10 @@ export struct PermissionList {
 }
 
 export struct PermissionMatrix {
+    mbr-supported: bool,
     user-names: [string],
     range-names: [string],
+    user-statuses: [ExtendedStatus],
     permission-lists: [PermissionList],
 }
 

@@ -163,6 +163,20 @@ export component PermissionEditor inherits ConfigView {
     in property <ExtendedStatus> login-status: PermissionEditorState.login-statuses[root.device-idx];
     in property <PermissionMatrix> matrix: PermissionEditorState.matrices[root.device-idx];
     in-out property <bool> authenticated: false;
+    private property <int> selected-user-idx: 0;
+    private property <PermissionList> selected-user-plist: matrix.permission-lists[selected-user-idx];
+    private property <ExtendedStatus> selected-user-status: matrix.user-statuses[selected-user-idx];
+    changed matrix => {
+        initiate-fetch(selected-user-idx)
+    }
+    changed selected-user-idx => {
+        initiate-fetch(selected-user-idx)
+    }
+    function initiate-fetch(user-idx: int) {
+        if selected-user-status.status != Status.success {
+            PermissionEditorState.fetch(root.device-idx, user-idx);
+        }
+    }
     VerticalLayout {
         if !authenticated: LoginView {
             extended-status: login-status;
@@ -183,40 +197,39 @@ export component PermissionEditor inherits ConfigView {
             spacing: 16px;
             HorizontalLayout {
                 alignment: start;
-                user-selector := ComboBox {
+                ComboBox {
+                    current-index <=> selected-user-idx;
                     model: matrix.user-names;
                     preferred-width: Math.max(self.min-width, 240px);
-                    selected(current-value) => {
-                        if matrix.permission-lists[user-selector.current-index].unshadow-mbr-status.status == Status.loading {
-                            PermissionEditorState.fetch(root.device-idx, user-selector.current-index);
-                        }
-                    }
                 }
             }
 
-            MBRPermissionView {
-                unshadow-mbr: matrix.permission-lists[user-selector.current-index].unshadow-mbr;
-                status: matrix.permission-lists[user-selector.current-index].unshadow-mbr-status;
+            if matrix.mbr-supported: MBRPermissionView {
+                unshadow-mbr: selected-user-plist.unshadow-mbr;
+                status: selected-user-plist.unshadow-mbr-status;
             }
-
             RangePermissionTable {
                 names: matrix.range-names;
-                read-unlock: matrix.permission-lists[user-selector.current-index].read-unlock;
-                write-unlock: matrix.permission-lists[user-selector.current-index].write-unlock;
-                statuses: matrix.permission-lists[user-selector.current-index].range-statuses;
+                read-unlock: selected-user-plist.read-unlock;
+                write-unlock: selected-user-plist.write-unlock;
+                statuses: selected-user-plist.range-statuses;
             }
-
-            if login-status.status != Status.success: StatusOverlay {
-                status: login-status;
-            }
+        }
+        if authenticated && login-status.status != Status.success: StatusOverlay {
+            status: login-status;
+        }
+        if authenticated && selected-user-status.status != Status.success && login-status.status == Status.success: StatusOverlay {
+            status: selected-user-status;
         }
     }
 }
 
 global ExampleMatrix {
     out property <PermissionMatrix> matrix: {
+        mbr-supported: true,
         user-names: ["User1", "User2"],
         range-names: ["GlobalRange", "Range1", "Range2"],
+        user-statuses: [{ status: Status.success }, { status: Status.error, message: "fetch failed" }],
         permission-lists: [
             {
                 unshadow-mbr: false,
@@ -241,6 +254,13 @@ export component LivePreviewTest_RangeTable inherits RangePermissionTable { }
 export component LivePreviewTest_ListError inherits PermissionEditor {
     device-name: "Foo Device";
     login-status: { status: Status.error, message: "sample error" };
+    authenticated: true;
+    matrix: ExampleMatrix.matrix;
+}
+
+export component LivePreviewTest_ListLoading inherits PermissionEditor {
+    device-name: "Foo Device";
+    login-status: { status: Status.loading };
     authenticated: true;
     matrix: ExampleMatrix.matrix;
 }

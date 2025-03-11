@@ -1,7 +1,5 @@
 /target
-
 *.lock
-
 *.bkp
-
-.idea/
+.idea
+.vs

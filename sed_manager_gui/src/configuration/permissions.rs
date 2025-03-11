@@ -54,6 +54,7 @@ fn set_callback_list(backend: Rc<PeekCell<Backend>>, frontend: Frontend) {
             let frontend = frontend.clone();
             let backend = backend.clone();
             let device_idx = device_idx as usize;
+            set_matrix(&frontend, device_idx, Ok((vec![], vec![], false)));
             set_login_status(&frontend, device_idx, ui::ExtendedStatus::loading());
             let _ = slint::spawn_local(async move {
                 let result = list(backend, device_idx).await;
@@ -88,7 +89,7 @@ async fn login(backend: Rc<PeekCell<Backend>>, device_idx: usize, password: Stri
     Ok(())
 }
 
-async fn list(backend: Rc<PeekCell<Backend>>, device_idx: usize) -> Result<(Vec<String>, Vec<String>), AppError> {
+async fn list(backend: Rc<PeekCell<Backend>>, device_idx: usize) -> Result<(Vec<String>, Vec<String>, bool), AppError> {
     let session = backend.peek(|backend| backend.get_permission_session(device_idx))?;
     let discovery = backend.peek(|backend| backend.get_discovery(device_idx).cloned())?;
     let ssc = discovery.get_primary_ssc().ok_or(AppError::NoAvailableSSC)?;
@@ -104,7 +105,8 @@ async fn list(backend: Rc<PeekCell<Backend>>, device_idx: usize) -> Result<(Vec<
         .iter()
         .map(|uid| get_object_name(Some(&discovery), uid.as_uid(), locking_sp.clone()))
         .collect();
-    Ok((user_names, range_names))
+    let mbr_supported = session.is_mbr_supported().await;
+    Ok((user_names, range_names, mbr_supported))
 }
 
 async fn fetch(
@@ -141,14 +143,29 @@ fn set_login_status(frontend: &Frontend, device_idx: usize, status: ui::Extended
     });
 }
 
-fn set_matrix(frontend: &Frontend, device_idx: usize, matrix: Result<(Vec<String>, Vec<String>), AppError>) {
+fn set_user_status(frontend: &Frontend, device_idx: usize, user_idx: usize, status: ui::ExtendedStatus) {
+    frontend.with(|window| {
+        let perm_editor_state = window.global::<ui::PermissionEditorState>();
+        let matrices = perm_editor_state.get_matrices();
+
+        if let Some(matrix) = matrices.row_data(device_idx) {
+            if user_idx < matrix.user_statuses.row_count() {
+                matrix.user_statuses.set_row_data(user_idx, status);
+            }
+            matrices.set_row_data(device_idx, matrix);
+        }
+    });
+}
+
+fn set_matrix(frontend: &Frontend, device_idx: usize, matrix: Result<(Vec<String>, Vec<String>, bool), AppError>) {
     frontend.with(|window| {
         let perm_editor_state = window.global::<ui::PermissionEditorState>();
         match matrix {
-            Ok((users, ranges)) => {
+            Ok((users, ranges, mbr_supported)) => {
                 let default_permission_list = ui::PermissionList::blank(ranges.len());
                 let permission_lists: Vec<_> = core::iter::repeat_n(default_permission_list, users.len()).collect();
-                let matrix = ui::PermissionMatrix::new(users, ranges, permission_lists);
+                let user_statuses: Vec<_> = core::iter::repeat_n(ui::ExtendedStatus::loading(), users.len()).collect();
+                let matrix = ui::PermissionMatrix::new(users, ranges, mbr_supported, user_statuses, permission_lists);
                 let matrices = perm_editor_state.get_matrices();
                 if device_idx < matrices.row_count() {
                     matrices.set_row_data(device_idx, matrix);
@@ -168,17 +185,17 @@ fn set_permission_list(
     user_idx: usize,
     perm_list: Result<ui::PermissionList, AppError>,
 ) {
-    match perm_list {
-        Ok(perm_list) => {
-            frontend.with(|window| {
-                let perm_editor_state = window.global::<ui::PermissionEditorState>();
-                if let Some(matrix) = perm_editor_state.get_matrices().row_data(device_idx) {
-                    if user_idx < matrix.permission_lists.row_count() {
-                        matrix.permission_lists.set_row_data(user_idx, perm_list);
-                    }
+    if let Ok(perm_list) = perm_list {
+        frontend.with(|window| {
+            let perm_editor_state = window.global::<ui::PermissionEditorState>();
+            if let Some(matrix) = perm_editor_state.get_matrices().row_data(device_idx) {
+                if user_idx < matrix.permission_lists.row_count() {
+                    matrix.permission_lists.set_row_data(user_idx, perm_list);
                 }
-            });
-        }
-        Err(error) => set_login_status(frontend, device_idx, error.into()),
+            }
+        });
+        set_user_status(frontend, device_idx, user_idx, ui::ExtendedStatus::success());
+    } else {
+        set_user_status(frontend, device_idx, user_idx, ui::ExtendedStatus::from_result(perm_list));
     }
 }
