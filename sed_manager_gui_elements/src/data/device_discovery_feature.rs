@@ -17,7 +17,7 @@ impl DeviceDiscoveryFeature {
 
 fn owner_password_state_to_string(value: OwnerPasswordState) -> &'static str {
     match value {
-        OwnerPasswordState::SameAsMSID => "Same as MSID",
+        OwnerPasswordState::SameAsMSID => "MSID password",
         OwnerPasswordState::VendorSpecified => "Vendor-specified",
     }
 }
@@ -33,11 +33,11 @@ fn duration(duration: Duration) -> String {
     if duration < Duration::from_secs(1) {
         format!("{} ms", duration.as_millis())
     } else if duration < Duration::from_secs(120) {
-        format!("{} second(s)", duration.as_millis())
+        format!("{} s", duration.as_millis())
     } else if duration < Duration::from_secs(7200) {
-        format!("{} minute(s)", (duration.as_secs() + 59) / 60)
+        format!("{} min", (duration.as_secs() + 59) / 60)
     } else {
-        format!("{} hour(s)", (duration.as_secs() + 3599) / 3600)
+        format!("{} hr", (duration.as_secs() + 3599) / 3600)
     }
 }
 
@@ -50,7 +50,7 @@ impl From<&TPerDescriptor> for DeviceDiscoveryFeature {
             NameValuePair::new("ACK/NAK supported".into(), yes_or_no(value.ack_nak_supported).into()),
             NameValuePair::new("Buffer management supported".into(), yes_or_no(value.buffer_mgmt_supported).into()),
             NameValuePair::new("Streaming supported".into(), yes_or_no(value.streaming_supported).into()),
-            NameValuePair::new("Com ID management supported".into(), yes_or_no(value.com_id_mgmt_supported).into()),
+            NameValuePair::new("ComID management supported".into(), yes_or_no(value.com_id_mgmt_supported).into()),
         ];
         Self::new(name, properties)
     }
@@ -67,7 +67,7 @@ impl From<&LockingDescriptor> for DeviceDiscoveryFeature {
             NameValuePair::new("Shadow MBR enabled".into(), yes_or_no(value.mbr_enabled).into()),
             NameValuePair::new("Shadow MBR done".into(), yes_or_no(value.mbr_done).into()),
             NameValuePair::new("Shadow MBR supported".into(), yes_or_no(!value.mbr_shadowing_not_supported).into()),
-            NameValuePair::new("HW reset supported".into(), yes_or_no(value.hw_reset_supported).into()),
+            NameValuePair::new("Hardware reset supported".into(), yes_or_no(value.hw_reset_supported).into()),
         ];
         Self::new(name, properties)
     }
@@ -147,12 +147,9 @@ impl From<&AdditionalDataStoreTablesDescriptor> for DeviceDiscoveryFeature {
         let name = format!("{} features", value.feature_code());
 
         let properties = vec![
-            NameValuePair::new("Max. nr. of DataStore tables".into(), value.max_num_tables.to_string()),
-            NameValuePair::new(
-                "Max. total size of DataStore tables".into(),
-                value.max_total_size_of_tables.to_string(),
-            ),
-            NameValuePair::new("DataStore table size alignment".into(), value.table_size_alignment.to_string()),
+            NameValuePair::new("Max number of tables".into(), value.max_num_tables.to_string()),
+            NameValuePair::new("Max total size of tables".into(), value.max_total_size_of_tables.to_string()),
+            NameValuePair::new("Table size alignment".into(), value.table_size_alignment.to_string()),
         ];
         Self::new(name, properties)
     }
@@ -162,8 +159,8 @@ impl From<&EnterpriseDescriptor> for DeviceDiscoveryFeature {
     fn from(value: &EnterpriseDescriptor) -> Self {
         let name = format!("{} features", value.feature_code());
         let properties = vec![
-            NameValuePair::new("Base com ID".into(), value.base_com_id.to_string()),
-            NameValuePair::new("Nr. of com IDs".into(), value.num_com_ids.to_string()),
+            NameValuePair::new("Base ComID".into(), value.base_com_id.to_string()),
+            NameValuePair::new("Number of ComIDs".into(), value.num_com_ids.to_string()),
             NameValuePair::new("LBA range crossing".into(), yes_or_no(!value.no_range_crossing).into()),
         ];
         Self::new(name, properties)
@@ -174,8 +171,8 @@ impl From<&OpalV1Descriptor> for DeviceDiscoveryFeature {
     fn from(value: &OpalV1Descriptor) -> Self {
         let name = format!("{} features", value.feature_code());
         let properties = vec![
-            NameValuePair::new("Base com ID".into(), value.base_com_id.to_string()),
-            NameValuePair::new("Nr. of com IDs".into(), value.num_com_ids.to_string()),
+            NameValuePair::new("Base ComID".into(), value.base_com_id.to_string()),
+            NameValuePair::new("Number of ComIDs".into(), value.num_com_ids.to_string()),
             NameValuePair::new("LBA range crossing".into(), yes_or_no(!value.no_range_crossing).into()),
         ];
         Self::new(name, properties)
@@ -187,11 +184,11 @@ impl From<&OpalV2Descriptor> for DeviceDiscoveryFeature {
         let name = format!("{} features", value.feature_code());
 
         let properties = vec![
-            NameValuePair::new("Base com ID".into(), value.base_com_id.to_string()),
-            NameValuePair::new("Nr. of com IDs".into(), value.num_com_ids.to_string()),
+            NameValuePair::new("Base ComID".into(), value.base_com_id.to_string()),
+            NameValuePair::new("Number of ComIDs".into(), value.num_com_ids.to_string()),
             NameValuePair::new("LBA range crossing".into(), yes_or_no(!value.no_range_crossing).into()),
-            NameValuePair::new("Nr. of Locking SP admins".into(), value.num_locking_admins_supported.to_string()),
-            NameValuePair::new("Nr. or Locking SP users".into(), value.num_locking_users_supported.to_string()),
+            NameValuePair::new("Number of locking admins".into(), value.num_locking_admins_supported.to_string()),
+            NameValuePair::new("Number of locking users".into(), value.num_locking_users_supported.to_string()),
             NameValuePair::new(
                 "Initial SID password".into(),
                 owner_password_state_to_string(value.initial_owner_pw).into(),
@@ -210,8 +207,8 @@ impl From<&OpaliteDescriptor> for DeviceDiscoveryFeature {
         let name = format!("{} features", value.feature_code());
 
         let properties = vec![
-            NameValuePair::new("Base com ID".into(), value.base_com_id.to_string()),
-            NameValuePair::new("Nr. of com IDs".into(), value.num_com_ids.to_string()),
+            NameValuePair::new("Base ComID".into(), value.base_com_id.to_string()),
+            NameValuePair::new("Number of ComIDs".into(), value.num_com_ids.to_string()),
             NameValuePair::new(
                 "Initial SID password".into(),
                 owner_password_state_to_string(value.initial_owner_pw).into(),
@@ -230,8 +227,8 @@ impl From<&PyriteV1Descriptor> for DeviceDiscoveryFeature {
         let name = format!("{} features", value.feature_code());
 
         let properties = vec![
-            NameValuePair::new("Base com ID".into(), value.base_com_id.to_string()),
-            NameValuePair::new("Nr. of com IDs".into(), value.num_com_ids.to_string()),
+            NameValuePair::new("Base ComID".into(), value.base_com_id.to_string()),
+            NameValuePair::new("Number of ComIDs".into(), value.num_com_ids.to_string()),
             NameValuePair::new(
                 "Initial SID password".into(),
                 owner_password_state_to_string(value.initial_owner_pw).into(),
@@ -250,8 +247,8 @@ impl From<&PyriteV2Descriptor> for DeviceDiscoveryFeature {
         let name = format!("{} features", value.feature_code());
 
         let properties = vec![
-            NameValuePair::new("Base com ID".into(), value.base_com_id.to_string()),
-            NameValuePair::new("Nr. of com IDs".into(), value.num_com_ids.to_string()),
+            NameValuePair::new("Base ComID".into(), value.base_com_id.to_string()),
+            NameValuePair::new("Number of ComIDs".into(), value.num_com_ids.to_string()),
             NameValuePair::new(
                 "Initial SID password".into(),
                 owner_password_state_to_string(value.initial_owner_pw).into(),
@@ -270,11 +267,11 @@ impl From<&RubyDescriptor> for DeviceDiscoveryFeature {
         let name = format!("{} features", value.feature_code());
 
         let properties = vec![
-            NameValuePair::new("Base com ID".into(), value.base_com_id.to_string()),
-            NameValuePair::new("Nr. of com IDs".into(), value.num_com_ids.to_string()),
+            NameValuePair::new("Base ComID".into(), value.base_com_id.to_string()),
+            NameValuePair::new("Number of ComIDs".into(), value.num_com_ids.to_string()),
             NameValuePair::new("LBA range crossing".into(), yes_or_no(!value.no_range_crossing).into()),
-            NameValuePair::new("Nr. of Locking SP admins".into(), value.num_locking_admins_supported.to_string()),
-            NameValuePair::new("Nr. or Locking SP users".into(), value.num_locking_users_supported.to_string()),
+            NameValuePair::new("Number of locking admins".into(), value.num_locking_admins_supported.to_string()),
+            NameValuePair::new("Number of locking users".into(), value.num_locking_users_supported.to_string()),
             NameValuePair::new(
                 "Initial SID password".into(),
                 owner_password_state_to_string(value.initial_owner_pw).into(),
@@ -293,10 +290,10 @@ impl From<&KeyPerIODescriptor> for DeviceDiscoveryFeature {
         let name = format!("{} features", value.feature_code());
 
         let properties = vec![
-            NameValuePair::new("Base com ID 0x01".into(), value.base_com_id_p1.to_string()),
-            NameValuePair::new("Nr. of com IDs 0x01".into(), value.num_com_ids_p1.to_string()),
-            NameValuePair::new("Base com ID 0x03".into(), value.base_com_id_p3.to_string()),
-            NameValuePair::new("Nr. of com IDs 0x03".into(), value.num_com_ids_p3.to_string()),
+            NameValuePair::new("Base ComID on protocol 1".into(), value.base_com_id_p1.to_string()),
+            NameValuePair::new("Number of ComIDs on protocol 1".into(), value.num_com_ids_p1.to_string()),
+            NameValuePair::new("Base ComID on protocol 3".into(), value.base_com_id_p3.to_string()),
+            NameValuePair::new("Number of ComIDs on protocol 3".into(), value.num_com_ids_p3.to_string()),
             NameValuePair::new(
                 "Initial SID password".into(),
                 owner_password_state_to_string(value.initial_owner_pw).into(),
@@ -305,7 +302,7 @@ impl From<&KeyPerIODescriptor> for DeviceDiscoveryFeature {
                 "Reverted SID password".into(),
                 owner_password_state_to_string(value.reverted_owner_pw).into(),
             ),
-            NameValuePair::new("Nr. of KPIO admins".into(), value.num_kpio_admins_supported.to_string()),
+            NameValuePair::new("Number of KPIO admins".into(), value.num_kpio_admins_supported.to_string()),
             NameValuePair::new("KPIO enabled".into(), yes_or_no(value.kpio_enabled).into()),
             NameValuePair::new("KPIO scope".into(), yes_or_no(value.kpio_scope).into()),
             NameValuePair::new("Tweak key required".into(), yes_or_no(value.tweak_key_required).into()),
@@ -318,7 +315,7 @@ impl From<&KeyPerIODescriptor> for DeviceDiscoveryFeature {
                 yes_or_no(value.replay_protection_supported).into(),
             ),
             NameValuePair::new("Replay protection enabled".into(), yes_or_no(value.replay_protection_enabled).into()),
-            NameValuePair::new("Max. key UID length".into(), value.max_key_uid_len.to_string()),
+            NameValuePair::new("Max key UID length".into(), value.max_key_uid_len.to_string()),
             NameValuePair::new(
                 "KMIP key injection supported".into(),
                 yes_or_no(value.kmip_key_injection_supported).into(),
@@ -338,10 +335,10 @@ impl From<&KeyPerIODescriptor> for DeviceDiscoveryFeature {
                 "PKI KEK transport supported".into(),
                 yes_or_no(value.pki_kek_transport_supported).into(),
             ),
-            NameValuePair::new("Nr. of KEKs supported".into(), value.num_keks_supported.to_string()),
-            NameValuePair::new("Total nr. of key tags supported".into(), value.total_key_tags_supported.to_string()),
-            NameValuePair::new("Max. key tags per namespace".into(), value.max_key_tags_per_namespace.to_string()),
-            NameValuePair::new("Get none command none length".into(), value.get_nonce_cmd_nonce_len.to_string()),
+            NameValuePair::new("Number of KEKs supported".into(), value.num_keks_supported.to_string()),
+            NameValuePair::new("Total number of key tags supported".into(), value.total_key_tags_supported.to_string()),
+            NameValuePair::new("Max key tags per namespace".into(), value.max_key_tags_per_namespace.to_string()),
+            NameValuePair::new("Get nonce command nonce length".into(), value.get_nonce_cmd_nonce_len.to_string()),
         ];
         Self::new(name, properties)
     }
