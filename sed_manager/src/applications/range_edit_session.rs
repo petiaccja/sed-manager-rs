@@ -1,3 +1,4 @@
+use crate::messaging::discovery::{Discovery, FeatureCode, LockingDescriptor};
 use crate::spec::column_types::{CredentialRef, LockingRangeRef, MediaKeyRef};
 use crate::spec::objects::LockingRange;
 use crate::spec::table_id;
@@ -5,6 +6,26 @@ use crate::tper::{Session, TPer};
 
 use super::utility::start_admin1_session;
 use super::Error;
+
+pub fn is_range_editor_supported(discovery: &Discovery) -> bool {
+    // KPIO uses a different system.
+    // Enterprise has no Admin authority on the Locking SP, only a dedicated authority per range.
+    const SUPPORTED_SSCS: [FeatureCode; 6] = [
+        FeatureCode::OpalV1,
+        FeatureCode::OpalV2,
+        FeatureCode::Opalite,
+        FeatureCode::PyriteV1,
+        FeatureCode::PyriteV2,
+        FeatureCode::Ruby,
+    ];
+    let Some(ssc) = discovery.get_primary_ssc() else {
+        return false;
+    };
+    let Some(locking_desc) = discovery.get::<LockingDescriptor>() else {
+        return false;
+    };
+    SUPPORTED_SSCS.contains(&ssc.feature_code()) && locking_desc.locking_enabled && locking_desc.locking_supported
+}
 
 pub struct RangeEditSession {
     session: Session,

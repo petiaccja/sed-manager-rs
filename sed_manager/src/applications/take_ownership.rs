@@ -1,5 +1,5 @@
 use crate::applications::utility::get_admin_sp;
-use crate::messaging::discovery::Discovery;
+use crate::messaging::discovery::{Discovery, LockingDescriptor};
 use crate::spec;
 use crate::spec::column_types::Password;
 use crate::spec::objects::CPIN;
@@ -8,8 +8,16 @@ use crate::tper::TPer;
 use super::error::Error;
 use super::with_session::with_session;
 
-pub fn is_taking_ownership_supported(_discovery: &Discovery) -> bool {
-    true
+pub fn is_taking_ownership_supported(discovery: &Discovery) -> bool {
+    if let Some(locking_desc) = discovery.get::<LockingDescriptor>() {
+        // We cannot reliably tell from the discovery if someone has already taken
+        // ownership of the device. However, if locking is enabled, someone definitely has
+        // taken ownership, therefore taking ownership is not supported anymore.
+        !locking_desc.locking_enabled
+    } else {
+        // Otherwise, taking ownership is always supported.
+        true
+    }
 }
 
 pub async fn take_ownership(tper: &TPer, new_password: &[u8]) -> Result<(), Error> {

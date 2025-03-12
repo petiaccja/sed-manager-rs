@@ -1,9 +1,30 @@
+use crate::messaging::discovery::{Discovery, FeatureCode, LockingDescriptor};
 use crate::spec::column_types::{AuthMethod, AuthorityRef, CPINRef};
 use crate::spec::objects::{Authority, CPIN};
 use crate::spec::table_id;
 use crate::tper::{Session, TPer};
 
 use super::{utility::start_admin1_session, Error};
+
+pub fn is_user_editor_supported(discovery: &Discovery) -> bool {
+    // Enterprise does not allow changing authorities, aside from their password.
+    const SUPPORTED_SSCS: [FeatureCode; 7] = [
+        FeatureCode::KeyPerIO, // Only has Admin{n}, but configuration is the same.
+        FeatureCode::OpalV1,
+        FeatureCode::OpalV2,
+        FeatureCode::Opalite,
+        FeatureCode::PyriteV1,
+        FeatureCode::PyriteV2,
+        FeatureCode::Ruby,
+    ];
+    let Some(ssc) = discovery.get_primary_ssc() else {
+        return false;
+    };
+    let Some(locking_desc) = discovery.get::<LockingDescriptor>() else {
+        return false;
+    };
+    SUPPORTED_SSCS.contains(&ssc.feature_code()) && locking_desc.locking_enabled && locking_desc.locking_supported
+}
 
 pub struct UserEditSession {
     session: Session,

@@ -1,4 +1,4 @@
-use crate::messaging::discovery::LockingDescriptor;
+use crate::messaging::discovery::{Discovery, LockingDescriptor};
 use crate::rpc::Error as RPCError;
 use crate::spec::basic_types::List;
 use crate::spec::column_types::{ACEOperand, ACERef, AuthorityRef, BooleanOp, LockingRangeRef};
@@ -7,6 +7,10 @@ use crate::spec::{self, method_id, table_id};
 use crate::tper::{Session, TPer};
 
 use super::{utility::start_admin1_session, Error};
+
+pub fn is_permission_editor_supported(discovery: &Discovery) -> bool {
+    super::is_user_editor_supported(discovery) && super::is_range_editor_supported(discovery)
+}
 
 pub struct PermissionEditSession {
     session: Session,

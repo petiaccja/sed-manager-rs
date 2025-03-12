@@ -1,3 +1,4 @@
+use crate::messaging::discovery::{Discovery, FeatureCode, LockingDescriptor};
 use crate::messaging::packet::{PACKET_HEADER_LEN, SUB_PACKET_HEADER_LEN};
 use crate::rpc::Properties;
 use crate::spec;
@@ -6,6 +7,27 @@ use crate::spec::table_id;
 use crate::tper::{Session, TPer};
 
 use super::{utility::start_admin1_session, Error};
+
+pub fn is_mbr_editor_supported(discovery: &Discovery) -> bool {
+    // Enterprise and KPIO never support MBR shadowing.
+    const SUPPORTED_SSCS: [FeatureCode; 6] = [
+        FeatureCode::OpalV1,   // Always
+        FeatureCode::OpalV2,   // Always
+        FeatureCode::Opalite,  // Always
+        FeatureCode::PyriteV1, // Optional
+        FeatureCode::PyriteV2, // Optional
+        FeatureCode::Ruby,     // Optional
+    ];
+    let Some(ssc) = discovery.get_primary_ssc() else {
+        return false;
+    };
+    let Some(locking_desc) = discovery.get::<LockingDescriptor>() else {
+        return false;
+    };
+    SUPPORTED_SSCS.contains(&ssc.feature_code())
+        && !locking_desc.mbr_shadowing_not_supported
+        && locking_desc.locking_enabled
+}
 
 pub struct MBREditSession {
     session: Session,
