@@ -13,3 +13,26 @@ pub enum ACEOperand {
     Authority(AuthorityRef),
     BooleanOp(BooleanOp),
 }
+
+impl From<AuthorityRef> for ACEOperand {
+    fn from(value: AuthorityRef) -> Self {
+        Self::Authority(value)
+    }
+}
+
+impl From<BooleanOp> for ACEOperand {
+    fn from(value: BooleanOp) -> Self {
+        Self::BooleanOp(value)
+    }
+}
+impl From<&AuthorityRef> for ACEOperand {
+    fn from(value: &AuthorityRef) -> Self {
+        Self::Authority(*value)
+    }
+}
+
+impl From<&BooleanOp> for ACEOperand {
+    fn from(value: &BooleanOp) -> Self {
+        Self::BooleanOp(*value)
+    }
+}

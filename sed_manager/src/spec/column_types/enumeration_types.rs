@@ -205,7 +205,7 @@ pub enum TableKind {
 }
 
 #[repr(u8)]
-#[derive(EnumerationType, PartialEq, Eq, Clone, Debug)]
+#[derive(EnumerationType, PartialEq, Eq, Clone, Debug, Copy)]
 pub enum BooleanOp {
     And = 0,
     Or = 1,

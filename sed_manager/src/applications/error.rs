@@ -22,6 +22,8 @@ pub enum Error {
     FileReadError,
     #[error("The file is too large")]
     FileTooLarge,
+    #[error("Invalid ACE expression")]
+    InvalidACEExpression,
 }
 
 impl From<RPCError> for Error {

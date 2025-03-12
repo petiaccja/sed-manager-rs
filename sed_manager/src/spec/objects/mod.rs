@@ -8,7 +8,7 @@ pub mod mbr_control;
 pub mod sp;
 pub mod table_desc;
 
-pub use ace::ACE;
+pub use ace::{ACEExpr, ACE};
 pub use authority::Authority;
 pub use c_pin::CPIN;
 pub use k_aes_256::KAES256;

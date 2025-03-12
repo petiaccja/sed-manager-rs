@@ -60,3 +60,19 @@ impl<Item> FromIterator<Item> for List<Item> {
         Self(iter.into_iter().collect())
     }
 }
+
+impl<Item> IntoIterator for List<Item> {
+    type IntoIter = std::vec::IntoIter<Item>;
+    type Item = Item;
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
+impl<'a, Item> IntoIterator for &'a List<Item> {
+    type IntoIter = core::slice::Iter<'a, Item>;
+    type Item = &'a Item;
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
+    }
+}
