@@ -24,12 +24,15 @@ component MBRPermissionView {
     in property <bool> unshadow-mbr;
     in property <ExtendedStatus> status;
     private property <bool> enabled: status.status != Status.loading;
+    callback set-mbr-permission(permitted: bool);
     changed unshadow-mbr => {
         unshadow-disp.checked = unshadow-mbr;
     }
     changed status => {
-        if status.status == Status.error {
+        if status.status != Status.loading {
             unshadow-disp.checked = unshadow-mbr;
+        }
+        if status.status == Status.error {
             ToastMessage.show("Could not update shadowing permission: " + status.message, PaletteExtra.error-foreground);
         }
     }
@@ -63,6 +66,9 @@ component MBRPermissionView {
                     text: "Unshadow";
                     checked: unshadow-mbr;
                     enabled: enabled;
+                    toggled => {
+                        set-mbr-permission(self.checked);
+                    }
                 }
             }
         }
@@ -74,12 +80,13 @@ component RangePermissionRow {
     in property <[float]> column-stretches: RangeTableDesc.column-stretches;
     in property <length> row-height: RangeTableDesc.row-height;
     in property <int> range-idx;
+    in property <string> name;
     in property <bool> read-unlock;
     in property <bool> write-unlock;
-    in property <Status> status;
-    private property <bool> enabled: status != Status.loading;
-    callback set-read-unlock(allowed: bool);
-    callback set-write-unlock(allowed: bool);
+    in property <ExtendedStatus> status;
+    private property <bool> enabled: status.status != Status.loading;
+    callback set-read-permission(permitted: bool);
+    callback set-write-permission(permitted: bool);
     changed read-unlock => {
         read-unlock-disp.checked = read-unlock;
     }
@@ -87,9 +94,12 @@ component RangePermissionRow {
         write-unlock-disp.checked = write-unlock;
     }
     changed status => {
-        if status == Status.error {
+        if status.status != Status.loading {
             read-unlock-disp.checked = read-unlock;
             write-unlock-disp.checked = write-unlock;
+        }
+        if status.status == Status.error {
+            ToastMessage.show("Could not modify " + name + ": " + status.message, PaletteExtra.error-foreground);
         }
     }
     HorizontalLayout {
@@ -103,7 +113,7 @@ component RangePermissionRow {
                 checked: read-unlock;
                 enabled: enabled;
                 toggled => {
-                    set-read-unlock(self.checked);
+                    set-read-permission(self.checked);
                 }
             }
         }
@@ -118,7 +128,7 @@ component RangePermissionRow {
                 checked: write-unlock;
                 enabled: enabled;
                 toggled => {
-                    set-write-unlock(self.checked)
+                    set-write-permission(self.checked)
                 }
             }
         }
@@ -130,6 +140,8 @@ component RangePermissionTable {
     in property <[bool]> read-unlock;
     in property <[bool]> write-unlock;
     in property <[ExtendedStatus]> statuses;
+    callback set-read-permission(range-idx: int, permitted: bool);
+    callback set-write-permission(range-idx: int, permitted: bool);
     table := Table {
         preferred-width: 100%;
         preferred-height: 100%;
@@ -140,17 +152,19 @@ component RangePermissionTable {
         row-heights: [RangeTableDesc.row-height];
         VerticalLayout {
             for row[range-idx] in root.names: RangePermissionRow {
+                name: root.names[range-idx];
                 read-unlock: read-unlock[range-idx];
                 write-unlock: write-unlock[range-idx];
-                status: statuses[range-idx].status;
+                status: statuses[range-idx];
                 column-widths: table.column-widths;
                 column-stretches: table.column-stretches;
                 range-idx: range-idx;
                 row-height: table.row-heights[0];
-                changed status => {
-                    if self.status == Status.error {
-                        ToastMessage.show("Could not modify " + names[range-idx] + ": " + statuses[range-idx].message, PaletteExtra.error-foreground);
-                    }
+                set-read-permission(permitted) => {
+                    set-read-permission(range-idx, permitted);
+                }
+                set-write-permission(permitted) => {
+                    set-write-permission(range-idx, permitted);
                 }
             }
         }
@@ -207,12 +221,21 @@ export component PermissionEditor inherits ConfigView {
             if matrix.mbr-supported: MBRPermissionView {
                 unshadow-mbr: selected-user-plist.unshadow-mbr;
                 status: selected-user-plist.unshadow-mbr-status;
+                set-mbr-permission(permitted) => {
+                    PermissionEditorState.set-mbr-permission(root.device-idx, selected-user-idx, permitted);
+                }
             }
             RangePermissionTable {
                 names: matrix.range-names;
                 read-unlock: selected-user-plist.read-unlock;
                 write-unlock: selected-user-plist.write-unlock;
                 statuses: selected-user-plist.range-statuses;
+                set-read-permission(range-idx, permitted) => {
+                    PermissionEditorState.set-read-permission(root.device-idx, selected-user-idx, range-idx, permitted);
+                }
+                set-write-permission(range-idx, permitted) => {
+                    PermissionEditorState.set-write-permission(root.device-idx, selected-user-idx, range-idx, permitted);
+                }
             }
         }
         if authenticated && login-status.status != Status.success: StatusOverlay {

@@ -73,6 +73,9 @@ export global PermissionEditorState {
     callback login(device-idx: int, password: string);
     callback list(device-idx: int);
     callback fetch(device-idx: int, user-idx: int);
+    callback set-mbr-permission(device-idx: int, user-idx: int, permitted: bool);
+    callback set-read-permission(device-idx: int, user-idx: int, range-idx: int, permitted: bool);
+    callback set-write-permission(device-idx: int, user-idx: int, range-idx: int, permitted: bool);
 }
 
 export global MBREditorState {

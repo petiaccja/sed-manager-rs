@@ -1,3 +1,5 @@
+use sed_manager::spec;
+use sed_manager::spec::column_types::{AuthorityRef, LockingRangeRef};
 use sed_manager_gui_elements::ExtendedStatus;
 use slint::{ComponentHandle as _, Model};
 use std::rc::Rc;
@@ -26,6 +28,9 @@ pub fn set_callbacks(backend: Rc<PeekCell<Backend>>, frontend: Frontend) {
     set_callback_login(backend.clone(), frontend.clone());
     set_callback_list(backend.clone(), frontend.clone());
     set_callback_fetch(backend.clone(), frontend.clone());
+    set_callback_mbr_permission(backend.clone(), frontend.clone());
+    set_callback_read_permission(backend.clone(), frontend.clone());
+    set_callback_write_permission(backend.clone(), frontend.clone());
 }
 
 fn set_callback_login(backend: Rc<PeekCell<Backend>>, frontend: Frontend) {
@@ -81,6 +86,71 @@ fn set_callback_fetch(backend: Rc<PeekCell<Backend>>, frontend: Frontend) {
     });
 }
 
+fn set_callback_mbr_permission(backend: Rc<PeekCell<Backend>>, frontend: Frontend) {
+    frontend.clone().with(|window| {
+        let perm_editor_state = window.global::<ui::PermissionEditorState>();
+
+        perm_editor_state.on_set_mbr_permission(move |device_idx, user_idx, permitted| {
+            let frontend = frontend.clone();
+            let backend = backend.clone();
+            let device_idx = device_idx as usize;
+            let user_idx = user_idx as usize;
+            set_mbr_update_progress(&frontend, device_idx, user_idx, ui::ExtendedStatus::loading());
+            let _ = slint::spawn_local(async move {
+                let result = set_mbr_permission(backend.clone(), device_idx, user_idx, permitted).await;
+                set_mbr_update_result(&frontend, device_idx, user_idx, result);
+                if is_class(backend, device_idx, user_idx) {
+                    invalidate_users(&frontend, device_idx, user_idx);
+                }
+            });
+        });
+    });
+}
+
+fn set_callback_read_permission(backend: Rc<PeekCell<Backend>>, frontend: Frontend) {
+    frontend.clone().with(|window| {
+        let perm_editor_state = window.global::<ui::PermissionEditorState>();
+
+        perm_editor_state.on_set_read_permission(move |device_idx, user_idx, range_idx, permitted| {
+            let frontend = frontend.clone();
+            let backend = backend.clone();
+            let device_idx = device_idx as usize;
+            let user_idx = user_idx as usize;
+            let range_idx = range_idx as usize;
+            set_range_update_progress(&frontend, device_idx, user_idx, range_idx, ui::ExtendedStatus::loading());
+            let _ = slint::spawn_local(async move {
+                let result = set_read_permission(backend.clone(), device_idx, user_idx, range_idx, permitted).await;
+                set_read_update_result(&frontend, device_idx, user_idx, range_idx, result);
+                if is_class(backend, device_idx, user_idx) {
+                    invalidate_users(&frontend, device_idx, user_idx);
+                }
+            });
+        });
+    });
+}
+
+fn set_callback_write_permission(backend: Rc<PeekCell<Backend>>, frontend: Frontend) {
+    frontend.clone().with(|window| {
+        let perm_editor_state = window.global::<ui::PermissionEditorState>();
+
+        perm_editor_state.on_set_write_permission(move |device_idx, user_idx, range_idx, permitted| {
+            let frontend = frontend.clone();
+            let backend = backend.clone();
+            let device_idx = device_idx as usize;
+            let user_idx = user_idx as usize;
+            let range_idx = range_idx as usize;
+            set_range_update_progress(&frontend, device_idx, user_idx, range_idx, ui::ExtendedStatus::loading());
+            let _ = slint::spawn_local(async move {
+                let result = set_write_permission(backend.clone(), device_idx, user_idx, range_idx, permitted).await;
+                set_write_update_result(&frontend, device_idx, user_idx, range_idx, result);
+                if is_class(backend, device_idx, user_idx) {
+                    invalidate_users(&frontend, device_idx, user_idx);
+                }
+            });
+        });
+    });
+}
+
 async fn login(backend: Rc<PeekCell<Backend>>, device_idx: usize, password: String) -> Result<(), AppError> {
     let tper = backend.peek_mut(|backend| backend.get_tper(device_idx))?;
     let session = PermissionEditSession::start(&tper, password.as_bytes()).await?;
@@ -109,17 +179,22 @@ async fn list(backend: Rc<PeekCell<Backend>>, device_idx: usize) -> Result<(Vec<
     Ok((user_names, range_names, mbr_supported))
 }
 
+fn get_cached_matrix(
+    backend: &Backend,
+    device_idx: usize,
+) -> Result<(Vec<AuthorityRef>, Vec<LockingRangeRef>), AppError> {
+    backend
+        .get_permission_matrix(device_idx)
+        .map(|(users, ranges)| (Vec::from_iter(users.iter().cloned()), Vec::from_iter(ranges.iter().cloned())))
+}
+
 async fn fetch(
     backend: Rc<PeekCell<Backend>>,
     device_idx: usize,
     user_idx: usize,
 ) -> Result<ui::PermissionList, AppError> {
     let session = backend.peek(|backend| backend.get_permission_session(device_idx))?;
-    let (users, ranges) = backend.peek(|backend| {
-        backend
-            .get_permission_matrix(device_idx)
-            .map(|(users, ranges)| (Vec::from_iter(users.iter().cloned()), Vec::from_iter(ranges.iter().cloned())))
-    })?;
+    let (users, ranges) = backend.peek(|backend| get_cached_matrix(backend, device_idx))?;
     let user = users.get(user_idx).ok_or(AppError::InternalError)?;
     let unshadow_mbr = session.get_mbr_permission(*user).await?;
     let mut read_unlock = Vec::new();
@@ -131,6 +206,51 @@ async fn fetch(
     let mbr_status = ExtendedStatus::success();
     let range_statuses = core::iter::repeat_n(mbr_status.clone(), ranges.len()).collect();
     Ok(ui::PermissionList::new(unshadow_mbr, mbr_status, read_unlock, write_unlock, range_statuses))
+}
+
+async fn set_mbr_permission(
+    backend: Rc<PeekCell<Backend>>,
+    device_idx: usize,
+    user_idx: usize,
+    permitted: bool,
+) -> Result<bool, AppError> {
+    let session = backend.peek(|backend| backend.get_permission_session(device_idx))?;
+    let (users, _ranges) = backend.peek(|backend| get_cached_matrix(backend, device_idx))?;
+    let user = users.get(user_idx).ok_or(AppError::InternalError)?;
+    session.set_mbr_permission(*user, permitted).await?;
+    Ok(session.get_mbr_permission(*user).await.unwrap_or(permitted))
+}
+
+async fn set_read_permission(
+    backend: Rc<PeekCell<Backend>>,
+    device_idx: usize,
+    user_idx: usize,
+    range_idx: usize,
+    permitted: bool,
+) -> Result<bool, AppError> {
+    let session = backend.peek(|backend| backend.get_permission_session(device_idx))?;
+    let (users, ranges) = backend.peek(|backend| get_cached_matrix(backend, device_idx))?;
+    let user = users.get(user_idx).ok_or(AppError::InternalError)?;
+    let range = ranges.get(range_idx).ok_or(AppError::InternalError)?;
+    session.set_read_permission(*user, *range, permitted).await?;
+    // Permission may also be affected by class permissions, better refresh.
+    Ok(session.get_read_permission(*user, *range).await.unwrap_or(permitted))
+}
+
+async fn set_write_permission(
+    backend: Rc<PeekCell<Backend>>,
+    device_idx: usize,
+    user_idx: usize,
+    range_idx: usize,
+    permitted: bool,
+) -> Result<bool, AppError> {
+    let session = backend.peek(|backend| backend.get_permission_session(device_idx))?;
+    let (users, ranges) = backend.peek(|backend| get_cached_matrix(backend, device_idx))?;
+    let user = users.get(user_idx).ok_or(AppError::InternalError)?;
+    let range = ranges.get(range_idx).ok_or(AppError::InternalError)?;
+    session.set_write_permission(*user, *range, permitted).await?;
+    // Permission may also be affected by class permissions, better refresh.
+    Ok(session.get_write_permission(*user, *range).await.unwrap_or(permitted))
 }
 
 fn set_login_status(frontend: &Frontend, device_idx: usize, status: ui::ExtendedStatus) {
@@ -198,4 +318,124 @@ fn set_permission_list(
     } else {
         set_user_status(frontend, device_idx, user_idx, ui::ExtendedStatus::from_result(perm_list));
     }
+}
+
+fn set_mbr_update_progress(frontend: &Frontend, device_idx: usize, user_idx: usize, status: ui::ExtendedStatus) {
+    frontend.with(|window| {
+        let perm_editor_state = window.global::<ui::PermissionEditorState>();
+        if let Some(matrix) = perm_editor_state.get_matrices().row_data(device_idx) {
+            if let Some(mut perm_list) = matrix.permission_lists.row_data(user_idx) {
+                perm_list.unshadow_mbr_status = status;
+                matrix.permission_lists.set_row_data(user_idx, perm_list);
+            }
+        }
+    });
+}
+
+fn set_mbr_update_result(frontend: &Frontend, device_idx: usize, user_idx: usize, result: Result<bool, AppError>) {
+    frontend.with(|window| {
+        let perm_editor_state = window.global::<ui::PermissionEditorState>();
+        if let Ok(permitted) = &result {
+            if let Some(matrix) = perm_editor_state.get_matrices().row_data(device_idx) {
+                if let Some(mut perm_list) = matrix.permission_lists.row_data(user_idx) {
+                    perm_list.unshadow_mbr = *permitted;
+                    matrix.permission_lists.set_row_data(user_idx, perm_list);
+                }
+            }
+        }
+    });
+    set_mbr_update_progress(frontend, device_idx, user_idx, ui::ExtendedStatus::from_result(result));
+}
+
+fn set_range_update_progress(
+    frontend: &Frontend,
+    device_idx: usize,
+    user_idx: usize,
+    range_idx: usize,
+    status: ui::ExtendedStatus,
+) {
+    frontend.with(|window| {
+        let perm_editor_state = window.global::<ui::PermissionEditorState>();
+        if let Some(matrix) = perm_editor_state.get_matrices().row_data(device_idx) {
+            if let Some(perm_list) = matrix.permission_lists.row_data(user_idx) {
+                if let Some(_range_status) = perm_list.range_statuses.row_data(range_idx) {
+                    perm_list.range_statuses.set_row_data(range_idx, status);
+                }
+            }
+        }
+    });
+}
+
+fn set_read_update_result(
+    frontend: &Frontend,
+    device_idx: usize,
+    user_idx: usize,
+    range_idx: usize,
+    result: Result<bool, AppError>,
+) {
+    frontend.with(|window| {
+        let perm_editor_state = window.global::<ui::PermissionEditorState>();
+        if let Ok(permitted) = &result {
+            if let Some(matrix) = perm_editor_state.get_matrices().row_data(device_idx) {
+                if let Some(perm_list) = matrix.permission_lists.row_data(user_idx) {
+                    if let Some(_range_status) = perm_list.range_statuses.row_data(range_idx) {
+                        perm_list.read_unlock.set_row_data(range_idx, *permitted);
+                    }
+                }
+            }
+        }
+    });
+    set_range_update_progress(frontend, device_idx, user_idx, range_idx, ui::ExtendedStatus::from_result(result));
+}
+
+fn set_write_update_result(
+    frontend: &Frontend,
+    device_idx: usize,
+    user_idx: usize,
+    range_idx: usize,
+    result: Result<bool, AppError>,
+) {
+    frontend.with(|window| {
+        let perm_editor_state = window.global::<ui::PermissionEditorState>();
+        if let Ok(permitted) = &result {
+            if let Some(matrix) = perm_editor_state.get_matrices().row_data(device_idx) {
+                if let Some(perm_list) = matrix.permission_lists.row_data(user_idx) {
+                    if let Some(_range_status) = perm_list.range_statuses.row_data(range_idx) {
+                        perm_list.write_unlock.set_row_data(range_idx, *permitted);
+                    }
+                }
+            }
+        }
+    });
+    set_range_update_progress(frontend, device_idx, user_idx, range_idx, ui::ExtendedStatus::from_result(result));
+}
+
+fn is_class(backend: Rc<PeekCell<Backend>>, device_idx: usize, user_idx: usize) -> bool {
+    let user = backend.peek(|backend| {
+        backend
+            .get_permission_matrix(device_idx)
+            .map(|(users, _)| users.get(user_idx).cloned())
+            .ok()
+            .flatten()
+    });
+    // The UIDs are the same for all relevant SSCs.
+    match user.unwrap_or(AuthorityRef::null()) {
+        spec::opal::locking::authority::USERS => true,
+        spec::opal::locking::authority::ADMINS => true,
+        _ => false,
+    }
+}
+
+fn invalidate_users(frontend: &Frontend, device_idx: usize, class_idx: usize) {
+    frontend.with(|window| {
+        let perm_editor_state = window.global::<ui::PermissionEditorState>();
+        if let Some(matrix) = perm_editor_state.get_matrices().row_data(device_idx) {
+            let num_users = matrix.user_statuses.row_count();
+            for user_idx in 0..num_users {
+                if user_idx != class_idx {
+                    matrix.user_statuses.set_row_data(user_idx, ui::ExtendedStatus::loading());
+                }
+            }
+        }
+    });
 }
