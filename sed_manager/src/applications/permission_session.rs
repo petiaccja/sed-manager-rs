@@ -1,7 +1,7 @@
 use crate::messaging::discovery::LockingDescriptor;
 use crate::rpc::Error as RPCError;
 use crate::spec::basic_types::List;
-use crate::spec::column_types::{ACEExpression, ACERef, AuthorityRef, BooleanOp, LockingRangeRef};
+use crate::spec::column_types::{ACEOperand, ACERef, AuthorityRef, BooleanOp, LockingRangeRef};
 use crate::spec::objects::{Authority, LockingRange, ACE};
 use crate::spec::{self, method_id, table_id};
 use crate::tper::{Session, TPer};
@@ -51,20 +51,20 @@ impl PermissionEditSession {
             return Ok(false);
         } else {
             let ace = spec::opal::locking::ace::MBR_CONTROL_SET_DONE_TO_DOR; // The same for all relevant SSCs.
-            let expr: List<ACEExpression> = self.session.get(ace.as_uid(), ACE::BOOLEAN_EXPR).await?;
+            let expr: List<ACEOperand> = self.session.get(ace.as_uid(), ACE::BOOLEAN_EXPR).await?;
             Ok(has_permission(&expr, user))
         }
     }
 
     pub async fn get_read_permission(&self, user: AuthorityRef, range: LockingRangeRef) -> Result<bool, Error> {
         let ace = self.get_ace(range, LockingRange::READ_LOCKED).await?;
-        let expr: List<ACEExpression> = self.session.get(ace.as_uid(), ACE::BOOLEAN_EXPR).await?;
+        let expr: List<ACEOperand> = self.session.get(ace.as_uid(), ACE::BOOLEAN_EXPR).await?;
         Ok(has_permission(&expr, user))
     }
 
     pub async fn get_write_permission(&self, user: AuthorityRef, range: LockingRangeRef) -> Result<bool, Error> {
         let ace = self.get_ace(range, LockingRange::WRITE_LOCKED).await?;
-        let expr: List<ACEExpression> = self.session.get(ace.as_uid(), ACE::BOOLEAN_EXPR).await?;
+        let expr: List<ACEOperand> = self.session.get(ace.as_uid(), ACE::BOOLEAN_EXPR).await?;
         Ok(has_permission(&expr, user))
     }
 
@@ -103,32 +103,32 @@ impl PermissionEditSession {
     }
 }
 
-fn has_permission(expr: &[ACEExpression], authority: AuthorityRef) -> bool {
+fn has_permission(expr: &[ACEOperand], authority: AuthorityRef) -> bool {
     eval_ace_expression(expr, &[authority]).unwrap_or(false)
 }
 
-fn eval_ace_expression(expr: &[ACEExpression], authenticated: &[AuthorityRef]) -> Option<bool> {
+fn eval_ace_expression(expr: &[ACEOperand], authenticated: &[AuthorityRef]) -> Option<bool> {
     let mut stack = Vec::<bool>::new();
     for item in expr {
         match item {
-            ACEExpression::Authority(authority) => {
+            ACEOperand::Authority(authority) => {
                 if authenticated.contains(authority) {
                     stack.push(true);
                 } else {
                     stack.push(false);
                 }
             }
-            ACEExpression::BooleanOp(BooleanOp::And) => {
+            ACEOperand::BooleanOp(BooleanOp::And) => {
                 let rhs = stack.pop()?;
                 let lhs = stack.pop()?;
                 stack.push(lhs && rhs);
             }
-            ACEExpression::BooleanOp(BooleanOp::Or) => {
+            ACEOperand::BooleanOp(BooleanOp::Or) => {
                 let rhs = stack.pop()?;
                 let lhs = stack.pop()?;
                 stack.push(lhs || rhs);
             }
-            ACEExpression::BooleanOp(BooleanOp::Not) => {
+            ACEOperand::BooleanOp(BooleanOp::Not) => {
                 let arg = stack.pop()?;
                 stack.push(!arg);
             }
@@ -163,6 +163,38 @@ mod tests {
         assert!(ranges.contains(&spec::opal::locking::locking::GLOBAL_RANGE));
         assert!(ranges.contains(&spec::opal::locking::locking::RANGE.nth(1).unwrap()));
         assert!(ranges.contains(&spec::opal::locking::locking::RANGE.nth(8).unwrap()));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn mbr_permission() -> Result<(), Error> {
+        let tper = setup_activated_tper().await;
+        let session = PermissionEditSession::start(&tper, MSID_PASSWORD.as_bytes()).await?;
+        let user = spec::opal::locking::authority::USER.nth(1).unwrap();
+        let mbr_permission = session.get_mbr_permission(user).await?;
+        assert_eq!(mbr_permission, false);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn read_permission() -> Result<(), Error> {
+        let tper = setup_activated_tper().await;
+        let session = PermissionEditSession::start(&tper, MSID_PASSWORD.as_bytes()).await?;
+        let user = spec::opal::locking::authority::USER.nth(1).unwrap();
+        let range = spec::opal::locking::locking::GLOBAL_RANGE;
+        let read_permission = session.get_read_permission(user, range).await?;
+        assert_eq!(read_permission, false);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn write_permission() -> Result<(), Error> {
+        let tper = setup_activated_tper().await;
+        let session = PermissionEditSession::start(&tper, MSID_PASSWORD.as_bytes()).await?;
+        let user = spec::opal::locking::authority::USER.nth(1).unwrap();
+        let range = spec::opal::locking::locking::GLOBAL_RANGE;
+        let write_permission = session.get_write_permission(user, range).await?;
+        assert_eq!(write_permission, false);
         Ok(())
     }
 }

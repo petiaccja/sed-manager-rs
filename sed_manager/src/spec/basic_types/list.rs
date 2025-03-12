@@ -54,3 +54,9 @@ impl<Item: TryFrom<Value>> TryFrom<Value> for List<Item> {
         }
     }
 }
+
+impl<Item> FromIterator<Item> for List<Item> {
+    fn from_iter<T: IntoIterator<Item = Item>>(iter: T) -> Self {
+        Self(iter.into_iter().collect())
+    }
+}

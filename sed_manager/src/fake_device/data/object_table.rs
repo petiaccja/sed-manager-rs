@@ -3,20 +3,21 @@ use std::collections::BTreeMap;
 
 use crate::messaging::uid::{TableUID, UID};
 use crate::spec::column_types::{
-    AuthorityRef, CPINRef, KAES256Ref, LockingRangeRef, MBRControlRef, SPRef, TableDescRef,
+    ACERef, AuthorityRef, CPINRef, KAES256Ref, LockingRangeRef, MBRControlRef, SPRef, TableDescRef,
 };
-use crate::spec::objects::{Authority, LockingRange, MBRControl, TableDesc, CPIN, KAES256, SP};
+use crate::spec::objects::{Authority, LockingRange, MBRControl, TableDesc, ACE, CPIN, KAES256, SP};
 use crate::spec::table_id;
 
 use super::object::GenericObject;
 
-pub type AuthorityTable = Table<Authority, AuthorityRef, { table_id::AUTHORITY.as_u64() }>;
-pub type TableTable = Table<TableDesc, TableDescRef, { table_id::TABLE.as_u64() }>;
-pub type MBRControlTable = Table<MBRControl, MBRControlRef, { table_id::MBR_CONTROL.as_u64() }>;
-pub type CPINTable = Table<CPIN, CPINRef, { table_id::C_PIN.as_u64() }>;
-pub type KAES256Table = Table<KAES256, KAES256Ref, { table_id::K_AES_256.as_u64() }>;
-pub type LockingTable = Table<LockingRange, LockingRangeRef, { table_id::LOCKING.as_u64() }>;
-pub type SPTable = Table<SP, SPRef, { table_id::SP.as_u64() }>;
+pub type AuthorityTable = ObjectTable<Authority, AuthorityRef, { table_id::AUTHORITY.as_u64() }>;
+pub type ACETable = ObjectTable<ACE, ACERef, { table_id::ACE.as_u64() }>;
+pub type TableTable = ObjectTable<TableDesc, TableDescRef, { table_id::TABLE.as_u64() }>;
+pub type MBRControlTable = ObjectTable<MBRControl, MBRControlRef, { table_id::MBR_CONTROL.as_u64() }>;
+pub type CPINTable = ObjectTable<CPIN, CPINRef, { table_id::C_PIN.as_u64() }>;
+pub type KAES256Table = ObjectTable<KAES256, KAES256Ref, { table_id::K_AES_256.as_u64() }>;
+pub type LockingTable = ObjectTable<LockingRange, LockingRangeRef, { table_id::LOCKING.as_u64() }>;
+pub type SPTable = ObjectTable<SP, SPRef, { table_id::SP.as_u64() }>;
 
 pub trait GenericTable {
     fn uid(&self) -> TableUID;
@@ -25,12 +26,12 @@ pub trait GenericTable {
     fn next_from(&self, uid: Option<UID>) -> Option<UID>;
 }
 
-pub struct Table<Object, ObjectRef, const THIS_TABLE: u64>(BTreeMap<ObjectRef, Object>)
+pub struct ObjectTable<Object, ObjectRef, const THIS_TABLE: u64>(BTreeMap<ObjectRef, Object>)
 where
     Object: GenericObject,
     ObjectRef: TryFrom<UID> + Into<UID> + Copy;
 
-impl<Object, ObjectRef, const THIS_TABLE: u64> Table<Object, ObjectRef, THIS_TABLE>
+impl<Object, ObjectRef, const THIS_TABLE: u64> ObjectTable<Object, ObjectRef, THIS_TABLE>
 where
     Object: GenericObject,
     ObjectRef: TryFrom<UID> + Into<UID> + Ord + Copy,
@@ -40,7 +41,7 @@ where
     }
 }
 
-impl<Object, ObjectRef, const THIS_TABLE: u64> Deref for Table<Object, ObjectRef, THIS_TABLE>
+impl<Object, ObjectRef, const THIS_TABLE: u64> Deref for ObjectTable<Object, ObjectRef, THIS_TABLE>
 where
     Object: GenericObject,
     ObjectRef: TryFrom<UID> + Into<UID> + Ord + Copy,
@@ -51,7 +52,7 @@ where
     }
 }
 
-impl<Object, ObjectRef, const THIS_TABLE: u64> DerefMut for Table<Object, ObjectRef, THIS_TABLE>
+impl<Object, ObjectRef, const THIS_TABLE: u64> DerefMut for ObjectTable<Object, ObjectRef, THIS_TABLE>
 where
     Object: GenericObject,
     ObjectRef: TryFrom<UID> + Into<UID> + Ord + Copy,
@@ -61,7 +62,21 @@ where
     }
 }
 
-impl<Object, ObjectRef, const THIS_TABLE: u64> GenericTable for Table<Object, ObjectRef, THIS_TABLE>
+impl<Object, ObjectRef, const THIS_TABLE: u64> FromIterator<Object> for ObjectTable<Object, ObjectRef, THIS_TABLE>
+where
+    Object: GenericObject,
+    ObjectRef: TryFrom<UID> + Into<UID> + Ord + Copy,
+{
+    fn from_iter<T: IntoIterator<Item = Object>>(iter: T) -> Self {
+        Self(
+            iter.into_iter()
+                .map(|object| (object.uid().try_into().unwrap_or_else(|_| panic!()), object))
+                .collect(),
+        )
+    }
+}
+
+impl<Object, ObjectRef, const THIS_TABLE: u64> GenericTable for ObjectTable<Object, ObjectRef, THIS_TABLE>
 where
     Object: GenericObject,
     ObjectRef: TryFrom<UID> + Into<UID> + Ord + Copy,

@@ -2,7 +2,7 @@ use as_array::AsArray;
 
 use crate::spec::{
     basic_types::{List, Set},
-    column_types::{ACEExpression, ACERef, Name},
+    column_types::{ACEOperand, ACERef, Name},
 };
 
 use super::cell::Cell;
@@ -13,7 +13,7 @@ pub struct ACE {
     pub uid: ACERef,
     pub name: Name,
     pub common_name: Name,
-    pub boolean_expr: List<ACEExpression>,
+    pub boolean_expr: List<ACEOperand>,
     pub columns: Set<u16>,
 }
 
@@ -36,3 +36,27 @@ impl Default for ACE {
         }
     }
 }
+
+macro_rules! ace_operand {
+    (||) => {
+        ::sed_manager::spec::column_types::ACEOperand::BooleanOp(::sed_manager::spec::column_types::BooleanOp::Or)
+    };
+    (&&) => {
+        ::sed_manager::spec::column_types::ACEOperand::BooleanOp(::sed_manager::spec::column_types::BooleanOp::And)
+    };
+    (!) => {
+        ::sed_manager::spec::column_types::ACEOperand::BooleanOp(::sed_manager::spec::column_types::BooleanOp::Not)
+    };
+    ($authority:expr) => {
+        ::sed_manager::spec::column_types::ACEOperand::Authority($authority)
+    };
+}
+
+macro_rules! ace_expr {
+    ($($operand:tt)*) => {
+        ::sed_manager::spec::basic_types::List(vec![$(::sed_manager::spec::objects::ace::ace_operand!($operand)),*])
+    };
+}
+
+pub(crate) use ace_expr;
+pub(crate) use ace_operand;

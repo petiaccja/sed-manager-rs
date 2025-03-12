@@ -2,7 +2,7 @@ use core::ops::Deref;
 
 use as_array::AsArray;
 
-use crate::fake_device::data::table::{AuthorityTable, CPINTable, GenericTable, TableTable};
+use crate::fake_device::data::object_table::{ACETable, AuthorityTable, CPINTable, GenericTable, TableTable};
 use crate::messaging::value::Bytes;
 use crate::rpc::MethodStatus;
 use crate::spec::column_types::{AuthorityRef, BoolOrBytes, CPINRef};
@@ -27,13 +27,14 @@ use crate::spec::column_types::{AuthorityRef, BoolOrBytes, CPINRef};
 #[as_array_traits(GenericTable)]
 pub struct BasicSP {
     pub table: TableTable,
-    pub authorities: AuthorityTable,
+    pub ace: ACETable,
+    pub authority: AuthorityTable,
     pub c_pin: CPINTable,
 }
 
 impl BasicSP {
     pub fn authenticate(&self, authority_id: AuthorityRef, proof: Option<Bytes>) -> Result<BoolOrBytes, MethodStatus> {
-        let Some(authority) = self.authorities.get(&authority_id) else {
+        let Some(authority) = self.authority.get(&authority_id) else {
             return Err(MethodStatus::InvalidParameter);
         };
         let credential_id = authority.credential;

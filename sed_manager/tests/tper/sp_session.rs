@@ -276,7 +276,7 @@ async fn get_acl() -> Result<(), RPCError> {
     let tper = TPer::new_on_default_com_id(Arc::new(device))?;
     let session = tper.start_session(sp::ADMIN, None, None).await?;
     let acl = session.get_acl(table_id::TABLE.as_uid(), method_id::GET).await?;
-    assert!(acl.is_empty()); // Currently, no ACLs are returned from FakeDevice, but the method doesn't fail.
+    assert_eq!(acl, vec![opal::admin::ace::ANYBODY]);
     Ok(())
 }
 

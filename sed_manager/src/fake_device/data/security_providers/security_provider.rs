@@ -1,5 +1,5 @@
 use crate::fake_device::data::byte_table::ByteTable;
-use crate::fake_device::data::table::GenericTable;
+use crate::fake_device::data::object_table::GenericTable;
 use crate::messaging::uid::{TableUID, UID};
 use crate::messaging::value::{Bytes, Named, Value};
 use crate::rpc::MethodStatus;
@@ -30,10 +30,7 @@ pub trait SecurityProvider {
         pin_length: Option<u16>,
     ) -> Result<(), MethodStatus>;
 
-    fn get_acl(&self, _invoking_id: UID, _method_id: MethodRef) -> Result<Vec<ACERef>, MethodStatus> {
-        // TODO: implement this later if ever needed for testing.
-        Ok(vec![].into())
-    }
+    fn get_acl(&self, invoking_id: UID, method_id: MethodRef) -> Result<Vec<ACERef>, MethodStatus>;
 
     fn get(&self, invoking_id: UID, cell_block: CellBlock) -> Result<BytesOrRowValues, MethodStatus> {
         match decode_cell_block(self, invoking_id, cell_block)? {

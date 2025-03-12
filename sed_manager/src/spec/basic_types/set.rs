@@ -69,3 +69,9 @@ impl<Item: Ord> FromIterator<Item> for Set<Item> {
         Self(iter.into_iter().collect())
     }
 }
+
+impl<Item: Ord, const N: usize> From<[Item; N]> for Set<Item> {
+    fn from(value: [Item; N]) -> Self {
+        value.into_iter().collect()
+    }
+}

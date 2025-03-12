@@ -9,7 +9,7 @@ pub enum Key256 {
 }
 
 #[derive(AlternativeType, PartialEq, Eq, Clone, Debug)]
-pub enum ACEExpression {
+pub enum ACEOperand {
     Authority(AuthorityRef),
     BooleanOp(BooleanOp),
 }
