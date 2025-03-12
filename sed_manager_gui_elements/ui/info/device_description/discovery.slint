@@ -80,10 +80,11 @@ component SplitView {
     HorizontalLayout {
         alignment: stretch;
         spacing: 12px;
-        if root.common-features.length != 0: ScrollView {
+        ScrollView {
             horizontal-scrollbar-policy: always-off;
             min-width: common_feature_view.min-width;
             viewport-height: common_feature_view.min-height;
+            preferred-width: Math.max(common_feature_view.preferred-width, ssc_feature_view.preferred-width);
             common_feature_view := VerticalLayout {
                 spacing: 12px;
                 for feature in root.common-features: Collapsible {
@@ -102,10 +103,12 @@ component SplitView {
                 }
             }
         }
-        if root.ssc-features.length != 0: ScrollView {
+
+        ScrollView {
             horizontal-scrollbar-policy: always-off;
             min-width: ssc_feature_view.min-width;
             viewport-height: ssc_feature_view.min-height;
+            preferred-width: Math.max(common_feature_view.preferred-width, ssc_feature_view.preferred-width);
             ssc_feature_view := VerticalLayout {
                 spacing: 16px;
                 for feature in root.ssc-features: Collapsible {
@@ -140,6 +143,13 @@ export component Discovery {
             ssc-features: discovery.ssc-features;
         }
     }
+}
+
+export component LivePreviewTest_OneSide inherits Discovery {
+    extended-status: { status: Status.success };
+    discovery: {
+        common-features: ExampleData.description.discovery.common-features,
+    };
 }
 
 export component LivePreviewTest_Success inherits Discovery {

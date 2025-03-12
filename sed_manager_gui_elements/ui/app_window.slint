@@ -122,8 +122,6 @@ export component AppWindow inherits Window {
     icon: Icons.sed-manager;
     preferred-width: 960px;
     preferred-height: 600px;
-    min-width: 640px;
-    min-height: 360px;
     private property <bool> loaded: DeviceListState.extended-status.status == Status.success && DeviceListState.tab-names.length != 0;
     VerticalLayout {
         if loaded: DriveTabView { }

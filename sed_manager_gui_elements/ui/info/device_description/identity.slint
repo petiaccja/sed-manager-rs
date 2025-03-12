@@ -74,15 +74,17 @@ export component Identity inherits Island {
                 { name: "Security subsystem classes:", values: security-subsystem-classes },
             ]: HorizontalLayout {
                 spacing: 8px;
-                alignment: space-between;
+                alignment: stretch;
                 Text {
                     text: parameter.name;
-                    vertical-alignment: center;
+                }
+
+                Rectangle {
+                    preferred-width: 100%;
                 }
 
                 for value in parameter.values: Text {
                     text: value;
-                    vertical-alignment: center;
                 }
             }
         }

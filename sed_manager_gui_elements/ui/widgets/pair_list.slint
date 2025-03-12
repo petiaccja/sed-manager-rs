@@ -43,7 +43,6 @@ export component PairList {
     rows := HorizontalLayout {
         alignment: stretch;
         names := VerticalLayout {
-            horizontal-stretch: 1;
             for nvp[i] in root.name_value_pairs: Cell {
                 content: nvp.name;
                 row-number: i;
@@ -51,18 +50,27 @@ export component PairList {
             }
         }
 
-        VerticalSeparator {
-            background: Palette.background;
-        }
-
         values := VerticalLayout {
-            horizontal-stretch: 1;
             for nvp[i] in root.name_value_pairs: Cell {
                 content: nvp.value;
                 row-number: i;
                 cell-type: CellType.value;
             }
         }
+    }
+
+    VerticalSeparator {
+        background: Palette.background;
+        private property <length> threshold: Math.max(names.preferred-width, values.preferred-width);
+        x: {
+            if names.width + values.width > 2 * threshold {
+                rows.width / 2
+            } else if names.preferred-width > values.preferred-width {
+                Math.min(names.preferred-width, names.width)
+            } else {
+                rows.width - Math.min(values.preferred-width, values.width)
+            }
+        };
     }
 }
 
