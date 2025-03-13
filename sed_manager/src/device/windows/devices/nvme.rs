@@ -74,7 +74,13 @@ impl Device for NVMeDevice {
 
     fn security_send(&self, security_protocol: u8, protocol_specific: [u8; 2], data: &[u8]) -> Result<(), DeviceError> {
         let protocol_specific = u16::from_be_bytes(protocol_specific);
-        Ok(scsi::security_protocol_out(&self.file, security_protocol, protocol_specific, data)?)
+        Ok(scsi::security_protocol_out(
+            &self.file,
+            security_protocol,
+            protocol_specific,
+            data,
+            SCSI_NVME_TRANSLATION_INC_512,
+        )?)
     }
 
     fn security_recv(
@@ -85,7 +91,13 @@ impl Device for NVMeDevice {
     ) -> Result<Vec<u8>, DeviceError> {
         let mut data = vec![0; len];
         let protocol_specific = u16::from_be_bytes(protocol_specific);
-        scsi::security_protocol_in(&self.file, security_protocol, protocol_specific, data.as_mut_slice())?;
+        scsi::security_protocol_in(
+            &self.file,
+            security_protocol,
+            protocol_specific,
+            data.as_mut_slice(),
+            SCSI_NVME_TRANSLATION_INC_512,
+        )?;
         Ok(data)
     }
 }
@@ -124,6 +136,11 @@ fn identify_controller(handle: HANDLE) -> Result<IdentifyController, WindowsErro
     stream.seek(SeekFrom::Start((data_offset + response_offset) as u64)).unwrap();
     IdentifyController::deserialize(&mut stream).map_err(|_| WindowsError::Win32(ERROR_INVALID_DATA))
 }
+
+/// The value of the INC_512 flag for SCSI to NVMe translation.
+///
+/// The value of this flag can be found in the NVM Express: SCSI Translation Reference.
+const SCSI_NVME_TRANSLATION_INC_512: bool = false;
 
 #[cfg(test)]
 mod test {
