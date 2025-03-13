@@ -1,4 +1,5 @@
 use crate::device::device::{Device, Interface};
+use crate::device::shared::aligned_array::AlignedArray;
 use crate::device::shared::memory::write_nonoverlapping;
 use crate::device::shared::nvme::IdentifyController;
 use crate::device::windows::utility::file_handle::FileHandle;
@@ -73,13 +74,14 @@ impl Device for NVMeDevice {
     }
 
     fn security_send(&self, security_protocol: u8, protocol_specific: [u8; 2], data: &[u8]) -> Result<(), DeviceError> {
+        let aligned_data = AlignedArray::from_slice(data, 8).unwrap();
         let protocol_specific = u16::from_be_bytes(protocol_specific);
         Ok(scsi::security_protocol_out(
             &self.file,
             security_protocol,
             protocol_specific,
-            data,
-            SCSI_NVME_TRANSLATION_INC_512,
+            aligned_data.as_padded_slice(),
+            SCSI_TRANSLATION_INC_512,
         )?)
     }
 
@@ -89,22 +91,22 @@ impl Device for NVMeDevice {
         protocol_specific: [u8; 2],
         len: usize,
     ) -> Result<Vec<u8>, DeviceError> {
-        let mut data = vec![0; len];
+        let mut data = AlignedArray::zeroed(len, 8).unwrap();
         let protocol_specific = u16::from_be_bytes(protocol_specific);
         scsi::security_protocol_in(
             &self.file,
             security_protocol,
             protocol_specific,
-            data.as_mut_slice(),
-            SCSI_NVME_TRANSLATION_INC_512,
+            data.as_padded_mut_slice(),
+            SCSI_TRANSLATION_INC_512,
         )?;
-        Ok(data)
+        Ok(data.into_vec())
     }
 }
 
 fn identify_controller(handle: HANDLE) -> Result<IdentifyController, WindowsError> {
     const NVME_MAX_LOG_SIZE: usize = 0x1000;
-    let mut buffer = vec![0u8; NVME_MAX_LOG_SIZE + 128];
+    let mut buffer = AlignedArray::zeroed(NVME_MAX_LOG_SIZE + 128, 8).unwrap();
     let data_offset = offset_of!(STORAGE_PROPERTY_QUERY, AdditionalParameters);
     let response_offset = size_of::<STORAGE_PROTOCOL_SPECIFIC_DATA>();
 
@@ -132,7 +134,7 @@ fn identify_controller(handle: HANDLE) -> Result<IdentifyController, WindowsErro
 
     let _ = ioctl_in_out(handle, IOCTL_STORAGE_QUERY_PROPERTY, &mut buffer)?;
 
-    let mut stream = InputStream::from(buffer);
+    let mut stream = InputStream::from(buffer.into_vec());
     stream.seek(SeekFrom::Start((data_offset + response_offset) as u64)).unwrap();
     IdentifyController::deserialize(&mut stream).map_err(|_| WindowsError::Win32(ERROR_INVALID_DATA))
 }
@@ -140,7 +142,7 @@ fn identify_controller(handle: HANDLE) -> Result<IdentifyController, WindowsErro
 /// The value of the INC_512 flag for SCSI to NVMe translation.
 ///
 /// The value of this flag can be found in the NVM Express: SCSI Translation Reference.
-const SCSI_NVME_TRANSLATION_INC_512: bool = false;
+const SCSI_TRANSLATION_INC_512: bool = false;
 
 #[cfg(test)]
 mod test {

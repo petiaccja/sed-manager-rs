@@ -1,3 +1,4 @@
+pub mod aligned_array;
 pub mod memory;
 pub mod nvme;
 pub mod scsi;
