@@ -20,6 +20,8 @@ pub enum Error {
     NotSupported,
     #[error("Permission denied (retry with elevated privileges)")]
     PermissionDenied,
+    #[error("Could not open a device using the explicitly selected interface")]
+    InterfaceMismatch,
     #[error("Unspecified error occured (the exact cause could not be determined)")]
     Unspecified,
     #[error("{}", .0)]

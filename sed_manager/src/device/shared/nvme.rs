@@ -3,9 +3,9 @@ use crate::serialization::{Deserialize, Serialize};
 // NVMe specification:
 // https://nvmexpress.org/wp-content/uploads/NVM-Express-Base-Specification-2_0-2021.06.02-Ratified-5.pdf
 
+#[allow(unused)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Opcode {
-    #[allow(unused)]
     IdentifyController = 0x06, // Not needed for Windows due to specific IOCTL.
     SecuritySend = 0x81,
     SecurityReceive = 0x82,

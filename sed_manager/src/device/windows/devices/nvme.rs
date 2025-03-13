@@ -1,6 +1,6 @@
 use crate::device::device::{Device, Interface};
 use crate::device::shared::memory::write_nonoverlapping;
-use crate::device::shared::nvme::{IdentifyController, Opcode};
+use crate::device::shared::nvme::IdentifyController;
 use crate::device::windows::utility::file_handle::FileHandle;
 use crate::device::windows::utility::ioctl::{ioctl_in_out, STORAGE_PROTOCOL_SPECIFIC_DATA, STORAGE_PROTOCOL_TYPE};
 use crate::device::windows::Error as WindowsError;
@@ -10,11 +10,10 @@ use crate::serialization::{Deserialize, InputStream, Seek as _, SeekFrom};
 use core::mem::offset_of;
 use std::os::windows::raw::HANDLE;
 use std::sync::OnceLock;
+use winapi::shared::winerror::ERROR_INVALID_DATA;
 use winapi::um::winioctl::{IOCTL_STORAGE_QUERY_PROPERTY, STORAGE_PROPERTY_QUERY};
 
-use super::scsi::{
-    ioctl_scsi_passthrough_direct, SCSIPassthroughDirection, DEFAULT_SENSE_LENGTH, DEFAULT_SENSE_OFFSET,
-};
+use super::scsi;
 use super::GenericDevice;
 
 pub struct NVMeDevice {
@@ -25,6 +24,7 @@ pub struct NVMeDevice {
 impl NVMeDevice {
     #[allow(unused)]
     pub fn open(path: &str) -> Result<Self, DeviceError> {
+        // This does not check the interface, you can force NVMe on an unknown device.
         let file = FileHandle::open(path)?;
         Ok(Self { file, cached_identity: OnceLock::new() })
     }
@@ -36,6 +36,17 @@ impl NVMeDevice {
                 let identity = identify_controller(self.file.handle())?;
                 Ok(self.cached_identity.get_or_init(|| identity))
             }
+        }
+    }
+}
+
+impl TryFrom<GenericDevice> for NVMeDevice {
+    type Error = GenericDevice;
+    fn try_from(value: GenericDevice) -> Result<Self, Self::Error> {
+        if let Ok(Interface::NVMe) = value.interface() {
+            Ok(Self { file: value.take_file(), cached_identity: OnceLock::new() })
+        } else {
+            Err(value)
         }
     }
 }
@@ -62,11 +73,8 @@ impl Device for NVMeDevice {
     }
 
     fn security_send(&self, security_protocol: u8, protocol_specific: [u8; 2], data: &[u8]) -> Result<(), DeviceError> {
-        // This is kind of annoying, because security send will NOT modify this data.
-        // Still have to copy it to make it mutable for the borrow checker.
-        let mut copy = Vec::from(data);
-        let opcode = Opcode::SecuritySend;
-        Ok(security_command(self.file.handle(), &mut copy, opcode, security_protocol, protocol_specific)?)
+        let protocol_specific = u16::from_be_bytes(protocol_specific);
+        Ok(scsi::security_protocol_out(&self.file, security_protocol, protocol_specific, data)?)
     }
 
     fn security_recv(
@@ -75,21 +83,10 @@ impl Device for NVMeDevice {
         protocol_specific: [u8; 2],
         len: usize,
     ) -> Result<Vec<u8>, DeviceError> {
-        let mut data = vec![0_u8; len];
-        let opcode = Opcode::SecurityReceive;
-        security_command(self.file.handle(), &mut data, opcode, security_protocol, protocol_specific)?;
+        let mut data = vec![0; len];
+        let protocol_specific = u16::from_be_bytes(protocol_specific);
+        scsi::security_protocol_in(&self.file, security_protocol, protocol_specific, data.as_mut_slice())?;
         Ok(data)
-    }
-}
-
-impl TryFrom<GenericDevice> for NVMeDevice {
-    type Error = GenericDevice;
-    fn try_from(value: GenericDevice) -> Result<Self, Self::Error> {
-        if let Ok(Interface::NVMe) = value.interface() {
-            Ok(Self { file: value.take_file(), cached_identity: OnceLock::new() })
-        } else {
-            Err(value)
-        }
     }
 }
 
@@ -125,61 +122,7 @@ fn identify_controller(handle: HANDLE) -> Result<IdentifyController, WindowsErro
 
     let mut stream = InputStream::from(buffer);
     stream.seek(SeekFrom::Start((data_offset + response_offset) as u64)).unwrap();
-    match IdentifyController::deserialize(&mut stream) {
-        Ok(identity) => Ok(identity),
-        Err(_) => panic!("controller identify structure deserialization should not fail"),
-    }
-}
-
-fn scsi_passthrough_cdb(
-    opcode: Opcode,
-    security_protocol: u8,
-    protocol_specific: [u8; 2],
-    buffer_len: usize,
-) -> [u8; 16] {
-    assert!(buffer_len <= u32::MAX as usize);
-
-    let cdb0 = match opcode {
-        Opcode::SecuritySend => 0xB5,
-        Opcode::SecurityReceive => 0xA2,
-        _ => panic!("opcode not supported with SCSI passthrough"),
-    };
-
-    [
-        cdb0,
-        security_protocol,
-        protocol_specific[0],
-        protocol_specific[1],
-        0,
-        0,
-        ((buffer_len >> 24) & 0xFF) as u8,
-        ((buffer_len >> 16) & 0xFF) as u8,
-        ((buffer_len >> 8) & 0xFF) as u8,
-        ((buffer_len) & 0xFF) as u8,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-    ]
-}
-
-fn security_command(
-    device: HANDLE,
-    data: &mut [u8],
-    opcode: Opcode,
-    security_protocol: u8,
-    protocol_specific: [u8; 2],
-) -> Result<(), WindowsError> {
-    let cdb = scsi_passthrough_cdb(opcode, security_protocol, protocol_specific, data.len());
-    let direction = match opcode {
-        Opcode::SecuritySend => SCSIPassthroughDirection::Out,
-        Opcode::SecurityReceive => SCSIPassthroughDirection::In,
-        _ => panic!("opcode {:?} should not be used with security commands", opcode),
-    };
-    ioctl_scsi_passthrough_direct(device, data, direction, cdb, DEFAULT_SENSE_LENGTH, DEFAULT_SENSE_OFFSET)
-        .map_err(|e| e.into())
+    IdentifyController::deserialize(&mut stream).map_err(|_| WindowsError::Win32(ERROR_INVALID_DATA))
 }
 
 #[cfg(test)]

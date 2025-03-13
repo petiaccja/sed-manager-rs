@@ -73,6 +73,10 @@ impl GenericDevice {
         Ok(Self { file, cached_desc: OnceLock::new() })
     }
 
+    pub fn get_file(&self) -> &FileHandle {
+        &self.file
+    }
+
     pub fn take_file(self) -> FileHandle {
         self.file
     }
