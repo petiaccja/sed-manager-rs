@@ -39,7 +39,7 @@ jobs:
       with:
         name: sed-manager-${{ matrix.os_name }}-${{ matrix.cargo_profile }}
         path: |
-          "${{ github.workspace }}/target/${{ matrix.cargo_folder }}/sed-manager-gui*"
-          !"${{ github.workspace }}/target/${{ matrix.cargo_folder }}/*.d"
-          !"${{ github.workspace }}/target/${{ matrix.cargo_folder }}/*.pdb"
+          ${{ github.workspace }}/target/${{ matrix.cargo_folder }}/sed-manager-gui*
+          !${{ github.workspace }}/target/${{ matrix.cargo_folder }}/*.d
+          !${{ github.workspace }}/target/${{ matrix.cargo_folder }}/*.pdb
         if-no-files-found: error
