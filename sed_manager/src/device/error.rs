@@ -30,6 +30,8 @@ pub enum Error {
 
     #[error("The ATA command was aborted")]
     ATACommandAborted,
+    #[error("The SCSI command failed")]
+    SCSICommandFailed,
 
     #[error("Unspecified error occured (the exact cause could not be determined)")]
     Unspecified,

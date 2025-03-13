@@ -8,7 +8,6 @@ use crate::device::shared::aligned_array::AlignedArray;
 use crate::device::shared::memory::write_nonoverlapping;
 use crate::device::shared::scsi::{SecurityProtocolIn, SecurityProtocolOut};
 use crate::device::windows::utility::{file_handle::FileHandle, ioctl::ioctl_in_out};
-use crate::device::windows::Error as WindowsError;
 use crate::device::{Device, Error as DeviceError, Interface};
 use crate::serialization::SerializeBinary;
 
@@ -96,7 +95,7 @@ pub fn security_protocol_in(
     security_protocol_specific: u16,
     data_in: &mut [u8],
     inc_512: bool,
-) -> Result<(), WindowsError> {
+) -> Result<(), DeviceError> {
     let command = SecurityProtocolIn::new(security_protocol, security_protocol_specific, data_in.len() as u32, inc_512);
     let cdb = command.to_bytes().expect("command serialization should be infallible");
     assert!(cdb.len() <= 16);
@@ -120,7 +119,11 @@ pub fn security_protocol_in(
 
     let mut command_buffer = vec![0; command.SenseInfoOffset as usize + command.SenseInfoLength as usize];
     write_nonoverlapping(&command, &mut command_buffer);
-    ioctl_in_out(file_handle.handle(), IOCTL_SCSI_PASS_THROUGH_DIRECT, &mut command_buffer).map(|_| ())
+    let _ = ioctl_in_out(file_handle.handle(), IOCTL_SCSI_PASS_THROUGH_DIRECT, &mut command_buffer)?;
+    if command.ScsiStatus != 0 {
+        return Err(DeviceError::SCSICommandFailed);
+    }
+    Ok(())
 }
 
 pub fn security_protocol_out(
@@ -129,7 +132,7 @@ pub fn security_protocol_out(
     security_protocol_specific: u16,
     data_out: &[u8],
     inc_512: bool,
-) -> Result<(), WindowsError> {
+) -> Result<(), DeviceError> {
     let command =
         SecurityProtocolOut::new(security_protocol, security_protocol_specific, data_out.len() as u32, inc_512);
     let cdb = command.to_bytes().expect("command serialization should be infallible");
@@ -154,7 +157,11 @@ pub fn security_protocol_out(
 
     let mut command_buffer = vec![0; command.SenseInfoOffset as usize + command.SenseInfoLength as usize];
     write_nonoverlapping(&command, &mut command_buffer);
-    ioctl_in_out(file_handle.handle(), IOCTL_SCSI_PASS_THROUGH_DIRECT, &mut command_buffer).map(|_| ())
+    let _ = ioctl_in_out(file_handle.handle(), IOCTL_SCSI_PASS_THROUGH_DIRECT, &mut command_buffer)?;
+    if command.ScsiStatus != 0 {
+        return Err(DeviceError::SCSICommandFailed);
+    }
+    Ok(())
 }
 
 const PTR_LENGTH: usize = size_of::<usize>();
