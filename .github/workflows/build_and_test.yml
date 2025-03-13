@@ -1,4 +1,4 @@
-name: Build & test
+name: build_and_test
 
 on:
   push:
@@ -23,6 +23,8 @@ jobs:
             cargo_folder: debug
           - cargo_profile: release
             cargo_folder: release
+          - os: windows-latest
+            os_name: windows
     runs-on: windows-latest
 
     steps:
@@ -35,6 +37,8 @@ jobs:
     - name: "Upload binaries"
       uses: actions/upload-artifact@v4
       with:
-        name: sed-manager-gui-${{ matrix.cargo_profile }}
-        path: "${{ github.workspace }}/target/${{ matrix.cargo_folder }}/sed-manager-gui*"
+        name: sed-manager-${{ matrix.os_name }}-${{ matrix.cargo_profile }}
+        path: |
+          "${{ github.workspace }}/target/${{ matrix.cargo_folder }}/sed-manager-gui"
+          "${{ github.workspace }}/target/${{ matrix.cargo_folder }}/sed-manager-gui.exe"
         if-no-files-found: error

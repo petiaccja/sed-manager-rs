@@ -1,0 +1,51 @@
+name: release
+
+on:
+  workflow_run:
+    workflows: [build_and_test]
+    branches: [v**.**]
+    types: [completed]
+
+jobs:
+  create_release:
+    permissions:
+      actions: read
+      contents: write  
+    env:
+      GH_TOKEN: ${{ github.token }}
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch != null }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_branch }}
+
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: sed-manager-windows-release
+          path: ${{github.workspace}}/SEDManager_Windows_x86_64
+          github-token: ${{github.token}}
+          run-id: ${{ github.event.workflow_run.id }}
+
+      - name: Download Linux artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: sed-manager-linux-release
+          path: ${{github.workspace}}/SEDManager_Linux_x86_64
+          github-token: ${{github.token}}
+          run-id: ${{ github.event.workflow_run.id }}
+
+      - name: Zip artifacts
+        shell: bash
+        working-directory: ${{github.workspace}}
+        run: |
+          zip -r SEDManager_Windows_x86_64.zip SEDManager_Windows_x86_64
+          zip -r SEDManager_Linux_x86_64.zip SEDManager_Linux_x86_64
+
+      - name: Create release
+        shell: bash
+        run: |
+          gh release create ${{ github.event.workflow_run.head_branch }}
+          gh release upload ${{ github.event.workflow_run.head_branch }} ${{github.workspace}}/SEDManager_Windows_x86_64.zip#SEDManager_Windows_x86_64
+          gh release upload ${{ github.event.workflow_run.head_branch }} ${{github.workspace}}/SEDManager_Linux_x86_64.zip#SEDManager_Linux_x86_64
