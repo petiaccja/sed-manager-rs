@@ -17,7 +17,7 @@ jobs:
       fail-fast: false
       matrix:
         cargo_profile: [dev, release]
-        os: [windows-latest]
+        os: [windows-latest, ubuntu-latest]
         include:
           - cargo_profile: dev
             cargo_folder: debug
@@ -25,12 +25,22 @@ jobs:
             cargo_folder: release
           - os: windows-latest
             os_name: windows
-    runs-on: windows-latest
+          - os: ubuntu-latest
+            os_name: linux
+    runs-on: ${{ matrix.os }}
 
     steps:
     - uses: actions/checkout@v4
+
+    - name: Install dependencies
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        sudo apt install libfontconfig-dev
+        sudo apt install libfreetype-dev        
+
     - name: Build
       run: cargo build --profile ${{ matrix.cargo_profile }} --verbose
+
     - name: Run tests
       run: cargo test --profile ${{ matrix.cargo_profile }} --verbose
 

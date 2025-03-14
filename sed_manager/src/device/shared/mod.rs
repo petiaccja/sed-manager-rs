@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 pub mod aligned_array;
 pub mod ata;
 pub mod memory;
