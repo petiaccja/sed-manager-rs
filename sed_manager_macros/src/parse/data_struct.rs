@@ -1,5 +1,7 @@
-use quote::quote;
+use quote::{quote, ToTokens};
 use syn::{self, spanned::Spanned};
+
+use super::ByteOrder;
 
 pub struct DataStruct {
     pub name: syn::Ident,
@@ -13,10 +15,16 @@ pub struct DataField {
     pub layout: LayoutAttr,
 }
 
+pub struct BitField {
+    pub bits: core::ops::Range<u8>,
+    pub ty: syn::Type,
+}
+
 pub struct LayoutAttr {
-    pub offset: Option<usize>,
-    pub bits: Option<core::ops::Range<usize>>,
-    pub round: Option<usize>,
+    pub byte_order: ByteOrder,
+    pub offset: Option<u64>,
+    pub round: Option<u64>,
+    pub bit_field: Option<BitField>,
 }
 
 impl DataStruct {
@@ -30,10 +38,16 @@ impl DataStruct {
         let layout = match find_layout_attr(&ast.attrs) {
             Some(attr) => {
                 let layout = LayoutAttr::parse(attr)?;
-                if layout.offset.is_some() || layout.bits.is_some() {
+                if layout.offset.is_some() {
                     return Err(syn::Error::new(
                         attr.meta.span(),
-                        "only the `round` layout parameter is supported for the struct",
+                        "the `offset` layout parameter is not allowed on a struct",
+                    ));
+                }
+                if layout.bit_field.is_some() {
+                    return Err(syn::Error::new(
+                        attr.meta.span(),
+                        "the `bit_field` layout parameter is not allowed on a struct",
                     ));
                 }
                 layout
@@ -76,14 +90,48 @@ impl LayoutAttr {
                     return Err(syn::Error::new(assign.left.span(), "expected `param = value`"));
                 };
                 if path.path.is_ident("offset") {
-                    layout.offset = Some(parse_literal_usize(&assign.right)?);
-                } else if path.path.is_ident("bits") {
-                    layout.bits = Some(parse_literal_range_usize(&assign.right)?);
+                    layout.offset = Some(parse_literal_u64(&assign.right)?);
                 } else if path.path.is_ident("round") {
-                    layout.round = Some(parse_literal_usize(&assign.right)?);
+                    layout.round = Some(parse_literal_u64(&assign.right)?);
                 } else {
-                    return Err(syn::Error::new(path.span(), "invalid layout param"));
+                    return Err(syn::Error::new(
+                        path.span(),
+                        format!("invalid layout param `{}`", path.path.to_token_stream()),
+                    ));
                 };
+            } else if let syn::Expr::Call(call) = expr {
+                let syn::Expr::Path(name) = *call.func else {
+                    return Err(syn::Error::new(call.func.span(), "expected `param(values...)`"));
+                };
+                if name.path.is_ident("bit_field") {
+                    let (Some(ty), Some(bits)) = (call.args.get(0), call.args.get(1)) else {
+                        return Err(syn::Error::new(call.args.span(), "expected `bit_field(type, bits)`"));
+                    };
+                    let ty = syn::parse2::<syn::Type>(ty.into_token_stream())?;
+                    let bits = if let Ok(range) = parse_literal_range_u8(bits) {
+                        range
+                    } else {
+                        let single_bit = parse_literal_u8(bits)?;
+                        single_bit..(single_bit + 1)
+                    };
+                    layout.bit_field = Some(BitField { bits, ty });
+                } else {
+                    return Err(syn::Error::new(
+                        name.span(),
+                        format!("invalid layout param `{}`", name.to_token_stream().to_string()),
+                    ));
+                }
+            } else if let syn::Expr::Path(path) = expr {
+                if path.path.is_ident("big_endian") {
+                    layout.byte_order = ByteOrder::BigEndian;
+                } else if path.path.is_ident("little_endian") {
+                    layout.byte_order = ByteOrder::LittleEndian;
+                } else {
+                    return Err(syn::Error::new(
+                        path.span(),
+                        format!("invalid layout param `{}`", path.to_token_stream().to_string()),
+                    ));
+                }
             } else {
                 return Err(syn::Error::new(expr.span(), "invalid layout param"));
             };
@@ -94,11 +142,11 @@ impl LayoutAttr {
 
 impl Default for LayoutAttr {
     fn default() -> Self {
-        LayoutAttr { offset: None, bits: None, round: None }
+        LayoutAttr { byte_order: ByteOrder::Inherit, offset: None, bit_field: None, round: None }
     }
 }
 
-fn parse_literal_usize(expr: &syn::Expr) -> Result<usize, syn::Error> {
+fn parse_literal_u64(expr: &syn::Expr) -> Result<u64, syn::Error> {
     let syn::Expr::Lit(literal) = expr else {
         return Err(syn::Error::new(expr.span(), "expected an integer literal"));
     };
@@ -108,7 +156,17 @@ fn parse_literal_usize(expr: &syn::Expr) -> Result<usize, syn::Error> {
     integral.base10_parse()
 }
 
-fn parse_literal_range_usize(expr: &syn::Expr) -> Result<core::ops::Range<usize>, syn::Error> {
+fn parse_literal_u8(expr: &syn::Expr) -> Result<u8, syn::Error> {
+    let syn::Expr::Lit(literal) = expr else {
+        return Err(syn::Error::new(expr.span(), "expected an integer literal"));
+    };
+    let syn::Lit::Int(integral) = &literal.lit else {
+        return Err(syn::Error::new(expr.span(), "expected an integer literal"));
+    };
+    integral.base10_parse()
+}
+
+fn parse_literal_range_u8(expr: &syn::Expr) -> Result<core::ops::Range<u8>, syn::Error> {
     let syn::Expr::Range(range) = expr else {
         return Err(syn::Error::new(expr.span(), "expected a range expression"));
     };
@@ -119,8 +177,8 @@ fn parse_literal_range_usize(expr: &syn::Expr) -> Result<core::ops::Range<usize>
         return Err(syn::Error::new(expr.span(), "expected a range with both start and end specified"));
     };
 
-    let start = parse_literal_usize(start_expr.as_ref())?;
-    let end_value = parse_literal_usize(end_expr.as_ref())?;
+    let start = parse_literal_u8(start_expr.as_ref())?;
+    let end_value = parse_literal_u8(end_expr.as_ref())?;
     let end = match range.limits {
         syn::RangeLimits::HalfOpen(_) => end_value,
         syn::RangeLimits::Closed(_) => end_value + 1,
@@ -128,7 +186,7 @@ fn parse_literal_range_usize(expr: &syn::Expr) -> Result<core::ops::Range<usize>
     if start >= end {
         return Err(syn::Error::new(expr.span(), "empty range is not accepted"));
     }
-    Ok(core::ops::Range::<usize> { start: start, end: end })
+    Ok(core::ops::Range::<u8> { start, end })
 }
 
 fn find_layout_attr(attrs: &[syn::Attribute]) -> Option<&syn::Attribute> {
@@ -191,17 +249,17 @@ mod tests {
     }
 
     #[test]
-    fn parse_struct_bits_attr() {
+    fn parse_struct_bit_field_attr() {
         let stream = quote! {
             struct Data {
-                #[layout(bits=1..2)]
+                #[layout(bit_field(u16, 1..2))]
                 pub field : u32,
             }
         };
         let input = syn::parse2::<DeriveInput>(stream).unwrap();
         let struct_desc = DataStruct::parse(&input).unwrap();
         assert_eq!(struct_desc.fields.len(), 1);
-        assert_eq!(struct_desc.fields[0].layout.bits.clone().unwrap(), (1..2));
+        assert_eq!(struct_desc.fields[0].layout.bit_field.as_ref().unwrap().bits, (1..2));
     }
 
     #[test]
@@ -222,7 +280,7 @@ mod tests {
     fn parse_struct_multiple_attrs() {
         let stream = quote! {
             struct Data {
-                #[layout(offset = 2, bits=1..2)]
+                #[layout(offset = 2, bit_field(u16, 1..2))]
                 pub field : u32,
             }
         };
@@ -230,6 +288,6 @@ mod tests {
         let struct_desc = DataStruct::parse(&input).unwrap();
         assert_eq!(struct_desc.fields.len(), 1);
         assert_eq!(struct_desc.fields[0].layout.offset.unwrap(), 2);
-        assert_eq!(struct_desc.fields[0].layout.bits.clone().unwrap(), (1..2));
+        assert_eq!(struct_desc.fields[0].layout.bit_field.as_ref().unwrap().bits, (1..2));
     }
 }

@@ -12,6 +12,7 @@ pub enum Opcode {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[layout(little_endian)]
 pub struct IdentifyController {
     pub vendor_id: u16,
     pub subsystem_vendor_id: u16,
