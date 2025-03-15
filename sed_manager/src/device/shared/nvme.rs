@@ -11,6 +11,8 @@ pub enum Opcode {
     SecurityReceive = 0x82,
 }
 
+// This data structure is actually little endian so the Serialize/Deserialize derives
+// do not work properly here.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct IdentifyController {
     pub vendor_id: u16,
@@ -20,6 +22,8 @@ pub struct IdentifyController {
     pub firmware_revision: [u8; 8],
     pub recommended_arbitration_burst: u8,
     pub ieee_oui_identifier: [u8; 3],
+    #[layout(offset = 256, bits=7..=7)]
+    pub security_send_receive_supported: bool,
 }
 
 impl IdentifyController {

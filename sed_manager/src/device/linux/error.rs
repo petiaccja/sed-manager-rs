@@ -1,10 +1,29 @@
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Error {}
+use nix::errno::Errno;
 
-impl core::error::Error for Error {}
+use crate::device;
 
-impl core::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Unknown Linux platform error")
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum Error {
+    #[error("{}", .0)]
+    Errno(Errno),
+    #[error("Could not open /dev/disk/by-id to list devices")]
+    NoDiskFolder,
+}
+
+impl From<Error> for device::Error {
+    fn from(value: Error) -> Self {
+        Self::PlatformError(value)
+    }
+}
+
+impl From<Errno> for Error {
+    fn from(value: Errno) -> Self {
+        Self::Errno(value)
+    }
+}
+
+impl From<Errno> for device::Error {
+    fn from(value: Errno) -> Self {
+        Self::PlatformError(Error::Errno(value))
     }
 }
