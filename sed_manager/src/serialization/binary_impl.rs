@@ -1,6 +1,7 @@
 use super::error::Error;
 use super::serialize::{Deserialize, Serialize};
 use super::stream::{InputStream, ItemWrite, OutputStream};
+use super::ByteOrder;
 use super::ItemRead;
 
 macro_rules! serialize_integer {
@@ -8,7 +9,11 @@ macro_rules! serialize_integer {
         impl Serialize<u8> for $int_ty {
             type Error = Error;
             fn serialize(&self, stream: &mut OutputStream<u8>) -> Result<(), Self::Error> {
-                stream.write_exact(&self.to_be_bytes());
+                if stream.byte_order == ByteOrder::BigEndian {
+                    stream.write_exact(&self.to_be_bytes());
+                } else {
+                    stream.write_exact(&self.to_le_bytes());
+                }
                 Ok(())
             }
         }
@@ -32,7 +37,11 @@ macro_rules! deserialize_integer {
                     Err(Error::EndOfStream)
                 } else {
                     partial.rotate_left(num_bytes_read);
-                    Ok(<$int_ty>::from_be_bytes(partial))
+                    if stream.byte_order == ByteOrder::BigEndian {
+                        Ok(<$int_ty>::from_be_bytes(partial))
+                    } else {
+                        Ok(<$int_ty>::from_le_bytes(partial))
+                    }
                 }
             }
         }
@@ -111,30 +120,51 @@ where
 
 #[cfg(test)]
 mod tests {
+    use crate::serialization::ByteOrder;
+
     use super::*;
 
     macro_rules! test_serialize {
-        ($int_ty:ty, $name:ident) => {
+        ($int_ty:ty, $name_be:ident, $name_le:ident) => {
             #[test]
-            fn $name() {
-                let input = <$int_ty>::max_value();
+            fn $name_be() {
+                let init_data: [u8; size_of::<$int_ty>()] = core::array::from_fn(|idx| idx as u8);
+                let input = <$int_ty>::from_be_bytes(init_data.clone());
                 let mut os = OutputStream::<u8>::new();
+                os.byte_order = ByteOrder::BigEndian;
                 assert!(input.serialize(&mut os).is_ok());
-                let mut is = InputStream::<u8>::from(os.take());
+                let buf = os.take();
+                assert_eq!(&buf, &init_data);
+                let mut is = InputStream::<u8>::from(buf);
+                is.byte_order = ByteOrder::BigEndian;
+                let value = <$int_ty>::deserialize(&mut is).unwrap();
+                assert_eq!(input, value);
+            }
+            #[test]
+            fn $name_le() {
+                let init_data: [u8; size_of::<$int_ty>()] = core::array::from_fn(|idx| idx as u8);
+                let input = <$int_ty>::from_le_bytes(init_data.clone());
+                let mut os = OutputStream::<u8>::new();
+                os.byte_order = ByteOrder::LittleEndian;
+                assert!(input.serialize(&mut os).is_ok());
+                let buf = os.take();
+                assert_eq!(&buf, &init_data);
+                let mut is = InputStream::<u8>::from(buf);
+                is.byte_order = ByteOrder::LittleEndian;
                 let value = <$int_ty>::deserialize(&mut is).unwrap();
                 assert_eq!(input, value);
             }
         };
     }
 
-    test_serialize!(u8, serialize_u8);
-    test_serialize!(u16, serialize_u16);
-    test_serialize!(u32, serialize_u32);
-    test_serialize!(u64, serialize_u64);
-    test_serialize!(i8, serialize_i8);
-    test_serialize!(i16, serialize_i16);
-    test_serialize!(i32, serialize_i32);
-    test_serialize!(i64, serialize_i64);
+    test_serialize!(u8, serialize_u8_be, serialize_u8_le);
+    test_serialize!(u16, serialize_u16_be, serialize_u16_le);
+    test_serialize!(u32, serialize_u32_be, serialize_u32_le);
+    test_serialize!(u64, serialize_u64_be, serialize_u64_le);
+    test_serialize!(i8, serialize_i8_be, serialize_i8_le);
+    test_serialize!(i16, serialize_i16_be, serialize_i16_le);
+    test_serialize!(i32, serialize_i32_be, serialize_i32_le);
+    test_serialize!(i64, serialize_i64_be, serialize_i64_le);
 
     #[test]
     fn serialize_bool() {

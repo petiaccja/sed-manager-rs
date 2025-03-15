@@ -52,44 +52,44 @@ pub trait SecuritySubsystemClass: Feature {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[layout(round = 12)]
 pub struct TPerDescriptor {
-    #[layout(offset = 0, bits = 1..=1)]
+    #[layout(offset = 0, bit_field(u8, 6))]
     pub com_id_mgmt_supported: bool,
-    #[layout(offset = 0, bits = 3..=3)]
+    #[layout(offset = 0, bit_field(u8, 4))]
     pub streaming_supported: bool,
-    #[layout(offset = 0, bits = 4..=4)]
+    #[layout(offset = 0, bit_field(u8, 3))]
     pub buffer_mgmt_supported: bool,
-    #[layout(offset = 0, bits = 5..=5)]
+    #[layout(offset = 0, bit_field(u8, 2))]
     pub ack_nak_supported: bool,
-    #[layout(offset = 0, bits = 6..=6)]
+    #[layout(offset = 0, bit_field(u8, 1))]
     pub async_supported: bool,
-    #[layout(offset = 0, bits = 7..=7)]
+    #[layout(offset = 0, bit_field(u8, 0))]
     pub sync_supported: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[layout(round = 12)]
 pub struct LockingDescriptor {
-    #[layout(offset = 0, bits = 0..=0)]
+    #[layout(offset = 0, bit_field(u8, 7))]
     pub hw_reset_supported: bool,
-    #[layout(offset = 0, bits = 1..=1)]
+    #[layout(offset = 0, bit_field(u8, 6))]
     pub mbr_shadowing_not_supported: bool,
-    #[layout(offset = 0, bits = 2..=2)]
+    #[layout(offset = 0, bit_field(u8, 5))]
     pub mbr_done: bool,
-    #[layout(offset = 0, bits = 3..=3)]
+    #[layout(offset = 0, bit_field(u8, 4))]
     pub mbr_enabled: bool,
-    #[layout(offset = 0, bits = 4..=4)]
+    #[layout(offset = 0, bit_field(u8, 3))]
     pub media_encryption: bool,
-    #[layout(offset = 0, bits = 5..=5)]
+    #[layout(offset = 0, bit_field(u8, 2))]
     pub locked: bool,
-    #[layout(offset = 0, bits = 6..=6)]
+    #[layout(offset = 0, bit_field(u8, 1))]
     pub locking_enabled: bool,
-    #[layout(offset = 0, bits = 7..=7)]
+    #[layout(offset = 0, bit_field(u8, 0))]
     pub locking_supported: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct GeometryDescriptor {
-    #[layout(offset = 0, bits = 7..=7)]
+    #[layout(offset = 0, bit_field(u8, 0))]
     pub align: bool,
     #[layout(offset = 8)]
     pub logical_block_size: u32,
@@ -99,25 +99,25 @@ pub struct GeometryDescriptor {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct DataRemovalMechanism {
-    #[layout(offset = 2, bits = 2..=2)]
+    #[layout(offset = 2, bit_field(u8, 5))]
     pub vendor_erase: bool,
-    #[layout(offset = 2, bits = 5..=5)]
+    #[layout(offset = 2, bit_field(u8, 2))]
     pub crypto_erase: bool,
-    #[layout(offset = 2, bits = 6..=6)]
+    #[layout(offset = 2, bit_field(u8, 1))]
     pub block_erase: bool,
-    #[layout(offset = 2, bits = 7..=7)]
+    #[layout(offset = 2, bit_field(u8, 0))]
     pub overwrite: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct DataRemovalTime {
-    #[layout(offset = 0, bits = 2..=2)]
+    #[layout(offset = 0, bit_field(u8, 5))]
     pub vendor_erase_unit: bool,
-    #[layout(offset = 0, bits = 5..=5)]
+    #[layout(offset = 0, bit_field(u8, 2))]
     pub crypto_erase_unit: bool,
-    #[layout(offset = 0, bits = 6..=6)]
+    #[layout(offset = 0, bit_field(u8, 1))]
     pub block_erase_unit: bool,
-    #[layout(offset = 0, bits = 7..=7)]
+    #[layout(offset = 0, bit_field(u8, 0))]
     pub overwrite_unit: bool,
     #[layout(offset = 1)]
     pub overwrite_amount: u16,
@@ -132,9 +132,9 @@ pub struct DataRemovalTime {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[layout(round = 32)]
 pub struct DataRemovalDescriptor {
-    #[layout(offset = 1, bits = 6..=6)]
+    #[layout(offset = 1, bit_field(u8, 1))]
     pub interrupted: bool,
-    #[layout(offset = 1, bits = 7..=7)]
+    #[layout(offset = 1, bit_field(u8, 0))]
     pub processing: bool,
     #[layout(offset = 2)]
     pub supported_mechanism: DataRemovalMechanism,
@@ -144,15 +144,15 @@ pub struct DataRemovalDescriptor {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[layout(round = 12)]
 pub struct BlockSIDAuthDescriptor {
-    #[layout(offset = 0, bits = 4..=4)]
+    #[layout(offset = 0, bit_field(u8, 3))]
     pub locking_sp_frozen: bool,
-    #[layout(offset = 0, bits = 5..=5)]
+    #[layout(offset = 0, bit_field(u8, 2))]
     pub locking_sp_freeze_supported: bool,
-    #[layout(offset = 0, bits = 6..=6)]
+    #[layout(offset = 0, bit_field(u8, 1))]
     pub sid_authentication_blocked: bool,
-    #[layout(offset = 0, bits = 7..=7)]
+    #[layout(offset = 0, bit_field(u8, 0))]
     pub sid_pin_same_as_msid: bool,
-    #[layout(offset = 1, bits = 7..=7)]
+    #[layout(offset = 1, bit_field(u8, 0))]
     pub hw_reset_unblocks: bool,
 }
 
@@ -170,7 +170,7 @@ pub struct AdditionalDataStoreTablesDescriptor {
 pub struct EnterpriseDescriptor {
     pub base_com_id: u16,
     pub num_com_ids: u16,
-    #[layout(offset = 4, bits = 7..=7)]
+    #[layout(offset = 4, bit_field(u8, 0))]
     pub no_range_crossing: bool,
 }
 
@@ -179,7 +179,7 @@ pub struct EnterpriseDescriptor {
 pub struct OpalV1Descriptor {
     pub base_com_id: u16,
     pub num_com_ids: u16,
-    #[layout(offset = 4, bits = 7..=7)]
+    #[layout(offset = 4, bit_field(u8, 0))]
     pub no_range_crossing: bool,
 }
 
@@ -188,7 +188,7 @@ pub struct OpalV1Descriptor {
 pub struct OpalV2Descriptor {
     pub base_com_id: u16,
     pub num_com_ids: u16,
-    #[layout(offset = 4, bits = 7..=7)]
+    #[layout(offset = 4, bit_field(u8, 0))]
     pub no_range_crossing: bool,
     #[layout(offset = 5)]
     pub num_locking_admins_supported: u16,
@@ -232,7 +232,7 @@ pub struct PyriteV2Descriptor {
 pub struct RubyDescriptor {
     pub base_com_id: u16,
     pub num_com_ids: u16,
-    #[layout(offset = 4, bits = 7..=7)]
+    #[layout(offset = 4, bit_field(u8, 0))]
     pub no_range_crossing: bool,
     #[layout(offset = 5)]
     pub num_locking_admins_supported: u16,
@@ -252,42 +252,51 @@ pub struct KeyPerIODescriptor {
     pub initial_owner_pw: OwnerPasswordState,
     pub reverted_owner_pw: OwnerPasswordState,
     pub num_kpio_admins_supported: u16,
-    #[layout(offset = 12, bits = 2..=2)]
+
+    #[layout(offset = 12, bit_field(u8, 5))]
     pub replay_protection_enabled: bool,
-    #[layout(offset = 12, bits = 3..=3)]
+    #[layout(offset = 12, bit_field(u8, 4))]
     pub replay_protection_supported: bool,
-    #[layout(offset = 12, bits = 4..=4)]
+    #[layout(offset = 12, bit_field(u8, 3))]
     pub incorrect_key_detection_supported: bool,
-    #[layout(offset = 12, bits = 5..=5)]
+    #[layout(offset = 12, bit_field(u8, 2))]
     pub tweak_key_required: bool,
-    #[layout(offset = 12, bits = 6..=6)]
+    #[layout(offset = 12, bit_field(u8, 1))]
     pub kpio_scope: bool,
-    #[layout(offset = 12, bits = 7..=7)]
+    #[layout(offset = 12, bit_field(u8, 0))]
     pub kpio_enabled: bool,
+
     #[layout(offset = 13)]
     pub max_key_uid_len: u16,
-    #[layout(offset = 15, bits = 7..=7)]
+
+    #[layout(offset = 15, bit_field(u8, 0))]
     pub kmip_key_injection_supported: bool,
-    #[layout(offset = 17, bits = 5..=5)]
+
+    #[layout(offset = 17, bit_field(u8, 2))]
     pub nist_rsa_oaep_supported: bool,
-    #[layout(offset = 17, bits = 6..=6)]
+    #[layout(offset = 17, bit_field(u8, 1))]
     pub nist_aes_gcm_supported: bool,
-    #[layout(offset = 17, bits = 7..=7)]
+    #[layout(offset = 17, bit_field(u8, 0))]
     pub nist_aes_kw_supported: bool,
-    #[layout(offset = 19, bits = 7..=7)]
+
+    #[layout(offset = 19, bit_field(u8, 0))]
     pub rsa2k_wrapping_supported: bool,
-    #[layout(offset = 21, bits = 5..=5)]
+
+    #[layout(offset = 21, bit_field(u8, 0))]
     pub aes256_wrapping_supported: bool,
-    #[layout(offset = 21, bits = 6..=6)]
+    #[layout(offset = 21, bit_field(u8, 1))]
     pub rsa3k_wrapping_supported: bool,
-    #[layout(offset = 21, bits = 7..=7)]
+    #[layout(offset = 21, bit_field(u8, 2))]
     pub rsa4k_wrapping_supported: bool,
-    #[layout(offset = 23, bits = 6..=6)]
+
+    #[layout(offset = 23, bit_field(u8, 1))]
     pub pki_kek_transport_supported: bool,
-    #[layout(offset = 23, bits = 7..=7)]
+    #[layout(offset = 23, bit_field(u8, 0))]
     pub plaintext_kek_prov_supported: bool,
+
     #[layout(offset = 28)]
     pub num_keks_supported: u32,
+
     pub total_key_tags_supported: u32,
     pub max_key_tags_per_namespace: u16,
     pub get_nonce_cmd_nonce_len: u8,
@@ -323,9 +332,7 @@ pub enum FeatureDescriptor {
 #[layout(round = 4)]
 struct RawFeatureDescriptor {
     feature_code: FeatureCode,
-    #[layout(offset = 2, bits = 4..=7)]
     version: u8,
-    #[layout(offset = 3)]
     payload: VecWithLen<u8, u8>,
 }
 

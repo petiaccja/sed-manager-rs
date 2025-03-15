@@ -1,5 +1,11 @@
 use super::Error;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ByteOrder {
+    BigEndian,
+    LittleEndian,
+}
+
 pub trait ItemRead<Item> {
     fn read_exact<'me>(&'me mut self, count: usize) -> Result<&'me [Item], Error>;
     fn read_one<'me>(&'me mut self) -> Result<&'me Item, Error>;
@@ -32,11 +38,14 @@ pub trait Seek {
 pub struct InputStream<Item> {
     data: Vec<Item>,
     stream_pos: usize,
+    pub byte_order: ByteOrder,
 }
 
 pub struct OutputStream<Item> {
     data: Vec<Item>,
     stream_pos: usize,
+    pub byte_order: ByteOrder,
+    pub overwrite: fn(&mut Item, Item),
 }
 
 impl<Item> InputStream<Item> {
@@ -44,17 +53,24 @@ impl<Item> InputStream<Item> {
     where
         Item: Clone,
     {
-        InputStream { data: items.into(), stream_pos: 0 }
+        InputStream { data: items.into(), stream_pos: 0, byte_order: ByteOrder::BigEndian }
     }
 
     pub fn take(self) -> Vec<Item> {
         self.data
     }
+
+    pub fn with_byte_order<Output>(&mut self, byte_order: ByteOrder, f: impl FnOnce(&mut Self) -> Output) -> Output {
+        let restore = core::mem::replace(&mut self.byte_order, byte_order);
+        let result = f(self);
+        let _ = core::mem::replace(&mut self.byte_order, restore);
+        result
+    }
 }
 
 impl<Item> From<Vec<Item>> for InputStream<Item> {
     fn from(value: Vec<Item>) -> Self {
-        Self { data: value, stream_pos: 0 }
+        Self { data: value, stream_pos: 0, byte_order: ByteOrder::BigEndian }
     }
 }
 
@@ -63,13 +79,18 @@ where
     Item: Clone,
 {
     fn from(value: &[Item]) -> Self {
-        Self { data: value.into(), stream_pos: 0 }
+        Self { data: value.into(), stream_pos: 0, byte_order: ByteOrder::BigEndian }
     }
 }
 
 impl<Item> OutputStream<Item> {
     pub fn new() -> OutputStream<Item> {
-        OutputStream { data: vec![], stream_pos: 0 }
+        OutputStream {
+            data: vec![],
+            stream_pos: 0,
+            byte_order: ByteOrder::BigEndian,
+            overwrite: Self::default_overwrite,
+        }
     }
     pub fn take(&mut self) -> Vec<Item> {
         self.data.drain(..).collect()
@@ -79,6 +100,28 @@ impl<Item> OutputStream<Item> {
     }
     pub fn as_mut_slice(&mut self) -> &[Item] {
         self.data.as_mut_slice()
+    }
+
+    pub fn with_byte_order<Output>(&mut self, byte_order: ByteOrder, f: impl FnOnce(&mut Self) -> Output) -> Output {
+        let restore = core::mem::replace(&mut self.byte_order, byte_order);
+        let result = f(self);
+        let _ = core::mem::replace(&mut self.byte_order, restore);
+        result
+    }
+
+    pub fn with_overwrite<Output>(
+        &mut self,
+        overwrite: fn(&mut Item, Item),
+        f: impl FnOnce(&mut Self) -> Output,
+    ) -> Output {
+        let restore = core::mem::replace(&mut self.overwrite, overwrite);
+        let result = f(self);
+        let _ = core::mem::replace(&mut self.overwrite, restore);
+        result
+    }
+
+    pub fn default_overwrite(old: &mut Item, new: Item) {
+        let _ = core::mem::replace(old, new);
     }
 }
 
@@ -166,17 +209,12 @@ impl<Item> ItemWrite<Item> for OutputStream<Item> {
         Item: Clone,
     {
         for item in items {
-            if self.stream_pos < self.data.len() {
-                self.data[self.stream_pos] = item.clone();
-            } else {
-                self.data.push(item.clone());
-            }
-            self.stream_pos += 1;
+            self.write_one(item.clone());
         }
     }
     fn write_one(&mut self, item: Item) {
         if self.stream_pos < self.data.len() {
-            self.data[self.stream_pos] = item;
+            (self.overwrite)(&mut self.data[self.stream_pos], item);
         } else {
             self.data.push(item);
         }

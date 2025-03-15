@@ -14,9 +14,9 @@ struct OffsetData {
 
 #[derive(Serialize, Deserialize)]
 struct BitField {
-    #[layout(offset = 2, bits = 0..1)]
+    #[layout(offset = 2, bit_field(u16, 15))]
     pub field_a: bool,
-    #[layout(offset = 2, bits = 1..16)]
+    #[layout(offset = 2, bit_field(u16, 0..15))]
     pub field_b: u16,
 }
 
@@ -24,6 +24,17 @@ struct BitField {
 struct RoundedField {
     #[layout(round = 8)]
     pub field_a: u16,
+}
+
+#[derive(Serialize, Deserialize)]
+#[layout(little_endian)]
+struct ByteOrderData {
+    #[layout(little_endian)]
+    pub field_a: u16,
+    #[layout(big_endian)]
+    pub field_b: u16,
+    // Inherit
+    pub field_c: u16,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -190,4 +201,23 @@ fn deserialize_enum_fallback() {
     let mut is = InputStream::from(os.take());
     let output = FallbackEnum::deserialize(&mut is).unwrap();
     assert_eq!(FallbackEnum::Fallback, output);
+}
+
+#[test]
+fn deserialize_struct_byte_order() {
+    let mut is = InputStream::<u8>::new(&DESERIALIZE_DATA);
+    let data = ByteOrderData::deserialize(&mut is).unwrap();
+    assert_eq!(data.field_a, 0x2301);
+    assert_eq!(data.field_b, 0x4567);
+    assert_eq!(data.field_c, 0xAB89);
+    assert_eq!(is.stream_position(), 6);
+}
+
+#[test]
+fn serialize_struct_byte_order() {
+    let mut os = OutputStream::<u8>::new();
+    let data = ByteOrderData { field_a: 0x2301, field_b: 0x4567, field_c: 0xAB89 };
+    data.serialize(&mut os).unwrap();
+    assert_eq!(os.as_slice(), &DESERIALIZE_DATA[0..6]);
+    assert_eq!(os.stream_position(), 6);
 }

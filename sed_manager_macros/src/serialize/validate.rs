@@ -1,13 +1,15 @@
-use core::fmt::Display;
-use core::ops::Range;
+use quote::ToTokens;
 
 use crate::parse::data_struct::{DataField, DataStruct, LayoutAttr};
 use crate::parse::numeric_enum::NumericEnum;
+use core::fmt::Display;
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum LayoutError {
     InvalidStructLayoutParam(String),
     ReversedFields((String, String)),
     OverlappingFields((String, String)),
+    BitFieldTypeMismatch(String),
 }
 
 impl Display for LayoutError {
@@ -23,6 +25,9 @@ impl Display for LayoutError {
             LayoutError::OverlappingFields((a, b)) => {
                 f.write_fmt(format_args!("fields `{}` and `{}` cannot overlap", a, b))
             }
+            LayoutError::BitFieldTypeMismatch(field) => {
+                write!(f, "bit field of `{field}` contains fields with different types")
+            }
         }
     }
 }
@@ -31,8 +36,8 @@ fn validate_struct_layout_params(layout: &LayoutAttr) -> Result<(), LayoutError>
     if layout.offset.is_some() {
         return Err(LayoutError::InvalidStructLayoutParam(String::from("offset")));
     }
-    if layout.bits.is_some() {
-        return Err(LayoutError::InvalidStructLayoutParam(String::from("bits")));
+    if layout.bit_field.is_some() {
+        return Err(LayoutError::InvalidStructLayoutParam(String::from("bit_field")));
     }
     Ok(())
 }
@@ -41,55 +46,67 @@ fn validate_field_layout_params(_layout: &LayoutAttr) -> Result<(), LayoutError>
     Ok(())
 }
 
-fn next_byte(bit: usize) -> usize {
-    (bit + 7) / 8 * 8
+fn separate_groups(fields: &[DataField]) -> impl Iterator<Item = &[DataField]> {
+    fields.chunk_by(|first, second| first.layout.offset.is_some() && first.layout.offset == second.layout.offset)
 }
 
-fn field_locations(fields: &[DataField]) -> Vec<Range<usize>> {
-    let mut locations = Vec::<Range<usize>>::new();
-    for field in fields {
-        let base = match field.layout.offset {
-            Some(offset) => 8 * offset as usize,
-            None => match locations.last() {
-                Some(last) => next_byte(last.end),
-                None => 0,
-            },
-        };
-        let span = match &field.layout.bits {
-            Some(bits) => (base + bits.start)..(base + bits.end),
-            None => base..(base + 8), // Estimate size as 1 byte. May add a const SIZE to Serialize trait.
-        };
-        let rounded = match field.layout.round {
-            Some(round) => {
-                let len = span.end - base;
-                let rounded = (len + 8 * round - 1) / (8 * round) * (8 * round);
-                (span.start)..(base + rounded)
+fn are_offsets_increasing<'a>(groups: impl Iterator<Item = &'a [DataField]>) -> Result<(), LayoutError> {
+    let is_sorted = groups.filter_map(|group| group.first().map(|first| first.layout.offset).flatten()).is_sorted();
+    if is_sorted {
+        Ok(())
+    } else {
+        Err(LayoutError::ReversedFields(("<unknown>".into(), "<unknown>".into())))
+    }
+}
+
+fn is_group_bit_field(group: &[DataField]) -> bool {
+    group.iter().any(|field| field.layout.bit_field.is_some())
+}
+
+fn is_group_valid(group: &[DataField]) -> Result<(), LayoutError> {
+    if is_group_bit_field(group) {
+        let mut bit_fields = group.iter().filter_map(|field| field.layout.bit_field.as_ref()).collect::<Vec<_>>();
+        if bit_fields.len() != group.len() {
+            let first_non_bit_field = group.iter().find(|field| field.layout.bit_field.is_none()).unwrap();
+            let first_bit_field = group.iter().find(|field| field.layout.bit_field.is_some()).unwrap();
+            return Err(LayoutError::OverlappingFields((
+                first_bit_field.name.to_string(),
+                first_non_bit_field.name.to_string(),
+            )));
+        }
+
+        let same_types = bit_fields.iter().all(|&bit_field| {
+            bit_field.ty.to_token_stream().to_string() == bit_fields[0].ty.to_token_stream().to_string()
+        });
+        if !same_types {
+            return Err(LayoutError::BitFieldTypeMismatch(group[0].name.to_string()));
+        }
+
+        bit_fields.sort_by_key(|bit_field| bit_field.bits.start);
+        for idx in 1..bit_fields.len() {
+            let prev_bf = &bit_fields[idx - 1].bits;
+            let cur_bf = &bit_fields[idx].bits;
+            if prev_bf.end > cur_bf.start {
+                let prev_field = group
+                    .iter()
+                    .find(|field| field.layout.bit_field.as_ref().is_some_and(|bf| &bf.bits == prev_bf))
+                    .unwrap();
+                let cur_field = group
+                    .iter()
+                    .find(|field| field.layout.bit_field.as_ref().is_some_and(|bf| &bf.bits == cur_bf))
+                    .unwrap();
+                return Err(LayoutError::OverlappingFields((prev_field.name.to_string(), cur_field.name.to_string())));
             }
-            None => span,
-        };
-        locations.push(rounded);
-    }
-    locations
-}
+        }
 
-fn validate_location_reversal(descs: &[DataField], locs: &[Range<usize>]) -> Result<(), LayoutError> {
-    assert!(descs.len() == locs.len());
-    for i in 1..descs.len() {
-        if locs[i - 1].start > locs[i].start {
-            return Err(LayoutError::ReversedFields((descs[i - 1].name.to_string(), descs[i].name.to_string())));
+        Ok(())
+    } else {
+        if group.len() >= 2 {
+            Err(LayoutError::OverlappingFields((group[0].name.to_string(), group[1].name.to_string())))
+        } else {
+            Ok(())
         }
     }
-    Ok(())
-}
-
-fn validate_location_overlap(descs: &[DataField], locs: &[Range<usize>]) -> Result<(), LayoutError> {
-    assert!(descs.len() == locs.len());
-    for i in 1..descs.len() {
-        if locs[i - 1].end > locs[i].start {
-            return Err(LayoutError::OverlappingFields((descs[i - 1].name.to_string(), descs[i].name.to_string())));
-        }
-    }
-    Ok(())
 }
 
 pub fn validate_struct(desc: &DataStruct) -> Result<(), LayoutError> {
@@ -97,9 +114,10 @@ pub fn validate_struct(desc: &DataStruct) -> Result<(), LayoutError> {
     for field in &desc.fields {
         validate_field_layout_params(&field.layout)?;
     }
-    let locs = field_locations(&desc.fields);
-    validate_location_reversal(&desc.fields, &locs)?; // Should do before overlap.
-    validate_location_overlap(&desc.fields, &locs)?;
+    are_offsets_increasing(separate_groups(&desc.fields))?;
+    for group in separate_groups(&desc.fields) {
+        is_group_valid(group)?;
+    }
     Ok(())
 }
 
@@ -109,9 +127,23 @@ pub fn validate_enum(_desc: &NumericEnum) -> Result<(), LayoutError> {
 
 #[cfg(test)]
 mod tests {
+    use crate::parse::data_struct::BitField;
+
     use super::*;
     use proc_macro2::Span;
     use quote::quote;
+
+    macro_rules! name {
+        ($name:expr) => {
+            syn::Ident::new($name, Span::call_site())
+        };
+    }
+
+    macro_rules! ty {
+        ($ty:ty) => {
+            syn::Type::Verbatim(quote! {$ty})
+        };
+    }
 
     #[test]
     fn validate_struct_layout_flagged_offset() {
@@ -125,177 +157,126 @@ mod tests {
 
     #[test]
     fn validate_struct_layout_flagged_bits() {
-        let layout = LayoutAttr { bits: Some(0..1), ..Default::default() };
+        let layout = LayoutAttr { bit_field: Some(BitField { bits: 1..2, ty: ty!(u8) }), ..Default::default() };
         if let Err(LayoutError::InvalidStructLayoutParam(p)) = validate_struct_layout_params(&layout) {
-            assert_eq!(p, "bits");
+            assert_eq!(p, "bit_field");
         } else {
             assert!(false);
         }
     }
 
     #[test]
-    fn field_locations_consecutive() {
-        let fields = [
-            DataField {
-                name: syn::Ident::new("_0", Span::call_site()),
-                ty: syn::Type::Verbatim(quote! {u8}),
-                layout: LayoutAttr { ..Default::default() },
-            },
-            DataField {
-                name: syn::Ident::new("_1", Span::call_site()),
-                ty: syn::Type::Verbatim(quote! {u8}),
-                layout: LayoutAttr { ..Default::default() },
-            },
-        ];
-        let locations = field_locations(&fields);
-        assert_eq!(locations[0], 0..8);
-        assert_eq!(locations[1], 8..16);
+    fn good_default() {
+        let desc = DataStruct {
+            fields: vec![
+                DataField { name: name!("_0"), ty: ty!(u8), layout: LayoutAttr { ..Default::default() } },
+                DataField { name: name!("_1"), ty: ty!(u8), layout: LayoutAttr { ..Default::default() } },
+            ],
+            layout: LayoutAttr::default(),
+            name: name!("S"),
+        };
+        assert_eq!(validate_struct(&desc), Ok(()));
     }
 
     #[test]
-    fn field_locations_disjoint_bitfields() {
-        let fields = [
-            DataField {
-                name: syn::Ident::new("_0", Span::call_site()),
-                ty: syn::Type::Verbatim(quote! {u8}),
-                layout: LayoutAttr { bits: Some(1..2), ..Default::default() },
-            },
-            DataField {
-                name: syn::Ident::new("_1", Span::call_site()),
-                ty: syn::Type::Verbatim(quote! {u8}),
-                layout: LayoutAttr { bits: Some(3..4), ..Default::default() },
-            },
-        ];
-        let locations = field_locations(&fields);
-        assert_eq!(locations[0], 1..2);
-        assert_eq!(locations[1], 11..12);
+    fn good_offset() {
+        let desc = DataStruct {
+            fields: vec![
+                DataField {
+                    name: name!("_0"),
+                    ty: ty!(u8),
+                    layout: LayoutAttr { offset: Some(0), ..Default::default() },
+                },
+                DataField {
+                    name: name!("_1"),
+                    ty: ty!(u8),
+                    layout: LayoutAttr { offset: Some(1), ..Default::default() },
+                },
+            ],
+            layout: LayoutAttr::default(),
+            name: name!("S"),
+        };
+        assert_eq!(validate_struct(&desc), Ok(()));
     }
 
     #[test]
-    fn field_locations_joint_bitfields() {
-        let fields = [
-            DataField {
-                name: syn::Ident::new("_0", Span::call_site()),
-                ty: syn::Type::Verbatim(quote! {u8}),
-                layout: LayoutAttr { bits: Some(1..2), offset: Some(0), ..Default::default() },
-            },
-            DataField {
-                name: syn::Ident::new("_1", Span::call_site()),
-                ty: syn::Type::Verbatim(quote! {u8}),
-                layout: LayoutAttr { bits: Some(3..4), offset: Some(0), ..Default::default() },
-            },
-        ];
-        let locations = field_locations(&fields);
-        assert_eq!(locations[0], 1..2);
-        assert_eq!(locations[1], 3..4);
+    fn good_bit_field() {
+        let desc = DataStruct {
+            fields: vec![
+                DataField {
+                    name: name!("_0"),
+                    ty: ty!(u8),
+                    layout: LayoutAttr {
+                        offset: Some(0),
+                        bit_field: Some(BitField { bits: 1..2, ty: ty!(u8) }),
+                        ..Default::default()
+                    },
+                },
+                DataField {
+                    name: name!("_1"),
+                    ty: ty!(u8),
+                    layout: LayoutAttr {
+                        offset: Some(0),
+                        bit_field: Some(BitField { bits: 2..3, ty: ty!(u8) }),
+                        ..Default::default()
+                    },
+                },
+            ],
+            layout: LayoutAttr::default(),
+            name: name!("S"),
+        };
+        assert_eq!(validate_struct(&desc), Ok(()));
     }
 
     #[test]
-    fn field_locations_bitfield_follow() {
-        let fields = [
-            DataField {
-                name: syn::Ident::new("_0", Span::call_site()),
-                ty: syn::Type::Verbatim(quote! {u8}),
-                layout: LayoutAttr { bits: Some(1..2), offset: Some(0), ..Default::default() },
-            },
-            DataField {
-                name: syn::Ident::new("_1", Span::call_site()),
-                ty: syn::Type::Verbatim(quote! {u8}),
-                layout: LayoutAttr { ..Default::default() },
-            },
-        ];
-        let locations = field_locations(&fields);
-        assert_eq!(locations[0], 1..2);
-        assert_eq!(locations[1], 8..16);
+    fn offset_overlapping() {
+        let desc = DataStruct {
+            fields: vec![
+                DataField {
+                    name: name!("_0"),
+                    ty: ty!(u8),
+                    layout: LayoutAttr { offset: Some(2), ..Default::default() },
+                },
+                DataField {
+                    name: name!("_1"),
+                    ty: ty!(u8),
+                    layout: LayoutAttr { offset: Some(2), ..Default::default() },
+                },
+            ],
+            layout: LayoutAttr::default(),
+            name: name!("S"),
+        };
+        let expected = Err(LayoutError::OverlappingFields(("_0".into(), "_1".into())));
+        assert_eq!(validate_struct(&desc), expected);
     }
 
     #[test]
-    fn field_locations_offset() {
-        let fields = [
-            DataField {
-                name: syn::Ident::new("_0", Span::call_site()),
-                ty: syn::Type::Verbatim(quote! {u8}),
-                layout: LayoutAttr { offset: Some(8), ..Default::default() },
-            },
-            DataField {
-                name: syn::Ident::new("_1", Span::call_site()),
-                ty: syn::Type::Verbatim(quote! {u8}),
-                layout: LayoutAttr { ..Default::default() },
-            },
-        ];
-        let locations = field_locations(&fields);
-        assert_eq!(locations[0], 64..72);
-        assert_eq!(locations[1], 72..80);
-    }
-
-    #[test]
-    fn field_locations_reversed() {
-        let fields = [
-            DataField {
-                name: syn::Ident::new("_0", Span::call_site()),
-                ty: syn::Type::Verbatim(quote! {u8}),
-                layout: LayoutAttr { offset: Some(8), ..Default::default() },
-            },
-            DataField {
-                name: syn::Ident::new("_1", Span::call_site()),
-                ty: syn::Type::Verbatim(quote! {u8}),
-                layout: LayoutAttr { offset: Some(6), ..Default::default() },
-            },
-            DataField {
-                name: syn::Ident::new("_2", Span::call_site()),
-                ty: syn::Type::Verbatim(quote! {u8}),
-                layout: LayoutAttr { ..Default::default() },
-            },
-        ];
-        let locations = field_locations(&fields);
-        assert_eq!(locations[0], 64..72);
-        assert_eq!(locations[1], 48..56);
-        assert_eq!(locations[2], 56..64);
-    }
-
-    #[test]
-    fn validate_overlap_flagged() {
-        let descs = [
-            DataField {
-                name: syn::Ident::new("_0", Span::call_site()).into(),
-                ty: syn::Type::Verbatim(quote! {u8}),
-                layout: LayoutAttr { ..Default::default() },
-            },
-            DataField {
-                name: syn::Ident::new("_1", Span::call_site()).into(),
-                ty: syn::Type::Verbatim(quote! {u8}),
-                layout: LayoutAttr { ..Default::default() },
-            },
-        ];
-        let locs = [0..16, 8..24];
-        if let Err(LayoutError::OverlappingFields((a, b))) = validate_location_overlap(&descs, &locs) {
-            assert_eq!(a, "_0");
-            assert_eq!(b, "_1");
-        } else {
-            assert!(false);
-        }
-    }
-
-    #[test]
-    fn validate_reversed_flagged() {
-        let descs = [
-            DataField {
-                name: syn::Ident::new("_0", Span::call_site()),
-                ty: syn::Type::Verbatim(quote! {u8}),
-                layout: LayoutAttr { ..Default::default() },
-            },
-            DataField {
-                name: syn::Ident::new("_1", Span::call_site()),
-                ty: syn::Type::Verbatim(quote! {u8}),
-                layout: LayoutAttr { ..Default::default() },
-            },
-        ];
-        let locs = [32..40, 0..8];
-        if let Err(LayoutError::ReversedFields((a, b))) = validate_location_reversal(&descs, &locs) {
-            assert_eq!(a, "_0");
-            assert_eq!(b, "_1");
-        } else {
-            assert!(false);
-        }
+    fn bit_field_overlapping() {
+        let desc = DataStruct {
+            fields: vec![
+                DataField {
+                    name: name!("_0"),
+                    ty: ty!(u8),
+                    layout: LayoutAttr {
+                        offset: Some(0),
+                        bit_field: Some(BitField { bits: 1..4, ty: ty!(u8) }),
+                        ..Default::default()
+                    },
+                },
+                DataField {
+                    name: name!("_1"),
+                    ty: ty!(u8),
+                    layout: LayoutAttr {
+                        offset: Some(0),
+                        bit_field: Some(BitField { bits: 3..8, ty: ty!(u8) }),
+                        ..Default::default()
+                    },
+                },
+            ],
+            layout: LayoutAttr::default(),
+            name: name!("S"),
+        };
+        let expected = Err(LayoutError::OverlappingFields(("_0".into(), "_1".into())));
+        assert_eq!(validate_struct(&desc), expected);
     }
 }

@@ -12,7 +12,7 @@ pub struct SecurityProtocolIn {
     opcode: Opcode,
     security_protocol: u8,
     security_protocol_specific: u16,
-    #[layout(offset = 4, bits = 0..=0)]
+    #[layout(offset = 4, bit_field(u8, 7))]
     inc_512: bool,
     #[layout(offset = 6)]
     allocation_length: u32,
@@ -25,7 +25,7 @@ pub struct SecurityProtocolOut {
     opcode: Opcode,
     security_protocol: u8,
     security_protocol_specific: u16,
-    #[layout(offset = 4, bits = 0..=0)]
+    #[layout(offset = 4, bit_field(u8, 7))]
     inc_512: bool,
     #[layout(offset = 6)]
     transfer_length: u32,
