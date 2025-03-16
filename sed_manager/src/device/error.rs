@@ -23,12 +23,16 @@ pub enum Error {
     #[error("Feature not supported by SEDManager")]
     NotImplemented,
     #[error("Feature not supported by the device")]
-    NotSupported,
+    NotSupported, // TODO: remove this on Windows
     #[error("Permission denied (retry with elevated privileges)")]
     PermissionDenied,
     #[error("Could not open a device using the explicitly selected interface")]
-    InterfaceMismatch,
+    InterfaceMismatch, // TODO: remove this on Windows
+    #[error("The drive interface is not supported")]
+    InterfaceNotSupported,
 
+    #[error("Security send/receive is not supported by the device")]
+    SecurityNotSupported,
     #[error("The ATA command was aborted")]
     ATACommandAborted,
     #[error("The SCSI command failed")]

@@ -37,11 +37,15 @@ impl Device for ATADevice {
         Ok(String::from_utf8_lossy(&self.cached_desc.firmware_revision).trim().to_string())
     }
 
+    fn is_security_supported(&self) -> bool {
+        self.cached_desc.trusted_computing_supported
+    }
+
     fn security_send(&self, _security_protocol: u8, _protocol_specific: [u8; 2], _data: &[u8]) -> Result<(), Error> {
-        if self.cached_desc.trusted_computing_supported {
+        if self.is_security_supported() {
             Err(Error::NotImplemented)
         } else {
-            Err(Error::NotSupported)
+            Err(Error::SecurityNotSupported)
         }
     }
 
@@ -51,10 +55,10 @@ impl Device for ATADevice {
         _protocol_specific: [u8; 2],
         _len: usize,
     ) -> Result<Vec<u8>, Error> {
-        if self.cached_desc.trusted_computing_supported {
+        if self.is_security_supported() {
             Err(Error::NotImplemented)
         } else {
-            Err(Error::NotSupported)
+            Err(Error::SecurityNotSupported)
         }
     }
 }

@@ -33,21 +33,25 @@ impl Device for NVMeDevice {
         Ok(self.cached_desc.firmware_revision_as_str())
     }
 
+    fn is_security_supported(&self) -> bool {
+        self.cached_desc.security_send_receive_supported
+    }
+
     fn security_send(&self, security_protocol: u8, protocol_specific: [u8; 2], data: &[u8]) -> Result<(), Error> {
-        if self.cached_desc.security_send_receive_supported {
+        if self.is_security_supported() {
             security_send(&self.file, security_protocol, protocol_specific, data)
         } else {
-            Err(Error::NotSupported)
+            Err(Error::SecurityNotSupported)
         }
     }
 
     fn security_recv(&self, security_protocol: u8, protocol_specific: [u8; 2], len: usize) -> Result<Vec<u8>, Error> {
-        if self.cached_desc.security_send_receive_supported {
+        if self.is_security_supported() {
             let mut data = vec![0; len];
             security_receive(&self.file, security_protocol, protocol_specific, &mut data)?;
             Ok(data)
         } else {
-            Err(Error::NotSupported)
+            Err(Error::SecurityNotSupported)
         }
     }
 }
@@ -71,7 +75,7 @@ fn identify_controller(file: &FileHandle) -> Result<IdentifyController, Error> {
     };
     let ioctl_err = unsafe { nvme_admin_cmd(file.handle(), &mut command as *mut NVMeAdminCommand) }?;
     check_ioctl_err(ioctl_err)?;
-    let identity = IdentifyController::from_bytes(identity).map_err(|_| Error::InterfaceMismatch)?;
+    let identity = IdentifyController::from_bytes(identity).map_err(|_| Error::InterfaceNotSupported)?;
     Ok(identity)
 }
 

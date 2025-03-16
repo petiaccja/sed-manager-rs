@@ -7,7 +7,7 @@ use ata::ATADevice;
 use nvme::NVMeDevice;
 
 fn replace_error(error: &mut Option<Error>, new_error: Error) {
-    let is_only_mismatch = error.as_ref().is_some_and(|value| value == &Error::InterfaceMismatch);
+    let is_only_mismatch = error.as_ref().is_some_and(|value| value == &Error::InterfaceNotSupported);
     if is_only_mismatch || error.is_none() {
         error.replace(new_error);
     }
