@@ -1,3 +1,7 @@
+//! Implements support for identify & security send/receive commands for NVMe devices.
+//!
+//! Uses native NVMe admin command ioctl's, i.e. no SCSI or other translation required.
+
 use core::ptr::null_mut;
 
 use nix::ioctl_readwrite;

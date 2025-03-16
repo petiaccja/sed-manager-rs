@@ -1,3 +1,11 @@
+//! Implements support for identify & security send/receive\* commands for ATA devices.
+//!
+//! \* Currently, only identify is implemented, so device information is displayed properly
+//! but encryption is not actually supported. The official SCSI specs define
+//! an ATA passthrough command. This appears to be exposed by Linux's `SG_IO` ioctl
+//! and `ATA_12`/`ATA_16` SCSI opcodes. Support can be implemented with the `SG_IO`
+//! ioctl and the `sg_io_hdr` structure. `hdparm`'s source code might be helpful.
+
 use nix::errno::Errno;
 use nix::libc::ioctl;
 
