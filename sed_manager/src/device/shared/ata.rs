@@ -1,3 +1,5 @@
+use sed_manager_macros::Deserialize;
+
 use crate::device::Error;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -85,6 +87,22 @@ fn convert_buffer_len(num_bytes: u32) -> Result<u16, Error> {
     }
     let num_blocks = num_bytes / 512;
     u16::try_from(num_blocks).map_err(|_| Error::BufferTooLarge)
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct IdentifyDevice {
+    #[layout(offset = 0, bit_field(u16, 15))]
+    pub not_ata_device: bool,
+    #[layout(offset = 20)]
+    pub serial_number: [u8; 20],
+    #[layout(offset = 46)]
+    pub firmware_revision: [u8; 8],
+    #[layout(offset = 54)]
+    pub model_number: [u8; 40],
+    #[layout(offset = 96, bit_field(u16, 0))]
+    pub trusted_computing_supported: bool,
+    #[layout(offset = 152)]
+    pub serial_ata_capabilities: u16, // This is a bit field, but we only care if it's ATA or SATA.
 }
 
 #[cfg(test)]
