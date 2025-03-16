@@ -12,7 +12,7 @@ use nix::libc::ioctl;
 use crate::device::linux::utility::FileHandle;
 use crate::device::linux::Error as LinuxError;
 use crate::device::shared::ata::IdentifyDevice;
-use crate::device::{Device, Error, Interface};
+use crate::device::{Device, Error as DeviceError, Interface};
 use crate::serialization::DeserializeBinary;
 
 pub struct ATADevice {
@@ -45,11 +45,16 @@ impl Device for ATADevice {
         self.cached_desc.trusted_computing_supported
     }
 
-    fn security_send(&self, _security_protocol: u8, _protocol_specific: [u8; 2], _data: &[u8]) -> Result<(), Error> {
+    fn security_send(
+        &self,
+        _security_protocol: u8,
+        _protocol_specific: [u8; 2],
+        _data: &[u8],
+    ) -> Result<(), DeviceError> {
         if self.is_security_supported() {
-            Err(Error::NotImplemented)
+            Err(DeviceError::NotImplemented)
         } else {
-            Err(Error::SecurityNotSupported)
+            Err(DeviceError::SecurityNotSupported)
         }
     }
 
@@ -58,32 +63,32 @@ impl Device for ATADevice {
         _security_protocol: u8,
         _protocol_specific: [u8; 2],
         _len: usize,
-    ) -> Result<Vec<u8>, Error> {
+    ) -> Result<Vec<u8>, DeviceError> {
         if self.is_security_supported() {
-            Err(Error::NotImplemented)
+            Err(DeviceError::NotImplemented)
         } else {
-            Err(Error::SecurityNotSupported)
+            Err(DeviceError::SecurityNotSupported)
         }
     }
 }
 
 impl ATADevice {
-    pub fn open(path: &str) -> Result<Self, Error> {
+    pub fn open(path: &str) -> Result<Self, DeviceError> {
         let file = FileHandle::open(path)?;
         let desc = query_description(&file)?;
         Ok(Self { file, cached_desc: desc })
     }
 }
 
-fn query_description(file: &FileHandle) -> Result<IdentifyDevice, Error> {
+fn query_description(file: &FileHandle) -> Result<IdentifyDevice, DeviceError> {
     let mut identity = [0_u8; 512];
     let result = unsafe { ioctl(file.handle(), HDIO_GET_IDENTITY, identity.as_mut_ptr()) };
     if result != 0 {
         return Err(LinuxError::from(Errno::from_raw(result)).into());
     }
-    let identity = IdentifyDevice::from_bytes(identity.into()).map_err(|_| Error::InvalidArgument)?;
+    let identity = IdentifyDevice::from_bytes(identity.into()).map_err(|_| DeviceError::InvalidArgument)?;
     if identity.not_ata_device {
-        return Err(Error::InterfaceMismatch);
+        return Err(DeviceError::InterfaceNotSupported);
     }
     Ok(identity)
 }
