@@ -3,7 +3,7 @@ use core::ptr::null_mut;
 use nix::ioctl_readwrite;
 
 use crate::device::linux::utility::FileHandle;
-use crate::device::shared::nvme::{IdentifyController, Opcode};
+use crate::device::shared::nvme::{GenericStatusCode, IdentifyController, Opcode, StatusCode};
 use crate::device::{Device, Error, Interface};
 use crate::serialization::DeserializeBinary;
 
@@ -22,15 +22,15 @@ impl Device for NVMeDevice {
     }
 
     fn model_number(&self) -> Result<String, Error> {
-        Ok(String::from_utf8_lossy(&self.cached_desc.model_number).trim().to_string())
+        Ok(self.cached_desc.model_number_as_str())
     }
 
     fn serial_number(&self) -> Result<String, Error> {
-        Ok(String::from_utf8_lossy(&self.cached_desc.serial_number).trim().to_string())
+        Ok(self.cached_desc.serial_number_as_str())
     }
 
     fn firmware_revision(&self) -> Result<String, Error> {
-        Ok(String::from_utf8_lossy(&self.cached_desc.firmware_revision).trim().to_string())
+        Ok(self.cached_desc.firmware_revision_as_str())
     }
 
     fn security_send(&self, security_protocol: u8, protocol_specific: [u8; 2], data: &[u8]) -> Result<(), Error> {
@@ -69,7 +69,8 @@ fn identify_controller(file: &FileHandle) -> Result<IdentifyController, Error> {
         cdw10: 0x0000_0001,
         ..Default::default()
     };
-    let _ = unsafe { nvme_admin_cmd(file.handle(), &mut command as *mut NVMeAdminCommand) }?;
+    let ioctl_err = unsafe { nvme_admin_cmd(file.handle(), &mut command as *mut NVMeAdminCommand) }?;
+    check_ioctl_err(ioctl_err)?;
     let identity = IdentifyController::from_bytes(identity).map_err(|_| Error::InterfaceMismatch)?;
     Ok(identity)
 }
@@ -88,8 +89,8 @@ fn security_receive(
         cdw11: data_in.len() as u32, // Data length duplicated.
         ..Default::default()
     };
-    let _ = unsafe { nvme_admin_cmd(file_handle.handle(), &mut command as *mut NVMeAdminCommand) }?;
-    Ok(())
+    let ioctl_err = unsafe { nvme_admin_cmd(file_handle.handle(), &mut command as *mut NVMeAdminCommand) }?;
+    check_ioctl_err(ioctl_err)
 }
 
 fn security_send(
@@ -106,8 +107,8 @@ fn security_send(
         cdw11: data_out.len() as u32, // Data length duplicated.
         ..Default::default()
     };
-    let _ = unsafe { nvme_admin_cmd(file_handle.handle(), &mut command as *mut NVMeAdminCommand) }?;
-    Ok(())
+    let ioctl_err = unsafe { nvme_admin_cmd(file_handle.handle(), &mut command as *mut NVMeAdminCommand) }?;
+    check_ioctl_err(ioctl_err)
 }
 
 fn make_cdw10(security_protocol: u8, protocol_specific: [u8; 2]) -> u32 {
@@ -119,8 +120,23 @@ fn make_cdw10(security_protocol: u8, protocol_specific: [u8; 2]) -> u32 {
     ])
 }
 
+/// Check if the `ioctl` return value indicates an NVMe error.
+/// The NVMe status is encoded in the lowest 11 bits of the value returned by `ioctl`.
+fn check_ioctl_err(ioctl_err: i32) -> Result<(), Error> {
+    let ioctl_err: u32 = unsafe { core::mem::transmute(ioctl_err) };
+    let status = StatusCode::try_from(ioctl_err).unwrap_or(StatusCode::InvalidStatusField);
+    match status {
+        StatusCode::Generic(GenericStatusCode::Success) => match ioctl_err {
+            0 => Ok(()),
+            _ => Err(Error::NVMeError(StatusCode::Unknown(0))),
+        },
+        _ => Err(Error::NVMeError(status)),
+    }
+}
+
 ioctl_readwrite!(nvme_admin_cmd, b'N', 0x41, NVMeAdminCommand);
 
+#[derive(Debug)]
 #[repr(C)]
 struct NVMeAdminCommand {
     opcode: Opcode,
@@ -165,5 +181,31 @@ impl Default for NVMeAdminCommand {
             timeout_ms: 0,
             result: 0,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn check_ioctl_err_success() {
+        let ioctl_err = 0b000_00000000;
+        assert_eq!(check_ioctl_err(ioctl_err), Ok(()));
+    }
+
+    #[test]
+    fn check_ioctl_err_nvme_err() {
+        let ioctl_err = 0b1_000_00000001;
+        assert_eq!(
+            check_ioctl_err(ioctl_err),
+            Err(Error::NVMeError(StatusCode::Generic(GenericStatusCode::InvalidCommandOpcode)))
+        );
+    }
+
+    #[test]
+    fn check_ioctl_err_non_nvme_err() {
+        let ioctl_err = 0b1_000_00000000;
+        assert_eq!(check_ioctl_err(ioctl_err), Err(Error::NVMeError(StatusCode::Unknown(0))));
     }
 }

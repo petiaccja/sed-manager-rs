@@ -1,3 +1,4 @@
+use super::shared::nvme;
 #[cfg(target_os = "windows")]
 use super::windows::Error as PlatformError;
 
@@ -32,6 +33,8 @@ pub enum Error {
     ATACommandAborted,
     #[error("The SCSI command failed")]
     SCSICommandFailed,
+    #[error("NVMe error: {}", .0)]
+    NVMeError(nvme::StatusCode),
 
     #[error("Unspecified error occured (the exact cause could not be determined)")]
     Unspecified,
