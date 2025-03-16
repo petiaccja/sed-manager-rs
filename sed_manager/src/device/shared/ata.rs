@@ -231,6 +231,8 @@ fn convert_buffer_len(num_bytes: u32) -> Result<u16, DeviceError> {
 
 fn parse_ata_string(ata_string: &[u8]) -> String {
     let mut swapped = Vec::from(ata_string);
+    // On Linux, the IOCTL does this magically. Go figure...
+    #[cfg(not(target_os = "linux"))]
     for i in (0..swapped.len()).step_by(2) {
         if i + 1 < swapped.len() {
             swapped.swap(i, i + 1);

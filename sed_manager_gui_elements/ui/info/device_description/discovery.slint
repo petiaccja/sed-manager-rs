@@ -61,15 +61,15 @@ component ErrorView {
         }
 
         Text {
-            text: "No encryption features found";
-            font-size: 14px;
+            text: "Cannot encrypt drive";
+            font-size: 16px;
             horizontal-alignment: center;
         }
 
         Text {
             text: root.error;
-            font-size: 14px;
             horizontal-alignment: center;
+            wrap: word-wrap;
         }
     }
 }
