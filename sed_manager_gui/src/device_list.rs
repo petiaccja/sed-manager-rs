@@ -110,11 +110,13 @@ pub struct DispDeviceList {
 
 async fn list(backend: Rc<PeekCell<Backend>>) -> Result<DispDeviceList, DeviceError> {
     let devices = run_in_thread(list_blocking).await?;
+    let mut opened = devices.opened;
+    opened.sort_by(|d1, d2| d2.is_security_supported().cmp(&d1.is_security_supported()));
     let mut identities = Vec::<NativeDeviceIdentity>::new();
-    for device in &devices.opened {
+    for device in &opened {
         identities.push(get_identity(device.clone()).await.into());
     }
-    backend.peek_mut(|backend| backend.set_devices(devices.opened));
+    backend.peek_mut(|backend| backend.set_devices(opened));
     Ok(DispDeviceList { identities, unavailable: devices.unavailable })
 }
 

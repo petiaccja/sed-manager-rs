@@ -50,6 +50,10 @@ impl Device for GenericDevice {
         self.get_or_query_description().map(|desc| desc.firmware_revision.clone().unwrap_or(String::new()))
     }
 
+    fn is_security_supported(&self) -> bool {
+        false
+    }
+
     fn security_send(&self, _security_protocol: u8, _protocol_specific: [u8; 2], _data: &[u8]) -> Result<(), Error> {
         // The generic device does not support security commands.
         // This is because the IOCTL's may be interface-specific.

@@ -25,5 +25,4 @@ pub fn open_device(drive_path: &str) -> Result<Box<dyn Device>, Error> {
         Interface::SATA => ATADevice::try_from(generic_device).map(|dev| into_boxed(dev)), // SATA is "same" as ATA.
         _ => Ok(into_boxed(generic_device)),
     }
-    .map_err(|_| Error::InterfaceMismatch)
 }

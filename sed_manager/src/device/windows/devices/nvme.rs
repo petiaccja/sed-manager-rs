@@ -10,7 +10,6 @@ use crate::serialization::{Deserialize, InputStream, Seek as _, SeekFrom};
 
 use core::mem::offset_of;
 use std::os::windows::raw::HANDLE;
-use std::sync::OnceLock;
 use winapi::shared::winerror::ERROR_INVALID_DATA;
 use winapi::um::winioctl::{IOCTL_STORAGE_QUERY_PROPERTY, STORAGE_PROPERTY_QUERY};
 
@@ -19,35 +18,26 @@ use super::GenericDevice;
 
 pub struct NVMeDevice {
     file: FileHandle,
-    cached_identity: OnceLock<IdentifyController>,
+    cached_desc: IdentifyController,
 }
 
 impl NVMeDevice {
     #[allow(unused)]
     pub fn open(path: &str) -> Result<Self, DeviceError> {
-        // This does not check the interface, you can force NVMe on an unknown device.
         let file = FileHandle::open(path)?;
-        Ok(Self { file, cached_identity: OnceLock::new() })
-    }
-
-    fn identify_controller(&self) -> Result<&IdentifyController, DeviceError> {
-        match self.cached_identity.get() {
-            Some(identity) => Ok(identity),
-            None => {
-                let identity = identify_controller(self.file.handle())?;
-                Ok(self.cached_identity.get_or_init(|| identity))
-            }
-        }
+        let desc = identify_controller(file.handle())?;
+        Ok(Self { file, cached_desc: desc })
     }
 }
 
 impl TryFrom<GenericDevice> for NVMeDevice {
-    type Error = GenericDevice;
+    type Error = DeviceError;
     fn try_from(value: GenericDevice) -> Result<Self, Self::Error> {
         if let Ok(Interface::NVMe) = value.interface() {
-            Ok(Self { file: value.take_file(), cached_identity: OnceLock::new() })
+            let desc = identify_controller(value.get_file().handle())?;
+            Ok(Self { file: value.take_file(), cached_desc: desc })
         } else {
-            Err(value)
+            Err(DeviceError::InterfaceNotSupported)
         }
     }
 }
@@ -62,18 +52,25 @@ impl Device for NVMeDevice {
     }
 
     fn model_number(&self) -> Result<String, DeviceError> {
-        Ok(self.identify_controller()?.model_number_as_str().trim().to_string())
+        Ok(self.cached_desc.model_number_as_str())
     }
 
     fn serial_number(&self) -> Result<String, DeviceError> {
-        Ok(self.identify_controller()?.serial_number_as_str().trim().to_string())
+        Ok(self.cached_desc.serial_number_as_str())
     }
 
     fn firmware_revision(&self) -> Result<String, DeviceError> {
-        Ok(self.identify_controller()?.firmware_revision_as_str().trim().to_string())
+        Ok(self.cached_desc.firmware_revision_as_str())
+    }
+
+    fn is_security_supported(&self) -> bool {
+        self.cached_desc.security_send_receive_supported
     }
 
     fn security_send(&self, security_protocol: u8, protocol_specific: [u8; 2], data: &[u8]) -> Result<(), DeviceError> {
+        if !self.is_security_supported() {
+            return Err(DeviceError::SecurityNotSupported);
+        }
         let aligned_data = AlignedArray::from_slice(data, 8).unwrap();
         let protocol_specific = u16::from_be_bytes(protocol_specific);
         Ok(scsi::security_protocol_out(
@@ -91,6 +88,9 @@ impl Device for NVMeDevice {
         protocol_specific: [u8; 2],
         len: usize,
     ) -> Result<Vec<u8>, DeviceError> {
+        if !self.is_security_supported() {
+            return Err(DeviceError::SecurityNotSupported);
+        }
         let mut data = AlignedArray::zeroed(len, 8).unwrap();
         let protocol_specific = u16::from_be_bytes(protocol_specific);
         scsi::security_protocol_in(
@@ -148,7 +148,7 @@ const SCSI_TRANSLATION_INC_512: bool = false;
 mod test {
     use super::*;
 
-    use skip_test::{may_skip, skip, skip_or_unwrap};
+    use skip_test::may_skip;
 
     use crate::device::windows::drive_list::list_physical_drives;
 
@@ -164,12 +164,7 @@ mod test {
     #[test]
     #[may_skip]
     fn test_nvme_identify_controller() -> Result<(), DeviceError> {
-        let nvme_drives = get_nvme_drives();
-        let device = skip_or_unwrap!(nvme_drives.first());
-        match device.identify_controller() {
-            Ok(_) => Ok(()),
-            Err(DeviceError::PermissionDenied) => skip!(),
-            Err(err) => Err(err.into()),
-        }
+        let _nvme_drives = get_nvme_drives();
+        Ok(())
     }
 }
