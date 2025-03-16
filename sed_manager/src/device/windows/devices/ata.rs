@@ -5,67 +5,73 @@ use winapi::shared::ntddscsi::{
 };
 
 use crate::device::shared::aligned_array::AlignedArray;
-use crate::device::shared::ata::{Input, Output};
+use crate::device::shared::ata::{ATAError, IdentifyDevice, Input};
 use crate::device::windows::utility::file_handle::FileHandle;
 use crate::device::windows::utility::ioctl::ioctl_in_out;
 use crate::device::{Device, Error as DeviceError, Interface};
+use crate::serialization::DeserializeBinary as _;
 
 use super::GenericDevice;
 
 pub struct ATADevice {
-    generic_device: GenericDevice,
+    file: FileHandle,
+    cached_desc: IdentifyDevice,
 }
 
 impl ATADevice {
     #[allow(unused)]
     pub fn open(path: &str) -> Result<Self, DeviceError> {
-        // This does not check the interface, you can force SCSI on an unknown device.
-        let generic_device = GenericDevice::open(path)?;
-        Ok(Self { generic_device })
+        let file = FileHandle::open(path)?;
+        let desc = identify_device(&file)?;
+        Ok(Self { file, cached_desc: desc })
     }
 }
 
 impl TryFrom<GenericDevice> for ATADevice {
-    type Error = GenericDevice;
+    type Error = DeviceError;
     fn try_from(value: GenericDevice) -> Result<Self, Self::Error> {
-        match value.interface() {
-            Ok(Interface::ATA) => Ok(Self { generic_device: value }),
-            Ok(Interface::SATA) => Ok(Self { generic_device: value }),
-            _ => Err(value),
+        let interface = value.interface()?;
+        if [Interface::ATA, Interface::SATA].contains(&interface) {
+            let desc = identify_device(value.get_file())?;
+            Ok(Self { file: value.take_file(), cached_desc: desc })
+        } else {
+            Err(DeviceError::InterfaceNotSupported)
         }
     }
 }
 
 impl Device for ATADevice {
     fn path(&self) -> Option<String> {
-        self.generic_device.path()
+        Some(self.file.path().to_string())
     }
 
     fn interface(&self) -> Result<Interface, DeviceError> {
-        self.generic_device.interface()
+        Ok(self.cached_desc.interface())
     }
 
     fn model_number(&self) -> Result<String, DeviceError> {
-        self.generic_device.model_number()
+        Ok(self.cached_desc.model_number())
     }
 
     fn serial_number(&self) -> Result<String, DeviceError> {
-        self.generic_device.serial_number()
+        Ok(self.cached_desc.serial_number())
     }
 
     fn firmware_revision(&self) -> Result<String, DeviceError> {
-        self.generic_device.firmware_revision()
+        Ok(self.cached_desc.firmware_revision())
+    }
+
+    fn is_security_supported(&self) -> bool {
+        self.cached_desc.trusted_computing_supported
     }
 
     fn security_send(&self, security_protocol: u8, protocol_specific: [u8; 2], data: &[u8]) -> Result<(), DeviceError> {
+        if !self.is_security_supported() {
+            return Err(DeviceError::SecurityNotSupported);
+        }
         let aligned_data = AlignedArray::from_slice_padded(data, ALIGNMENT, PADDING).unwrap();
         let protocol_specific = u16::from_be_bytes(protocol_specific);
-        Ok(trusted_send(
-            self.generic_device.get_file(),
-            security_protocol,
-            protocol_specific,
-            aligned_data.as_padded_slice(),
-        )?)
+        Ok(trusted_send(&self.file, security_protocol, protocol_specific, aligned_data.as_padded_slice())?)
     }
 
     fn security_recv(
@@ -74,16 +80,43 @@ impl Device for ATADevice {
         protocol_specific: [u8; 2],
         len: usize,
     ) -> Result<Vec<u8>, DeviceError> {
+        if !self.is_security_supported() {
+            return Err(DeviceError::SecurityNotSupported);
+        }
         let mut data = AlignedArray::zeroed_padded(len, ALIGNMENT, PADDING).unwrap();
         let protocol_specific = u16::from_be_bytes(protocol_specific);
-        trusted_receive(
-            self.generic_device.get_file(),
-            security_protocol,
-            protocol_specific,
-            data.as_padded_mut_slice(),
-        )?;
+        trusted_receive(&self.file, security_protocol, protocol_specific, data.as_padded_mut_slice())?;
         Ok(data.into_vec())
     }
+}
+
+fn identify_device(file_handle: &FileHandle) -> Result<IdentifyDevice, DeviceError> {
+    let mut data_out = vec![0_u8; 512];
+    let input = Input::identify_device();
+    let task_file = input.serialize();
+
+    let mut command = ATA_PASS_THROUGH_DIRECT {
+        Length: size_of::<ATA_PASS_THROUGH_DIRECT>() as u16,
+        AtaFlags: ATA_FLAGS_DATA_IN | ATA_FLAGS_USE_DMA,
+        PathId: 0,          // Set by the driver.
+        TargetId: 0,        // Set by the driver.
+        Lun: 0,             // Set by the driver.
+        ReservedAsUchar: 0, // Reserved for future use.
+        DataTransferLength: data_out.len() as u32,
+        TimeOutValue: TIMEOUT,
+        ReservedAsUlong: 0, // Reserved for future use.
+        DataBuffer: data_out.as_mut_ptr() as *mut c_void,
+        PreviousTaskFile: [0; 8],
+        CurrentTaskFile: task_file,
+    };
+
+    let command_buffer = unsafe {
+        core::slice::from_raw_parts_mut(&mut command as *mut _ as *mut u8, size_of::<ATA_PASS_THROUGH_DIRECT>())
+    };
+
+    let _ = ioctl_in_out(file_handle.handle(), IOCTL_ATA_PASS_THROUGH_DIRECT, command_buffer)?;
+    check_ata_status(&command.CurrentTaskFile)?;
+    IdentifyDevice::from_bytes(data_out).map_err(|_| DeviceError::ATAError(ATAError::with_error_bit()))
 }
 
 fn trusted_send(
@@ -103,7 +136,7 @@ fn trusted_send(
         Lun: 0,             // Set by the driver.
         ReservedAsUchar: 0, // Reserved for future use.
         DataTransferLength: data_out.len() as u32,
-        TimeOutValue: 5,
+        TimeOutValue: TIMEOUT,
         ReservedAsUlong: 0, // Reserved for future use.
         DataBuffer: data_out.as_ptr() as *mut c_void,
         PreviousTaskFile: [0; 8],
@@ -115,11 +148,7 @@ fn trusted_send(
     };
 
     let _ = ioctl_in_out(file_handle.handle(), IOCTL_ATA_PASS_THROUGH_DIRECT, command_buffer)?;
-    let output = Output::parse(command.CurrentTaskFile);
-    if output.error || output.aborted || output.interface_crc {
-        return Err(DeviceError::ATACommandAborted);
-    }
-    Ok(())
+    check_ata_status(&command.CurrentTaskFile)
 }
 
 fn trusted_receive(
@@ -139,7 +168,7 @@ fn trusted_receive(
         Lun: 0,             // Set by the driver.
         ReservedAsUchar: 0, // Reserved for future use.
         DataTransferLength: data_out.len() as u32,
-        TimeOutValue: 5,
+        TimeOutValue: TIMEOUT,
         ReservedAsUlong: 0, // Reserved for future use.
         DataBuffer: data_out.as_ptr() as *mut c_void,
         PreviousTaskFile: [0; 8],
@@ -151,11 +180,7 @@ fn trusted_receive(
     };
 
     let _ = ioctl_in_out(file_handle.handle(), IOCTL_ATA_PASS_THROUGH_DIRECT, command_buffer)?;
-    let output = Output::parse(command.CurrentTaskFile);
-    if output.error || output.aborted || output.interface_crc {
-        return Err(DeviceError::ATACommandAborted);
-    }
-    Ok(())
+    check_ata_status(&command.CurrentTaskFile)
 }
 
 /// See [`super::scsi`] for info about alignment.
@@ -163,3 +188,15 @@ const ALIGNMENT: usize = 8;
 
 /// ATA trusted commands must have input and output buffers in 512 blocks.
 const PADDING: usize = 512;
+
+// Number of seconds to wait for the device to complete the ATA command.
+const TIMEOUT: u32 = 10;
+
+fn check_ata_status(task_file: &[u8; 8]) -> Result<(), DeviceError> {
+    let status = ATAError::from_task_file(task_file.clone());
+    if status.success() {
+        Ok(())
+    } else {
+        Err(DeviceError::ATAError(status))
+    }
+}

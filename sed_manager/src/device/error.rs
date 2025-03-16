@@ -1,4 +1,6 @@
+use super::shared::ata;
 use super::shared::nvme;
+
 #[cfg(target_os = "windows")]
 use super::windows::Error as PlatformError;
 
@@ -26,15 +28,13 @@ pub enum Error {
     NotSupported, // TODO: remove this on Windows
     #[error("Permission denied (retry with elevated privileges)")]
     PermissionDenied,
-    #[error("Could not open a device using the explicitly selected interface")]
-    InterfaceMismatch, // TODO: remove this on Windows
     #[error("The drive interface is not supported")]
     InterfaceNotSupported,
 
     #[error("Security send/receive is not supported by the device")]
     SecurityNotSupported,
-    #[error("The ATA command was aborted")]
-    ATACommandAborted,
+    #[error("ATA error: {}", .0)]
+    ATAError(ata::ATAError),
     #[error("The SCSI command failed")]
     SCSICommandFailed,
     #[error("NVMe error: {}", .0)]

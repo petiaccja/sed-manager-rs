@@ -25,24 +25,20 @@ impl Device for ATADevice {
         Some(self.file.path().into())
     }
 
-    fn interface(&self) -> Result<Interface, Error> {
-        if self.cached_desc.serial_ata_capabilities != 0 {
-            Ok(Interface::SATA)
-        } else {
-            Ok(Interface::ATA)
-        }
+    fn interface(&self) -> Result<Interface, DeviceError> {
+        Ok(self.cached_desc.interface())
     }
 
-    fn model_number(&self) -> Result<String, Error> {
-        Ok(String::from_utf8_lossy(&self.cached_desc.model_number).trim().to_string())
+    fn model_number(&self) -> Result<String, DeviceError> {
+        Ok(self.cached_desc.model_number())
     }
 
-    fn serial_number(&self) -> Result<String, Error> {
-        Ok(String::from_utf8_lossy(&self.cached_desc.serial_number).trim().to_string())
+    fn serial_number(&self) -> Result<String, DeviceError> {
+        Ok(self.cached_desc.serial_number())
     }
 
-    fn firmware_revision(&self) -> Result<String, Error> {
-        Ok(String::from_utf8_lossy(&self.cached_desc.firmware_revision).trim().to_string())
+    fn firmware_revision(&self) -> Result<String, DeviceError> {
+        Ok(self.cached_desc.firmware_revision())
     }
 
     fn is_security_supported(&self) -> bool {

@@ -95,6 +95,10 @@ impl Device for FakeDevice {
         Ok(String::from("FW1.0"))
     }
 
+    fn is_security_supported(&self) -> bool {
+        true
+    }
+
     fn security_send(&self, security_protocol: u8, protocol_specific: [u8; 2], data: &[u8]) -> Result<(), Error> {
         let com_id = u16::from_be_bytes(protocol_specific);
         let route = Route { protocol: security_protocol, com_id };

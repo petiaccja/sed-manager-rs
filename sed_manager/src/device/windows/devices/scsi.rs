@@ -27,12 +27,12 @@ impl SCSIDevice {
 }
 
 impl TryFrom<GenericDevice> for SCSIDevice {
-    type Error = GenericDevice;
+    type Error = DeviceError;
     fn try_from(value: GenericDevice) -> Result<Self, Self::Error> {
         if let Ok(Interface::SCSI) = value.interface() {
             Ok(Self { generic_device: value })
         } else {
-            Err(value)
+            Err(DeviceError::InterfaceNotSupported)
         }
     }
 }
@@ -56,6 +56,10 @@ impl Device for SCSIDevice {
 
     fn firmware_revision(&self) -> Result<String, DeviceError> {
         self.generic_device.firmware_revision()
+    }
+
+    fn is_security_supported(&self) -> bool {
+        false // TODO
     }
 
     fn security_send(&self, security_protocol: u8, protocol_specific: [u8; 2], data: &[u8]) -> Result<(), DeviceError> {
