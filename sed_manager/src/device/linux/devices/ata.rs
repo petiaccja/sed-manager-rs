@@ -6,11 +6,9 @@
 //! and `ATA_12`/`ATA_16` SCSI opcodes. Support can be implemented with the `SG_IO`
 //! ioctl and the `sg_io_hdr` structure. `hdparm`'s source code might be helpful.
 
-use nix::errno::Errno;
-use nix::libc::ioctl;
+use nix::ioctl_read_bad;
 
 use crate::device::linux::utility::FileHandle;
-use crate::device::linux::Error as LinuxError;
 use crate::device::shared::ata::IdentifyDevice;
 use crate::device::{Device, Error as DeviceError, Interface};
 use crate::serialization::DeserializeBinary;
@@ -82,10 +80,7 @@ impl ATADevice {
 
 fn query_description(file: &FileHandle) -> Result<IdentifyDevice, DeviceError> {
     let mut identity = [0_u8; 512];
-    let result = unsafe { ioctl(file.handle(), HDIO_GET_IDENTITY, identity.as_mut_ptr()) };
-    if result != 0 {
-        return Err(LinuxError::from(Errno::from_raw(result)).into());
-    }
+    let _ = unsafe { hdio_get_identity(file.handle(), &mut identity as *mut [u8; 512]) }?;
     let identity = IdentifyDevice::from_bytes(identity.into()).map_err(|_| DeviceError::InvalidArgument)?;
     if identity.not_ata_device {
         return Err(DeviceError::InterfaceNotSupported);
@@ -93,4 +88,4 @@ fn query_description(file: &FileHandle) -> Result<IdentifyDevice, DeviceError> {
     Ok(identity)
 }
 
-const HDIO_GET_IDENTITY: u64 = 0x030d; // IO control code [include/uapi/linux/hdreg.h]
+ioctl_read_bad!(hdio_get_identity, 0x030d, [u8; 512]);
