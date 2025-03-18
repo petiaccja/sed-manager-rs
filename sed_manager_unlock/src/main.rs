@@ -45,17 +45,17 @@ fn get_device_list() -> Result<DeviceList, DeviceError> {
 fn print_devices(device_list: &DeviceList) -> Result<(), DeviceError> {
     println!("Shadowed devices:");
     for device in &device_list.shadowed {
-        println!("  {} / {}", device.model_number()?, device.serial_number()?);
+        println!("  {} / {}", device.model_number(), device.serial_number());
     }
 
     println!("\nLocked devices:");
     for device in &device_list.locked {
-        println!("  {} / {}", device.model_number()?, device.serial_number()?);
+        println!("  {} / {}", device.model_number(), device.serial_number());
     }
 
     println!("\nOther devices:");
     for device in &device_list.other {
-        println!("  {} / {}", device.model_number()?, device.serial_number()?);
+        println!("  {} / {}", device.model_number(), device.serial_number());
     }
 
     println!("\nFailed devices:");
