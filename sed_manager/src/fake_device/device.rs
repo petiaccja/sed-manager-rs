@@ -79,20 +79,20 @@ impl Device for FakeDevice {
         None
     }
 
-    fn interface(&self) -> Result<Interface, Error> {
-        Ok(Interface::Other)
+    fn interface(&self) -> Interface {
+        Interface::Other
     }
 
-    fn model_number(&self) -> Result<String, Error> {
-        Ok(String::from("Fake Device 3000"))
+    fn model_number(&self) -> String {
+        String::from("Fake Device 3000")
     }
 
-    fn serial_number(&self) -> Result<String, Error> {
-        Ok(String::from("0123456789"))
+    fn serial_number(&self) -> String {
+        String::from("0123456789")
     }
 
-    fn firmware_revision(&self) -> Result<String, Error> {
-        Ok(String::from("FW1.0"))
+    fn firmware_revision(&self) -> String {
+        String::from("FW1.0")
     }
 
     fn is_security_supported(&self) -> bool {

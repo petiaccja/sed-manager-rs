@@ -33,7 +33,7 @@ impl NVMeDevice {
 impl TryFrom<GenericDevice> for NVMeDevice {
     type Error = DeviceError;
     fn try_from(value: GenericDevice) -> Result<Self, Self::Error> {
-        if let Ok(Interface::NVMe) = value.interface() {
+        if Interface::NVMe == value.interface() {
             let desc = identify_controller(value.get_file().handle())?;
             Ok(Self { file: value.take_file(), cached_desc: desc })
         } else {
@@ -47,20 +47,20 @@ impl Device for NVMeDevice {
         Some(self.file.path().into())
     }
 
-    fn interface(&self) -> Result<Interface, DeviceError> {
-        Ok(Interface::NVMe)
+    fn interface(&self) -> Interface {
+        Interface::NVMe
     }
 
-    fn model_number(&self) -> Result<String, DeviceError> {
-        Ok(self.cached_desc.model_number_as_str())
+    fn model_number(&self) -> String {
+        self.cached_desc.model_number_as_str()
     }
 
-    fn serial_number(&self) -> Result<String, DeviceError> {
-        Ok(self.cached_desc.serial_number_as_str())
+    fn serial_number(&self) -> String {
+        self.cached_desc.serial_number_as_str()
     }
 
-    fn firmware_revision(&self) -> Result<String, DeviceError> {
-        Ok(self.cached_desc.firmware_revision_as_str())
+    fn firmware_revision(&self) -> String {
+        self.cached_desc.firmware_revision_as_str()
     }
 
     fn is_security_supported(&self) -> bool {

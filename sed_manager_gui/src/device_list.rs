@@ -2,14 +2,13 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use sed_manager::messaging::discovery::Discovery;
-use slint::{ComponentHandle as _, Model};
+use slint::{ComponentHandle as _, Model, ToSharedString};
 
 use sed_manager::device::{list_physical_drives, open_device, Device, Error as DeviceError};
 use sed_manager::rpc::Error as RPCError;
 
 use crate::backend::Backend;
 use crate::frontend::Frontend;
-use crate::native_data::NativeDeviceIdentity;
 use crate::ui;
 use crate::utility::{into_vec_model, run_in_thread, PeekCell};
 
@@ -42,9 +41,6 @@ fn set_callback_for_list(backend: Rc<PeekCell<Backend>>, frontend: Frontend) {
             let _ = slint::spawn_local(async move {
                 let result = list(backend).await;
                 if let Ok(DispDeviceList { identities, unavailable }) = result {
-                    let identities: Vec<_> = identities.into_iter().map(|x| ui::DeviceIdentity::from(x)).collect();
-                    let unavailable: Vec<_> =
-                        unavailable.into_iter().map(|x| ui::UnavailableDevice::new(x.0, x.1.to_string())).collect();
                     crate::configuration::init(&frontend, identities.len());
                     crate::troubleshooting::init(&frontend, identities.len());
                     set_identities(&frontend, identities);
@@ -104,20 +100,31 @@ pub struct HwDeviceList {
 }
 
 pub struct DispDeviceList {
-    pub identities: Vec<NativeDeviceIdentity>,
-    pub unavailable: Vec<(String, DeviceError)>,
+    pub identities: Vec<ui::DeviceIdentity>,
+    pub unavailable: Vec<ui::UnavailableDevice>,
 }
 
 async fn list(backend: Rc<PeekCell<Backend>>) -> Result<DispDeviceList, DeviceError> {
     let devices = run_in_thread(list_blocking).await?;
     let mut opened = devices.opened;
     opened.sort_by(|d1, d2| d2.is_security_supported().cmp(&d1.is_security_supported()));
-    let mut identities = Vec::<NativeDeviceIdentity>::new();
-    for device in &opened {
-        identities.push(get_identity(device.clone()).await.into());
-    }
+    let identities = opened
+        .iter()
+        .map(|device| ui::DeviceIdentity {
+            name: device.model_number().into(),
+            serial: device.serial_number().into(),
+            path: device.path().unwrap_or("-".into()).into(),
+            firmware: device.firmware_revision().into(),
+            interface: device.interface().to_string().into(),
+        })
+        .collect();
+    let unavailable = devices
+        .unavailable
+        .into_iter()
+        .map(|(path, error)| ui::UnavailableDevice { path: path.into(), error_message: error.to_shared_string() })
+        .collect();
     backend.peek_mut(|backend| backend.set_devices(opened));
-    Ok(DispDeviceList { identities, unavailable: devices.unavailable })
+    Ok(DispDeviceList { identities, unavailable: unavailable })
 }
 
 async fn discover(backend: Rc<PeekCell<Backend>>, device_idx: usize) -> Result<Discovery, RPCError> {
@@ -226,15 +233,4 @@ fn list_blocking() -> Result<HwDeviceList, DeviceError> {
     #[cfg(debug_assertions)]
     devices.push(Arc::new(sed_manager::fake_device::FakeDevice::new()) as Arc<dyn Device>);
     Ok(HwDeviceList { opened: devices, unavailable: unavailable_devices })
-}
-
-pub async fn get_identity(device: Arc<dyn Device>) -> NativeDeviceIdentity {
-    run_in_thread(move || NativeDeviceIdentity {
-        name: device.model_number().unwrap_or("Unknown model".into()),
-        serial: device.serial_number().unwrap_or("Unknown serial".into()),
-        path: device.path().unwrap_or("Unknown path".into()),
-        firmware: device.firmware_revision().unwrap_or("Unknown firmware".into()),
-        interface: device.interface().map(|x| x.to_string()).unwrap_or("Unknown interface".into()),
-    })
-    .await
 }

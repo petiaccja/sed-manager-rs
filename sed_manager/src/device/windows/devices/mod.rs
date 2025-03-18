@@ -18,7 +18,7 @@ fn into_boxed<ConcreteDevice: Device + 'static>(device: ConcreteDevice) -> Box<d
 
 pub fn open_device(drive_path: &str) -> Result<Box<dyn Device>, Error> {
     let generic_device = GenericDevice::open(drive_path)?;
-    match generic_device.interface()? {
+    match generic_device.interface() {
         Interface::NVMe => NVMeDevice::try_from(generic_device).map(|dev| into_boxed(dev)),
         Interface::SCSI => SCSIDevice::try_from(generic_device).map(|dev| into_boxed(dev)),
         Interface::ATA => ATADevice::try_from(generic_device).map(|dev| into_boxed(dev)),

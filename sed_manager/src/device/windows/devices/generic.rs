@@ -1,6 +1,5 @@
 use core::ffi::c_void;
 use core::ptr::null_mut;
-use std::sync::OnceLock;
 
 use winapi::{
     shared::minwindef::DWORD,
@@ -19,7 +18,7 @@ use crate::device::{shared::string::FromNullTerminated, Device, Error, Interface
 
 pub struct GenericDevice {
     file: FileHandle,
-    cached_desc: OnceLock<GenericDeviceDesc>,
+    cached_desc: GenericDeviceDesc,
 }
 
 pub struct GenericDeviceDesc {
@@ -34,20 +33,20 @@ impl Device for GenericDevice {
         Some(self.file.path().into())
     }
 
-    fn interface(&self) -> Result<Interface, Error> {
-        self.get_or_query_description().map(|desc| desc.interface)
+    fn interface(&self) -> Interface {
+        self.cached_desc.interface
     }
 
-    fn model_number(&self) -> Result<String, Error> {
-        self.get_or_query_description().map(|desc| desc.model_number.clone().unwrap_or(String::new()))
+    fn model_number(&self) -> String {
+        self.cached_desc.model_number.clone().unwrap_or(String::new())
     }
 
-    fn serial_number(&self) -> Result<String, Error> {
-        self.get_or_query_description().map(|desc| desc.serial_number.clone().unwrap_or(String::new()))
+    fn serial_number(&self) -> String {
+        self.cached_desc.serial_number.clone().unwrap_or(String::new())
     }
 
-    fn firmware_revision(&self) -> Result<String, Error> {
-        self.get_or_query_description().map(|desc| desc.firmware_revision.clone().unwrap_or(String::new()))
+    fn firmware_revision(&self) -> String {
+        self.cached_desc.firmware_revision.clone().unwrap_or(String::new())
     }
 
     fn is_security_supported(&self) -> bool {
@@ -74,7 +73,8 @@ impl Device for GenericDevice {
 impl GenericDevice {
     pub fn open(path: &str) -> Result<Self, Error> {
         let file = FileHandle::open(path)?;
-        Ok(Self { file, cached_desc: OnceLock::new() })
+        let desc = query_description(&file)?;
+        Ok(Self { file, cached_desc: desc })
     }
 
     pub fn get_file(&self) -> &FileHandle {
@@ -83,20 +83,6 @@ impl GenericDevice {
 
     pub fn take_file(self) -> FileHandle {
         self.file
-    }
-
-    fn get_or_query_description(&self) -> Result<&GenericDeviceDesc, Error> {
-        // This logic will possibly call `query_description` multiple times if
-        // executed from multiple thread simultaneously. This does not lead to
-        // incorrect behaviour, only minor performance degradation. Fix this if
-        // `try_get_or_init` or similar is available for `OnceCell`.
-        match self.cached_desc.get() {
-            Some(identity) => Ok(identity),
-            None => {
-                let desc = query_description(&self.file)?;
-                Ok(self.cached_desc.get_or_init(|| desc))
-            }
-        }
     }
 }
 

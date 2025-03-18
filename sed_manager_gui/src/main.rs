@@ -4,7 +4,6 @@ mod backend;
 mod configuration;
 mod device_list;
 mod frontend;
-mod native_data;
 mod troubleshooting;
 mod ui;
 mod utility;

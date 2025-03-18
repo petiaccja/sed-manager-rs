@@ -23,20 +23,20 @@ impl Device for ATADevice {
         Some(self.file.path().into())
     }
 
-    fn interface(&self) -> Result<Interface, DeviceError> {
-        Ok(self.cached_desc.interface())
+    fn interface(&self) -> Interface {
+        self.cached_desc.interface()
     }
 
-    fn model_number(&self) -> Result<String, DeviceError> {
-        Ok(self.cached_desc.model_number())
+    fn model_number(&self) -> String {
+        self.cached_desc.model_number()
     }
 
-    fn serial_number(&self) -> Result<String, DeviceError> {
-        Ok(self.cached_desc.serial_number())
+    fn serial_number(&self) -> String {
+        self.cached_desc.serial_number()
     }
 
-    fn firmware_revision(&self) -> Result<String, DeviceError> {
-        Ok(self.cached_desc.firmware_revision())
+    fn firmware_revision(&self) -> String {
+        self.cached_desc.firmware_revision()
     }
 
     fn is_security_supported(&self) -> bool {

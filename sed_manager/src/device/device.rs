@@ -13,10 +13,10 @@ pub enum Interface {
 
 pub trait Device: Send + Sync {
     fn path(&self) -> Option<String>;
-    fn interface(&self) -> Result<Interface, Error>;
-    fn model_number(&self) -> Result<String, Error>;
-    fn serial_number(&self) -> Result<String, Error>;
-    fn firmware_revision(&self) -> Result<String, Error>;
+    fn interface(&self) -> Interface;
+    fn model_number(&self) -> String;
+    fn serial_number(&self) -> String;
+    fn firmware_revision(&self) -> String;
 
     fn is_security_supported(&self) -> bool;
     fn security_send(&self, security_protocol: u8, protocol_specific: [u8; 2], data: &[u8]) -> Result<(), Error>;

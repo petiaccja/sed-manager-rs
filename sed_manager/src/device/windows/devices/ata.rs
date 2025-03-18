@@ -30,8 +30,7 @@ impl ATADevice {
 impl TryFrom<GenericDevice> for ATADevice {
     type Error = DeviceError;
     fn try_from(value: GenericDevice) -> Result<Self, Self::Error> {
-        let interface = value.interface()?;
-        if [Interface::ATA, Interface::SATA].contains(&interface) {
+        if [Interface::ATA, Interface::SATA].contains(&value.interface()) {
             let desc = identify_device(value.get_file())?;
             Ok(Self { file: value.take_file(), cached_desc: desc })
         } else {
@@ -45,20 +44,20 @@ impl Device for ATADevice {
         Some(self.file.path().to_string())
     }
 
-    fn interface(&self) -> Result<Interface, DeviceError> {
-        Ok(self.cached_desc.interface())
+    fn interface(&self) -> Interface {
+        self.cached_desc.interface()
     }
 
-    fn model_number(&self) -> Result<String, DeviceError> {
-        Ok(self.cached_desc.model_number())
+    fn model_number(&self) -> String {
+        self.cached_desc.model_number()
     }
 
-    fn serial_number(&self) -> Result<String, DeviceError> {
-        Ok(self.cached_desc.serial_number())
+    fn serial_number(&self) -> String {
+        self.cached_desc.serial_number()
     }
 
-    fn firmware_revision(&self) -> Result<String, DeviceError> {
-        Ok(self.cached_desc.firmware_revision())
+    fn firmware_revision(&self) -> String {
+        self.cached_desc.firmware_revision()
     }
 
     fn is_security_supported(&self) -> bool {

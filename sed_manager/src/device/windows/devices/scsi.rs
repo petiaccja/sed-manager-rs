@@ -31,7 +31,7 @@ impl SCSIDevice {
 impl TryFrom<GenericDevice> for SCSIDevice {
     type Error = DeviceError;
     fn try_from(value: GenericDevice) -> Result<Self, Self::Error> {
-        if let Ok(Interface::SCSI) = value.interface() {
+        if let Interface::SCSI = value.interface() {
             Ok(Self { generic_device: value })
         } else {
             Err(DeviceError::InterfaceNotSupported)
@@ -44,19 +44,19 @@ impl Device for SCSIDevice {
         self.generic_device.path()
     }
 
-    fn interface(&self) -> Result<Interface, DeviceError> {
+    fn interface(&self) -> Interface {
         self.generic_device.interface()
     }
 
-    fn model_number(&self) -> Result<String, DeviceError> {
+    fn model_number(&self) -> String {
         self.generic_device.model_number()
     }
 
-    fn serial_number(&self) -> Result<String, DeviceError> {
+    fn serial_number(&self) -> String {
         self.generic_device.serial_number()
     }
 
-    fn firmware_revision(&self) -> Result<String, DeviceError> {
+    fn firmware_revision(&self) -> String {
         self.generic_device.firmware_revision()
     }
 
