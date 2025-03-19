@@ -22,6 +22,7 @@ pub fn init(frontend: &Frontend, num_devices: usize) {
         mbr_editor_state.set_login_statuses(into_vec_model(vec![login_status; num_devices]));
         mbr_editor_state.set_control_statuses(into_vec_model(vec![control_status; num_devices]));
         mbr_editor_state.set_upload_statuses(into_vec_model(vec![upload_status; num_devices]));
+        mbr_editor_state.set_upload_files(into_vec_model(vec![slint::SharedString::new(); num_devices]));
         mbr_editor_state.set_upload_progresses(into_vec_model(vec![0.0; num_devices]));
         mbr_editor_state.set_upload_cancel_reqs(into_vec_model(vec![false; num_devices]));
         mbr_editor_state.set_mbr_control(into_vec_model(vec![ui::MBRControl::default(); num_devices]));
@@ -37,6 +38,7 @@ pub fn set_callbacks(backend: Rc<PeekCell<Backend>>, frontend: Frontend) {
     set_callback_query(backend.clone(), frontend.clone());
     set_callback_set_enabled(backend.clone(), frontend.clone());
     set_callback_set_done(backend.clone(), frontend.clone());
+    set_callback_open(frontend.clone());
     set_callback_upload(backend.clone(), frontend.clone());
 }
 
@@ -125,15 +127,31 @@ fn set_callback_upload(backend: Rc<PeekCell<Backend>>, frontend: Frontend) {
     frontend.clone().with(|window| {
         let mbr_editor_state = window.global::<ui::MBREditorState>();
 
-        mbr_editor_state.on_upload(move |device_idx| {
+        mbr_editor_state.on_upload(move |device_idx, file| {
             let frontend = frontend.clone();
             let backend = backend.clone();
             let device_idx = device_idx as usize;
             set_upload_status(&frontend, device_idx, ui::ExtendedStatus::loading());
             let _ = slint::spawn_local(async move {
-                let result = upload(backend, frontend.clone(), device_idx).await;
+                let result = upload(backend, frontend.clone(), device_idx, file.into()).await;
                 set_upload_progress(&frontend, device_idx, 0.0);
                 set_upload_status(&frontend, device_idx, ui::ExtendedStatus::from_result(result));
+            });
+        });
+    });
+}
+
+fn set_callback_open(frontend: Frontend) {
+    frontend.clone().with(|window| {
+        let mbr_editor_state = window.global::<ui::MBREditorState>();
+
+        mbr_editor_state.on_open(move |device_idx| {
+            let frontend = frontend.clone();
+            let device_idx = device_idx as usize;
+            let _ = slint::spawn_local(async move {
+                if let Some(file) = rfd::AsyncFileDialog::new().pick_file().await {
+                    set_file(&frontend, device_idx, file.path().to_string_lossy().into());
+                }
             });
         });
     });
@@ -165,17 +183,19 @@ async fn set_done(backend: Rc<PeekCell<Backend>>, device_idx: usize, done: bool)
     Ok(session.set_done(done).await?)
 }
 
-async fn upload(backend: Rc<PeekCell<Backend>>, frontend: Frontend, device_idx: usize) -> Result<(), AppError> {
-    let Some(file_handle) = rfd::AsyncFileDialog::new().pick_file().await else {
-        return Ok(());
-    };
+async fn upload(
+    backend: Rc<PeekCell<Backend>>,
+    frontend: Frontend,
+    device_idx: usize,
+    file: String,
+) -> Result<(), AppError> {
     let Ok(runtime) = tokio::runtime::Builder::new_multi_thread().enable_all().build() else {
         return Err(AppError::InternalError);
     };
     let session = backend.peek(|backend| backend.get_mbr_session(device_idx))?;
     let progress_per_mil = Arc::new(AtomicU32::new(0));
     let cancel_req = Arc::new(AtomicBool::new(false));
-    let worker_task = runtime.spawn(upload_worker(session, file_handle, progress_per_mil.clone(), cancel_req.clone()));
+    let worker_task = runtime.spawn(upload_worker(session, file, progress_per_mil.clone(), cancel_req.clone()));
     let display_callback =
         move || upload_display(frontend.clone(), device_idx, progress_per_mil.clone(), cancel_req.clone());
 
@@ -190,11 +210,11 @@ async fn upload(backend: Rc<PeekCell<Backend>>, frontend: Frontend, device_idx: 
 
 async fn upload_worker(
     session: Arc<MBREditSession>,
-    file_handle: rfd::FileHandle,
+    file: String,
     progress_per_mil: Arc<AtomicU32>,
     cancel_req: Arc<AtomicBool>,
 ) -> Result<(), AppError> {
-    let Ok(mut file) = tokio::fs::OpenOptions::new().read(true).open(file_handle.path()).await else {
+    let Ok(mut file) = tokio::fs::OpenOptions::new().read(true).open(file).await else {
         return Err(AppError::FileNotOpen);
     };
     let len = file.metadata().await.map(|metadata| metadata.len()).unwrap_or(u64::MAX);
@@ -240,6 +260,15 @@ fn set_control_status(frontend: &Frontend, device_idx: usize, status: ui::Extend
     });
 }
 
+fn set_file(frontend: &Frontend, device_idx: usize, file: String) {
+    frontend.with(|window| {
+        let mbr_editor_state = window.global::<ui::MBREditorState>();
+        let upload_files = mbr_editor_state.get_upload_files();
+        if device_idx < upload_files.row_count() {
+            upload_files.set_row_data(device_idx, file.into());
+        }
+    });
+}
 fn set_upload_status(frontend: &Frontend, device_idx: usize, status: ui::ExtendedStatus) {
     frontend.with(|window| {
         let mbr_editor_state = window.global::<ui::MBREditorState>();

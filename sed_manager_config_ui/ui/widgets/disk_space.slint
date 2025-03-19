@@ -1,0 +1,13 @@
+export global DiskSpace {
+    public pure function to-string(bytes: int) -> string {
+        if bytes < 1024 {
+            bytes + " B"
+        } else if bytes < 1024 * 1024 {
+            bytes / 1024.0 + " KiB"
+        } else if bytes < 1024 * 1024 * 1024 {
+            bytes / 1024 / 1024.0 + " MiB"
+        } else {
+            bytes / 1024 / 1024 / 1024.0 + " GiB"
+        }
+    }
+}

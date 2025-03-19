@@ -13,68 +13,60 @@ import { RepeatedPasswordEdit } from "../widgets/password.slint";
 import { MBREditorState } from "../state.slint";
 import { StatusIndicator } from "../widgets/progress.slint";
 import { IconButton } from "../widgets/icon_button.slint";
+import { ResultPopup } from "../widgets/result_popup.slint";
+import { DiskSpace } from "../widgets/disk_space.slint";
 
-component MBRView {
+component MBRControlView {
     in property <MBRControl> mbr-control;
-    in property <Status> control-status;
-    in property <Status> upload-status;
-    in property <float> upload-progress;
+    in property <ExtendedStatus> status;
     callback set-enabled(enabled: bool);
     callback set-done(done: bool);
-    callback upload();
-    callback cancel();
-    changed control-status => {
-        if control-status == Status.error {
+    changed status => {
+        if status.status == Status.error {
             enabled-switch.checked = mbr-control.enabled;
             done-switch.checked = !mbr-control.done;
         }
     }
-    VerticalLayout {
-        spacing: 12px;
-        Island {
+
+    Island {
+        VerticalLayout {
+            padding: 8px;
+            spacing: 8px;
+            Text {
+                text: "MBR Control";
+                color: PaletteExtra.accented-control-foreground;
+                font-weight: 600;
+            }
+
             HorizontalLayout {
                 alignment: start;
                 vertical-stretch: 0;
                 GridLayout {
-                    padding: 8px;
                     spacing-vertical: 12px;
                     spacing-horizontal: 16px;
                     Text {
                         row: 0;
-                        text: "Size:";
-                        vertical-alignment: center;
-                    }
-
-                    Text {
-                        text: mbr-control.size + " B";
-                        vertical-alignment: center;
-                    }
-
-                    Text {
-                        row: 1;
-                        text: "Shadowing:";
+                        text: "Shadowing enabled:";
                         vertical-alignment: center;
                     }
 
                     enabled-switch := Switch {
-                        text: self.checked ? "Enabled" : "Disabled";
                         checked: mbr-control.enabled;
-                        enabled: control-status != Status.loading;
+                        enabled: status.status != Status.loading;
                         toggled => {
                             set-enabled(self.checked);
                         }
                     }
 
                     Text {
-                        row: 2;
-                        text: "Current state:";
+                        row: 1;
+                        text: "Shadowed:";
                         vertical-alignment: center;
                     }
 
                     done-switch := Switch {
-                        text: self.checked ? "Shadowed" : "Not shadowed";
                         checked: !mbr-control.done;
-                        enabled: control-status != Status.loading;
+                        enabled: status.status != Status.loading;
                         toggled => {
                             set-done(!self.checked);
                         }
@@ -82,38 +74,126 @@ component MBRView {
                 }
             }
         }
+    }
+}
 
+component MBRUploadView {
+    in property <int> max-size;
+    in property <ExtendedStatus> status;
+    in-out property <string> file;
+    in property <float> progress;
+    callback open();
+    callback upload(file: string);
+    callback cancel();
+
+    Island {
         VerticalLayout {
-            vertical-stretch: 1;
-            alignment: center;
+            padding: 8px;
+            spacing: 8px;
             HorizontalLayout {
-                alignment: center;
-                IconButton {
-                    icon: Icons.upload;
-                    width: 120px;
-                    height: 120px;
-                    enabled: upload-status != Status.loading;
+                spacing: 8px;
+                Text {
+                    text: "Upload PBA image";
+                    color: PaletteExtra.accented-control-foreground;
+                    font-weight: 600;
+                }
+
+                Rectangle {
+                    preferred-width: 100%;
+                }
+
+                Text {
+                    text: "MBR size:";
+                    vertical-alignment: center;
+                }
+
+                Text {
+                    text: DiskSpace.to-string(max-size);
+                    vertical-alignment: center;
+                }
+            }
+
+            if status.status != Status.loading: HorizontalLayout {
+                height: 32px;
+                spacing: 8px;
+                LineEdit {
+                    placeholder-text: "Enter path or click open";
+                    text <=> file;
+                }
+
+                Button {
+                    width: 90px;
+                    icon: Icons.file-open;
+                    text: "Open";
+                    colorize-icon: true;
                     clicked => {
-                        upload();
+                        open();
+                    }
+                }
+
+                Button {
+                    width: 90px;
+                    icon: Icons.upload;
+                    text: "Upload";
+                    colorize-icon: true;
+                    clicked => {
+                        upload(file);
+                    }
+                }
+            }
+
+            if status.status == Status.loading: HorizontalLayout {
+                height: 32px;
+                spacing: 8px;
+                ProgressIndicator {
+                    progress: progress;
+                }
+
+                Button {
+                    width: 90px;
+                    icon: Icons.close;
+                    text: "Cancel";
+                    colorize-icon: true;
+                    clicked => {
+                        cancel();
                     }
                 }
             }
         }
+    }
+}
 
-        HorizontalLayout {
-            spacing: 8px;
-            ProgressIndicator {
-                indeterminate: false;
-                progress: upload-progress;
-            }
+component MBRView {
+    in property <MBRControl> mbr-control;
+    in property <ExtendedStatus> control-status;
+    in property <ExtendedStatus> upload-status;
+    in-out property <string> upload-file <=> mbr-upload-view.file;
+    in property <float> upload-progress;
+    callback set-enabled <=> mbr-control-view.set-enabled;
+    callback set-done <=> mbr-control-view.set-done;
+    callback open <=> mbr-upload-view.open;
+    callback upload <=> mbr-upload-view.upload;
+    callback cancel <=> mbr-upload-view.cancel;
 
-            Button {
-                text: "Cancel";
-                enabled: upload-status == Status.loading;
-                clicked => {
-                    cancel();
-                }
-            }
+    changed upload-file => {
+        mbr-upload-view.file = upload-file;
+    }
+
+    VerticalLayout {
+        spacing: 12px;
+        mbr-control-view := MBRControlView {
+            status: control-status;
+            mbr-control: mbr-control;
+        }
+
+        mbr-upload-view := MBRUploadView {
+            max-size: mbr-control.size;
+            status: upload-status;
+            progress: upload-progress;
+        }
+
+        Rectangle {
+            preferred-height: 100%;
         }
     }
 }
@@ -124,21 +204,27 @@ export component MBREditor inherits ConfigView {
     back-enabled: login-status.status != Status.loading && upload-status.status != Status.loading;
     in property <ExtendedStatus> login-status: MBREditorState.login-statuses[root.device-idx];
     in property <ExtendedStatus> control-status: MBREditorState.control-statuses[root.device-idx];
+    in property <string> upload-file-in: MBREditorState.upload-files[root.device-idx];
+    out property <string> upload-file-out: MBREditorState.upload-files[root.device-idx];
     in property <ExtendedStatus> upload-status: MBREditorState.upload-statuses[root.device-idx];
     in property <float> upload-progress: MBREditorState.upload-progresses[root.device-idx];
     in property <MBRControl> mbr-control: MBREditorState.mbr-control[root.device-idx];
     in-out property <bool> authenticated: false;
     changed control-status => {
         if control-status.status == Status.error {
-            ToastMessage.show("Failed to update MBR: " + control-status.message, PaletteExtra.error-foreground);
+            ToastMessage.show("Cannot update MBR: " + control-status.message, PaletteExtra.error-foreground);
         }
     }
     changed upload-status => {
-        if upload-status.status == Status.error {
-            ToastMessage.show("Upload failed: " + upload-status.message, PaletteExtra.error-foreground);
-        } else if upload-status.status == Status.success {
-            ToastMessage.show("Upload finished", PaletteExtra.success-foreground);
+        if upload-status.status != Status.loading {
+            upload-result-popup.show()
         }
+    }
+    changed upload-file-in => {
+        upload-file-out = upload-file-in;
+    }
+    changed upload-file-out => {
+        MBREditorState.upload-files[root.device-idx] = upload-file-out;
     }
     VerticalLayout {
         if !authenticated: LoginView {
@@ -158,8 +244,9 @@ export component MBREditor inherits ConfigView {
         }
         if authenticated: MBRView {
             mbr-control: mbr-control;
-            control-status: control-status.status;
-            upload-status: upload-status.status;
+            control-status: control-status;
+            upload-status: upload-status;
+            upload-file <=> upload-file-out;
             upload-progress: upload-progress;
             set-enabled(enabled) => {
                 MBREditorState.set-enabled(root.device-idx, enabled);
@@ -167,16 +254,38 @@ export component MBREditor inherits ConfigView {
             set-done(done) => {
                 MBREditorState.set-done(root.device-idx, done);
             }
-            upload => {
-                MBREditorState.upload-cancel_reqs[root.device-idx] = false;
-                MBREditorState.upload(root.device-idx)
+            open => {
+                MBREditorState.open(root.device-idx);
+            }
+            upload(file) => {
+                MBREditorState.upload-cancel-reqs[root.device-idx] = false;
+                MBREditorState.upload(root.device-idx, file);
             }
             cancel => {
-                MBREditorState.upload-cancel_reqs[root.device-idx] = true;
+                MBREditorState.upload-cancel-reqs[root.device-idx] = true;
             }
         }
         if login-status.status != Status.success && authenticated: StatusOverlay {
             status: login-status;
+        }
+    }
+
+    upload-result-popup := ResultPopup {
+        x: (root.width - self.width) / 2;
+        y: (root.height - self.height) / 2;
+        icon: Icons.upload;
+        finish-text: "OK";
+        retry-present: false;
+        status: upload-status.status;
+        message: {
+            if upload-status.status == Status.error {
+                upload-status.message
+            } else {
+                "PBA image uploaded"
+            }
+        };
+        finished => {
+            self.close();
         }
     }
 }
@@ -192,6 +301,9 @@ export component LivePreviewTest_ParamsError inherits MBREditor {
 export component LivePreviewTest_ParamsSuccess inherits MBREditor {
     device-name: "Foo Device";
     login-status: { status: Status.success };
+    control-status: { status: Status.success };
+    upload-status: { status: Status.success };
+    mbr-control: { size: 128 * 1024 * 1024 + 512312, enabled: false, done: false };
     authenticated: true;
 }
 

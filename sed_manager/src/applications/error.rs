@@ -16,11 +16,11 @@ pub enum Error {
     InternalError,
     #[error("Cancelled")]
     Cancelled,
-    #[error("Could not open file")]
+    #[error("Cannot open file")]
     FileNotOpen,
-    #[error("Could not read file")]
+    #[error("Cannot read file")]
     FileReadError,
-    #[error("The file is too large")]
+    #[error("File is too large")]
     FileTooLarge,
     #[error("Invalid ACE expression")]
     InvalidACEExpression,

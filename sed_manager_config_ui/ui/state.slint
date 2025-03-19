@@ -82,14 +82,16 @@ export global MBREditorState {
     in property <[ExtendedStatus]> login-statuses;
     in property <[MBRControl]> mbr-control;
     in property <[ExtendedStatus]> control-statuses;
+    in-out property <[string]> upload-files;
     in property <[ExtendedStatus]> upload-statuses;
     in property <[float]> upload-progresses;
-    in property <[bool]> upload-cancel_reqs;
+    in property <[bool]> upload-cancel-reqs;
     callback login(device-idx: int, password: string);
     callback query(device-idx: int);
     callback set-enabled(device-idx: int, enabled: bool);
     callback set-done(device-idx: int, done: bool);
-    callback upload(device-idx: int);
+    callback open(device-idx: int);
+    callback upload(device-idx: int, file: string);
 }
 
 export global TroubleshootingState {
