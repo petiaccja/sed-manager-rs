@@ -14,7 +14,7 @@ import { UserEditorState, UserList } from "../state.slint";
 import { StatusIndicator } from "../widgets/progress.slint";
 
 global TableDesc {
-    out property <[string]> column-names: ["Enabled", "Friendly name", "Password"];
+    out property <[string]> column-names: ["Enabled", "Name", "Password"];
     out property <[length]> column-widths: [80px, 140px, 80px];
     out property <[float]> column-stretches: [0.2, 1.0, 0.2];
     out property <length> row-height: 32px;
@@ -105,7 +105,7 @@ component UserTable {
     in property <[ExtendedStatus]> statuses;
     out property <int> password-popup-user;
     callback set-enabled(user-idx: int, enabled: bool);
-    callback set-name(user-idx: int, friendly-name: string);
+    callback set-name(user-idx: int, common-name: string);
     callback set-password(user-idx: int, password: string);
     table := Table {
         preferred-width: 100%;
@@ -132,8 +132,8 @@ component UserTable {
                 set-enabled(enabled) => {
                     set-enabled(user-idx, enabled);
                 }
-                set-name(friendly-name) => {
-                    set-name(user-idx, friendly-name);
+                set-name(common-name) => {
+                    set-name(user-idx, common-name);
                 }
                 set-password => {
                     password-popup-user = user-idx;
@@ -213,8 +213,8 @@ export component UserEditor inherits ConfigView {
             set-enabled(user-idx, enabled) => {
                 UserEditorState.set-enabled(root.device-idx, user-idx, enabled);
             }
-            set-name(user-idx, friendly-name) => {
-                UserEditorState.set-name(root.device-idx, user-idx, friendly-name);
+            set-name(user-idx, common-name) => {
+                UserEditorState.set-name(root.device-idx, user-idx, common-name);
             }
             set-password(user-idx, password) => {
                 UserEditorState.set-password(root.device-idx, user-idx, password)

@@ -13,18 +13,13 @@ component WarningMessage {
         spacing: 8px;
         alignment: center;
         Text {
-            text: "Losing the password could render your drive unusable (bricked)!";
+            text: "Losing your password could render your drive unusable!";
             font-weight: 600;
             wrap: word-wrap;
         }
 
         Text {
-            text: "You need this password to reset the device in case you lose your encryption password.";
-            wrap: word-wrap;
-        }
-
-        Text {
-            text: "Make sure you have your PSID password. The PSID is a second way to reset the drive.";
+            text: "In case you lose your encryption password, the only way to regain control of the drive is via factory reset. You will need either this password or the PSID password for that.";
             wrap: word-wrap;
         }
     }
@@ -90,7 +85,7 @@ export component TakeOwnership inherits ConfigView {
         finish-text: "Done";
         message: {
             if extended-status.status == Status.success {
-                "Ownership set up successfully!"
+                "You now own this drive"
             } else if extended-status.status == Status.error {
                 "Failed to take ownership:\n" + extended-status.message
             } else {

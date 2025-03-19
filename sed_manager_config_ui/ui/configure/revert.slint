@@ -92,7 +92,7 @@ export component Revert inherits ConfigView {
         finish-text: "Done";
         message: {
             if extended-status.status == Status.success {
-                "Device reverted successfully!"
+                "Device reverted"
             } else if extended-status.status == Status.error {
                 "Failed to revert device:\n" + extended-status.message
             } else {

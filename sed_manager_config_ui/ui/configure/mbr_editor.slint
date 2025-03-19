@@ -137,7 +137,7 @@ export component MBREditor inherits ConfigView {
         if upload-status.status == Status.error {
             ToastMessage.show("Upload failed: " + upload-status.message, PaletteExtra.error-foreground);
         } else if upload-status.status == Status.success {
-            ToastMessage.show("Upload successful!", PaletteExtra.success-foreground);
+            ToastMessage.show("Upload finished", PaletteExtra.success-foreground);
         }
     }
     VerticalLayout {

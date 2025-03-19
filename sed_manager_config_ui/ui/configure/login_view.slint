@@ -62,7 +62,7 @@ export component LoginView {
             status: extended-status.status;
             message: {
                 if extended-status.status == Status.success {
-                    "Authenticated successfully!"
+                    "Authenticated"
                 } else if extended-status.status == Status.error {
                     "Failed to authenticate:\n" + extended-status.message
                 } else {
