@@ -81,7 +81,7 @@ export component ActivateLocking inherits ConfigView {
         finish-text: "Done";
         message: {
             if extended-status.status == Status.success {
-                "Locking is now active!\nNote: you still have to set up locking ranges."
+                "Locking features activated"
             } else if extended-status.status == Status.error {
                 "Failed to activate locking:\n" + extended-status.message
             } else {

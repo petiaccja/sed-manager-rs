@@ -1,6 +1,5 @@
-import { LineEdit, Button } from "std-widgets.slint";
+import { LineEdit, Button, ComboBox, Switch } from "std-widgets.slint";
 import { PaletteExtra } from "../widgets/visual.slint";
-import { RepeatedPasswordEdit } from "../widgets/password.slint";
 import { Status, ExtendedStatus} from "../data/status.slint";
 import { WarningPopup } from "../widgets/warning_popup.slint";
 import { ResultPopup } from "../widgets/result_popup.slint";
@@ -10,69 +9,72 @@ import { SingleStepState } from "../state.slint";
 
 component WarningMessage {
     VerticalLayout {
-        spacing: 8px;
         alignment: center;
+        spacing: 8px;
         Text {
-            text: "Losing the password could render your drive unusable (bricked)!";
+            text: "Erase all from the drive?";
+            wrap: word-wrap;
             font-weight: 600;
-            wrap: word-wrap;
         }
 
         Text {
-            text: "You need this password to reset the device in case you lose your encryption password.";
-            wrap: word-wrap;
-        }
-
-        Text {
-            text: "Make sure you have your PSID password. The PSID is a second way to reset the drive.";
+            text: "The data will be erased cryptographically, and there is no way to later restore it.";
             wrap: word-wrap;
         }
     }
 }
 
 component Form {
-    in property <bool> enabled: true;
-    out property <string> password <=> password.password;
+    out property <bool> use-psid: authority.current-index == 1;
+    out property <string> password;
+    out property <bool> revert-admin <=> select-sp.checked;
+    in property <bool> enabled;
     callback executed();
     VerticalLayout {
         alignment: LayoutAlignment.center;
         padding: 8px;
         spacing: 6px;
         min-width: 200px;
-        password := RepeatedPasswordEdit {
-            prompt-text: "New owner password:";
+        authority := ComboBox {
+            model: ["Enter owner password:", "Enter PSID password:"];
+        }
+
+        password := LineEdit {
+            input-type: InputType.password;
+            text <=> root.password;
+        }
+
+        select-sp := Switch {
+            text: "Revert admin";
+            checked: false;
+            enabled: !use-psid;
         }
 
         Button {
-            text: "Take ownership";
+            text: select-sp.checked || use-psid ? "Revert admin & locking" : "Revert locking";
             primary: true;
-            enabled: password.accepted && enabled;
+            enabled <=> enabled;
             clicked => {
-                executed()
+                executed();
             }
-        }
-
-        Text {
-            text: password.reason;
-            color: PaletteExtra.error-foreground;
-            horizontal-alignment: center;
         }
     }
 }
 
-export component TakeOwnership inherits ConfigView {
+export component Revert inherits ConfigView {
     in property <ExtendedStatus> extended-status: SingleStepState.statuses[root.device-idx];
-    config-name: "Take ownership";
-    config-icon: Icons.take-ownership;
+    config-name: "Revert";
+    config-icon: Icons.revert;
     back-enabled: extended-status.status != Status.loading;
     warning-popup := WarningPopup {
         x: (root.width - self.width) / 2;
         y: (root.height - self.height) / 2;
+        continue-text: "Erase";
         WarningMessage { }
 
         continued => {
             self.close();
-            SingleStepState.take-ownership(root.device-idx, form.password);
+            SingleStepState.revert(root.device-idx, form.use-psid, form.password, form.revert-admin);
             result-popup.show();
         }
         cancelled => {
@@ -90,11 +92,11 @@ export component TakeOwnership inherits ConfigView {
         finish-text: "Done";
         message: {
             if extended-status.status == Status.success {
-                "Ownership set up successfully!"
+                "Device reverted"
             } else if extended-status.status == Status.error {
-                "Failed to take ownership:\n" + extended-status.message
+                "Failed to revert device:\n" + extended-status.message
             } else {
-                "Taking ownership..."
+                "Reverting device..."
             }
         }
         finished => {

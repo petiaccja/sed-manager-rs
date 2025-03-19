@@ -1,0 +1,35 @@
+import { Palette } from "std-widgets.slint";
+import { PaletteExtra } from "visual.slint";
+
+export component PrototypePopup inherits PopupWindow {
+    private property <length> border-radius: 16px;
+
+    Rectangle {
+        opacity: 95%;
+
+        Rectangle {
+            background: #00000000;
+            border-radius: border-radius;
+            x: -6px;
+            y: -6px;
+            width: root.width + 12px;
+            height: root.height + 12px;
+            drop-shadow-color: #00000060;
+            drop-shadow-blur: 32px;
+            drop-shadow-offset-x: 3px;
+            drop-shadow-offset-y: 3px;
+        }
+
+        Rectangle {
+            background: Palette.background;
+            border-radius: border-radius;
+        }
+
+        Rectangle {
+            background: Palette.control-background;
+            border-radius: border-radius;
+        }
+    }
+
+    @children
+}

@@ -1,6 +1,5 @@
 use sed_manager::spec;
 use sed_manager::spec::column_types::{AuthorityRef, LockingRangeRef};
-use sed_manager_gui_elements::ExtendedStatus;
 use slint::{ComponentHandle as _, Model};
 use std::rc::Rc;
 
@@ -203,7 +202,7 @@ async fn fetch(
         read_unlock.push(session.get_read_permission(*user, *range).await?);
         write_unlock.push(session.get_write_permission(*user, *range).await?);
     }
-    let mbr_status = ExtendedStatus::success();
+    let mbr_status = ui::ExtendedStatus::success();
     let range_statuses = core::iter::repeat_n(mbr_status.clone(), ranges.len()).collect();
     Ok(ui::PermissionList::new(unshadow_mbr, mbr_status, read_unlock, write_unlock, range_statuses))
 }

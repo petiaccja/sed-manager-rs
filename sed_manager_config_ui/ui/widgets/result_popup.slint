@@ -81,7 +81,7 @@ export component LivePreviewTest {
     function update() {
         if status == Status.loading {
             self.status = Status.success;
-            self.message = "Task successful!";
+            self.message = "Success";
         } else if status == Status.success {
             self.status = Status.error;
             self.message = "Task failed:\nuseful error message"

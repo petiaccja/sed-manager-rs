@@ -17,14 +17,10 @@ component UnavailableDeviceView inherits Island {
         HorizontalLayout {
             height: 24px;
             spacing: 12px;
-            Text {
-                text: "Path:";
-                vertical-alignment: center;
-            }
 
             LineEdit {
                 horizontal-stretch: 1.0;
-                horizontal-alignment: right;
+                horizontal-alignment: left;
                 read-only: true;
                 text: unavailable-device.path;
             }
@@ -39,7 +35,8 @@ component UnavailableDeviceView inherits Island {
 
             Text {
                 horizontal-stretch: 1.0;
-                text: "Failed to open device: " + unavailable-device.error-message;
+                text: unavailable-device.error-message;
+                color: PaletteExtra.error-foreground;
             }
         }
     }

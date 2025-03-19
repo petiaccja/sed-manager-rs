@@ -11,7 +11,7 @@ export component StackResetPopup inherits ResultPopup {
         if self.status == Status.loading {
             "Resetting stack..."
         } else if self.status == Status.success {
-            "Stack successfully reset!"
+            "Stack has been reset"
         } else {
             "Failed to reset stack: " + extended-status.message
         }
