@@ -11,7 +11,6 @@ use crate::spec::objects::CPIN;
 use crate::tper::TPer;
 
 use super::error::Error;
-use super::with_session::with_session;
 
 pub fn is_taking_ownership_supported(discovery: &Discovery) -> bool {
     if let Some(locking_desc) = discovery.get::<LockingDescriptor>() {
@@ -34,13 +33,12 @@ pub async fn take_ownership(tper: &TPer, new_password: &[u8]) -> Result<(), Erro
     let admin_sp = get_admin_sp(ssc.feature_code())?;
 
     let anybody_session = tper.start_session(admin_sp, None, None).await?;
-    let msid_password: Password = with_session!(session = anybody_session => {
-        session.get(c_pin::MSID.as_uid(), CPIN::PIN).await
-    })?;
+    let msid_password: Password =
+        anybody_session.with(async |session| session.get(c_pin::MSID.as_uid(), CPIN::PIN).await).await?;
     let sid_session = tper.start_session(admin_sp, Some(authority::SID), Some(&msid_password)).await?;
-    with_session!(session = sid_session => {
-        session.set(c_pin::SID.as_uid(), CPIN::PIN, new_password).await
-    })?;
+    sid_session
+        .with(async |session| session.set(c_pin::SID.as_uid(), CPIN::PIN, new_password).await)
+        .await?;
 
     Ok(())
 }
@@ -50,7 +48,7 @@ pub async fn verify_ownership(tper: &TPer, sid_password: &[u8]) -> Result<bool, 
     let discovery = tper.discover().await?;
     let ssc = discovery.get_primary_ssc().ok_or(Error::NoAvailableSSC)?;
     let admin_sp = get_admin_sp(ssc.feature_code())?;
-    with_session!(session = tper.start_session(admin_sp, Some(authority::SID), Some(sid_password)).await? => {});
+    let _ = tper.start_session(admin_sp, Some(authority::SID), Some(sid_password)).await?.end_session().await;
     Ok(true)
 }
 
