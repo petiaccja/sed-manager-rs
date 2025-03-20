@@ -47,13 +47,14 @@ pub async fn verify_reverted(tper: &TPer) -> Result<bool, Error> {
 mod tests {
     use std::sync::Arc;
 
-    use crate::{fake_device::FakeDevice, tper::TPer};
+    use crate::{fake_device::FakeDevice, rpc::TokioRuntime, tper::TPer};
 
     use super::*;
 
     #[tokio::test]
     async fn revert_success_admin() -> Result<(), Error> {
         let sid_password = "macilaci";
+        let runtime = Arc::new(TokioRuntime::new());
         let device = Arc::new(FakeDevice::new());
         {
             let controller = device.controller();
@@ -61,7 +62,7 @@ mod tests {
             let sid = controller.admin_sp.basic_sp.c_pin.get_mut(&spec::opal::admin::c_pin::SID).unwrap();
             sid.pin = sid_password.into();
         };
-        let tper = TPer::new_on_default_com_id(device)?;
+        let tper = TPer::new_on_default_com_id(device, runtime)?;
         revert(&tper, spec::core::authority::SID, sid_password.as_bytes(), spec::opal::admin::sp::ADMIN).await?;
         assert!(verify_reverted(&tper).await?);
         Ok(())
@@ -70,6 +71,7 @@ mod tests {
     #[tokio::test]
     async fn revert_success_locking() -> Result<(), Error> {
         let sid_password = "macilaci";
+        let runtime = Arc::new(TokioRuntime::new());
         let device = Arc::new(FakeDevice::new());
         {
             let controller = device.controller();
@@ -77,7 +79,7 @@ mod tests {
             let sid = controller.admin_sp.basic_sp.c_pin.get_mut(&spec::opal::admin::c_pin::SID).unwrap();
             sid.pin = sid_password.into();
         };
-        let tper = TPer::new_on_default_com_id(device)?;
+        let tper = TPer::new_on_default_com_id(device, runtime)?;
         revert(&tper, spec::core::authority::SID, sid_password.as_bytes(), spec::opal::admin::sp::LOCKING).await?;
         //assert!(verify_reverted(&tper).await?);
         Ok(())

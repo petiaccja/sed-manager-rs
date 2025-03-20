@@ -7,7 +7,7 @@ use tokio::sync::Mutex;
 use crate::device::Device;
 use crate::messaging::com_id::{ComIdState, StackResetStatus};
 use crate::messaging::discovery::Discovery;
-use crate::rpc::{CommandSender, Error as RPCError, Properties, Protocol, SessionIdentifier};
+use crate::rpc::{CommandSender, DynamicRuntime, Error as RPCError, Properties, Protocol, SessionIdentifier};
 use crate::spec::column_types::{AuthorityRef, SPRef};
 
 use super::com_session::ComSession;
@@ -32,9 +32,9 @@ pub fn get_primary_ssc_com_id(discovery: &Discovery) -> Option<(u16, u16)> {
 }
 
 impl TPer {
-    pub fn new(device: Arc<dyn Device>, com_id: u16, com_id_ext: u16) -> Self {
+    pub fn new(device: Arc<dyn Device>, runtime: Arc<dyn DynamicRuntime>, com_id: u16, com_id_ext: u16) -> Self {
         let capabilities = Protocol::capabilities();
-        let (message_sender, _) = Protocol::spawn(device, com_id, com_id_ext, capabilities.clone());
+        let (message_sender, _) = Protocol::spawn(device, runtime, com_id, com_id_ext, capabilities.clone());
         Self {
             com_id,
             com_id_ext,
@@ -47,10 +47,10 @@ impl TPer {
         }
     }
 
-    pub fn new_on_default_com_id(device: Arc<dyn Device>) -> Result<Self, RPCError> {
+    pub fn new_on_default_com_id(device: Arc<dyn Device>, runtime: Arc<dyn DynamicRuntime>) -> Result<Self, RPCError> {
         let discovery = discover(&*device)?;
         if let Some((com_id, com_id_ext)) = get_primary_ssc_com_id(&discovery) {
-            Ok(Self::new(device, com_id, com_id_ext))
+            Ok(Self::new(device, runtime, com_id, com_id_ext))
         } else {
             Err(RPCError::NotSupported)
         }

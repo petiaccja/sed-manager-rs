@@ -54,6 +54,12 @@ impl SPSession {
         self.do_end_of_session().await
     }
 
+    pub async fn with<Output: 'static>(mut self, f: impl AsyncFnOnce(&mut SPSession) -> Output) -> Output {
+        let result = f(&mut self).await;
+        let _ = self.end_session().await;
+        result
+    }
+
     pub fn abort_session(self) {
         drop(self);
     }

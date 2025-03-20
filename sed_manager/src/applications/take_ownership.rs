@@ -53,15 +53,16 @@ pub async fn verify_ownership(tper: &TPer, sid_password: &[u8]) -> Result<bool, 
 mod tests {
     use std::sync::Arc;
 
-    use crate::{fake_device::FakeDevice, tper::TPer};
+    use crate::{fake_device::FakeDevice, rpc::TokioRuntime, tper::TPer};
 
     use super::*;
 
     #[tokio::test]
     async fn take_ownership_success() -> Result<(), Error> {
         let new_password = "macilaci".as_bytes();
+        let runtime = Arc::new(TokioRuntime::new());
         let device = Arc::new(FakeDevice::new());
-        let tper = TPer::new_on_default_com_id(device)?;
+        let tper = TPer::new_on_default_com_id(device, runtime)?;
         take_ownership(&tper, new_password).await?;
         assert!(verify_ownership(&tper, new_password).await?);
         Ok(())
@@ -70,8 +71,9 @@ mod tests {
     #[tokio::test]
     async fn take_ownership_already_taken() -> Result<(), Error> {
         let new_password = "macilaci".as_bytes();
+        let runtime = Arc::new(TokioRuntime::new());
         let device = Arc::new(FakeDevice::new());
-        let tper = TPer::new_on_default_com_id(device)?;
+        let tper = TPer::new_on_default_com_id(device, runtime)?;
         take_ownership(&tper, new_password).await?;
         assert!(take_ownership(&tper, "zsiroskenyer".as_bytes()).await.is_err());
         Ok(())

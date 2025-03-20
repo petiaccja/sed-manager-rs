@@ -6,12 +6,13 @@ use sed_manager::applications::{
 use sed_manager::device::{Device, Error as DeviceError};
 use sed_manager::messaging::discovery::{Discovery, Feature};
 use sed_manager::messaging::uid::UID;
-use sed_manager::rpc::Error as RPCError;
+use sed_manager::rpc::{DynamicRuntime, Error as RPCError};
 use sed_manager::spec::column_types::{AuthorityRef, LockingRangeRef, SPRef};
 use sed_manager::spec::{self, ObjectLookup as _};
 use sed_manager::tper::TPer;
 
 pub struct Backend {
+    runtime: Arc<dyn DynamicRuntime>,
     devices: Vec<Arc<dyn Device>>,
     discoveries: Vec<Option<Discovery>>,
     tpers: Vec<Option<Arc<TPer>>>,
@@ -85,8 +86,8 @@ impl From<PermissionEditSession> for EditorSession {
 }
 
 impl Backend {
-    pub fn new() -> Self {
-        Self { devices: Vec::new(), discoveries: Vec::new(), tpers: Vec::new(), sessions: Vec::new() }
+    pub fn new(runtime: Arc<dyn DynamicRuntime>) -> Self {
+        Self { runtime, devices: Vec::new(), discoveries: Vec::new(), tpers: Vec::new(), sessions: Vec::new() }
     }
 
     pub fn set_devices(&mut self, devices: Vec<Arc<dyn Device>>) {
@@ -122,7 +123,7 @@ impl Backend {
         let ssc = discovery.get_primary_ssc().ok_or(RPCError::NotSupported)?;
         let com_id = ssc.base_com_id();
         let com_id_ext = 0;
-        let tper = Arc::new(TPer::new(device.clone(), com_id, com_id_ext));
+        let tper = Arc::new(TPer::new(device.clone(), self.runtime.clone(), com_id, com_id_ext));
         drop(maybe_tper.replace(tper.clone()));
         Ok(tper)
     }

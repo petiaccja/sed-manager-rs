@@ -90,13 +90,15 @@ pub mod tests {
     use std::sync::Arc;
 
     use crate::fake_device::FakeDevice;
+    use crate::rpc::TokioRuntime;
     use crate::spec;
     use crate::tper::TPer;
 
     pub async fn setup_activated_tper() -> TPer {
         use spec::opal::admin::sp::LOCKING;
+        let runtime = Arc::new(TokioRuntime::new());
         let device = Arc::new(FakeDevice::new());
         device.controller().lock().unwrap().activate(LOCKING).unwrap();
-        TPer::new_on_default_com_id(device).unwrap()
+        TPer::new_on_default_com_id(device, runtime).unwrap()
     }
 }
