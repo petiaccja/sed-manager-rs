@@ -32,14 +32,6 @@ impl SPSession {
             }
         }
     }
-
-    async fn do_end_of_session(&self) -> Result<(), RPCError> {
-        let result = self.sender.method(self.session, PackagedMethod::EndOfSession).await?;
-        match result {
-            PackagedMethod::EndOfSession => Ok(()),
-            _ => Err(RPCError::Aborted),
-        }
-    }
 }
 
 impl Drop for SPSession {
@@ -51,7 +43,12 @@ impl Drop for SPSession {
 
 impl SPSession {
     pub async fn end_session(self) -> Result<(), RPCError> {
-        self.do_end_of_session().await
+        let result = self.sender.method(self.session, PackagedMethod::EndOfSession).await?;
+        self.sender.close_session(self.session); // Make the drop have no effect.
+        match result {
+            PackagedMethod::EndOfSession => Ok(()),
+            _ => Err(RPCError::Aborted),
+        }
     }
 
     pub async fn with<Output: 'static>(mut self, f: impl AsyncFnOnce(&mut SPSession) -> Output) -> Output {
@@ -61,7 +58,8 @@ impl SPSession {
     }
 
     pub fn abort_session(self) {
-        drop(self);
+        self.sender.enqueue_method(self.session, PackagedMethod::EndOfSession);
+        self.sender.abort_session(self.session);
     }
 
     pub async fn authenticate(&self, authority: AuthorityRef, proof: Option<&[u8]>) -> Result<bool, RPCError> {

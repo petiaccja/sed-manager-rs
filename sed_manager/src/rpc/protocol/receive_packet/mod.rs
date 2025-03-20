@@ -66,6 +66,12 @@ impl ReceivePacket {
         }
     }
 
+    pub fn abort_session(&mut self, id: SessionIdentifier) {
+        if let Some(session) = self.sessions.get_mut(&id) {
+            session.abort();
+        }
+    }
+
     pub fn is_empty(&self) -> bool {
         self.sessions.is_empty()
     }
@@ -168,6 +174,12 @@ impl Session {
     pub fn close(&mut self) {
         self.packet.close();
         self.sender.close();
+    }
+
+    pub fn abort(&mut self) {
+        self.packet.close();
+        self.sender.close();
+        self.sender.clear();
     }
 
     pub fn update(&mut self) {
@@ -361,6 +373,7 @@ mod tests {
         node.update(&mut sender, &mut com_packet, &mut done);
         node.close_session(id);
         node.update(&mut sender, &mut com_packet, &mut done);
+        assert_eq!(node.sessions.len(), 0);
         assert!(done.is_closed());
     }
 }

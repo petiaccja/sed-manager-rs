@@ -7,7 +7,7 @@ use tokio::sync::Mutex;
 use crate::device::Device;
 use crate::messaging::com_id::{ComIdState, StackResetStatus};
 use crate::messaging::discovery::Discovery;
-use crate::rpc::{CommandSender, DynamicRuntime, Error as RPCError, Properties, Protocol, SessionIdentifier};
+use crate::rpc::{CommandSender, Error as RPCError, Properties, Protocol, Runtime, SessionIdentifier};
 use crate::spec::column_types::{AuthorityRef, SPRef};
 
 use super::com_session::ComSession;
@@ -20,9 +20,11 @@ pub struct TPer {
     next_hsn: AtomicU32,
     capabilities: Properties,
     properties: Mutex<Option<Properties>>,
-    message_sender: CommandSender,
     com_session: ComSession,
     control_session: ControlSession,
+    message_sender: CommandSender,
+    #[allow(unused)]
+    runtime: Arc<dyn core::any::Any>, // Runs the protocol and has to be kept alive
 }
 
 pub use crate::rpc::discover;
@@ -32,9 +34,9 @@ pub fn get_primary_ssc_com_id(discovery: &Discovery) -> Option<(u16, u16)> {
 }
 
 impl TPer {
-    pub fn new(device: Arc<dyn Device>, runtime: Arc<dyn DynamicRuntime>, com_id: u16, com_id_ext: u16) -> Self {
+    pub fn new<R: Runtime>(device: Arc<dyn Device>, runtime: Arc<R>, com_id: u16, com_id_ext: u16) -> Self {
         let capabilities = Protocol::capabilities();
-        let (message_sender, _) = Protocol::spawn(device, runtime, com_id, com_id_ext, capabilities.clone());
+        let (message_sender, _) = Protocol::spawn(device, &*runtime, com_id, com_id_ext, capabilities.clone());
         Self {
             com_id,
             com_id_ext,
@@ -44,10 +46,11 @@ impl TPer {
             message_sender: message_sender.clone(),
             com_session: ComSession::new(message_sender.clone()),
             control_session: ControlSession::new(message_sender.clone()),
+            runtime: runtime,
         }
     }
 
-    pub fn new_on_default_com_id(device: Arc<dyn Device>, runtime: Arc<dyn DynamicRuntime>) -> Result<Self, RPCError> {
+    pub fn new_on_default_com_id<R: Runtime>(device: Arc<dyn Device>, runtime: Arc<R>) -> Result<Self, RPCError> {
         let discovery = discover(&*device)?;
         if let Some((com_id, com_id_ext)) = get_primary_ssc_com_id(&discovery) {
             Ok(Self::new(device, runtime, com_id, com_id_ext))

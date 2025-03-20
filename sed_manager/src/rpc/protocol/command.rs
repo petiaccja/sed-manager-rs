@@ -9,6 +9,7 @@ use super::promise::Promise;
 pub enum Command {
     OpenSession { id: SessionIdentifier, properties: Properties },
     CloseSession { id: SessionIdentifier },
+    AbortSession { id: SessionIdentifier },
     CloseComSession,
     TryShutdown,
     Method { id: SessionIdentifier, request: Promise<PackagedMethod, PackagedMethod, Error> },
@@ -32,6 +33,10 @@ impl CommandSender {
 
     pub fn close_session(&self, id: SessionIdentifier) {
         let _ = self.tx.send(Command::CloseSession { id });
+    }
+
+    pub fn abort_session(&self, id: SessionIdentifier) {
+        let _ = self.tx.send(Command::AbortSession { id });
     }
 
     pub fn close_com_session(&self) {

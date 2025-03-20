@@ -11,9 +11,8 @@ mod utility;
 use backend::Backend;
 use core::error::Error;
 use frontend::Frontend;
-use sed_manager::rpc::TokioRuntime;
 use slint::ComponentHandle;
-use std::{fs::File, rc::Rc, sync::Arc};
+use std::{fs::File, rc::Rc};
 use utility::PeekCell;
 
 fn init_logging() -> Option<tracing_appender::non_blocking::WorkerGuard> {
@@ -36,11 +35,10 @@ fn init_logging() -> Option<tracing_appender::non_blocking::WorkerGuard> {
 
 fn main() -> Result<(), Box<dyn Error>> {
     let _guard = init_logging();
-    let runtime = Arc::new(TokioRuntime::new());
+    let backend = Rc::new(PeekCell::new(Backend::new()));
 
     let _ = slint::BackendSelector::new().backend_name("winit".into()).renderer_name("skia".into()).select();
     let app_window = ui::AppWindow::new()?;
-    let backend = Rc::new(PeekCell::new(Backend::new(runtime.clone())));
     let frontend = Frontend::new(app_window.clone_strong());
 
     configuration::set_callbacks(backend.clone(), frontend.clone());

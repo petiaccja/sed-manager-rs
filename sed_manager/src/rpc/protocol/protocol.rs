@@ -14,7 +14,7 @@ use crate::serialization::DeserializeBinary;
 use super::command::Command;
 use super::promise::Promise;
 use super::receive_packet::{self, commit, ReceivePacket};
-use super::runtime::{DynamicRuntime, Runtime};
+use super::runtime::{DynamicTimer, Runtime, Timer};
 use super::send_packet::{self, SendPacket};
 use super::shared::buffer::Buffer;
 use super::shared::pipe::{SinkPipe, SourcePipe};
@@ -24,7 +24,7 @@ use super::CommandSender;
 pub struct Protocol {
     rx: mpsc::UnboundedReceiver<Command>,
     device: Arc<dyn Device>,
-    runtime: Arc<dyn DynamicRuntime>,
+    timer: Box<dyn DynamicTimer>,
     com_id: u16,
     properties: Properties,
     // Packet: send
@@ -46,6 +46,7 @@ pub struct Protocol {
 enum CommandBatch {
     OpenSession { id: SessionIdentifier, properties: Properties },
     CloseSession { id: SessionIdentifier },
+    AbortSession { id: SessionIdentifier },
     CloseComSession,
     TryShutdown,
     Method { buffer: Vec<(SessionIdentifier, Promise<PackagedMethod, PackagedMethod, Error>)> },
@@ -54,24 +55,25 @@ enum CommandBatch {
 }
 
 impl Protocol {
-    pub fn spawn(
+    pub fn spawn<R: Runtime>(
         device: Arc<dyn Device>,
-        runtime: Arc<dyn DynamicRuntime>,
+        runtime: &R,
         com_id: u16,
         com_id_ext: u16,
         properties: Properties,
     ) -> (CommandSender, oneshot::Receiver<()>) {
         let (tx, rx) = mpsc::unbounded_channel();
         let (done_tx, done_rx) = oneshot::channel();
-        let protocol = Self::new(rx, device, runtime.clone(), com_id, com_id_ext, properties);
-        let _ = Runtime::spawn(&*runtime, protocol.run(done_tx));
+        let timer = Box::new(runtime.timer());
+        let protocol = Self::new(rx, device, timer, com_id, com_id_ext, properties);
+        let _ = runtime.spawn(protocol.run(done_tx));
         (CommandSender::new(tx), done_rx)
     }
 
     pub fn new(
         rx: mpsc::UnboundedReceiver<Command>,
         device: Arc<dyn Device>,
-        runtime: Arc<dyn DynamicRuntime>,
+        timer: Box<dyn DynamicTimer>,
         com_id: u16,
         com_id_ext: u16,
         properties: Properties,
@@ -79,7 +81,7 @@ impl Protocol {
         Self {
             rx,
             device,
-            runtime,
+            timer,
             com_id,
             properties,
             send_packet: SendPacket::new(com_id, com_id_ext),
@@ -152,7 +154,7 @@ impl Protocol {
 
     async fn recv_batches(&mut self) -> Vec<CommandBatch> {
         let mut batches = Vec::<CommandBatch>::new();
-        if let Ok(Some(command)) = self.runtime.timeout(Duration::from_millis(64), self.rx.recv()).await {
+        if let Ok(Some(command)) = self.timer.timeout(Duration::from_millis(64), self.rx.recv()).await {
             append_command(&mut batches, command);
         }
         while let Ok(command) = self.rx.try_recv() {
@@ -171,6 +173,10 @@ impl Protocol {
                 // We do not close the receive half. That will be closed once
                 // the send half indicates the session is "done".
                 self.send_packet.close_session(id);
+            }
+            CommandBatch::AbortSession { id } => {
+                self.send_packet.close_session(id);
+                self.receive_packet.abort_session(id);
             }
             CommandBatch::CloseComSession => {
                 self.com_id_input.close();
@@ -218,12 +224,14 @@ impl Protocol {
         // Receive sessions should only be closed once the associated send session
         // has exhausted all its inputs.
         while let Poll::Ready(Some(id)) = self.send_done.pop() {
+            tracing::event!(tracing::Level::DEBUG, hsn = id.hsn, tsn = id.tsn, "[recv] Issue close");
             self.receive_packet.close_session(id);
         }
         // In case a recv session aborts, abort the associated send session.
         // This code attempts to abort normally closed sessions as well, but
         // that's not an issue as by that time the send session is closed anyway.
         while let Poll::Ready(Some(id)) = self.recv_done.pop() {
+            tracing::event!(tracing::Level::DEBUG, hsn = id.hsn, tsn = id.tsn, "[send] Issue abort");
             self.send_packet.abort_session(id);
         }
     }
@@ -279,6 +287,7 @@ fn append_command(batches: &mut Vec<CommandBatch>, command: Command) {
         (_, Command::ComId { request }) => batches.push(CommandBatch::ComId { buffer: vec![request] }),
         (_, Command::OpenSession { id, properties }) => batches.push(CommandBatch::OpenSession { id, properties }),
         (_, Command::CloseSession { id }) => batches.push(CommandBatch::CloseSession { id }),
+        (_, Command::AbortSession { id }) => batches.push(CommandBatch::AbortSession { id }),
         (_, Command::Discover { request }) => batches.push(CommandBatch::Discover { request }),
         (_, Command::CloseComSession) => batches.push(CommandBatch::CloseComSession),
         (_, Command::TryShutdown) => batches.push(CommandBatch::TryShutdown),
@@ -303,8 +312,8 @@ mod tests {
     #[tokio::test]
     async fn send_com_id_success() {
         let device = Arc::new(FakeDevice::new()) as Arc<dyn Device>;
-        let runtime = Arc::new(TokioRuntime::new());
-        let (command, done) = Protocol::spawn(device, runtime, BASE_COM_ID, 0, Properties::ASSUMED);
+        let runtime = TokioRuntime::new();
+        let (command, done) = Protocol::spawn(device, &runtime, BASE_COM_ID, 0, Properties::ASSUMED);
 
         let result = command.com_id(HandleComIdRequest::verify_com_id_valid(BASE_COM_ID, 0)).await;
         assert!(result.is_ok());
@@ -318,8 +327,8 @@ mod tests {
     #[tokio::test]
     async fn send_session_success() {
         let device = Arc::new(FakeDevice::new()) as Arc<dyn Device>;
-        let runtime = Arc::new(TokioRuntime::new());
-        let (command, done) = Protocol::spawn(device, runtime, BASE_COM_ID, 0, Properties::ASSUMED);
+        let runtime = TokioRuntime::new();
+        let (command, done) = Protocol::spawn(device, &runtime, BASE_COM_ID, 0, Properties::ASSUMED);
         let id = SessionIdentifier { hsn: 0, tsn: 0 };
 
         command.open_session(id, Properties::ASSUMED);

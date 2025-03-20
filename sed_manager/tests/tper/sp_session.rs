@@ -360,6 +360,7 @@ async fn revert_sp() -> Result<(), RPCError> {
         .start_session(sp::LOCKING, Some(authority::ADMIN.nth(1).unwrap()), Some(MSID_PASSWORD.as_bytes()))
         .await?;
     let _ = session.revert_sp(None).await?;
+    session.abort_session();
 
     // Is the locking SP deactivated?
     let controller = device.controller();
