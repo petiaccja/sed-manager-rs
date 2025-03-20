@@ -11,7 +11,6 @@ use crate::spec::objects::CPIN;
 use crate::tper::TPer;
 
 use super::error::Error;
-use super::with_session::with_session;
 
 pub fn is_revert_supported(_discovery: &Discovery) -> bool {
     true
@@ -41,10 +40,9 @@ pub async fn verify_reverted(tper: &TPer) -> Result<bool, Error> {
     let admin_sp = get_admin_sp(ssc.feature_code())?;
 
     let anybody_session = tper.start_session(admin_sp, None, None).await?;
-    let msid_password: Password = with_session!(session = anybody_session => {
-        session.get(c_pin::MSID.as_uid(), CPIN::PIN).await
-    })?;
-    with_session!(session = tper.start_session(admin_sp, Some(authority::SID), Some(&msid_password)).await? => {});
+    let msid_password: Password =
+        anybody_session.with(async |session| session.get(c_pin::MSID.as_uid(), CPIN::PIN).await).await?;
+    let _ = tper.start_session(admin_sp, Some(authority::SID), Some(&msid_password)).await?.end_session().await;
     Ok(true)
 }
 

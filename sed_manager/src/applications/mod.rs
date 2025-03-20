@@ -12,7 +12,6 @@ mod revert;
 mod take_ownership;
 mod user_edit_session;
 mod utility;
-pub mod with_session;
 
 pub use activate_locking::{activate_locking, is_activating_locking_supported, verify_locking_activation};
 pub use error::Error;
