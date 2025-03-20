@@ -14,6 +14,7 @@ use crate::serialization::DeserializeBinary;
 use super::command::Command;
 use super::promise::Promise;
 use super::receive_packet::{self, commit, ReceivePacket};
+use super::runtime::{DynamicRuntime, Runtime};
 use super::send_packet::{self, SendPacket};
 use super::shared::buffer::Buffer;
 use super::shared::pipe::{SinkPipe, SourcePipe};
@@ -23,6 +24,7 @@ use super::CommandSender;
 pub struct Protocol {
     rx: mpsc::UnboundedReceiver<Command>,
     device: Arc<dyn Device>,
+    runtime: Arc<dyn DynamicRuntime>,
     com_id: u16,
     properties: Properties,
     // Packet: send
@@ -54,20 +56,22 @@ enum CommandBatch {
 impl Protocol {
     pub fn spawn(
         device: Arc<dyn Device>,
+        runtime: Arc<dyn DynamicRuntime>,
         com_id: u16,
         com_id_ext: u16,
         properties: Properties,
     ) -> (CommandSender, oneshot::Receiver<()>) {
         let (tx, rx) = mpsc::unbounded_channel();
         let (done_tx, done_rx) = oneshot::channel();
-        let protocol = Self::new(rx, device, com_id, com_id_ext, properties);
-        let _ = super::runtime::RUNTIME.spawn(protocol.run(done_tx));
+        let protocol = Self::new(rx, device, runtime.clone(), com_id, com_id_ext, properties);
+        let _ = Runtime::spawn(&*runtime, protocol.run(done_tx));
         (CommandSender::new(tx), done_rx)
     }
 
     pub fn new(
         rx: mpsc::UnboundedReceiver<Command>,
         device: Arc<dyn Device>,
+        runtime: Arc<dyn DynamicRuntime>,
         com_id: u16,
         com_id_ext: u16,
         properties: Properties,
@@ -75,6 +79,7 @@ impl Protocol {
         Self {
             rx,
             device,
+            runtime,
             com_id,
             properties,
             send_packet: SendPacket::new(com_id, com_id_ext),
@@ -147,7 +152,7 @@ impl Protocol {
 
     async fn recv_batches(&mut self) -> Vec<CommandBatch> {
         let mut batches = Vec::<CommandBatch>::new();
-        if let Ok(Some(command)) = tokio::time::timeout(Duration::from_millis(64), self.rx.recv()).await {
+        if let Ok(Some(command)) = self.runtime.timeout(Duration::from_millis(64), self.rx.recv()).await {
             append_command(&mut batches, command);
         }
         while let Ok(command) = self.rx.try_recv() {
@@ -291,14 +296,15 @@ mod tests {
     use super::*;
     use crate::{
         fake_device::{FakeDevice, BASE_COM_ID},
-        rpc::MethodCall,
+        rpc::{protocol::runtime::TokioRuntime, MethodCall},
         spec::{invoking_id::SESSION_MANAGER, sm_method_id::PROPERTIES},
     };
 
     #[tokio::test]
     async fn send_com_id_success() {
         let device = Arc::new(FakeDevice::new()) as Arc<dyn Device>;
-        let (command, done) = Protocol::spawn(device, BASE_COM_ID, 0, Properties::ASSUMED);
+        let runtime = Arc::new(TokioRuntime::new());
+        let (command, done) = Protocol::spawn(device, runtime, BASE_COM_ID, 0, Properties::ASSUMED);
 
         let result = command.com_id(HandleComIdRequest::verify_com_id_valid(BASE_COM_ID, 0)).await;
         assert!(result.is_ok());
@@ -312,7 +318,8 @@ mod tests {
     #[tokio::test]
     async fn send_session_success() {
         let device = Arc::new(FakeDevice::new()) as Arc<dyn Device>;
-        let (command, done) = Protocol::spawn(device, BASE_COM_ID, 0, Properties::ASSUMED);
+        let runtime = Arc::new(TokioRuntime::new());
+        let (command, done) = Protocol::spawn(device, runtime, BASE_COM_ID, 0, Properties::ASSUMED);
         let id = SessionIdentifier { hsn: 0, tsn: 0 };
 
         command.open_session(id, Properties::ASSUMED);

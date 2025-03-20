@@ -63,6 +63,7 @@ mod tests {
 
     use crate::{
         fake_device::{FakeDevice, MSID_PASSWORD},
+        rpc::TokioRuntime,
         tper::TPer,
     };
 
@@ -73,7 +74,8 @@ mod tests {
         let sid_password = MSID_PASSWORD.as_bytes();
         let new_password = None;
         let device = Arc::new(FakeDevice::new());
-        let tper = TPer::new_on_default_com_id(device)?;
+        let runtime = Arc::new(TokioRuntime::new());
+        let tper = TPer::new_on_default_com_id(device, runtime)?;
         activate_locking(&tper, sid_password, new_password).await?;
         verify_locking_activation(&tper, Some(sid_password)).await?;
         Ok(())
@@ -84,7 +86,8 @@ mod tests {
         let sid_password = MSID_PASSWORD.as_bytes();
         let new_password = Some("macilaci".as_bytes());
         let device = Arc::new(FakeDevice::new());
-        let tper = TPer::new_on_default_com_id(device)?;
+        let runtime = Arc::new(TokioRuntime::new());
+        let tper = TPer::new_on_default_com_id(device, runtime)?;
         activate_locking(&tper, sid_password, new_password).await?;
         verify_locking_activation(&tper, new_password).await?;
         Ok(())
@@ -95,7 +98,8 @@ mod tests {
         let sid_password = MSID_PASSWORD.as_bytes();
         let new_password = Some("macilaci".as_bytes());
         let device = Arc::new(FakeDevice::new());
-        let tper = TPer::new_on_default_com_id(device)?;
+        let runtime = Arc::new(TokioRuntime::new());
+        let tper = TPer::new_on_default_com_id(device, runtime)?;
         activate_locking(&tper, sid_password, new_password).await?;
         assert!(activate_locking(&tper, sid_password, new_password).await.is_err());
         Ok(())
