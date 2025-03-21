@@ -1,3 +1,8 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
 pub fn write_nonoverlapping<T: Sized>(value: &T, dst: &mut [u8]) {
     assert!(size_of::<T>() <= dst.len());
     unsafe {

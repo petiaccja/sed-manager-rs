@@ -1,3 +1,8 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
 use super::{annotate_field, stream::Seek, Deserialize, Error, InputStream, OutputStream, Serialize};
 use core::{ops::Deref, ops::DerefMut};
 

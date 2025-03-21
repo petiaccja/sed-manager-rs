@@ -1,3 +1,8 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
 use crate::fake_device::data::object_table::ACETable;
 use crate::spec::objects::{ace::ace_expr, ACE};
 use crate::spec::objects::{Authority, LockingRange, MBRControl, CPIN, KAES256};

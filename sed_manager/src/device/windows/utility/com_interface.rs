@@ -1,3 +1,8 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
 use crate::device::windows::error::{check_hresult, Error};
 use core::ptr::null_mut;
 use std::cell::OnceCell;

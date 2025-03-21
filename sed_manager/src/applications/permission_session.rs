@@ -1,3 +1,8 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
 use crate::messaging::discovery::{Discovery, LockingDescriptor};
 use crate::spec::basic_types::List;
 use crate::spec::column_types::{ACEOperand, ACERef, AuthorityRef, LockingRangeRef};

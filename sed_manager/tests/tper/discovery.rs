@@ -1,3 +1,8 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
 use sed_manager::fake_device::FakeDevice;
 use sed_manager::messaging::discovery::{LockingDescriptor, OpalV2Descriptor, OwnerPasswordState, TPerDescriptor};
 use sed_manager::rpc::Error as RPCError;

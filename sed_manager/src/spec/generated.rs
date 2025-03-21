@@ -1,3 +1,8 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
 //! The specification is generated from a JSON description with a build.rs script.
 //!
 //! This avoids code bloat for the actual Rust code and makes editing the specification

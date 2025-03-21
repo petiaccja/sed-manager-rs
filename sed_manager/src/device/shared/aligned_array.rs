@@ -1,3 +1,8 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
 use core::ops::{Deref, DerefMut};
 use core::ptr::{null_mut, NonNull};
 use std::alloc::{alloc, dealloc, handle_alloc_error, Layout, LayoutError};

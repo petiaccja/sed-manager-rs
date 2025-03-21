@@ -1,3 +1,8 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
 use super::{Seek, SeekFrom};
 use core::ops::{BitAnd, Not, Shl};
 use std::ops::Shr;

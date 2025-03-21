@@ -1,3 +1,8 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
 use crate::fake_device::PSID_PASSWORD;
 use crate::fake_device::{data::object_table::CPINTable, MSID_PASSWORD};
 use crate::spec::opal::admin::*;

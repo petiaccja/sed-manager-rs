@@ -1,4 +1,8 @@
 #![allow(dead_code)]
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
 
 mod com_id_session;
 pub mod data;

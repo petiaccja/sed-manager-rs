@@ -1,3 +1,8 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
 use super::token::{Tag, Token};
 use super::value::Value;
 use crate::serialization::{Deserialize, Error as SerializeError, InputStream, OutputStream, Serialize};

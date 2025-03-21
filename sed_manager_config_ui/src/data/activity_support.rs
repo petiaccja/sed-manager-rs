@@ -1,3 +1,8 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
 use sed_manager::{
     applications::{
         is_activating_locking_supported, is_mbr_editor_supported, is_permission_editor_supported,

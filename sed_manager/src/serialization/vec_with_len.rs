@@ -1,3 +1,8 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
 use super::annotate_field;
 use super::stream::{Seek as _, SeekFrom};
 use super::{Deserialize, Error, InputStream, OutputStream, Serialize};

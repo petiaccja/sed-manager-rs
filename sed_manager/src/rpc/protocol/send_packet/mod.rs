@@ -1,3 +1,8 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
 use std::collections::BTreeMap;
 
 use crate::rpc::{Error, PackagedMethod, Properties, SessionIdentifier};

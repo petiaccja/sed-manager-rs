@@ -1,0 +1,22 @@
+name: rustfmt
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    types: [opened, synchronize, reopened]
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Verify formatting
+        run: |
+          cargo fmt --check
+
+      - name: Check license headers
+        run: |
+          cargo install licensesnip
+          ~/.cargo/bin/licensesnip check

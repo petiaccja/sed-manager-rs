@@ -1,3 +1,8 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
 use core::ptr::null_mut;
 use core::{ffi::c_void, iter::from_fn, mem::zeroed, ops::Deref};
 use winapi::{
