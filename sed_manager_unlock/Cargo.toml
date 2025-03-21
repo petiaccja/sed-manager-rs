@@ -1,0 +1,27 @@
+[package]
+name = "sed-manager-unlock"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+sed-manager = { path = "../sed_manager" }
+
+[dependencies.tokio]
+version = "1.41.0"
+default-features = false
+features = ["rt-multi-thread"]
+
+[dependencies.thiserror]
+version = "1.0.66"
+
+[dependencies.rpassword]
+version = "7.3.1"
+
+[dependencies.tracing]
+version = "0.1.41"
+
+[dependencies.tracing-appender]
+version = "0.2.3"
+
+[dependencies.tracing-subscriber]
+version = "0.3.19"
