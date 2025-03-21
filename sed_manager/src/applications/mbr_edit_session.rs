@@ -1,3 +1,8 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
 use crate::messaging::discovery::{Discovery, FeatureCode, LockingDescriptor};
 use crate::messaging::packet::{PACKET_HEADER_LEN, SUB_PACKET_HEADER_LEN};
 use crate::rpc::Properties;

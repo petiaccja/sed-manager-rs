@@ -1,3 +1,8 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
 //! Implements parts of the NVMe specification that is relevant for drive encryption.
 //! The official specification is accessible on [NVMe's website](https://nvmexpress.org/specifications/).
 

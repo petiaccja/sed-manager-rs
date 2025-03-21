@@ -1,3 +1,8 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
 use crate::device::device::{Device, Interface};
 use crate::device::shared::aligned_array::AlignedArray;
 use crate::device::shared::memory::write_nonoverlapping;

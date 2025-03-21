@@ -1,3 +1,8 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
 use sed_manager::messaging::discovery::{Discovery, FeatureCode, GeometryDescriptor};
 use slint::{SharedString, ToSharedString as _, VecModel};
 use std::rc::Rc;

@@ -1,3 +1,8 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
 /// Run block of code and close session asynchronously afterwards.
 ///
 /// While the session would be closed by [`Drop`] without blocking, it might

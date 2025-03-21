@@ -1,3 +1,8 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
 use sed_manager::applications::Error as AppError;
 use sed_manager::device::Error as DeviceError;
 use sed_manager::rpc::Error as RPCError;

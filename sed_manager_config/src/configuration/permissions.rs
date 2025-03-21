@@ -1,3 +1,8 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
 use sed_manager::spec;
 use sed_manager::spec::column_types::{AuthorityRef, LockingRangeRef};
 use slint::{ComponentHandle as _, Model};

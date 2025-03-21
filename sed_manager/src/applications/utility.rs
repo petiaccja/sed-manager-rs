@@ -1,3 +1,8 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
 use crate::messaging::discovery::FeatureCode;
 use crate::messaging::uid_range::ObjectUIDRange;
 use crate::spec::column_types::{AuthorityRefRange, CPINRefRange, SPRef};

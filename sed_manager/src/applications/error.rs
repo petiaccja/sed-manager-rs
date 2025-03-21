@@ -1,3 +1,8 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
 use crate::rpc::Error as RPCError;
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]

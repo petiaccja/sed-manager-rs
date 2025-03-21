@@ -1,3 +1,8 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
 use core::task::Poll::*;
 
 use crate::messaging::packet::{Packet, SubPacket, PACKET_HEADER_LEN, SUB_PACKET_HEADER_LEN};

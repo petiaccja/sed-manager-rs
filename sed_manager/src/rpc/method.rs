@@ -1,3 +1,8 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
 use crate::messaging::token::{Token, TokenStreamError};
 use crate::messaging::uid::UID;
 use crate::messaging::value::{Command, List, Value};

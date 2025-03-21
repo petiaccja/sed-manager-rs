@@ -1,3 +1,8 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
 pub trait ToNullTerminated {
     #[allow(unused)]
     fn to_null_terminated_utf16(&self) -> Vec<u16>;

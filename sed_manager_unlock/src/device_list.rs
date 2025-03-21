@@ -1,3 +1,8 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
 use std::sync::Arc;
 
 use sed_manager::device::{list_physical_drives, open_device, Device, Error as DeviceError};

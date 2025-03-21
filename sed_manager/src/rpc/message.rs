@@ -1,3 +1,8 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
 use crate::messaging::token::{Tag, Token, TokenStreamError};
 use crate::messaging::value::Command;
 use crate::serialization::{Deserialize, InputStream, ItemRead, OutputStream, Serialize};

@@ -1,3 +1,8 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
 use crate::applications::utility::get_locking_admins;
 use crate::messaging::discovery::{Discovery, LockingDescriptor};
 use crate::spec::column_types::LifeCycleState;

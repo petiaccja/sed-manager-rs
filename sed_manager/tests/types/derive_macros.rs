@@ -1,3 +1,8 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
 use sed_manager::messaging::value::{Bytes, Named, Value};
 use sed_manager::spec::basic_types::Type;
 use sed_manager_macros::AlternativeType;

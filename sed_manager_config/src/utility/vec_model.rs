@@ -1,3 +1,8 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
 use slint::{Model, ModelRc, VecModel};
 
 pub fn into_vec_model<Item: Clone + 'static>(v: Vec<Item>) -> ModelRc<Item> {

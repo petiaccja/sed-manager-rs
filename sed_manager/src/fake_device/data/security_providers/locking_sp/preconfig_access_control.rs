@@ -1,3 +1,8 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
 use crate::fake_device::data::access_control_table::{AccessControlEntry, AccessControlRef, AccessControlTable};
 use crate::fake_device::data::security_providers::locking_sp::{ADMIN_IDX, RANGE_IDX, USER_IDX};
 use crate::spec::opal::locking::*;

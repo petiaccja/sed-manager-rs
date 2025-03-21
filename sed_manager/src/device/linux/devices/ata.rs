@@ -1,3 +1,8 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
 //! Implements support for identify & security send/receive\* commands for ATA devices.
 //!
 //! \* Currently, only identify is implemented, so device information is displayed properly

@@ -1,3 +1,8 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
 use sed_manager_macros::AlternativeType;
 
 use super::{AuthorityRef, BooleanOp, Bytes32, Bytes64};

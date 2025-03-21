@@ -1,3 +1,8 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
 //! Implements support for identify & security send/receive commands for NVMe devices.
 //!
 //! Uses native NVMe admin command ioctl's, i.e. no SCSI or other translation required.

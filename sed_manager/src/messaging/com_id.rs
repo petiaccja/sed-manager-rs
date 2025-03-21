@@ -1,3 +1,8 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
 use crate::serialization::{vec_with_len::VecWithLen, Deserialize, InputStream, Serialize};
 
 /// The transfer length for IF-RECV for HANDLE_COM_ID_REQUESTs that fits the
