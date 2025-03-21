@@ -15,5 +15,8 @@ jobs:
       - name: Verify formatting
         run: |
           cargo fmt --check
+
+      - name: Check license headers
+        run: |
           cargo install licensesnip
           ~/.cargo/bin/licensesnip check
