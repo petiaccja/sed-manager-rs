@@ -4,7 +4,6 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-
 mod backend;
 mod configuration;
 mod device_list;
