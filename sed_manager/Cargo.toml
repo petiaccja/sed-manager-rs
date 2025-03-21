@@ -34,6 +34,11 @@ version = "1.41.0"
 default-features = false
 features = ["rt", "sync", "rt-multi-thread", "time", "macros"]
 
+[dependencies.tokio-util]
+version = "0.7.14"
+default-features = false
+features = ["rt"]
+
 [dependencies.tracing]
 version = "0.1.41"
 

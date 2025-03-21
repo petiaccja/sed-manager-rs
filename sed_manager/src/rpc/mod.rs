@@ -9,6 +9,4 @@ pub use error::Error;
 pub use message::PackagedMethod;
 pub use method::{MethodCall, MethodResult, MethodStatus};
 pub use properties::Properties;
-pub use protocol::{
-    discover, CommandSender, DynamicRuntime, Protocol, Runtime, SessionIdentifier, TokioRuntime, CONTROL_SESSION_ID,
-};
+pub use protocol::{discover, CommandSender, Protocol, Runtime, SessionIdentifier, TokioRuntime, CONTROL_SESSION_ID};

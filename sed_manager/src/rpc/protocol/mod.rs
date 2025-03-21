@@ -13,6 +13,5 @@ mod tracing;
 pub use command::CommandSender;
 pub use protocol::discover;
 pub use protocol::Protocol;
-pub use runtime::TokioRuntime;
-pub use runtime::{DynamicRuntime, Runtime};
+pub use runtime::{Runtime, TokioRuntime};
 pub use session_identifier::{SessionIdentifier, CONTROL_SESSION_ID};

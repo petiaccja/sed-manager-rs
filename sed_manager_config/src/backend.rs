@@ -6,17 +6,17 @@ use sed_manager::applications::{
 use sed_manager::device::{Device, Error as DeviceError};
 use sed_manager::messaging::discovery::{Discovery, Feature};
 use sed_manager::messaging::uid::UID;
-use sed_manager::rpc::{DynamicRuntime, Error as RPCError};
+use sed_manager::rpc::{Error as RPCError, TokioRuntime};
 use sed_manager::spec::column_types::{AuthorityRef, LockingRangeRef, SPRef};
 use sed_manager::spec::{self, ObjectLookup as _};
 use sed_manager::tper::TPer;
 
 pub struct Backend {
-    runtime: Arc<dyn DynamicRuntime>,
     devices: Vec<Arc<dyn Device>>,
     discoveries: Vec<Option<Discovery>>,
     tpers: Vec<Option<Arc<TPer>>>,
     sessions: Vec<Option<EditorSession>>,
+    runtime: Arc<TokioRuntime>, // Has to be dropped after all TPer's are dropped.
 }
 
 pub enum EditorSession {
@@ -86,8 +86,14 @@ impl From<PermissionEditSession> for EditorSession {
 }
 
 impl Backend {
-    pub fn new(runtime: Arc<dyn DynamicRuntime>) -> Self {
-        Self { runtime, devices: Vec::new(), discoveries: Vec::new(), tpers: Vec::new(), sessions: Vec::new() }
+    pub fn new() -> Self {
+        Self {
+            runtime: Arc::new(TokioRuntime::new()),
+            devices: Vec::new(),
+            discoveries: Vec::new(),
+            tpers: Vec::new(),
+            sessions: Vec::new(),
+        }
     }
 
     pub fn set_devices(&mut self, devices: Vec<Arc<dyn Device>>) {
