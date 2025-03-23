@@ -28,6 +28,8 @@ SEDManager helps you quickly set up your TCG-compliant self-encrypting drives (S
 | Linux       | Yes  | No   | No**     |
 | PBA (Linux) | Yes  | No   | No       |
 
+\*[TODO: add link]
+
 ## Installation and usage
 
 ### Downloading the executables and the PBA
@@ -40,7 +42,7 @@ SEDManager will run without root access, but it needs access to raw disks (e.g. 
 
 ### Configuring your drives & system
 
-If you're already familiar with self-encrypting drives and any TCG specifications, like Opal, you can probably do it without further reading. If you aren't, you can read the extended documentation. [TODO: link].
+If you're already familiar with self-encrypting drives and TCG specifications, like Opal, you can probably do it without further reading. If you aren't, you can read the extended documentation. [TODO: link].
 
 ### A word of warning
 
