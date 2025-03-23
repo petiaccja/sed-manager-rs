@@ -192,33 +192,6 @@ export component ActivityLauncher {
                     }
                 }
             }
-
-            if false && root.security-providers.length > 0: Collapsible {
-                text: "Table editor";
-                icon: Icons.table-editor;
-                preferred-height: self.min-height;
-                font-color: PaletteExtra.accented-control-foreground;
-                header-height: 42px;
-                VerticalLayout {
-                    alignment: start;
-                    for sp in security_providers: VerticalLayout {
-                        alignment: start;
-                        HorizontalSeparator {
-                            background: Palette.background;
-                        }
-
-                        NavigationButton {
-                            text: sp + " SP";
-                            icon: Icons.security-provider;
-                            height: button-height;
-                            navigation-direction: NavigationDirection.left;
-                            background: #00000000;
-                            icon-color: PaletteExtra.make-accented(#ffc400, Palette.control-foreground, Palette.control-background);
-                            enabled: false;
-                        }
-                    }
-                }
-            }
         }
     }
 }

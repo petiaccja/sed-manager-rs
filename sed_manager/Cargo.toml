@@ -11,11 +11,6 @@ sed-manager-macros = { path = "../sed_manager_macros" }
 skip-test = { path = "../skip_test" }
 as-array = { path = "../as_array" }
 
-[dependencies.bitvec]
-version = "1"
-default-features = false
-features = ["alloc"]
-
 [dependencies.winapi]
 version = "0.3.9"
 default-features = false

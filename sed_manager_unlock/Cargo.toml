@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 sed-manager = { path = "../sed_manager" }
+time = "= 0.3.38" # 0.3.40 does not compile.
 
 [dependencies.tokio]
 version = "1.41.0"

@@ -9,6 +9,7 @@ build = "build.rs"
 [dependencies]
 sed-manager = { path = "../sed_manager" }
 sed-manager-config-ui = { path = "../sed_manager_config_ui" }
+time = "= 0.3.38" # 0.3.40 does not compile.
 
 [dependencies.slint]
 version = "1.9.2"
@@ -32,6 +33,3 @@ version = "0.3.19"
 [dependencies.rfd]
 version = "0.15.2"
 features = ["xdg-portal"]
-
-[build-dependencies]
-slint-build = "1.9.2"

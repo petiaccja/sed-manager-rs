@@ -177,7 +177,7 @@ component RangePermissionTable {
 }
 
 export component PermissionEditor inherits ConfigView {
-    config-name: "Access control";
+    config-name: "Edit permissions";
     config-icon: Icons.permissions;
     in property <ExtendedStatus> login-status: PermissionEditorState.login-statuses[root.device-idx];
     in property <PermissionMatrix> matrix: PermissionEditorState.matrices[root.device-idx];

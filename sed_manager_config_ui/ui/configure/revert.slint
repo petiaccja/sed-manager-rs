@@ -68,7 +68,7 @@ component Form {
 
 export component Revert inherits ConfigView {
     in property <ExtendedStatus> extended-status: SingleStepState.statuses[root.device-idx];
-    config-name: "Revert";
+    config-name: "Revert device";
     config-icon: Icons.revert;
     back-enabled: extended-status.status != Status.loading;
     warning-popup := WarningPopup {

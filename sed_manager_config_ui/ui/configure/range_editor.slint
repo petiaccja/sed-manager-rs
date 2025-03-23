@@ -144,6 +144,12 @@ component RangeRow {
                     checked-range.set-start(Types.str-to-int(text));
                     set-value(checked-range.get-range());
                 }
+                changed has-focus => {
+                    if !self.has-focus && checked-range.start-lba != Types.str-to-int(self.text) {
+                        checked-range.set-start(Types.str-to-int(self.text));
+                        set-value(checked-range.get-range());
+                    }
+                }
             }
         }
 
@@ -164,6 +170,12 @@ component RangeRow {
                     checked-range.set-length(Types.str-to-int(text));
                     set-value(checked-range.get-range());
                 }
+                changed has-focus => {
+                    if !self.has-focus && checked-range.length-lba != Types.str-to-int(self.text) {
+                        checked-range.set-length(Types.str-to-int(self.text));
+                        set-value(checked-range.get-range());
+                    }
+                }
             }
         }
 
@@ -183,6 +195,12 @@ component RangeRow {
                     self.clear-focus();
                     checked-range.set-end(Types.str-to-int(text));
                     set-value(checked-range.get-range());
+                }
+                changed has-focus => {
+                    if !self.has-focus && checked-range.end-lba != Types.str-to-int(self.text) {
+                        checked-range.set-end(Types.str-to-int(self.text));
+                        set-value(checked-range.get-range());
+                    }
                 }
             }
         }
@@ -345,7 +363,7 @@ component RangeTable {
 }
 
 export component RangeEditor inherits ConfigView {
-    config-name: "Range editor";
+    config-name: "Edit ranges";
     config-icon: Icons.locking-ranges;
     in property <ExtendedStatus> login-status: RangeEditorState.login-statuses[root.device-idx];
     in property <DeviceGeometry> geometry: DeviceListState.descriptions[root.device-idx].geometry;
@@ -355,7 +373,7 @@ export component RangeEditor inherits ConfigView {
         if !authenticated: LoginView {
             extended-status: login-status;
             user-name: "Admin1";
-            login-button-text: "Edit locking ranges";
+            login-button-text: "Edit ranges";
             back => {
                 root.back();
             }
