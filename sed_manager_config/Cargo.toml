@@ -32,6 +32,3 @@ version = "0.3.19"
 [dependencies.rfd]
 version = "0.15.2"
 features = ["xdg-portal"]
-
-[build-dependencies]
-slint-build = "1.9.2"

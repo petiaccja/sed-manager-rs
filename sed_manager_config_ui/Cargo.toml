@@ -12,7 +12,7 @@ sed-manager = { path = "../sed_manager" }
 [dependencies.slint]
 version = "1.10.0"
 default-features = false
-features = ["std", "compat-1-2", "backend-winit", "renderer-skia", "renderer-femtovg"]
+features = ["std", "compat-1-2"]
 
 [build-dependencies]
 slint-build = "1.10.0"
