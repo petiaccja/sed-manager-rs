@@ -82,6 +82,15 @@ component UserRow {
                         ToastMessage.show("Name must be no more than 32 characters", PaletteExtra.error-foreground);
                     }
                 }
+                changed has-focus => {
+                    if !self.has-focus && user.name != self.text {
+                        if self.text.character-count <= 32 {
+                            set-name(self.text);
+                        } else {
+                            ToastMessage.show("Name must be no more than 32 characters", PaletteExtra.error-foreground);
+                        }
+                    }
+                }
             }
         }
 

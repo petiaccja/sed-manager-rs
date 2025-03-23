@@ -144,6 +144,12 @@ component RangeRow {
                     checked-range.set-start(Types.str-to-int(text));
                     set-value(checked-range.get-range());
                 }
+                changed has-focus => {
+                    if !self.has-focus && checked-range.start-lba != Types.str-to-int(self.text) {
+                        checked-range.set-start(Types.str-to-int(self.text));
+                        set-value(checked-range.get-range());
+                    }
+                }
             }
         }
 
@@ -164,6 +170,12 @@ component RangeRow {
                     checked-range.set-length(Types.str-to-int(text));
                     set-value(checked-range.get-range());
                 }
+                changed has-focus => {
+                    if !self.has-focus && checked-range.length-lba != Types.str-to-int(self.text) {
+                        checked-range.set-length(Types.str-to-int(self.text));
+                        set-value(checked-range.get-range());
+                    }
+                }
             }
         }
 
@@ -183,6 +195,12 @@ component RangeRow {
                     self.clear-focus();
                     checked-range.set-end(Types.str-to-int(text));
                     set-value(checked-range.get-range());
+                }
+                changed has-focus => {
+                    if !self.has-focus && checked-range.end-lba != Types.str-to-int(self.text) {
+                        checked-range.set-end(Types.str-to-int(self.text));
+                        set-value(checked-range.get-range());
+                    }
                 }
             }
         }
