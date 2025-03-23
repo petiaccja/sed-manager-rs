@@ -8,27 +8,7 @@ import { Status } from "../data/status.slint";
 import { Button, Palette, Spinner } from "std-widgets.slint";
 import { Icons } from "../icons.slint";
 import { DeviceListState } from "../state.slint";
-
-
-component BackButton inherits Rectangle {
-    in property <bool> enabled;
-    private property <color> text-color: area.has-hover && enabled ? PaletteExtra.accented-control-foreground : Palette.control-foreground.with-alpha(enabled ? 1.0 : 0.5);
-    callback clicked <=> area.clicked;
-    width: 32px;
-    height: 32px;
-    background: #00000000;
-    border-radius: Math.min(self.width, self.height) / 2;
-    border-color: text-color;
-    border-width: 2px;
-    Image {
-        source: Icons.arrow-left;
-        colorize: text-color;
-    }
-
-    area := TouchArea {
-        enabled: enabled;
-    }
-}
+import { IconButton } from "../widgets/icon_button.slint";
 
 component Header inherits Island {
     in property <string> device-name;
@@ -45,8 +25,10 @@ component Header inherits Island {
         padding-right: 12px;
         VerticalLayout {
             alignment: center;
-            back-button := BackButton {
+            back-button := IconButton {
                 enabled: back-enabled;
+                icon: Icons.arrow-left;
+                width: 32px;
             }
         }
 

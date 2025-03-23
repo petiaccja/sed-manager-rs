@@ -345,7 +345,7 @@ component RangeTable {
 }
 
 export component RangeEditor inherits ConfigView {
-    config-name: "Range editor";
+    config-name: "Edit ranges";
     config-icon: Icons.locking-ranges;
     in property <ExtendedStatus> login-status: RangeEditorState.login-statuses[root.device-idx];
     in property <DeviceGeometry> geometry: DeviceListState.descriptions[root.device-idx].geometry;
@@ -355,7 +355,7 @@ export component RangeEditor inherits ConfigView {
         if !authenticated: LoginView {
             extended-status: login-status;
             user-name: "Admin1";
-            login-button-text: "Edit locking ranges";
+            login-button-text: "Edit ranges";
             back => {
                 root.back();
             }

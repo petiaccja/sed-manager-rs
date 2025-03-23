@@ -191,7 +191,7 @@ component UserTable {
 }
 
 export component UserEditor inherits ConfigView {
-    config-name: "User editor";
+    config-name: "Edit users";
     config-icon: Icons.users;
     in property <ExtendedStatus> login-status: UserEditorState.login-statuses[root.device-idx];
     in property <UserList> user-list: UserEditorState.user-lists[root.device-idx];
