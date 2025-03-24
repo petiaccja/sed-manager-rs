@@ -10,7 +10,7 @@ import { Status, ExtendedStatus} from "../data/status.slint";
 import { WarningPopup } from "../widgets/warning_popup.slint";
 import { ResultPopup } from "../widgets/result_popup.slint";
 import { ConfigView } from "config_view.slint";
-import { Icons } from "../icons.slint";
+import { Icons, IconColors } from "../icons.slint";
 import { SingleStepState } from "../state.slint";
 
 component WarningMessage {
@@ -64,6 +64,7 @@ export component TakeOwnership inherits ConfigView {
     in property <ExtendedStatus> extended-status: SingleStepState.statuses[root.device-idx];
     config-name: "Take ownership";
     config-icon: Icons.take-ownership;
+    config-color: IconColors.take-ownership;
     back-enabled: extended-status.status != Status.loading;
     warning-popup := WarningPopup {
         x: (root.width - self.width) / 2;

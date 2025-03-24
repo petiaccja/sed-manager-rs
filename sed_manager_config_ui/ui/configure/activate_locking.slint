@@ -9,7 +9,7 @@ import { Status, ExtendedStatus} from "../data/status.slint";
 import { ResultPopup } from "../widgets/result_popup.slint";
 import { ConfigView } from "config_view.slint";
 import { RepeatedPasswordEdit } from "../widgets/password.slint";
-import { Icons } from "../icons.slint";
+import { Icons, IconColors } from "../icons.slint";
 import { SingleStepState } from "../state.slint";
 
 component Form {
@@ -75,6 +75,7 @@ export component ActivateLocking inherits ConfigView {
     in property <ExtendedStatus> extended-status: SingleStepState.statuses[root.device-idx];
     config-name: "Activate locking";
     config-icon: Icons.activate-locking;
+    config-color: IconColors.activate-locking;
     back-enabled: extended-status.status != Status.loading;
     result-popup := ResultPopup {
         x: (root.width - self.width) / 2;

@@ -3,6 +3,8 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
+import { PaletteExtra } from "widgets/visual.slint";
+import { Palette } from "std-widgets.slint";
 export global Icons {
     out property <image> none: @image-url("");
 
@@ -18,11 +20,11 @@ export global Icons {
     // Configure activities
     out property <image> take-ownership: @image-url("../images/action/rocket_launch.svg");
     out property <image> activate-locking: @image-url("../images/device/lock.svg");
-    out property <image> locking-ranges: @image-url("../images/device/segment.svg");
-    out property <image> users: @image-url("../images/action/person_edit.svg");
-    out property <image> permissions: @image-url("../images/action/passkey.svg");
-    out property <image> mbr-shadowing: @image-url("../images/action/tonality.svg");
-    out property <image> revert: @image-url("../images/action/lock_reset.svg");
+    out property <image> edit-ranges: @image-url("../images/device/segment.svg");
+    out property <image> edit-users: @image-url("../images/action/person_edit.svg");
+    out property <image> edit-permissions: @image-url("../images/action/passkey.svg");
+    out property <image> shadow-mbr: @image-url("../images/action/tonality.svg");
+    out property <image> revert-device: @image-url("../images/action/lock_reset.svg");
     // Troubleshoot activities
     out property <image> com-id-status: @image-url("../images/action/query_stats.svg");
     out property <image> stack-reset: @image-url("../images/action/reset_wrench.svg");
@@ -42,4 +44,16 @@ export global Icons {
     out property <image> file-open: @image-url("../images/action/file_open.svg");
     out property <image> close: @image-url("../images/action/close.svg");
     out property <image> cancel: @image-url("../images/action/cancel.svg");
+}
+
+export global IconColors {
+    out property <color> take-ownership: PaletteExtra.make-accented(#00da36, Palette.control-foreground, Palette.control-background);
+    out property <color> activate-locking: PaletteExtra.make-accented(#ffd92f, Palette.control-foreground, Palette.control-background);
+    out property <color> edit-ranges: PaletteExtra.make-accented(#9900ff, Palette.control-foreground, Palette.control-background);
+    out property <color> edit-users: PaletteExtra.make-accented(#006eff, Palette.control-foreground, Palette.control-background);
+    out property <color> edit-permissions: PaletteExtra.make-accented(#ff9900, Palette.control-foreground, Palette.control-background);
+    out property <color> shadow-mbr: PaletteExtra.make-accented(#96fcff, Palette.control-foreground, Palette.control-background);
+    out property <color> revert-device: PaletteExtra.error-foreground;
+    out property <color> query-status: PaletteExtra.make-accented(#ff46ff, Palette.control-foreground, Palette.control-background);
+    out property <color> stack-reset: PaletteExtra.make-accented(#00a2ff, Palette.control-foreground, Palette.control-background);
 }

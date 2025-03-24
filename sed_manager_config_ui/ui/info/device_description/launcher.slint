@@ -8,7 +8,7 @@ import { Collapsible } from "../../widgets/collapsible.slint";
 import { NavigationButton, NavigationDirection } from "../../widgets/navigation_button.slint";
 import { HorizontalSeparator, PaletteExtra } from "../../widgets/visual.slint";
 import { Activity, ActivitySupport } from "../../data/activity.slint";
-import { Icons } from "../../icons.slint";
+import { Icons, IconColors } from "../../icons.slint";
 
 export component ActivityLauncher {
     in property <ActivitySupport> activity-support;
@@ -40,7 +40,7 @@ export component ActivityLauncher {
                         height: button-height;
                         navigation-direction: NavigationDirection.left;
                         background: #00000000;
-                        icon-color: PaletteExtra.success-foreground;
+                        icon-color: IconColors.take-ownership;
                         enabled: activity-support.take-ownership;
                         clicked => {
                             select-activity(Activity.take-ownership);
@@ -57,7 +57,7 @@ export component ActivityLauncher {
                         height: button-height;
                         navigation-direction: NavigationDirection.left;
                         background: #00000000;
-                        icon-color: PaletteExtra.make-accented(#ffc400, Palette.control-foreground, Palette.control-background);
+                        icon-color: IconColors.activate-locking;
                         enabled: activity-support.activate-locking;
                         clicked => {
                             select-activity(Activity.activate-locking);
@@ -70,11 +70,11 @@ export component ActivityLauncher {
 
                     NavigationButton {
                         text: "Edit ranges";
-                        icon: Icons.locking-ranges;
+                        icon: Icons.edit-ranges;
                         height: button-height;
                         navigation-direction: NavigationDirection.left;
                         background: #00000000;
-                        icon-color: PaletteExtra.make-accented(#9900ff, Palette.control-foreground, Palette.control-background);
+                        icon-color: IconColors.edit-ranges;
                         enabled: activity-support.range-editor;
                         clicked => {
                             select-activity(Activity.range-editor);
@@ -87,11 +87,11 @@ export component ActivityLauncher {
 
                     NavigationButton {
                         text: "Edit users";
-                        icon: Icons.users;
+                        icon: Icons.edit-users;
                         height: button-height;
                         navigation-direction: NavigationDirection.left;
                         background: #00000000;
-                        icon-color: PaletteExtra.make-accented(#006eff, Palette.control-foreground, Palette.control-background);
+                        icon-color: IconColors.edit-users;
                         enabled: activity-support.user-editor;
                         clicked => {
                             select-activity(Activity.user-editor);
@@ -104,11 +104,11 @@ export component ActivityLauncher {
 
                     NavigationButton {
                         text: "Edit permissions";
-                        icon: Icons.permissions;
+                        icon: Icons.edit-permissions;
                         height: button-height;
                         navigation-direction: NavigationDirection.left;
                         background: #00000000;
-                        icon-color: PaletteExtra.success-foreground;
+                        icon-color: IconColors.edit-permissions;
                         enabled: activity-support.access-control-editor;
                         clicked => {
                             select-activity(Activity.access-control-editor);
@@ -121,11 +121,11 @@ export component ActivityLauncher {
 
                     NavigationButton {
                         text: "Shadow MBR";
-                        icon: Icons.mbr-shadowing;
+                        icon: Icons.shadow-mbr;
                         height: button-height;
                         navigation-direction: NavigationDirection.left;
                         background: #00000000;
-                        icon-color: PaletteExtra.make-accented(#96fcff, Palette.control-foreground, Palette.control-background);
+                        icon-color: IconColors.shadow-mbr;
                         enabled: activity-support.shadow-mbr;
                         clicked => {
                             select-activity(Activity.shadow-mbr);
@@ -138,11 +138,11 @@ export component ActivityLauncher {
 
                     NavigationButton {
                         text: "Revert device";
-                        icon: Icons.revert;
+                        icon: Icons.revert-device;
                         height: button-height;
                         navigation-direction: NavigationDirection.left;
                         background: #00000000;
-                        icon-color: PaletteExtra.error-foreground;
+                        icon-color: IconColors.revert-device;
                         enabled: activity-support.revert;
                         clicked => {
                             select-activity(Activity.revert);
@@ -168,7 +168,7 @@ export component ActivityLauncher {
                         icon: Icons.com-id-status;
                         height: button-height;
                         background: #00000000;
-                        icon-color: PaletteExtra.make-accented(#ff46ff, Palette.control-foreground, Palette.control-background);
+                        icon-color: IconColors.query-status;
                         enabled: activity-support.com-id-status;
                         clicked => {
                             select-activity(Activity.com-id-status);
@@ -184,7 +184,7 @@ export component ActivityLauncher {
                         icon: Icons.stack-reset;
                         height: button-height;
                         background: #00000000;
-                        icon-color: PaletteExtra.make-accented(#00a2ff, Palette.control-foreground, Palette.control-background);
+                        icon-color: IconColors.stack-reset;
                         enabled: activity-support.stack-reset;
                         clicked => {
                             select-activity(Activity.stack-reset);

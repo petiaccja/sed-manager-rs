@@ -9,7 +9,7 @@ import { Status, ExtendedStatus} from "../data/status.slint";
 import { WarningPopup } from "../widgets/warning_popup.slint";
 import { ResultPopup } from "../widgets/result_popup.slint";
 import { ConfigView } from "config_view.slint";
-import { Icons } from "../icons.slint";
+import { Icons, IconColors } from "../icons.slint";
 import { SingleStepState } from "../state.slint";
 
 component WarningMessage {
@@ -69,7 +69,8 @@ component Form {
 export component Revert inherits ConfigView {
     in property <ExtendedStatus> extended-status: SingleStepState.statuses[root.device-idx];
     config-name: "Revert device";
-    config-icon: Icons.revert;
+    config-icon: Icons.revert-device;
+    config-color: IconColors.revert-device;
     back-enabled: extended-status.status != Status.loading;
     warning-popup := WarningPopup {
         x: (root.width - self.width) / 2;

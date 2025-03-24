@@ -17,7 +17,7 @@ import { WarningPopup } from "../widgets/warning_popup.slint";
 import { StatusIndicator } from "../widgets/progress.slint";
 import { ToastMessage } from "../widgets/toast_message.slint";
 import { StatusOverlay } from "../widgets/status-overlay.slint";
-import { Icons } from "../icons.slint";
+import { Icons, IconColors } from "../icons.slint";
 import { LoginView } from "login_view.slint";
 import { RangeEditorState, RangeList, DeviceListState } from "../state.slint";
 
@@ -364,7 +364,8 @@ component RangeTable {
 
 export component RangeEditor inherits ConfigView {
     config-name: "Edit ranges";
-    config-icon: Icons.locking-ranges;
+    config-icon: Icons.edit-ranges;
+    config-color: IconColors.edit-ranges;
     in property <ExtendedStatus> login-status: RangeEditorState.login-statuses[root.device-idx];
     in property <DeviceGeometry> geometry: DeviceListState.descriptions[root.device-idx].geometry;
     in property <RangeList> range-list: RangeEditorState.range-lists[root.device-idx];
