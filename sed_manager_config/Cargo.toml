@@ -33,3 +33,15 @@ version = "0.3.19"
 [dependencies.rfd]
 version = "0.15.2"
 features = ["xdg-portal"]
+
+[dependencies.serde_json]
+version = "1.0.138"
+
+[dependencies.serde]
+version = "1.0.219"
+
+[dependencies.dirs]
+version = "6.0.0"
+
+[dependencies.regex]
+version = "1.11.1"

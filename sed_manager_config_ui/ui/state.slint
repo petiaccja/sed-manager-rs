@@ -115,3 +115,8 @@ export global DeviceListState {
     callback discover(device-idx: int);
     callback release-session(device-idx: int);
 }
+
+export global SettingsState {
+    in property <string> license-text;
+    callback accept-license();
+}

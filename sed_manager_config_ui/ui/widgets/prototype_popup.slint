@@ -7,7 +7,9 @@ import { Palette } from "std-widgets.slint";
 import { PaletteExtra } from "visual.slint";
 
 export component PrototypePopup inherits PopupWindow {
-    private property <length> border-radius: 16px;
+    in property <length> border-radius: 16px;
+    in property <length> border-width: 0px;
+    in property <color> border-color: PaletteExtra.accent.with-alpha(0.25);
 
     Rectangle {
         opacity: 95%;
@@ -33,6 +35,8 @@ export component PrototypePopup inherits PopupWindow {
         Rectangle {
             background: Palette.control-background;
             border-radius: border-radius;
+            border-width: border-width;
+            border-color: border-color;
         }
     }
 
