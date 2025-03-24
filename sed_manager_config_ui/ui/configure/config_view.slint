@@ -6,7 +6,7 @@
 import { Island, PaletteExtra } from "../widgets/visual.slint";
 import { Status } from "../data/status.slint";
 import { Button, Palette, Spinner } from "std-widgets.slint";
-import { Icons } from "../icons.slint";
+import { Icons, IconColors } from "../icons.slint";
 import { DeviceListState } from "../state.slint";
 import { IconButton } from "../widgets/icon_button.slint";
 
@@ -14,6 +14,7 @@ component Header inherits Island {
     in property <string> device-name;
     in property <string> config-name;
     in property <image> config-icon;
+    in property <color> config-color;
     in property <bool> back-enabled: true;
     callback back <=> back-button.clicked;
     preferred-height: content.min-height;
@@ -58,7 +59,7 @@ component Header inherits Island {
 
         Image {
             source: config-icon;
-            colorize: Palette.control-foreground;
+            colorize: config-color;
             width: 32px;
             vertical-alignment: center;
             horizontal-alignment: center;
@@ -72,6 +73,7 @@ export component ConfigView {
     in property <string> device-name: DeviceListState.descriptions[device-idx].identity.name;
     in property <string> config-name;
     in property <image> config-icon;
+    in property <color> config-color: Palette.control-foreground;
     in property <bool> back-enabled: true;
     callback back();
     VerticalLayout {
@@ -80,6 +82,7 @@ export component ConfigView {
             device-name: device-name;
             config-name: config-name;
             config-icon: config-icon;
+            config-color: config-color;
             back-enabled: back-enabled;
             back => {
                 back()
@@ -98,6 +101,7 @@ export component LivePreviewTest inherits ConfigView {
     device-name: "Foo Device";
     config-name: "Take ownership";
     config-icon: Icons.take-ownership;
+    config-color: IconColors.take-ownership;
     VerticalLayout {
         vertical-stretch: 1;
         alignment: center;

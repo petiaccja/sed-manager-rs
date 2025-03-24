@@ -8,7 +8,7 @@ import { ConfigView } from "config_view.slint";
 import { LoginView } from "login_view.slint";
 import { Table, Cell } from "../widgets/table.slint";
 import { LineEdit, CheckBox, Button, ComboBox, Switch } from "std-widgets.slint";
-import { Icons } from "../icons.slint";
+import { Icons, IconColors } from "../icons.slint";
 import { PaletteExtra, Island } from "../widgets/visual.slint";
 import { ToastMessage } from "../widgets/toast_message.slint";
 import { StatusOverlay } from "../widgets/status-overlay.slint";
@@ -178,7 +178,8 @@ component RangePermissionTable {
 
 export component PermissionEditor inherits ConfigView {
     config-name: "Edit permissions";
-    config-icon: Icons.permissions;
+    config-icon: Icons.edit-permissions;
+    config-color: IconColors.edit-permissions;
     in property <ExtendedStatus> login-status: PermissionEditorState.login-statuses[root.device-idx];
     in property <PermissionMatrix> matrix: PermissionEditorState.matrices[root.device-idx];
     in-out property <bool> authenticated: false;

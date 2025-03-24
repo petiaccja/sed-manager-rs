@@ -9,7 +9,7 @@ import { LoginView } from "login_view.slint";
 import { MBRControl } from "../data/mbr_control.slint";
 import { Table, Cell } from "../widgets/table.slint";
 import { LineEdit, CheckBox, Button, Switch, Palette, ProgressIndicator } from "std-widgets.slint";
-import { Icons } from "../icons.slint";
+import { Icons, IconColors } from "../icons.slint";
 import { PaletteExtra, Island, HorizontalSeparator } from "../widgets/visual.slint";
 import { ToastMessage } from "../widgets/toast_message.slint";
 import { StatusOverlay } from "../widgets/status-overlay.slint";
@@ -205,7 +205,8 @@ component MBRView {
 
 export component MBREditor inherits ConfigView {
     config-name: "Shadow MBR";
-    config-icon: Icons.mbr-shadowing;
+    config-icon: Icons.shadow-mbr;
+    config-color: IconColors.shadow-mbr;
     back-enabled: login-status.status != Status.loading && upload-status.status != Status.loading;
     in property <ExtendedStatus> login-status: MBREditorState.login-statuses[root.device-idx];
     in property <ExtendedStatus> control-status: MBREditorState.control-statuses[root.device-idx];

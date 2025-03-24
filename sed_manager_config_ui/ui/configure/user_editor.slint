@@ -9,7 +9,7 @@ import { LoginView } from "login_view.slint";
 import { User } from "../data/user.slint";
 import { Table, Cell } from "../widgets/table.slint";
 import { LineEdit, CheckBox, Button } from "std-widgets.slint";
-import { Icons } from "../icons.slint";
+import { Icons, IconColors } from "../icons.slint";
 import { PaletteExtra } from "../widgets/visual.slint";
 import { ToastMessage } from "../widgets/toast_message.slint";
 import { StatusOverlay } from "../widgets/status-overlay.slint";
@@ -201,7 +201,8 @@ component UserTable {
 
 export component UserEditor inherits ConfigView {
     config-name: "Edit users";
-    config-icon: Icons.users;
+    config-icon: Icons.edit-users;
+    config-color: IconColors.edit-users;
     in property <ExtendedStatus> login-status: UserEditorState.login-statuses[root.device-idx];
     in property <UserList> user-list: UserEditorState.user-lists[root.device-idx];
     in-out property <bool> authenticated: false;
