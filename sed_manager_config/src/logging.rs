@@ -1,3 +1,8 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
 use std::fs::File;
 
 pub fn init() -> Option<tracing_appender::non_blocking::WorkerGuard> {
