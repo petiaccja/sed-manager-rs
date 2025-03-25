@@ -1,0 +1,68 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
+import { PrototypePopup } from "../widgets/prototype_popup.slint";
+import { Palette, TextEdit, Button, ScrollView } from "std-widgets.slint";
+
+export component LicensePopup inherits Rectangle {
+    in property <string> license-text;
+    callback accept();
+    callback decline();
+    background: Palette.background;
+    opacity: 95%;
+    VerticalLayout {
+        padding: 16px;
+        spacing: 8px;
+        Text {
+            vertical-stretch: 0;
+            horizontal-alignment: center;
+            text: "SEDManager License Agreement";
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        ScrollView {
+            vertical-stretch: 1;
+            min-width: 128px;
+            min-height: 64px;
+            VerticalLayout {
+                text := TextInput {
+                    text: license-text;
+                    read-only: true;
+                    wrap: TextWrap.word-wrap;
+                }
+            }
+        }
+
+        HorizontalLayout {
+            vertical-stretch: 0;
+            spacing: 8px;
+            alignment: end;
+            Button {
+                text: "Accept";
+                width: 90px;
+                clicked => {
+                    root.accept();
+                }
+            }
+
+            Button {
+                text: "Quit";
+                width: 90px;
+                clicked => {
+                    root.decline();
+                }
+            }
+        }
+    }
+}
+
+export component LivePreviewTest {
+    settings-popup := LicensePopup {
+        license-text: "Licence Agreement\n\nLorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.";
+        preferred-width: 100%;
+        preferred-height: 100%;
+    }
+}

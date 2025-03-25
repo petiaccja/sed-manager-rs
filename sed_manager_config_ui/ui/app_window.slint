@@ -7,17 +7,19 @@ import { DeviceDescription, ExampleData as DeviceDescriptionExampleData } from "
 import { UnavailableDevicesPage} from "pages/unavailable_devices_page.slint";
 import { TabBar } from "widgets/tab_bar.slint";
 import { AlternativeLayout, AlternativeChild } from "widgets/alternative_layout.slint";
-import { DeviceListState, TroubleshootingState, UserEditorState, RangeEditorState, SingleStepState, PermissionEditorState, MBREditorState } from "state.slint";
+import { DeviceListState, TroubleshootingState, UserEditorState, RangeEditorState, SingleStepState, PermissionEditorState, MBREditorState, SettingsState } from "state.slint";
 import { Button, Spinner, Palette } from "std-widgets.slint";
 import { DevicePage } from "pages/device_page.slint";
 import { UnavailableDevicesPage } from "pages/unavailable_devices_page.slint";
 import { Status } from "data/status.slint";
 import { StatusIndicator } from "widgets/progress.slint";
-import { PaletteExtra } from "widgets/visual.slint";
+import { PaletteExtra, Island } from "widgets/visual.slint";
 import { ToastPopup } from "widgets/toast_message.slint";
 import { Icons } from "icons.slint";
+import { IconButton } from "widgets/icon_button.slint";
+import { LicensePopup } from "settings/license_popup.slint";
 
-export { DeviceListState, TroubleshootingState, UserEditorState, RangeEditorState, SingleStepState, PermissionEditorState, MBREditorState }
+export { DeviceListState, TroubleshootingState, UserEditorState, RangeEditorState, SingleStepState, PermissionEditorState, MBREditorState, SettingsState }
 
 component DriveTabView {
     private property <int> current-tab;
@@ -29,6 +31,7 @@ component DriveTabView {
         padding-top: 6px;
         HorizontalLayout {
             vertical-stretch: 0.0;
+            spacing: 6px;
             TabBar {
                 titles: DeviceListState.tab-names;
                 selected: Math.max(0, Math.min(DeviceListState.tab-names.length - 1, current-tab));
@@ -37,12 +40,16 @@ component DriveTabView {
                 }
             }
 
-            Button {
+            Island {
+                width: 42px;
                 height: 32px;
-                icon: Icons.refresh;
-                colorize-icon: true;
-                clicked => {
-                    DeviceListState.list();
+                IconButton {
+                    width: 100%;
+                    height: 100%;
+                    icon: Icons.refresh;
+                    clicked => {
+                        DeviceListState.list();
+                    }
                 }
             }
         }
@@ -77,6 +84,7 @@ component DriveTabView {
 }
 
 component LoadingView {
+    callback more();
     HorizontalLayout {
         alignment: center;
         VerticalLayout {
@@ -109,7 +117,7 @@ component LoadingView {
             Text {
                 text: {
                     if DeviceListState.extended-status.status == Status.loading {
-                        "This can take up to 20 seconds while hard drives spin up."
+                        "This can take up to 20 seconds while hard drives spin up"
                     } else if DeviceListState.extended-status.status == Status.error {
                         DeviceListState.extended-status.message
                     } else {
@@ -128,9 +136,27 @@ export component AppWindow inherits Window {
     preferred-width: 960px;
     preferred-height: 600px;
     private property <bool> loaded: DeviceListState.extended-status.status == Status.success && DeviceListState.tab-names.length != 0;
+    public function show-license() {
+        license-popup.visible = true;
+    }
+    callback quit();
     VerticalLayout {
         if loaded: DriveTabView { }
         if !loaded: LoadingView { }
+    }
+
+    license-popup := LicensePopup {
+        preferred-width: 100%;
+        preferred-height: 100%;
+        license-text: SettingsState.license-text;
+        visible: false;
+        accept => {
+            self.visible = false;
+            SettingsState.accept-license();
+        }
+        decline => {
+            quit();
+        }
     }
 
     toast-popup := ToastPopup {
