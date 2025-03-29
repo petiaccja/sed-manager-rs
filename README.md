@@ -3,7 +3,7 @@
 ![Language](https://img.shields.io/badge/Language-Rust-blue)
 [![build_and_test](https://github.com/petiaccja/sed-manager-rs/actions/workflows/build_and_test.yml/badge.svg)](https://github.com/petiaccja/sed-manager-rs/actions/workflows/build_and_test.yml)
 
-An easy to use cross-platform GUI application for setting up self-encrypting drives.
+An easy to use cross-platform GUI application for setting up self-encrypting drives. For more information and documentation, head to [SEDManager's website](https://petiaccja.github.io/sed-manager-website/).
 
 ## Introduction
 
@@ -11,24 +11,22 @@ SEDManager helps you quickly set up your TCG-compliant self-encrypting drives (S
 
 ### Supported encryption standards:
 
-| TCG SSC      | Support      | Notes                               |
-|--------------|--------------|-------------------------------------|
-| Enterprise   | Partial*     | Only detect, take ownership, revert |
-| Opal         | Full         | Opal 1.0 & 2.0 supported            |
-| Opalite      | Full         |                                     |
-| Pyrite       | Full         | Pyrite 1.0 & 2.0 supported          |
-| Ruby         | Full         |                                     |
-| Key per I/O  | Partial*     | Only detect, take ownership, revert |
+| TCG SSC      | Support      | Notes                                            |
+|--------------|--------------|--------------------------------------------------|
+| Enterprise   | Partial      | Detect, take ownership, activate locking, revert |
+| Opal         | Full         | Opal 1.0 & 2.0 supported                         |
+| Opalite      | Full         |                                                  |
+| Pyrite       | Full         | Pyrite 1.0 & 2.0 supported                       |
+| Ruby         | Full         |                                                  |
+| Key per I/O  | Partial      | Detect, take ownership, activate locking, revert |
 
 ### Supported operating systems and interfaces:
 
 |             | NVMe | SCSI | ATA/SATA |
 |-------------|------|------|----------|
-| Windows     | Yes  | Yes* | Yes*     |
-| Linux       | Yes  | No   | No**     |
+| Windows     | Yes  | Yes  | Yes      |
+| Linux       | Yes  | No   | No       |
 | PBA (Linux) | Yes  | No   | No       |
-
-\*[TODO: add link]
 
 ## Installation and usage
 
@@ -42,7 +40,7 @@ SEDManager will run without root access, but it needs access to raw disks (e.g. 
 
 ### Configuring your drives & system
 
-If you're already familiar with self-encrypting drives and TCG specifications, like Opal, you can probably do it without further reading. If you aren't, you can read the extended documentation. [TODO: link].
+If you're already familiar with self-encrypting drives and TCG specifications, like Opal, you can probably do it without further reading. If you aren't, head to the [website](https://petiaccja.github.io/sed-manager-website/) to read more.
 
 ### A word of warning
 
