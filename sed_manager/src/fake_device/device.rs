@@ -89,15 +89,15 @@ impl Device for FakeDevice {
     }
 
     fn model_number(&self) -> String {
-        String::from("Fake Device 3000")
+        String::from("Virtual Test Device")
     }
 
     fn serial_number(&self) -> String {
-        String::from("0123456789")
+        String::from("SN123456")
     }
 
     fn firmware_revision(&self) -> String {
-        String::from("FW1.0")
+        String::from("FW1234")
     }
 
     fn is_security_supported(&self) -> bool {
