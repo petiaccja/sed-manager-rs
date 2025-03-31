@@ -3,7 +3,11 @@
 ![Language](https://img.shields.io/badge/Language-Rust-blue)
 [![build_and_test](https://github.com/petiaccja/sed-manager-rs/actions/workflows/build_and_test.yml/badge.svg)](https://github.com/petiaccja/sed-manager-rs/actions/workflows/build_and_test.yml)
 
-An easy to use cross-platform GUI application for setting up self-encrypting drives. For more information and documentation, head to [SEDManager's website](https://petiaccja.github.io/sed-manager-website/).
+An easy to use cross-platform GUI application for setting up self-encrypting drives.
+
+- [Documentation](https://petiaccja.github.io/sed-manager-website/)
+- [Download](https://github.com/petiaccja/sed-manager-rs/releases)
+- [PBA](https://github.com/petiaccja/sed-manager-pba/releases)
 
 ## Introduction
 
