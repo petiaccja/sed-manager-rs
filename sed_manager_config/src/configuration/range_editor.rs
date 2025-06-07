@@ -5,6 +5,7 @@
 
 use std::rc::Rc;
 
+use sed_manager::messaging::discovery::GeometryDescriptor;
 use sed_manager::spec::objects::LockingRange;
 use slint::{ComponentHandle as _, Model as _};
 
@@ -86,7 +87,7 @@ fn set_callback_set_value(backend: Rc<PeekCell<Backend>>, frontend: Frontend) {
             let range_idx = range_idx as usize;
             set_range_status(&frontend, device_idx, range_idx, ui::ExtendedStatus::loading());
             let _ = slint::spawn_local(async move {
-                let result = set_value(backend, device_idx, range_idx, value.clone()).await.map(|_| value);
+                let result = set_value(backend, device_idx, range_idx, value.clone()).await;
                 set_range(&frontend, device_idx, range_idx, result);
             });
         });
@@ -136,8 +137,8 @@ async fn list(
         on_found(
             name,
             ui::LockingRange {
-                start_lba: value.range_start as i32,
-                end_lba: (value.range_start + value.range_length) as i32,
+                start_lba: value.range_start as i64,
+                end_lba: (value.range_start + value.range_length) as i64,
                 read_lock_enabled: value.read_lock_enabled,
                 write_lock_enabled: value.write_lock_enabled,
                 read_locked: value.read_locked,
@@ -153,23 +154,48 @@ async fn set_value(
     device_idx: usize,
     range_idx: usize,
     value: ui::LockingRange,
-) -> Result<(), AppError> {
+) -> Result<ui::LockingRange, AppError> {
     let range = backend.peek(|backend| {
         let range_list = backend.get_range_list(device_idx)?;
         range_list.get(range_idx).ok_or(AppError::InternalError).cloned()
     })?;
+    let geometry = backend.peek(|backend| {
+        let default =
+            GeometryDescriptor { align: false, logical_block_size: 1, alignment_granularity: 1, lowest_aligned_lba: 0 };
+        backend
+            .get_discovery(device_idx)
+            .ok()
+            .map(|discovery| discovery.get::<GeometryDescriptor>())
+            .flatten()
+            .cloned()
+            .unwrap_or(default)
+    });
     let session = backend.peek_mut(|backend| backend.get_range_session(device_idx))?;
+    let start_lba = align_lba(
+        std::cmp::max(0, value.start_lba) as u64,
+        geometry.alignment_granularity,
+        geometry.lowest_aligned_lba,
+    );
+    let end_lba = align_lba(
+        std::cmp::max(start_lba, std::cmp::max(0, value.end_lba) as u64),
+        geometry.alignment_granularity,
+        geometry.lowest_aligned_lba,
+    );
     let lr = LockingRange {
         uid: range,
-        range_start: value.start_lba as u64,
-        range_length: (value.end_lba - value.start_lba) as u64,
+        range_start: start_lba,
+        range_length: end_lba - start_lba,
         read_lock_enabled: value.read_lock_enabled,
         write_lock_enabled: value.write_lock_enabled,
         read_locked: value.read_locked,
         write_locked: value.write_locked,
         ..Default::default()
     };
-    session.set_range(&lr).await
+    session.set_range(&lr).await.map(|_| ui::LockingRange {
+        start_lba: start_lba as i64,
+        end_lba: end_lba as i64,
+        ..value
+    })
 }
 
 async fn erase(backend: Rc<PeekCell<Backend>>, device_idx: usize, range_idx: usize) -> Result<(), AppError> {
@@ -245,4 +271,36 @@ fn set_range_status(frontend: &Frontend, device_idx: usize, range_idx: usize, st
             }
         }
     });
+}
+
+fn align_lba(lba: u64, block_alignment: u64, first_aligned_block: u64) -> u64 {
+    let clamped_lba = std::cmp::max(lba, first_aligned_block);
+    let base_lba = clamped_lba - first_aligned_block;
+    let aligned_base_lba = base_lba / block_alignment * block_alignment;
+    first_aligned_block + aligned_base_lba
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn align_lba_offset_aligned() {
+        assert_eq!(align_lba(11, 4, 7), 11);
+    }
+
+    #[test]
+    fn align_lba_offset_misaligned() {
+        assert_eq!(align_lba(13, 4, 7), 11);
+    }
+
+    #[test]
+    fn align_lba_nooffset_aligned() {
+        assert_eq!(align_lba(12, 4, 0), 12);
+    }
+
+    #[test]
+    fn align_lba_nooffset_misaligned() {
+        assert_eq!(align_lba(13, 4, 0), 12);
+    }
 }

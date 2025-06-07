@@ -1,0 +1,32 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
+export enum DigitalUnit {
+    LBA,
+    B,
+    KiB,
+    MiB,
+    GiB,
+    TiB,
+    kB,
+    MB,
+    GB,
+    TB,
+}
+
+export global DigitalUnitConversion {
+    pure callback parse(value: string, block-size: int) -> duration;
+    pure callback to_string(value: duration, unit: DigitalUnit, block-size: int) -> string;
+    parse(value, block-size) => {
+        if value.is-float() {
+            value.to-float() * 1ms
+        } else {
+            -1ms
+        }
+    }
+    to_string(value, unit, block-size) => {
+        value / 1ms
+    }
+}

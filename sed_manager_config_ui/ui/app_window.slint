@@ -18,8 +18,13 @@ import { ToastPopup } from "widgets/toast_message.slint";
 import { Icons } from "icons.slint";
 import { IconButton } from "widgets/icon_button.slint";
 import { LicensePopup } from "settings/license_popup.slint";
+import { DigitalUnit, DigitalUnitConversion } from "algorithm/digital_unit.slint";
 
-export { DeviceListState, TroubleshootingState, UserEditorState, RangeEditorState, SingleStepState, PermissionEditorState, MBREditorState, SettingsState }
+export { 
+    DeviceListState, TroubleshootingState, UserEditorState, RangeEditorState, 
+    SingleStepState, PermissionEditorState, MBREditorState, SettingsState,
+    DigitalUnit, DigitalUnitConversion,
+}
 
 component DriveTabView {
     private property <int> current-tab;

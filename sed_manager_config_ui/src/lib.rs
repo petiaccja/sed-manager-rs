@@ -5,4 +5,5 @@
 
 slint::include_modules!();
 
+mod algorithm;
 mod data;
