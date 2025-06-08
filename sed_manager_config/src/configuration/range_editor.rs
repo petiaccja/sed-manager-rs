@@ -274,6 +274,7 @@ fn set_range_status(frontend: &Frontend, device_idx: usize, range_idx: usize, st
 }
 
 fn align_lba(lba: u64, block_alignment: u64, first_aligned_block: u64) -> u64 {
+    let block_alignment = std::cmp::max(1, block_alignment); // Zero means no alignment, clamp to 1..infinity.
     let clamped_lba = std::cmp::max(lba, first_aligned_block);
     let base_lba = clamped_lba - first_aligned_block;
     let aligned_base_lba = base_lba / block_alignment * block_alignment;
@@ -283,6 +284,11 @@ fn align_lba(lba: u64, block_alignment: u64, first_aligned_block: u64) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn align_lba_zero_alignment() {
+        assert_eq!(align_lba(11, 0, 7), 11);
+    }
 
     #[test]
     fn align_lba_offset_aligned() {
