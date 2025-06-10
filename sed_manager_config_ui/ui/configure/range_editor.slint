@@ -54,79 +54,47 @@ component EraseWarningMessage {
     }
 }
 
-component CheckedRangeValue {
-    in property <DeviceGeometry> geometry;
-    in-out property <duration> start-lba;
-    in-out property <duration> length-lba;
-    in-out property <duration> end-lba;
-    in-out property <bool> read-lock-enabled;
-    in-out property <bool> write-lock-enabled;
-    in-out property <bool> read-locked;
-    in-out property <bool> write-locked;
-    callback udpated();
-    public function set-start(new-start: duration) {
-        start-lba = Math.max(0, new-start);
-        end-lba = Math.max(start-lba, end-lba);
-        length-lba = end-lba - start-lba;
-        udpated();
-    }
-    public function set-end(new-end: duration) {
-        end-lba = Math.max(0, new-end);
-        start-lba = Math.min(start-lba, end-lba);
-        length-lba = end-lba - start-lba;
-        udpated();
-    }
-    public function set-length(new-length: duration) {
-        end-lba = start-lba + Math.max(0, new-length);
-        length-lba = end-lba - start-lba;
-        udpated();
-    }
-    public function set-range(properties: LockingRange) {
-        start-lba = properties.start-lba;
-        length-lba = properties.end-lba - properties.start-lba;
-        end-lba = properties.end-lba;
-        read-lock-enabled = properties.read-lock-enabled;
-        write-lock-enabled = properties.write-lock-enabled;
-        read-locked = properties.read-locked;
-        write-locked = properties.write-locked;
-    }
-    public function get-range() -> LockingRange {
-        {
-            start-lba: start-lba,
-            end-lba: end-lba,
-            read-lock-enabled: read-lock-enabled,
-            write-lock-enabled: write-lock-enabled,
-            read-locked: read-locked,
-            write-locked: write-locked,
-        }
-    }
-}
-
-component LBAEdit inherits LineEdit {
+component LBAEdit {
     in-out property <duration> lba;
     in property <DigitalUnit> unit: DigitalUnit.LBA;
     in property <int> block-size;
-    private property <bool> format_valid: DigitalUnitConversion.parse(self.text, block-size) >= 0;
-    horizontal-alignment: right;
-    text: DigitalUnitConversion.to_string(lba, unit, block-size);
-    opacity: self.enabled ? 1.0 : 0.5;
-    function commit() -> bool {
-        if format_valid {
-            self.lba = DigitalUnitConversion.parse(self.text, block-size);
+    in property <bool> enabled;
+    private property <duration> parsed-lba: DigitalUnitConversion.parse(text-edit.text, block-size);
+    private property <bool> parsed-lba-valid: parsed-lba >= 0;
+    private property <string> rendered-lba: DigitalUnitConversion.to_string(lba, unit, block-size);
+    callback accepted(lba: duration);
+    function save-lba() {
+        if parsed-lba-valid && self.lba != parsed-lba {
+            self.lba = parsed-lba;
+            accepted(self.lba);
         }
-        format_valid
     }
-    accepted() => {
-        if commit() {
-            self.clear-focus();
-        }
-        self.text = DigitalUnitConversion.to_string(self.lba, self.unit, self.block-size);
+    changed rendered-lba => {
+        text-edit.text = rendered-lba;
     }
-    changed has-focus => {
-        if !self.has-focus {
-            commit();
-            self.text = DigitalUnitConversion.to_string(self.lba, self.unit, self.block-size);
+    text-edit := LineEdit {
+        width: 100%;
+        height: 100%;
+        text: rendered-lba;
+        horizontal-alignment: right;
+        accepted() => {
+            save-lba();
+            if parsed-lba-valid {
+                self.clear-focus();
+            }
+            self.text = rendered-lba;
         }
+        changed has-focus => {
+            if !self.has-focus {
+                save-lba();
+                self.text = rendered-lba;
+            }
+        }
+    }
+
+    Rectangle {
+        background: PaletteExtra.error-foreground;
+        opacity: parsed-lba-valid ? 0% : 35%;
     }
 }
 
@@ -142,15 +110,28 @@ component RangeRow {
     private property <bool> enabled: status != Status.loading;
     callback set-value(value: LockingRange);
     callback erase();
-    changed range => {
-        checked-range.set-range(range);
+    function sync-value() {
+        start-lba.lba = range.start-lba;
+        length-lba.lba = range.end-lba - range.start-lba;
+        end-lba.lba = range.end-lba;
+        rd-lock-en.checked = range.read-lock-enabled;
+        wr-lock-en.checked = range.write-lock-enabled;
+        rd-locked.checked = range.read-locked;
+        wr-locked.checked = range.write-locked;
+    }
+    function push-value() {
+        set-value({
+            start-lba: start-lba.lba,
+            end-lba: end-lba.lba,
+            read-lock-enabled: rd-lock-en.checked,
+            write-lock-enabled: wr-lock-en.checked,
+            read-locked: rd-locked.checked,
+            write-locked: wr-locked.checked,
+        })
     }
     changed status => {
         if status != Status.loading {
-            checked-range.set-range(range);
-            start-lba.lba = checked-range.start-lba;
-            length-lba.lba = checked-range.length-lba;
-            end-lba.lba = checked-range.end-lba;
+            sync-value();
         }
     }
     HorizontalLayout {
@@ -162,13 +143,14 @@ component RangeRow {
             column-idx: 0;
             start-lba := LBAEdit {
                 width: parent.width;
-                lba: checked-range.start-lba;
+                lba: range.start-lba;
                 enabled: enabled;
                 unit: root.unit;
                 block-size: root.geometry.block-size;
-                changed lba => {
-                    checked-range.set-start(self.lba);
-                    set-value(checked-range.get-range());
+                accepted(lba) => {
+                    end-lba.lba = Math.max(lba, end-lba.lba);
+                    length-lba.lba = end-lba.lba - lba;
+                    push-value();
                 }
             }
         }
@@ -181,13 +163,13 @@ component RangeRow {
             column-idx: 1;
             length-lba := LBAEdit {
                 width: parent.width;
-                lba: checked-range.length-lba;
+                lba: range.end-lba - range.start-lba;
                 enabled: enabled;
                 unit: root.unit;
                 block-size: root.geometry.block-size;
-                changed lba => {
-                    checked-range.set-length(self.lba);
-                    set-value(checked-range.get-range());
+                accepted(lba) => {
+                    end-lba.lba = start-lba.lba + lba;
+                    push-value();
                 }
             }
         }
@@ -200,13 +182,14 @@ component RangeRow {
             column-idx: 2;
             end-lba := LBAEdit {
                 width: parent.width;
-                lba: checked-range.end-lba;
+                lba: range.end-lba;
                 enabled: enabled;
                 unit: root.unit;
                 block-size: root.geometry.block-size;
-                changed lba => {
-                    checked-range.set-end(self.lba);
-                    set-value(checked-range.get-range());
+                accepted(lba) => {
+                    start-lba.lba = Math.min(start-lba.lba, lba);
+                    length-lba.lba = end-lba.lba - start-lba.lba;
+                    push-value();
                 }
             }
         }
@@ -218,10 +201,10 @@ component RangeRow {
             row-idx: range-idx;
             column-idx: 3;
             rd-lock-en := CheckBox {
-                checked <=> checked-range.read-lock-enabled;
+                checked: range.read-lock-enabled;
                 enabled: enabled;
                 toggled => {
-                    set-value(checked-range.get-range());
+                    push-value();
                 }
             }
         }
@@ -233,10 +216,10 @@ component RangeRow {
             row-idx: range-idx;
             column-idx: 4;
             wr-lock-en := CheckBox {
-                checked <=> checked-range.write-lock-enabled;
+                checked: range.write-lock-enabled;
                 enabled: enabled;
                 toggled => {
-                    set-value(checked-range.get-range());
+                    push-value();
                 }
             }
         }
@@ -248,10 +231,10 @@ component RangeRow {
             row-idx: range-idx;
             column-idx: 5;
             rd-locked := CheckBox {
-                checked <=> checked-range.read-locked;
+                checked: range.read-locked;
                 enabled: enabled;
                 toggled => {
-                    set-value(checked-range.get-range());
+                    push-value();
                 }
             }
         }
@@ -263,10 +246,10 @@ component RangeRow {
             row-idx: range-idx;
             column-idx: 6;
             wr-locked := CheckBox {
-                checked <=> checked-range.write-locked;
+                checked: range.write-locked;
                 enabled: enabled;
                 toggled => {
-                    set-value(checked-range.get-range());
+                    push-value();
                 }
             }
         }
@@ -286,23 +269,6 @@ component RangeRow {
                 clicked => {
                     erase();
                 }
-            }
-        }
-
-        checked-range := CheckedRangeValue {
-            width: 0px;
-            geometry: geometry;
-            start-lba: range.start-lba;
-            length-lba: range.end-lba - range.start-lba;
-            end-lba: range.end-lba;
-            read-lock-enabled: range.read-lock-enabled;
-            write-lock-enabled: range.write-lock-enabled;
-            read-locked: range.read-locked;
-            write-locked: range.write-locked;
-            udpated => {
-                start-lba.text = DigitalUnitConversion.to_string(checked-range.start-lba, unit, geometry.block-size);
-                length-lba.text = DigitalUnitConversion.to_string(checked-range.length-lba, unit, geometry.block-size);
-                end-lba.text = DigitalUnitConversion.to_string(checked-range.end-lba, unit, geometry.block-size);
             }
         }
     }
@@ -360,7 +326,6 @@ component RangeTable {
                 changed status => {
                     if self.status == Status.error {
                         ToastMessage.show("Could not modify " + names[range-idx] + ": " + statuses[range-idx].message, PaletteExtra.error-foreground);
-                        self.range = ranges[range-idx];
                     }
                 }
             }
