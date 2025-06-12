@@ -24,13 +24,12 @@ global Background {
 export component Cell {
     in property <int> row-idx;
     in property <int> column-idx;
+    @children
     Rectangle {
         border-width: 1px;
         border-color: Background.cell-border;
         background: Background.background(row-idx, column-idx, false);
     }
-
-    @children
 }
 
 export component Table {
