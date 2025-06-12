@@ -18,6 +18,8 @@ impl DigitalUnit {
             DigitalUnit::MB => 1000_000,
             DigitalUnit::GB => 1000_000_000,
             DigitalUnit::TB => 1000_000_000_000,
+            DigitalUnit::AutoDecimal => panic!("auto units don't have a ratio and need special handling"),
+            DigitalUnit::AutoBinary => panic!("auto units don't have a ratio and need special handling"),
         }) as f64
             / lba_size as f64
     }
@@ -36,6 +38,8 @@ impl core::fmt::Display for DigitalUnit {
             DigitalUnit::MB => "MB",
             DigitalUnit::GB => "GB",
             DigitalUnit::TB => "TB",
+            DigitalUnit::AutoDecimal => "Auto: decimal",
+            DigitalUnit::AutoBinary => "Auto: binary",
         };
         write!(f, "{s}")
     }

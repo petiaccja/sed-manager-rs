@@ -4,7 +4,7 @@
 //L-----------------------------------------------------------------------------
 
 import { ConfigView } from "config_view.slint";
-import { Button, CheckBox, ScrollView, Palette, LineEdit } from "std-widgets.slint";
+import { Button, CheckBox, ScrollView, Palette, LineEdit, ComboBox } from "std-widgets.slint";
 import { ExtendedStatus, Status } from "../data/status.slint";
 import { LockingRange } from "../data/locking_range.slint";
 import { DeviceGeometry } from "../data/device_description.slint";
@@ -284,6 +284,7 @@ component RangeTable {
     in property <[string]> names;
     in property <[LockingRange]> ranges;
     in property <[ExtendedStatus]> statuses;
+    in property <DigitalUnit> unit;
     callback set-value(range-idx: int, value: LockingRange);
     callback erase(range-idx: int);
     private property <int> warned-range-idx;
@@ -321,6 +322,7 @@ component RangeTable {
                 column-stretches: table.column-stretches;
                 range-idx: range-idx;
                 row-height: table.row-heights[0];
+                unit: root.unit;
                 set-value(value) => {
                     set-value(range-idx, value);
                 }
@@ -345,7 +347,7 @@ export component RangeEditor inherits ConfigView {
     in property <ExtendedStatus> login-status: RangeEditorState.login-statuses[root.device-idx];
     in property <DeviceGeometry> geometry: DeviceListState.descriptions[root.device-idx].geometry;
     in property <RangeList> range-list: RangeEditorState.range-lists[root.device-idx];
-    private property <bool> authenticated: false;
+    in-out property <bool> authenticated: false;
     form := VerticalLayout {
         if !authenticated: LoginView {
             extended-status: login-status;
@@ -362,16 +364,85 @@ export component RangeEditor inherits ConfigView {
                 RangeEditorState.list(root.device-idx);
             }
         }
-        if authenticated: RangeTable {
-            geometry: geometry;
-            names: range-list.names;
-            ranges: range-list.values;
-            statuses: range-list.statuses;
-            set-value(range-idx, value) => {
-                RangeEditorState.set-value(root.device-idx, range-idx, value);
+        if authenticated: VerticalLayout {
+            RangeTable {
+                geometry: geometry;
+                names: range-list.names;
+                ranges: range-list.values;
+                statuses: range-list.statuses;
+                unit: unit-selector.unit;
+                set-value(range-idx, value) => {
+                    RangeEditorState.set-value(root.device-idx, range-idx, value);
+                }
+                erase(range-idx) => {
+                    RangeEditorState.erase(root.device-idx, range-idx);
+                }
             }
-            erase(range-idx) => {
-                RangeEditorState.erase(root.device-idx, range-idx);
+
+            Island {
+                HorizontalLayout {
+                    padding: parent.border-radius / 2;
+                    unit-selector := ComboBox {
+                        out property <DigitalUnit> unit: [
+                            DigitalUnit.auto-decimal,
+                            DigitalUnit.auto-binary,
+                            DigitalUnit.LBA,
+                            DigitalUnit.B,
+                            DigitalUnit.kB,
+                            DigitalUnit.MB,
+                            DigitalUnit.GB,
+                            DigitalUnit.TB,
+                            DigitalUnit.KiB,
+                            DigitalUnit.MiB,
+                            DigitalUnit.GiB,
+                            DigitalUnit.TiB
+                        ][self.current-index];
+                        model: [
+                            "Auto: decimal",
+                            "Auto: binary",
+                            "LBA",
+                            "B",
+                            "kB",
+                            "MB",
+                            "GB",
+                            "TB",
+                            "KiB",
+                            "MiB",
+                            "GiB",
+                            "TiB"
+                        ];
+                    }
+
+                    Rectangle {
+                        horizontal-stretch: 1000;
+                    }
+
+                    Text {
+                        vertical-alignment: center;
+                        text: "Block size: " + root.geometry.block-size + " B";
+                        overflow: elide;
+                    }
+
+                    Rectangle {
+                        width: 16px;
+                    }
+
+                    Text {
+                        vertical-alignment: center;
+                        text: "Block alignment: " + root.geometry.block-alignment;
+                        overflow: elide;
+                    }
+
+                    Rectangle {
+                        width: 16px;
+                    }
+
+                    Text {
+                        vertical-alignment: center;
+                        text: "First aligned block: " + root.geometry.lowest-aligned-block;
+                        overflow: elide;
+                    }
+                }
             }
         }
         if login-status.status != Status.success && authenticated: StatusOverlay {
@@ -429,17 +500,17 @@ export component LivePreviewTest_RangeTable inherits RangeTable {
     statuses: ExampleRanges.range_list.statuses;
 }
 
-export component LivePreviewTest inherits RangeEditor {
+export component LivePreviewTest_Login inherits RangeEditor {
     device-name: "Foo Device";
     geometry: ExampleRanges.geometry;
     range-list: ExampleRanges.range_list;
     login-status: { status: Status.success };
-    timer := Timer {
-        interval: 1s;
-        running: false;
-        triggered => {
-            self.running = false;
-            root.login-status.status = Status.success;
-        }
-    }
+}
+
+export component LivePreviewTest_Edit inherits RangeEditor {
+    device-name: "Foo Device";
+    geometry: ExampleRanges.geometry;
+    range-list: ExampleRanges.range_list;
+    login-status: { status: Status.success };
+    authenticated: true;
 }

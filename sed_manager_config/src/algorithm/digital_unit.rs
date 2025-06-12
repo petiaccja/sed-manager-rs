@@ -42,11 +42,50 @@ pub fn parse(value: String, block_size: i32) -> i64 {
     (numeral * ratio) as i64
 }
 
-pub fn to_string(value: i64, unit: ui::DigitalUnit, block_size: i32) -> String {
+pub fn to_string_auto_decimal(value: i64, block_size: i32) -> String {
+    let num_bytes = value * block_size as i64;
+    if num_bytes < 1000 {
+        to_string_concrete(value, ui::DigitalUnit::B, block_size)
+    } else if num_bytes < 1000_000 {
+        to_string_concrete(value, ui::DigitalUnit::KB, block_size)
+    } else if num_bytes < 1000_000_000 {
+        to_string_concrete(value, ui::DigitalUnit::MB, block_size)
+    } else if num_bytes < 1000_000_000_000 {
+        to_string_concrete(value, ui::DigitalUnit::GB, block_size)
+    } else {
+        to_string_concrete(value, ui::DigitalUnit::TB, block_size)
+    }
+}
+
+pub fn to_string_auto_binary(value: i64, block_size: i32) -> String {
+    let num_bytes = value * block_size as i64;
+    if num_bytes < 1024 {
+        to_string_concrete(value, ui::DigitalUnit::B, block_size)
+    } else if num_bytes < 1024 * 1024 {
+        to_string_concrete(value, ui::DigitalUnit::KiB, block_size)
+    } else if num_bytes < 1024 * 1024 * 1024 {
+        to_string_concrete(value, ui::DigitalUnit::MiB, block_size)
+    } else if num_bytes < 1024 * 1024 * 1024 * 1024 {
+        to_string_concrete(value, ui::DigitalUnit::GiB, block_size)
+    } else {
+        to_string_concrete(value, ui::DigitalUnit::TiB, block_size)
+    }
+}
+
+pub fn to_string_concrete(value: i64, unit: ui::DigitalUnit, block_size: i32) -> String {
     let block_size = std::cmp::max(1, block_size);
     let ratio = unit.ratio(block_size);
     let numeral = value as f64 / ratio;
-    format!("{numeral} {unit}")
+    let rounded = f64::round(numeral * 1000.0) / 1000.0; // Round to 3 digits.
+    format!("{rounded} {unit}")
+}
+
+pub fn to_string(value: i64, unit: ui::DigitalUnit, block_size: i32) -> String {
+    match unit {
+        ui::DigitalUnit::AutoDecimal => to_string_auto_decimal(value, block_size),
+        ui::DigitalUnit::AutoBinary => to_string_auto_binary(value, block_size),
+        _ => to_string_concrete(value, unit, block_size),
+    }
 }
 
 #[cfg(test)]
