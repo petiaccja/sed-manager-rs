@@ -5,6 +5,7 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod algorithm;
 mod backend;
 mod configuration;
 mod device_list;
@@ -35,6 +36,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let app_window = ui::AppWindow::new()?;
     let frontend = Frontend::new(app_window.clone_strong());
 
+    algorithm::set_callbacks(frontend.clone());
     configuration::set_callbacks(backend.clone(), frontend.clone());
     troubleshooting::set_callbacks(backend.clone(), frontend.clone());
     device_list::set_callbacks(backend.clone(), frontend.clone());

@@ -3,11 +3,4 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-export struct LockingRange {
-    start-lba: duration, // Should be u64: abuse duration as it's the only 64-bit type in Slint.
-    end-lba: duration,
-    read-lock-enabled: bool,
-    write-lock-enabled: bool,
-    read-locked: bool,
-    write-locked: bool,
-}
+mod digital_unit;

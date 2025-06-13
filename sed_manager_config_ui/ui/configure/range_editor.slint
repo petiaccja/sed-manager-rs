@@ -4,7 +4,7 @@
 //L-----------------------------------------------------------------------------
 
 import { ConfigView } from "config_view.slint";
-import { LineEdit, Button, CheckBox, ScrollView, Palette } from "std-widgets.slint";
+import { Button, CheckBox, ScrollView, Palette, LineEdit, ComboBox } from "std-widgets.slint";
 import { ExtendedStatus, Status } from "../data/status.slint";
 import { LockingRange } from "../data/locking_range.slint";
 import { DeviceGeometry } from "../data/device_description.slint";
@@ -20,12 +20,13 @@ import { StatusOverlay } from "../widgets/status-overlay.slint";
 import { Icons, IconColors } from "../icons.slint";
 import { LoginView } from "login_view.slint";
 import { RangeEditorState, RangeList, DeviceListState } from "../state.slint";
+import { DigitalUnit, DigitalUnitConversion } from "../algorithm/digital_unit.slint";
 
 global TableDesc {
     out property <[string]> column-names: [
-        "Start\n(LBA)",
-        "Length\n(LBA)",
-        "End\n(LBA)",
+        "Start",
+        "Length",
+        "End",
         "Read lock\n enabled",
         "Write lock\n enabled",
         "Read locked",
@@ -53,54 +54,49 @@ component EraseWarningMessage {
     }
 }
 
-component CheckedRangeValue {
-    in property <DeviceGeometry> geometry;
-    in-out property <int> start-lba;
-    in-out property <int> length-lba;
-    in-out property <int> end-lba;
-    in-out property <bool> read-lock-enabled;
-    in-out property <bool> write-lock-enabled;
-    in-out property <bool> read-locked;
-    in-out property <bool> write-locked;
-    callback udpated();
-    pure function align(value: int) -> int {
-        geometry.lowest-aligned-block + Math.floor(Math.max(0, value - geometry.lowest-aligned-block) / geometry.block-alignment) * geometry.block-alignment
-    }
-    public function set-start(new-start: int) {
-        start-lba = align(Math.max(0, new-start));
-        end-lba = Math.max(start-lba, end-lba);
-        length-lba = end-lba - start-lba;
-        udpated();
-    }
-    public function set-end(new-end: int) {
-        end-lba = align(Math.max(0, new-end));
-        start-lba = Math.min(start-lba, end-lba);
-        length-lba = end-lba - start-lba;
-        udpated();
-    }
-    public function set-length(new-length: int) {
-        end-lba = align(start-lba + Math.max(0, new-length));
-        length-lba = end-lba - start-lba;
-        udpated();
-    }
-    public function set-range(properties: LockingRange) {
-        start-lba = properties.start-lba;
-        length-lba = properties.end-lba - properties.start-lba;
-        end-lba = properties.end-lba;
-        read-lock-enabled = properties.read-lock-enabled;
-        write-lock-enabled = properties.write-lock-enabled;
-        read-locked = properties.read-locked;
-        write-locked = properties.write-locked;
-    }
-    public function get-range() -> LockingRange {
-        {
-            start-lba: start-lba,
-            end-lba: end-lba,
-            read-lock-enabled: read-lock-enabled,
-            write-lock-enabled: write-lock-enabled,
-            read-locked: read-locked,
-            write-locked: write-locked,
+component LBAEdit {
+    in-out property <duration> lba;
+    in property <DigitalUnit> unit: DigitalUnit.LBA;
+    in property <int> block-size;
+    in property <bool> enabled;
+    private property <duration> parsed-lba: DigitalUnitConversion.parse(text-edit.text, block-size);
+    private property <bool> parsed-lba-valid: parsed-lba >= 0;
+    private property <string> rendered-lba: DigitalUnitConversion.to_string(lba, unit, block-size);
+    min-width: text-edit.min-width;
+    min-height: text-edit.min-height;
+    callback accepted(lba: duration);
+    function save-lba() {
+        if parsed-lba-valid && self.lba != parsed-lba {
+            self.lba = parsed-lba;
+            accepted(self.lba);
         }
+    }
+    changed rendered-lba => {
+        text-edit.text = rendered-lba;
+    }
+    text-edit := LineEdit {
+        width: parent.width;
+        height: parent.height;
+        text: rendered-lba;
+        horizontal-alignment: right;
+        accepted() => {
+            save-lba();
+            if parsed-lba-valid {
+                self.clear-focus();
+            }
+            self.text = rendered-lba;
+        }
+        changed has-focus => {
+            if !self.has-focus {
+                save-lba();
+                self.text = rendered-lba;
+            }
+        }
+    }
+
+    Rectangle {
+        background: PaletteExtra.error-foreground;
+        opacity: parsed-lba-valid ? 0% : 35%;
     }
 }
 
@@ -112,18 +108,32 @@ component RangeRow {
     in property <int> range-idx;
     in property <LockingRange> range;
     in property <Status> status;
+    in property <DigitalUnit> unit: DigitalUnit.LBA;
     private property <bool> enabled: status != Status.loading;
     callback set-value(value: LockingRange);
     callback erase();
-    changed range => {
-        checked-range.set-range(range);
+    function sync-value() {
+        start-lba.lba = range.start-lba;
+        length-lba.lba = range.end-lba - range.start-lba;
+        end-lba.lba = range.end-lba;
+        rd-lock-en.checked = range.read-lock-enabled;
+        wr-lock-en.checked = range.write-lock-enabled;
+        rd-locked.checked = range.read-locked;
+        wr-locked.checked = range.write-locked;
+    }
+    function push-value() {
+        set-value({
+            start-lba: start-lba.lba,
+            end-lba: end-lba.lba,
+            read-lock-enabled: rd-lock-en.checked,
+            write-lock-enabled: wr-lock-en.checked,
+            read-locked: rd-locked.checked,
+            write-locked: wr-locked.checked,
+        })
     }
     changed status => {
-        if status == Status.error {
-            checked-range.set-range(range);
-            start-lba.text = checked-range.start-lba;
-            length-lba.text = checked-range.length-lba;
-            end-lba.text = checked-range.end-lba;
+        if status != Status.loading {
+            sync-value();
         }
     }
     HorizontalLayout {
@@ -133,22 +143,17 @@ component RangeRow {
             height: row-height;
             row-idx: range-idx;
             column-idx: 0;
-            start-lba := LineEdit {
-                width: parent.width;
-                input-type: number;
-                horizontal-alignment: right;
-                text: checked-range.start-lba;
+            start-lba := LBAEdit {
+                width: 100%;
+                height: 100%;
+                lba: range.start-lba;
                 enabled: enabled;
-                accepted(text) => {
-                    self.clear-focus();
-                    checked-range.set-start(Types.str-to-int(text));
-                    set-value(checked-range.get-range());
-                }
-                changed has-focus => {
-                    if !self.has-focus && checked-range.start-lba != Types.str-to-int(self.text) {
-                        checked-range.set-start(Types.str-to-int(self.text));
-                        set-value(checked-range.get-range());
-                    }
+                unit: root.unit;
+                block-size: root.geometry.block-size;
+                accepted(lba) => {
+                    end-lba.lba = Math.max(lba, end-lba.lba);
+                    length-lba.lba = end-lba.lba - lba;
+                    push-value();
                 }
             }
         }
@@ -159,22 +164,16 @@ component RangeRow {
             height: row-height;
             row-idx: range-idx;
             column-idx: 1;
-            length-lba := LineEdit {
-                width: parent.width;
-                input-type: number;
-                horizontal-alignment: right;
-                text: checked-range.length-lba;
+            length-lba := LBAEdit {
+                width: 100%;
+                height: 100%;
+                lba: range.end-lba - range.start-lba;
                 enabled: enabled;
-                accepted(text) => {
-                    self.clear-focus();
-                    checked-range.set-length(Types.str-to-int(text));
-                    set-value(checked-range.get-range());
-                }
-                changed has-focus => {
-                    if !self.has-focus && checked-range.length-lba != Types.str-to-int(self.text) {
-                        checked-range.set-length(Types.str-to-int(self.text));
-                        set-value(checked-range.get-range());
-                    }
+                unit: root.unit;
+                block-size: root.geometry.block-size;
+                accepted(lba) => {
+                    end-lba.lba = start-lba.lba + lba;
+                    push-value();
                 }
             }
         }
@@ -185,22 +184,17 @@ component RangeRow {
             height: row-height;
             row-idx: range-idx;
             column-idx: 2;
-            end-lba := LineEdit {
-                width: parent.width;
-                input-type: number;
-                horizontal-alignment: right;
-                text: checked-range.end-lba;
+            end-lba := LBAEdit {
+                width: 100%;
+                height: 100%;
+                lba: range.end-lba;
                 enabled: enabled;
-                accepted(text) => {
-                    self.clear-focus();
-                    checked-range.set-end(Types.str-to-int(text));
-                    set-value(checked-range.get-range());
-                }
-                changed has-focus => {
-                    if !self.has-focus && checked-range.end-lba != Types.str-to-int(self.text) {
-                        checked-range.set-end(Types.str-to-int(self.text));
-                        set-value(checked-range.get-range());
-                    }
+                unit: root.unit;
+                block-size: root.geometry.block-size;
+                accepted(lba) => {
+                    start-lba.lba = Math.min(start-lba.lba, lba);
+                    length-lba.lba = end-lba.lba - start-lba.lba;
+                    push-value();
                 }
             }
         }
@@ -212,10 +206,10 @@ component RangeRow {
             row-idx: range-idx;
             column-idx: 3;
             rd-lock-en := CheckBox {
-                checked <=> checked-range.read-lock-enabled;
+                checked: range.read-lock-enabled;
                 enabled: enabled;
                 toggled => {
-                    set-value(checked-range.get-range());
+                    push-value();
                 }
             }
         }
@@ -227,10 +221,10 @@ component RangeRow {
             row-idx: range-idx;
             column-idx: 4;
             wr-lock-en := CheckBox {
-                checked <=> checked-range.write-lock-enabled;
+                checked: range.write-lock-enabled;
                 enabled: enabled;
                 toggled => {
-                    set-value(checked-range.get-range());
+                    push-value();
                 }
             }
         }
@@ -242,10 +236,10 @@ component RangeRow {
             row-idx: range-idx;
             column-idx: 5;
             rd-locked := CheckBox {
-                checked <=> checked-range.read-locked;
+                checked: range.read-locked;
                 enabled: enabled;
                 toggled => {
-                    set-value(checked-range.get-range());
+                    push-value();
                 }
             }
         }
@@ -257,10 +251,10 @@ component RangeRow {
             row-idx: range-idx;
             column-idx: 6;
             wr-locked := CheckBox {
-                checked <=> checked-range.write-locked;
+                checked: range.write-locked;
                 enabled: enabled;
                 toggled => {
-                    set-value(checked-range.get-range());
+                    push-value();
                 }
             }
         }
@@ -282,23 +276,6 @@ component RangeRow {
                 }
             }
         }
-
-        checked-range := CheckedRangeValue {
-            width: 0px;
-            geometry: geometry;
-            start-lba: range.start-lba;
-            length-lba: range.end-lba - range.start-lba;
-            end-lba: range.end-lba;
-            read-lock-enabled: range.read-lock-enabled;
-            write-lock-enabled: range.write-lock-enabled;
-            read-locked: range.read-locked;
-            write-locked: range.write-locked;
-            udpated => {
-                start-lba.text = self.start-lba;
-                length-lba.text = self.length-lba;
-                end-lba.text = self.end-lba;
-            }
-        }
     }
 }
 
@@ -307,6 +284,7 @@ component RangeTable {
     in property <[string]> names;
     in property <[LockingRange]> ranges;
     in property <[ExtendedStatus]> statuses;
+    in property <DigitalUnit> unit;
     callback set-value(range-idx: int, value: LockingRange);
     callback erase(range-idx: int);
     private property <int> warned-range-idx;
@@ -344,6 +322,7 @@ component RangeTable {
                 column-stretches: table.column-stretches;
                 range-idx: range-idx;
                 row-height: table.row-heights[0];
+                unit: root.unit;
                 set-value(value) => {
                     set-value(range-idx, value);
                 }
@@ -354,7 +333,6 @@ component RangeTable {
                 changed status => {
                     if self.status == Status.error {
                         ToastMessage.show("Could not modify " + names[range-idx] + ": " + statuses[range-idx].message, PaletteExtra.error-foreground);
-                        self.range = ranges[range-idx];
                     }
                 }
             }
@@ -369,7 +347,7 @@ export component RangeEditor inherits ConfigView {
     in property <ExtendedStatus> login-status: RangeEditorState.login-statuses[root.device-idx];
     in property <DeviceGeometry> geometry: DeviceListState.descriptions[root.device-idx].geometry;
     in property <RangeList> range-list: RangeEditorState.range-lists[root.device-idx];
-    private property <bool> authenticated: false;
+    in-out property <bool> authenticated: false;
     form := VerticalLayout {
         if !authenticated: LoginView {
             extended-status: login-status;
@@ -386,16 +364,85 @@ export component RangeEditor inherits ConfigView {
                 RangeEditorState.list(root.device-idx);
             }
         }
-        if authenticated: RangeTable {
-            geometry: geometry;
-            names: range-list.names;
-            ranges: range-list.values;
-            statuses: range-list.statuses;
-            set-value(range-idx, value) => {
-                RangeEditorState.set-value(root.device-idx, range-idx, value);
+        if authenticated: VerticalLayout {
+            RangeTable {
+                geometry: geometry;
+                names: range-list.names;
+                ranges: range-list.values;
+                statuses: range-list.statuses;
+                unit: unit-selector.unit;
+                set-value(range-idx, value) => {
+                    RangeEditorState.set-value(root.device-idx, range-idx, value);
+                }
+                erase(range-idx) => {
+                    RangeEditorState.erase(root.device-idx, range-idx);
+                }
             }
-            erase(range-idx) => {
-                RangeEditorState.erase(root.device-idx, range-idx);
+
+            Island {
+                HorizontalLayout {
+                    padding: parent.border-radius / 2;
+                    unit-selector := ComboBox {
+                        out property <DigitalUnit> unit: [
+                            DigitalUnit.auto-decimal,
+                            DigitalUnit.auto-binary,
+                            DigitalUnit.LBA,
+                            DigitalUnit.B,
+                            DigitalUnit.kB,
+                            DigitalUnit.MB,
+                            DigitalUnit.GB,
+                            DigitalUnit.TB,
+                            DigitalUnit.KiB,
+                            DigitalUnit.MiB,
+                            DigitalUnit.GiB,
+                            DigitalUnit.TiB
+                        ][self.current-index];
+                        model: [
+                            "Auto: decimal",
+                            "Auto: binary",
+                            "LBA",
+                            "B",
+                            "kB",
+                            "MB",
+                            "GB",
+                            "TB",
+                            "KiB",
+                            "MiB",
+                            "GiB",
+                            "TiB"
+                        ];
+                    }
+
+                    Rectangle {
+                        horizontal-stretch: 1000;
+                    }
+
+                    Text {
+                        vertical-alignment: center;
+                        text: "Block size: " + root.geometry.block-size + " B";
+                        overflow: elide;
+                    }
+
+                    Rectangle {
+                        width: 16px;
+                    }
+
+                    Text {
+                        vertical-alignment: center;
+                        text: "Block alignment: " + root.geometry.block-alignment;
+                        overflow: elide;
+                    }
+
+                    Rectangle {
+                        width: 16px;
+                    }
+
+                    Text {
+                        vertical-alignment: center;
+                        text: "First aligned block: " + root.geometry.lowest-aligned-block;
+                        overflow: elide;
+                    }
+                }
             }
         }
         if login-status.status != Status.success && authenticated: StatusOverlay {
@@ -422,8 +469,8 @@ global ExampleRanges {
                 write-locked: false,
             },
             {
-                start-lba: 1000,
-                end-lba: 2000,
+                start-lba: 1000ms,
+                end-lba: 2000ms,
                 read-lock-enabled: true,
                 write-lock-enabled: true,
                 read-locked: false,
@@ -453,17 +500,17 @@ export component LivePreviewTest_RangeTable inherits RangeTable {
     statuses: ExampleRanges.range_list.statuses;
 }
 
-export component LivePreviewTest inherits RangeEditor {
+export component LivePreviewTest_Login inherits RangeEditor {
     device-name: "Foo Device";
     geometry: ExampleRanges.geometry;
     range-list: ExampleRanges.range_list;
     login-status: { status: Status.success };
-    timer := Timer {
-        interval: 1s;
-        running: false;
-        triggered => {
-            self.running = false;
-            root.login-status.status = Status.success;
-        }
-    }
+}
+
+export component LivePreviewTest_Edit inherits RangeEditor {
+    device-name: "Foo Device";
+    geometry: ExampleRanges.geometry;
+    range-list: ExampleRanges.range_list;
+    login-status: { status: Status.success };
+    authenticated: true;
 }
