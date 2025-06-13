@@ -34,7 +34,7 @@ impl core::fmt::Display for DigitalUnit {
             DigitalUnit::MiB => "MiB",
             DigitalUnit::GiB => "GiB",
             DigitalUnit::TiB => "TiB",
-            DigitalUnit::KB => "KB",
+            DigitalUnit::KB => "kB",
             DigitalUnit::MB => "MB",
             DigitalUnit::GB => "GB",
             DigitalUnit::TB => "TB",

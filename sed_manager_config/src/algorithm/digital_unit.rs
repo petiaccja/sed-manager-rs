@@ -149,7 +149,7 @@ mod tests {
 
     #[test]
     fn parse_kb() {
-        assert_eq!(parse("1.5 KB".into(), 512), 1500 / 512);
+        assert_eq!(parse("1.5 kB".into(), 512), 1500 / 512);
     }
 
     #[test]
