@@ -3,8 +3,6 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use super::fmt::PrettyPrint;
-
 pub type Bytes = Vec<u8>;
 pub type List = Vec<Value>;
 
@@ -25,7 +23,7 @@ pub struct Named {
     pub value: Value,
 }
 
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq)]
 pub enum Value {
     Empty,
     Int8(i8),
@@ -65,88 +63,41 @@ impl Value {
     }
 }
 
-impl PrettyPrint for Value {
-    fn fmt(&self, f: &mut super::fmt::PrettyFormatter) -> Result<(), core::fmt::Error> {
+impl core::fmt::Debug for Value {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> Result<(), core::fmt::Error> {
         match self {
-            Value::Empty => f.write_str("<>"),
-            Value::Int8(n) => f.write_str(&format!("{n}_u8")),
-            Value::Int16(n) => f.write_str(&format!("{n}_i16")),
-            Value::Int32(n) => f.write_str(&format!("{n}_i32")),
-            Value::Int64(n) => f.write_str(&format!("{n}_i64")),
-            Value::Uint8(n) => f.write_str(&format!("{n}_u8")),
-            Value::Uint16(n) => f.write_str(&format!("{n}_u16")),
-            Value::Uint32(n) => f.write_str(&format!("{n}_u32")),
-            Value::Uint64(n) => f.write_str(&format!("{n}_u64")),
-            Value::Command(command) => command.fmt(f),
-            Value::Named(named) => named.fmt(f),
-            Value::Bytes(bytes) => bytes.fmt(f),
-            Value::List(values) => values.fmt(f),
-        }
-    }
-}
-
-impl PrettyPrint for Command {
-    fn fmt(&self, f: &mut super::fmt::PrettyFormatter<'_>) -> core::fmt::Result {
-        match self {
-            Command::Call => f.write_str("CALL"),
-            Command::EndOfData => f.write_str("EOD"),
-            Command::EndOfSession => f.write_str("EOS"),
-            Command::StartTransaction => f.write_str("ST"),
-            Command::EndTransaction => f.write_str("ET"),
-            Command::Empty => f.write_str("EMPTY"),
-        }
-    }
-}
-
-impl PrettyPrint for Bytes {
-    fn fmt(&self, f: &mut super::fmt::PrettyFormatter<'_>) -> Result<(), core::fmt::Error> {
-        let item_sep = if f.is_indenting_enabled() { '\n' } else { ' ' };
-        f.write_str("bytes:[")?;
-        f.write_char(item_sep)?;
-        f.indented(|f| {
-            for (idx, byte) in self.iter().enumerate() {
-                f.write_str(&format!("{byte:2X}"))?;
-                if idx % 4 == 3 {
-                    f.write_char(item_sep)?;
+            Value::Empty => f.write_str("<EMPTY>"),
+            Value::Int8(n) => write!(f, "{n}_u8"),
+            Value::Int16(n) => write!(f, "{n}_i16"),
+            Value::Int32(n) => write!(f, "{n}_i32"),
+            Value::Int64(n) => write!(f, "{n}_i64"),
+            Value::Uint8(n) => write!(f, "{n}_u8"),
+            Value::Uint16(n) => write!(f, "{n}_u16"),
+            Value::Uint32(n) => write!(f, "{n}_u32"),
+            Value::Uint64(n) => write!(f, "{n}_u64"),
+            Value::Command(command) => {
+                if f.alternate() {
+                    write!(f, "{command:#?}")
+                } else {
+                    write!(f, "{command:?}")
                 }
             }
-            Ok(())
-        })?;
-        f.write_char(']')
-    }
-}
-
-impl PrettyPrint for List {
-    fn fmt(&self, f: &mut super::fmt::PrettyFormatter<'_>) -> Result<(), core::fmt::Error> {
-        let item_sep = if f.is_indenting_enabled() { '\n' } else { ' ' };
-        f.write_str("list:[")?;
-        f.write_char(item_sep)?;
-        f.indented(|f| {
-            for item in self {
-                item.fmt(f)?;
-                f.write_char(item_sep)?;
+            Value::Named(named) => {
+                if f.alternate() {
+                    write!(f, "{named:#?}")
+                } else {
+                    write!(f, "{named:?}")
+                }
             }
-            Ok(())
-        })?;
-        f.write_char(']')
-    }
-}
-
-impl PrettyPrint for Named {
-    fn fmt(&self, f: &mut super::fmt::PrettyFormatter<'_>) -> Result<(), core::fmt::Error> {
-        let item_sep = if f.is_indenting_enabled() { '\n' } else { ' ' };
-        f.write_str("{")?;
-        f.write_char(item_sep)?;
-        f.indented(|f| {
-            f.write_str("name: ")?;
-            self.name.fmt(f)?;
-            f.write_char(item_sep)?;
-            f.write_str("value: ")?;
-            self.value.fmt(f)?;
-            f.write_char(item_sep)?;
-            Ok(())
-        })?;
-        f.write_char('}')
+            Value::Bytes(bytes) => {
+                f.write_str("bytes")?;
+                f.debug_list().entries(bytes.iter()).finish()
+            }
+            Value::List(values) => {
+                f.write_str("list")?;
+                f.debug_list().entries(values.iter()).finish()
+            }
+        }
     }
 }
 
@@ -538,5 +489,11 @@ mod tests {
         let value = Value::from(input.clone());
         let content: &List = (&value).try_into().unwrap();
         assert_eq!(content, &input);
+    }
+
+    #[test]
+    fn format_value_list() {
+        let input = Value::from(vec![Value::from(1), Value::from(2)]);
+        assert_eq!(format!("{input:?}"), "list[1_i32, 2_i32]");
     }
 }
