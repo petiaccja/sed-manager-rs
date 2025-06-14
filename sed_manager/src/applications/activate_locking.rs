@@ -12,7 +12,6 @@ use crate::tper::TPer;
 
 use super::error::Error;
 use super::utility::{get_admin_sp, get_locking_admin_c_pins, get_locking_sp};
-use super::with_session::with_session;
 
 pub fn is_activating_locking_supported(discovery: &Discovery) -> bool {
     discovery.get::<LockingDescriptor>().map(|desc| !desc.locking_enabled).unwrap_or(false)
@@ -30,23 +29,25 @@ pub async fn activate_locking(
 
     // Activate the locking SP.
     let admin_session = tper.start_session(admin_sp, Some(core::authority::SID), Some(sid_password)).await?;
-    with_session!(session = admin_session => {
-        let life_cycle_state : LifeCycleState = session.get(locking_sp.as_uid(), SP::LIFE_CYCLE_STATE).await?;
-        if life_cycle_state != LifeCycleState::ManufacturedInactive {
-            return Err(Error::AlreadyActivated);
-        }
-        session.activate(locking_sp).await?;
-        Ok::<(), Error>(())
-    })?;
+    admin_session
+        .with(async |session| {
+            let life_cycle_state: LifeCycleState = session.get(locking_sp.as_uid(), SP::LIFE_CYCLE_STATE).await?;
+            if life_cycle_state != LifeCycleState::ManufacturedInactive {
+                return Err(Error::AlreadyActivated);
+            }
+            session.activate(locking_sp).await?;
+            Ok::<(), Error>(())
+        })
+        .await?;
 
     // Change Admin1 PIN on the locking SP.
     let admin1 = get_locking_admins(ssc.feature_code()).ok().map(|uids| uids.nth(1)).flatten();
     let admin1_c_pin = get_locking_admin_c_pins(ssc.feature_code()).ok().map(|uids| uids.nth(1)).flatten();
     if let (Some(admin1_pw), Some(admin1), Some(admin1_c_pin)) = (new_admin1_password, admin1, admin1_c_pin) {
         let locking_session = tper.start_session(locking_sp, Some(admin1), Some(sid_password)).await?;
-        with_session!(session = locking_session => {
-            session.set(admin1_c_pin.as_uid(), CPIN::PIN, admin1_pw).await
-        })?;
+        locking_session
+            .with(async |session| session.set(admin1_c_pin.as_uid(), CPIN::PIN, admin1_pw).await)
+            .await?;
     }
 
     Ok(())
@@ -58,7 +59,7 @@ pub async fn verify_locking_activation(tper: &TPer, admin1_password: Option<&[u8
     let locking_sp = get_locking_sp(ssc.feature_code())?;
     let admin1 = get_locking_admins(ssc.feature_code()).ok().map(|uids| uids.nth(1)).flatten();
     let password = admin1_password.filter(|_| admin1.is_some());
-    with_session!(session = tper.start_session(locking_sp, admin1, password).await? => {});
+    let _ = tper.start_session(locking_sp, admin1, password).await?.end_session().await;
     Ok(true)
 }
 
