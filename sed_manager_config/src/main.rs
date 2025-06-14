@@ -25,7 +25,12 @@ use std::rc::Rc;
 use utility::PeekCell;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let _guard = logging::init();
+    let log_level = if cfg!(debug_assertions) {
+        logging::get_level().or(Some(tracing::Level::DEBUG))
+    } else {
+        logging::get_level()
+    };
+    let _guard = log_level.map(|log_level| logging::init(log_level));
     let backend = Rc::new(PeekCell::new(Backend::new()));
 
     // Load settings.
