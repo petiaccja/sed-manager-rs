@@ -56,7 +56,7 @@ impl SPSession {
         }
     }
 
-    pub async fn with<Output: 'static>(mut self, f: impl AsyncFnOnce(&mut SPSession) -> Output) -> Output {
+    pub async fn with<Output: 'static>(mut self, f: impl AsyncFnOnce(&mut Self) -> Output) -> Output {
         let result = f(&mut self).await;
         let _ = self.end_session().await;
         result

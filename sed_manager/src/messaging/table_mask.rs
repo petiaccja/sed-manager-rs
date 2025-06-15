@@ -3,8 +3,6 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use super::uid::TableUID;
-
 #[allow(non_camel_case_types)]
 #[repr(u32)]
 enum TableIndex {
@@ -56,8 +54,8 @@ enum TableIndex {
     K_AES_256,
 }
 
-pub const fn table_mask(table: TableUID) -> u64 {
-    match table.as_u64() >> 32 {
+pub const fn table_mask(table_uid: u64) -> u64 {
+    match table_uid >> 32 {
         0x0000_0001 => 1u64 << (TableIndex::Table as u32),
         0x0000_0002 => 1u64 << (TableIndex::SPInfo as u32),
         0x0000_0003 => 1u64 << (TableIndex::SPTemplates as u32),
@@ -108,6 +106,6 @@ pub const fn table_mask(table: TableUID) -> u64 {
     }
 }
 
-pub const fn is_table_in_mask(table: TableUID, mask: u64) -> bool {
-    table_mask(table) & mask != 0
+pub const fn is_table_in_mask(table_uid: u64, mask: u64) -> bool {
+    table_mask(table_uid) & mask != 0
 }

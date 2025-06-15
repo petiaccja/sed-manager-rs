@@ -107,11 +107,11 @@ impl TableUID {
     }
 
     pub const fn mask(&self) -> u64 {
-        super::table_mask::table_mask(*self)
+        super::table_mask::table_mask(self.as_u64())
     }
 
     pub const fn is_contained_in_mask(&self, mask: u64) -> bool {
-        super::table_mask::is_table_in_mask(*self, mask)
+        super::table_mask::is_table_in_mask(self.as_u64(), mask)
     }
 
     pub const fn to_descriptor(&self) -> ObjectUID<1> {
