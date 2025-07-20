@@ -10,6 +10,7 @@ mod backend;
 mod configuration;
 mod device_list;
 mod frontend;
+mod license;
 mod logging;
 mod settings;
 mod troubleshooting;
@@ -19,7 +20,7 @@ mod utility;
 use backend::Backend;
 use core::error::Error;
 use frontend::Frontend;
-use settings::remove_markdown_directives;
+use license::{get_license_fingerprint, get_plain_license};
 use slint::ComponentHandle;
 use std::rc::Rc;
 use utility::PeekCell;
@@ -52,13 +53,16 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // Set parameters for the about page and the license.
     let ui_settings = app_window.global::<ui::SettingsState>();
-    let license = include_str!("../../LICENSE.md");
-    ui_settings.set_license_text(remove_markdown_directives(license).into());
+    ui_settings.set_license_text(get_plain_license().into());
+    ui_settings.set_license_changed(settings.peek(|settings| settings.accepted_license_fingerprint.is_some()));
 
     // Refresh device list right after starting.
     let _ = app_window.show();
     app_window.global::<ui::DeviceListState>().invoke_list();
-    if !settings.peek(|settings| settings.license_accepted) {
+
+    // Show license agreement if not already accepted.
+    let accepted_license_fingerprint = settings.peek(|settings| settings.accepted_license_fingerprint.clone());
+    if accepted_license_fingerprint != Some(get_license_fingerprint()) {
         app_window.invoke_show_license();
     }
 
