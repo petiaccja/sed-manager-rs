@@ -2,17 +2,13 @@
 
 THIS LICENSE IS A DRAFT AND DOES NOT APPLY TO THE USE OF THE SOFTWARE. THE SOFTWARE IS CURRENTLY GOVERNED BY A SEPARATE LICENSE INCLUDED WITH THE SOFTWARE. THIS DRAFT IS PROVIDED FOR REVIEW PURPOSES ONLY AND HAS NO LEGAL EFFECT.
 
-TODO:
-- add email
-- allow non-profits
-
 This license agreement (**Agreement**) is made by and between you (**Licensee**) and Péter Kardos (**Developer**) and governs the use of the software known as SEDManager (**Software**). The **Software** consists of various libraries and applications designed for managing and configuring self-encrypting drives and includes executable code, source code, and documentation.
 
 Any party using the **Software** obtained from any source, e.g. a third party, whether modified or not, remains subject to the terms of this **Agreement** and must ensure compliance, including payment obligations where applicable.
 
 ## 1. Definitions
 
-- **Non-commercial use**: Any activity that is not intended to generate profit, revenue, or other forms of compensation, and does not involve providing services, work, or data for commercial purposes by a natural person.
+- **Non-commercial use**: Any activity that is not intended to generate profit, revenue, or other forms of compensation, and does not involve providing services, work, or data for commercial purposes. This includes use by natural persons and non-profit organisations, provided the use aligns with their non-commercial mission and does not involve commercial exploitation.
 - **Commercial use**: Any use of the **Software** that is intended to support or advance a business, professional activity, or other enterprise intended to generate income, revenue, or other forms of compensation. This includes, but is not limited to:
   - Use of the **Software** in connection with the provision of goods or services to third parties;
   - Use of the **Software** by or within a business, institution, organization, or governmental entity;
