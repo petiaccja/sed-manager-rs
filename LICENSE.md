@@ -47,13 +47,13 @@ Any commercial use of the **Software** beyond the scope of the individual commer
 
 The **Licensee** is permitted to redistribute the **Software** and any **Improvements**, provided that such redistribution complies with the following conditions:
 
-1.  The **Licensee** may not sublicense or transfer the **Software** or any **Improvements** to any third party.
+1.  The **Licensee** may not sublicense or transfer their license of the **Software** or any **Improvements** to any third party.
 2.  The redistributed **Software** and **Improvements** must retain this **Agreement** in its entirety, including all copyright notices and disclaimers.
 3.  Redistribution must not misrepresent the origin of the **Software** or **Improvements** or imply any endorsement by the **Developer** without prior written consent.
 
 Any redistribution that does not comply with these conditions is prohibited.
 
-## 4. Ownership of Intellectually Property
+## 4. Ownership of Intellectual Property
 
 ### 4.1. The Software
 
