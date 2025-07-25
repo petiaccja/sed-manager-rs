@@ -1,8 +1,6 @@
 # SEDManager License Agreement
 
-THIS LICENSE IS A DRAFT AND DOES NOT APPLY TO THE USE OF THE SOFTWARE. THE SOFTWARE IS CURRENTLY GOVERNED BY A SEPARATE LICENSE INCLUDED WITH THE SOFTWARE. THIS DRAFT IS PROVIDED FOR REVIEW PURPOSES ONLY AND HAS NO LEGAL EFFECT.
-
-This license agreement (**Agreement**) is made by and between you (**Licensee**) and Péter Kardos (**Developer**) and governs the use of the software known as SEDManager (**Software**). The **Software** consists of various libraries and applications designed for managing and configuring self-encrypting drives and includes executable code, source code, and documentation.
+This license agreement (**Agreement**) is made by and between you (**Licensee**) and Péter Kardos (**Developer**, [license@sedmanager.app](mailto:license@sedmanager.app)) and governs the use of the software known as SEDManager (**Software**). The **Software** consists of various libraries and applications designed for managing and configuring self-encrypting drives and includes executable code, source code, and documentation.
 
 Any party using the **Software** obtained from any source, e.g. a third party, whether modified or not, remains subject to the terms of this **Agreement** and must ensure compliance, including payment obligations where applicable.
 
@@ -87,7 +85,7 @@ The **Licensee** agrees not to use or export the **Software** in violation of ap
 
 ## 10. Governing Law and Jurisdiction
 
-This **Agreement** shall be governed by and construed in accordance with the laws of Switzerland without regard to its conflict of law principles and to the CISG. Any disputes arising under or in connection with this **Agreement** shall be subject to the exclusive jurisdiction of the courts located in Zurich, Switzerland. Mandatory places of jurisdiction remain reserved.
+This **Agreement** shall be governed by and construed in accordance with the laws of Switzerland without regard to its conflict of law principles and to the CISG. Any disputes arising under or in connection with this **Agreement** shall be subject to the exclusive jurisdiction of the courts located in Zurich, ZH, Switzerland. Mandatory places of jurisdiction remain reserved.
 
 ## 11. Termination
 
