@@ -25,11 +25,11 @@ SEDManager helps you quickly set up your TCG-compliant self-encrypting drives (S
 
 ### Supported operating systems and interfaces:
 
-|             | NVMe | SCSI | ATA/SATA |
-|-------------|------|------|----------|
-| Windows     | Yes  | Yes  | Yes      |
-| Linux       | Yes  | No   | No       |
-| PBA (Linux) | Yes  | No   | No       |
+|                   | NVMe | SCSI | ATA/SATA |
+|-------------------|------|------|----------|
+| Windows           | Yes  | Yes  | Yes      |
+| Linux             | Yes  | No   | No       |
+| PBA (Linux-based) | Yes  | No   | No       |
 
 ## Installation and usage
 
@@ -67,13 +67,23 @@ You will need to install the Rust toolchain, and possibly C/C++ compilers for so
 SEDManager has a proprietary license. The key points:
 - **Free for non-commercial users**. For example, encrypting a family computer.
 - **Free for individual commercial users**. For example, you're a freelancer and you want to encrypt your work laptop.
-- **Not free for general commercial users**. Anything other than the above two. Please reach out if you're interested in using SEDManager commercially.
+- **Paid for general commercial users**. Anything other than the above two. Please [reach out](mailto:license@sedmanager.app) if you're interested in using SEDManager commercially.
 - **You can edit the source code** in all cases, but there are limitations on how you can share your edits.
 
-This is just a quick summary, please read the [full license](./LICENSE.md) for the exact terms.
+Please read the [full license](./LICENSE.md) for the exact terms. This short summary is not binding.
+
+## Contributing
+
+If you're interested in contributing, please do so via GitHub's interface:
+- Found a bug ⇒ open an issue
+- Fixed a bug ⇒ open a pull request
+- Have a feature request ⇒ open an issue
+- Added a feature ⇒ open an issue
+
+If you're working on a larger feature or fix and you intend to contribute it to upstream, it's best to first open an issue to get in touch. An initial discussion will save you the trouble of working on something that cannot be accepted into upstream.
 
 ## Attributions
 
 SEDManager was built using:
-- [Slint](https://slint.dev/): the entire UI is written using Slint
-- [Material Symbols & Icons](https://fonts.google.com/icons): the UI uses Material design icons
+- [Slint](https://slint.dev/): a handy GUI library powering SEDManager's interface.
+- [Material Symbols & Icons](https://fonts.google.com/icons): aesthetic icons used across SEDManager's interface.
