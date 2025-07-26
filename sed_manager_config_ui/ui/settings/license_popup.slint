@@ -8,6 +8,7 @@ import { Palette, TextEdit, Button, ScrollView } from "std-widgets.slint";
 
 export component LicensePopup inherits Rectangle {
     in property <string> license-text;
+    in property <bool> license-changed;
     callback accept();
     callback decline();
     background: Palette.background;
@@ -18,7 +19,7 @@ export component LicensePopup inherits Rectangle {
         Text {
             vertical-stretch: 0;
             horizontal-alignment: center;
-            text: "SEDManager License Agreement";
+            text: !license-changed ? "Please review the license agreement:" : "The license agreement has been updated:";
             font-size: 18px;
             font-weight: 600;
         }
@@ -60,8 +61,9 @@ export component LicensePopup inherits Rectangle {
 }
 
 export component LivePreviewTest {
-    settings-popup := LicensePopup {
+    license-popup := LicensePopup {
         license-text: "Licence Agreement\n\nLorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.";
+        license-changed: false;
         preferred-width: 100%;
         preferred-height: 100%;
     }

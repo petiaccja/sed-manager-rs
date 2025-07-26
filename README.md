@@ -1,13 +1,12 @@
 # SEDManager
 
 ![Language](https://img.shields.io/badge/Language-Rust-blue)
+![Language](https://img.shields.io/badge/License-Proprietary-blue)
 [![build_and_test](https://github.com/petiaccja/sed-manager-rs/actions/workflows/build_and_test.yml/badge.svg)](https://github.com/petiaccja/sed-manager-rs/actions/workflows/build_and_test.yml)
 
-An easy to use cross-platform GUI application for setting up self-encrypting drives.
+An easy to use cross-platform GUI application for setting up self-encrypting drives. Head to [SEDManager's website](https://sedmanager.app) for more information, downloads, and documentation.
 
-- [Documentation](https://petiaccja.github.io/sed-manager-website/)
-- [Download](https://github.com/petiaccja/sed-manager-rs/releases)
-- [PBA](https://github.com/petiaccja/sed-manager-pba/releases)
+SEDManager is free for non-commercial use. Read more about the [licensing terms](#license) below.
 
 ## Introduction
 
@@ -26,11 +25,11 @@ SEDManager helps you quickly set up your TCG-compliant self-encrypting drives (S
 
 ### Supported operating systems and interfaces:
 
-|             | NVMe | SCSI | ATA/SATA |
-|-------------|------|------|----------|
-| Windows     | Yes  | Yes  | Yes      |
-| Linux       | Yes  | No   | No       |
-| PBA (Linux) | Yes  | No   | No       |
+|                   | NVMe | SCSI | ATA/SATA |
+|-------------------|------|------|----------|
+| Windows           | Yes  | Yes  | Yes      |
+| Linux             | Yes  | No   | No       |
+| PBA (Linux-based) | Yes  | No   | No       |
 
 ## Installation and usage
 
@@ -63,12 +62,28 @@ cargo build
 
 You will need to install the Rust toolchain, and possibly C/C++ compilers for some dependencies (e.g. Skia). You can also choose between the release (`--profile release`) and debug (`--profile dev`) profiles when using `cargo`.
 
+## License
+
+SEDManager has a proprietary license. The key points:
+- **Free for non-commercial users**. For example, encrypting a family computer.
+- **Free for individual commercial users**. For example, you're a freelancer and you want to encrypt your work laptop.
+- **Paid for general commercial users**. Anything other than the above two. Please [reach out](mailto:license@sedmanager.app) if you're interested in using SEDManager commercially.
+- **You can edit the source code** in all cases, but there are limitations on how you can share your edits.
+
+Please read the [full license](./LICENSE.md) for the exact terms. This short summary is not binding.
+
+## Contributing
+
+If you're interested in contributing, please do so via GitHub's interface:
+- Found a bug ⇒ open an issue
+- Fixed a bug ⇒ open a pull request
+- Have a feature request ⇒ open an issue
+- Added a feature ⇒ open an issue
+
+If you're working on a larger feature or fix and you intend to contribute it to upstream, it's best to first open an issue to get in touch. An initial discussion will save you the trouble of working on something that cannot be accepted into upstream.
+
 ## Attributions
 
 SEDManager was built using:
-- [Slint](https://slint.dev/): the entire UI is written using Slint
-- [Material Symbols & Icons](https://fonts.google.com/icons): the UI uses Material design icons
-
-## License
-
-SEDManager is copyrighted while I'm working out the licensing terms, meaning you can not legally use either the sources or the binaries. Stay tuned.
+- [Slint](https://slint.dev/): a handy GUI library powering SEDManager's interface.
+- [Material Symbols & Icons](https://fonts.google.com/icons): aesthetic icons used across SEDManager's interface.
