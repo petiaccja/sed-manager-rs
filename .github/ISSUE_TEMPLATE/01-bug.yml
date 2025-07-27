@@ -1,0 +1,66 @@
+name: "Bug report"
+description: "Create a report to help us improve"
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting this issue.
+
+        Before you hit submit, please check if the issue persists on the latest version of SEDManager, and if somebody has already reported it.
+
+        You can help a lot by attaching SEDManager's log file. To make SEDManager write logs, run it with the `--log=DEBUG` flag on the command line, or set the `RUST_LOG` environment variable to `DEBUG`. The logs are written to `%TEMP%/sed-manager.log` (Windows) or `/tmp/sed-manager.log` (Linux).
+  - type: textarea
+    attributes:
+      label: "Description of the bug and how to reproduce"
+      description: |
+        - Describe what went wrong and what you expected instead
+        - Provide concrete steps that can be followed to reproduce the issue
+        - Upload log files, if relevant
+      placeholder: |
+        Cannot log in as Admin1 due to incorrect password, even though I made sure the password is correctly set when activating locking.
+
+        How to reproduce:
+        1. Start with a clean drive setup (i.e. factory defaults)
+        2. Take ownership of the drive
+        3. Activate locking with custom Admin1 password (Note down the password!)
+        4. Attempt to configure locking ranges
+        5. The admin password is not accepted
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: "Version"
+      description: "SEDManager's version. This is currently not displayed by SEDManager, so if you don't know, enter the SHA256 or that you don't know."
+      placeholder: "0.1.1"
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: "Operating system"
+      description: "Linux, Windows, or PBA. If you can, specify the kernel version (uname -a) or build number (winver.exe)."
+      placeholder: "Windows 11 24H2"
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: "Storage device model"
+      description: "The brand and model of the drive you're configuring."
+      placeholder: "Samsung 990 PRO 1TB"
+    validations:
+      required: false
+  - type: input
+    attributes:
+      label: "Interface"
+      description: "Specify both the physical interface and the protocol. The protocol is displayed in SEDManager on the device's info page."
+      placeholder: "M.2 / NVMe"
+    validations:
+      required: false
+  - type: input
+    attributes:
+      label: "Security Subsystem Classes"
+      description: "The TCG SSCs the device supports. SEDManager displays this on the device's info page."
+      placeholder: "Opal 2.0"
+    validations:
+      required: false
+      

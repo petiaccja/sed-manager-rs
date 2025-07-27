@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question and discussions
+    url: https://github.com/petiaccja/sed-manager-rs/discussions
+    about: Please head over to the discussions board for posting general questions.
