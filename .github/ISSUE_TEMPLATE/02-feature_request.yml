@@ -23,7 +23,7 @@ body:
       label: Describe alternatives you've considered
       description: A clear and concise description of any alternative solutions or features you've considered.
       placeholder: |
-        I've tried firing up SEDManager after bootup and manually unlocking the drives, but it's rather cumbersome. Maybe I could automate this by confugring an autorun in the operating system if SEDManager had a CLI that can unlock the drives.
+        I've tried firing up SEDManager after bootup and manually unlocking the drives, but it's rather cumbersome. Maybe I could automate this by configring an autorun in the operating system if SEDManager had a CLI that can unlock the drives.
       validations:
         required: false
   - type: textarea

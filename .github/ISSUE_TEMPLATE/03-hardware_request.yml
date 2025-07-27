@@ -12,14 +12,14 @@ body:
   - type: input
     attributes:
       label: "Protocol"
-      description: The protocol used to issue commands to the drive. SEDManager display this on the device's info page. E.g. NVMe, ATA, SCSI.
+      description: The protocol used to issue commands to the drive. SEDManager displays this on the device's info page. E.g. NVMe, ATA, SCSI.
       placeholder: NVMe
     validations:
       required: true
   - type: input
     attributes:
       label: "Storage device model"
-      description: "The product you'd like to work. Please provide the brand and the model."
+      description: "The product you'd like SEDManager to support. Please provide the brand and the model."
       placeholder: Seagate Exos 2X18 16TB
     validations:
       required: false

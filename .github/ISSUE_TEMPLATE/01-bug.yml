@@ -23,7 +23,7 @@ body:
         How to reproduce:
         1. Start with a clean drive setup (i.e. factory defaults)
         2. Take ownership of the drive
-        3. Activate locking with custom Admin1 password (Not down the password!)
+        3. Activate locking with custom Admin1 password (Note down the password!)
         4. Attempt to configure locking ranges
         5. The admin password is not accepted
     validations:
@@ -31,7 +31,7 @@ body:
   - type: input
     attributes:
       label: "Version"
-      description: "SEDManager's version. This is currently not display by SEDManager, so if you don't know, enter the SHA256 or that you don't know."
+      description: "SEDManager's version. This is currently not displayed by SEDManager, so if you don't know, enter the SHA256 or that you don't know."
       placeholder: "0.1.1"
     validations:
       required: true
