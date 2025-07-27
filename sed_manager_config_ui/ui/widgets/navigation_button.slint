@@ -26,15 +26,15 @@ export component NavigationButton inherits Island {
     in property <length> spacing: 8px;
     in property <bool> enabled: true;
     callback clicked <=> area.clicked;
-    padding: 6px;
-    min-height: title.height + effective-padding-top() + effective-padding-bottom();
-    min-width: effective-padding-left() + image.width + spacing + title.width + spacing + direction-indicator.width + effective-padding-right();
+    private property <length> content-padding: 6px;
+    min-height: title.height + 2 * content-padding;
+    min-width: 2 * content-padding + image.width + spacing + title.width + spacing + direction-indicator.width;
     area := TouchArea {
         enabled: root.enabled;
     }
 
     image := Image {
-        x: effective-padding-left();
+        x: content-padding;
         width: icon-size();
         height: icon-size();
         source: root.icon;
@@ -47,7 +47,7 @@ export component NavigationButton inherits Island {
     }
 
     title := Text {
-        x: effective-padding-left() + icon-size() + spacing;
+        x: content-padding + icon-size() + spacing;
         text: root.text;
         vertical-alignment: center;
         font-weight: 600;
@@ -57,7 +57,7 @@ export component NavigationButton inherits Island {
     }
 
     direction-indicator := Image {
-        x: root.width - self.width - effective-padding-right();
+        x: root.width - self.width - content-padding;
         height: title.height;
         width: self.height;
         source: navigation-image();
@@ -87,22 +87,10 @@ export component NavigationButton inherits Island {
     }
     pure function icon-size() -> length {
         if self.icon.width != 0 {
-            Math.min(1.4 * title.height, root.height - effective-padding-top() - effective-padding-bottom());
+            Math.min(1.4 * title.height, root.height - 2 * content-padding);
         } else {
             0px
         }
-    }
-    pure function effective-padding-left() -> length {
-        Math.max(root.padding-left, root.padding)
-    }
-    pure function effective-padding-right() -> length {
-        Math.max(root.padding-right, root.padding)
-    }
-    pure function effective-padding-top() -> length {
-        Math.max(root.padding-top, root.padding)
-    }
-    pure function effective-padding-bottom() -> length {
-        Math.max(root.padding-bottom, root.padding)
     }
 }
 

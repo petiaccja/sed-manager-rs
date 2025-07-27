@@ -9,13 +9,13 @@ import { Icons } from "../icons.slint";
 
 export component IconButton {
     preferred-height: 32px;
-    padding: 4px;
-    min-width: label.min-width + 2 * self.padding;
-    min-height: 1px + 2 * self.padding;
+    min-width: label.min-width + 2 * content-padding;
+    min-height: 1px + 2 * content-padding;
     in property <image> icon;
     in property <string> text;
     in property <length> font-size: self.height / 7;
     in property <bool> enabled <=> area.enabled;
+    private property <length> content-padding: 4px;
     out property <bool> has-hover <=> area.has-hover;
     private property <color> foreground:  {
         if area.enabled && area.has-hover {
@@ -29,9 +29,9 @@ export component IconButton {
     private property <length> text-height: 0;
     callback clicked <=> area.clicked;
     image := Image {
-        y: parent.padding;
-        width: parent.width - 2 * parent.padding;
-        height: text.character-count > 0 ? parent.height - label.height - 2 * parent.padding : parent.height - 2 * parent.padding;
+        y: content-padding;
+        width: parent.width - 2 * content-padding;
+        height: text.character-count > 0 ? parent.height - label.height - 2 * content-padding : parent.height - 2 * content-padding;
         source: icon;
         image-fit: contain;
         horizontal-alignment: center;
@@ -40,7 +40,7 @@ export component IconButton {
     }
 
     label := Text {
-        y: parent.height - self.height - parent.padding;
+        y: parent.height - self.height - content-padding;
         height: self.min-height;
         text: text;
         horizontal-alignment: center;
