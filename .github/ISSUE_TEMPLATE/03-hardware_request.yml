@@ -1,0 +1,39 @@
+name: "Hardware request"
+description: "Request support for a specific storage device"
+labels: ["hardware-request"]
+body:
+  - type: input
+    attributes:
+      label: "Physical interface"
+      description: The shape of the physical connector through which you attach the device. E.g. M.2, SATA, USB, SAS.
+      placeholder: M.2
+    validations:
+      required: false
+  - type: input
+    attributes:
+      label: "Protocol"
+      description: The protocol used to issue commands to the drive. SEDManager display this on the device's info page. E.g. NVMe, ATA, SCSI.
+      placeholder: NVMe
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: "Storage device model"
+      description: "The product you'd like to work. Please provide the brand and the model."
+      placeholder: Seagate Exos 2X18 16TB
+    validations:
+      required: false
+  - type: input
+    attributes:
+      label: "Security Subsystem Classes"
+      description: "The TCG SSCs the device claims to support. SEDManager displays this on the device's info page."
+      placeholder: Opal 2.0
+    validations:
+      required: false
+  - type: textarea
+    attributes:
+      label: "Why is the device not supported?"
+      description: "Explain what issue you bumped into when configuring the device, for example, error messages from SEDManager."
+      placeholder: "The drive is detected, but SEDManager says it doesn't support locking due to the following error: ... The drive supports Opal 2.0 according to its specification."
+    validations:
+      required: true
