@@ -37,3 +37,9 @@ body:
       placeholder: "The drive is detected, but SEDManager says it doesn't support locking due to the following error: ... The drive supports Opal 2.0 according to its specification."
     validations:
       required: true
+  - type: textarea
+    attributes:
+      label: Additional information
+      description: Any additional information, context, screenshots or log files you have.
+    validations:
+      required: false
