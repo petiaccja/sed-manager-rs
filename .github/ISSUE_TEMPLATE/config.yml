@@ -1,5 +1,11 @@
 blank_issues_enabled: true
 contact_links:
-  - name: Question and discussions
+  - name: 💿 PBA issues
+    url: https://github.com/petiaccja/sed-manager-pba/issues
+    about: Report strictly PBA-related issues, such as failure to boot the PBA environment.
+  - name: 🌐 Website issues
+    url: https://github.com/petiaccja/sed-manager-website/issues
+    about: Report issues related to the website, like broken links or unclear text.
+  - name: ❓ Question and discussions
     url: https://github.com/petiaccja/sed-manager-rs/discussions
-    about: Please head over to the discussions board for posting general questions.
+    about: Ask general questions or start a discussion about SEDManager.
