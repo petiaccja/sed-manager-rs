@@ -12,12 +12,13 @@ import { LockingRange } from "../data/locking_range.slint";
 import { Description } from "../info/description.slint";
 import { TakeOwnership } from "../configure/take_owneship.slint";
 import { ActivateLocking } from "../configure/activate_locking.slint";
+import { ChangePassword } from "../configure/change_password.slint";
 import { RangeEditor} from "../configure/range_editor.slint";
 import { UserEditor } from "../configure/user_editor.slint";
 import { PermissionEditor } from "../configure/permission_editor.slint";
 import { MBREditor } from "../configure/mbr_editor.slint";
 import { Revert } from "../configure/revert.slint";
-import { DeviceListState, TroubleshootingState } from "../state.slint";
+import { DeviceListState, TroubleshootingState, ChangePasswordState } from "../state.slint";
 import { StackResetPopup } from "../troubleshoot/stack-reset.slint";
 
 export component DevicePage {
@@ -28,6 +29,8 @@ export component DevicePage {
         self.current-activity = activity;
         if activity == Activity.description {
             DeviceListState.discover(device-idx);
+        } else if activity == Activity.change-password {
+            ChangePasswordState.list(device-idx);
         } else if activity == Activity.stack-reset {
             TroubleshootingState.stack-reset(device-idx);
             self.current-activity = Activity.description;
@@ -53,6 +56,12 @@ export component DevicePage {
             }
         }
         if current-activity == Activity.activate-locking: ActivateLocking {
+            device-idx: device-idx;
+            back => {
+                set-current-activity(Activity.description);
+            }
+        }
+        if current-activity == Activity.change-password: ChangePassword {
             device-idx: device-idx;
             back => {
                 set-current-activity(Activity.description);

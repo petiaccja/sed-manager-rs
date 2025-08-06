@@ -18,6 +18,7 @@ impl ActivitySupport {
         Self {
             take_ownership: false,
             activate_locking: false,
+            change_password: false,
             range_editor: false,
             user_editor: false,
             access_control_editor: false,
@@ -31,7 +32,8 @@ impl ActivitySupport {
     pub fn from_discovery(discovery: &Discovery) -> Self {
         Self {
             activate_locking: is_activating_locking_supported(discovery),
-            com_id_status: false, // Always supported | Not implemented
+            change_password: true, // Always supported
+            com_id_status: false,  // Always supported | Not implemented
             range_editor: is_range_editor_supported(discovery),
             access_control_editor: is_permission_editor_supported(discovery),
             revert: is_revert_supported(discovery),
