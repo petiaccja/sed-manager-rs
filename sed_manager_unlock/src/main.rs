@@ -9,7 +9,7 @@ use std::sync::Arc;
 use std::{io, usize};
 
 use sed_manager::applications::Error as AppError;
-use sed_manager::applications::{get_locking_sp, get_lookup};
+use sed_manager::applications::{get_general_lookup, get_locking_sp};
 use sed_manager::device::Device;
 use sed_manager::messaging::discovery::Discovery;
 use sed_manager::rpc::{Error as RPCError, MethodStatus, TokioRuntime};
@@ -79,7 +79,7 @@ fn select_device(device_list: &DeviceList) -> Result<&(Arc<dyn Device>, Discover
 async fn get_user_by_name(name: &str, discovery: &Discovery) -> Result<AuthorityRef, Error> {
     let ssc = discovery.get_primary_ssc().ok_or(AppError::NoAvailableSSC)?;
     let locking_sp = get_locking_sp(ssc.feature_code())?;
-    let lookup = get_lookup(ssc.feature_code());
+    let lookup = get_general_lookup(ssc.feature_code());
     let uid = lookup
         .by_name(name, table_id::AUTHORITY.as_uid(), Some(locking_sp.as_uid()))
         .ok_or(Error::InvalidUser)?;
@@ -142,7 +142,7 @@ fn print_unlock_result(object: &str, result: Result<(), RPCError>, read: bool, w
 async fn unlock_device(session: &Session, discovery: &Discovery) -> Result<(), Error> {
     let ssc = discovery.get_primary_ssc().ok_or(AppError::NoAvailableSSC)?;
     let locking_sp = get_locking_sp(ssc.feature_code())?;
-    let lookup = get_lookup(ssc.feature_code());
+    let lookup = get_general_lookup(ssc.feature_code());
 
     let mbr_result = session.set(mbr_control::MBR_CONTROL.as_uid(), MBRControl::DONE, true).await;
     print_unlock_result("MBR", mbr_result, false, false);

@@ -67,18 +67,22 @@ pub fn get_locking_admin_c_pins(ssc: FeatureCode) -> Result<CPINRefRange, Error>
     }
 }
 
-pub fn get_lookup(ssc: FeatureCode) -> &'static dyn ObjectLookup {
+pub fn get_general_lookup(ssc: FeatureCode) -> &'static dyn ObjectLookup {
+    get_feature_lookup(ssc).unwrap_or(&spec::core::OBJECT_LOOKUP)
+}
+
+pub fn get_feature_lookup(ssc: FeatureCode) -> Option<&'static dyn ObjectLookup> {
     match ssc {
-        FeatureCode::Enterprise => &spec::enterprise::OBJECT_LOOKUP,
-        FeatureCode::OpalV1 => &spec::opal::OBJECT_LOOKUP,
-        FeatureCode::OpalV2 => &spec::opal::OBJECT_LOOKUP,
-        FeatureCode::Opalite => &spec::pyrite::OBJECT_LOOKUP,
-        FeatureCode::PyriteV1 => &spec::pyrite::OBJECT_LOOKUP,
-        FeatureCode::PyriteV2 => &spec::pyrite::OBJECT_LOOKUP,
-        FeatureCode::Ruby => &spec::ruby::OBJECT_LOOKUP,
-        FeatureCode::KeyPerIO => &spec::kpio::OBJECT_LOOKUP,
-        FeatureCode::AdditionalDataStoreTables => &spec::data_store::OBJECT_LOOKUP,
-        _ => &spec::core::OBJECT_LOOKUP,
+        FeatureCode::Enterprise => Some(&spec::enterprise::OBJECT_LOOKUP),
+        FeatureCode::OpalV1 => Some(&spec::opal::OBJECT_LOOKUP),
+        FeatureCode::OpalV2 => Some(&spec::opal::OBJECT_LOOKUP),
+        FeatureCode::Opalite => Some(&spec::pyrite::OBJECT_LOOKUP),
+        FeatureCode::PyriteV1 => Some(&spec::pyrite::OBJECT_LOOKUP),
+        FeatureCode::PyriteV2 => Some(&spec::pyrite::OBJECT_LOOKUP),
+        FeatureCode::Ruby => Some(&spec::ruby::OBJECT_LOOKUP),
+        FeatureCode::KeyPerIO => Some(&spec::kpio::OBJECT_LOOKUP),
+        FeatureCode::AdditionalDataStoreTables => Some(&spec::data_store::OBJECT_LOOKUP),
+        _ => None,
     }
 }
 
@@ -98,6 +102,12 @@ pub mod tests {
     use crate::rpc::TokioRuntime;
     use crate::spec;
     use crate::tper::TPer;
+
+    pub async fn setup_factory_tper() -> TPer {
+        let runtime = Arc::new(TokioRuntime::new());
+        let device = Arc::new(FakeDevice::new());
+        TPer::new_on_default_com_id(device, runtime).unwrap()
+    }
 
     pub async fn setup_activated_tper() -> TPer {
         use spec::opal::admin::sp::LOCKING;

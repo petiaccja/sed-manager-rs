@@ -13,12 +13,13 @@ use super::ADMIN_IDX;
 
 pub fn preconfig_authority() -> AuthorityTable {
     let mut items = vec![
-        Authority { uid: authority::ANYBODY, name: "Anybody".into(), ..Default::default() },
-        Authority { uid: authority::ADMINS, name: "Admins".into(), ..Default::default() },
-        Authority { uid: authority::MAKERS, name: "Makers".into(), ..Default::default() },
+        Authority { uid: authority::ANYBODY, name: "Anybody".into(), is_class: false, ..Default::default() },
+        Authority { uid: authority::ADMINS, name: "Admins".into(), is_class: true, ..Default::default() },
+        Authority { uid: authority::MAKERS, name: "Makers".into(), is_class: true, ..Default::default() },
         Authority {
             uid: authority::SID,
             name: "SID".into(),
+            is_class: false,
             operation: AuthMethod::Password,
             credential: CredentialRef::new_other(c_pin::SID),
             ..Default::default()
@@ -26,6 +27,7 @@ pub fn preconfig_authority() -> AuthorityTable {
         Authority {
             uid: spec::psid::admin::authority::PSID,
             name: "PSID".into(),
+            is_class: false,
             operation: AuthMethod::Password.into(),
             credential: CredentialRef::new_other(spec::psid::admin::c_pin::PSID),
             ..Default::default()
@@ -37,6 +39,8 @@ pub fn preconfig_authority() -> AuthorityTable {
             uid: authority::ADMIN.nth(admin_idx).unwrap(),
             name: format!("Admin{}", admin_idx).into(),
             enabled: false,
+            is_class: false,
+            class: authority::ADMINS,
             operation: AuthMethod::Password,
             credential: CredentialRef::new_other(c_pin::ADMIN.nth(admin_idx).unwrap()),
             ..Default::default()

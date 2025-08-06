@@ -6,14 +6,14 @@
 use std::sync::Arc;
 
 use sed_manager::applications::{
-    get_lookup, Error as AppError, MBREditSession, PermissionEditSession, RangeEditSession, UserEditSession,
+    get_feature_lookup, Error as AppError, MBREditSession, PermissionEditSession, RangeEditSession, UserEditSession,
 };
 use sed_manager::device::{Device, Error as DeviceError};
 use sed_manager::messaging::discovery::{Discovery, Feature};
 use sed_manager::messaging::uid::UID;
 use sed_manager::rpc::{Error as RPCError, TokioRuntime};
 use sed_manager::spec::column_types::{AuthorityRef, LockingRangeRef, SPRef};
-use sed_manager::spec::{self, ObjectLookup as _};
+use sed_manager::spec::{self, ObjectLookup};
 use sed_manager::tper::TPer;
 
 pub struct Backend {
@@ -25,6 +25,7 @@ pub struct Backend {
 }
 
 pub enum EditorSession {
+    ChangePassword { users: Vec<(SPRef, AuthorityRef)> },
     Range { session: Arc<RangeEditSession>, ranges: Vec<LockingRangeRef> },
     User { session: Arc<UserEditSession>, users: Vec<AuthorityRef> },
     MBR { session: Arc<MBREditSession> },
@@ -34,6 +35,7 @@ pub enum EditorSession {
 impl EditorSession {
     pub async fn end(self) -> Result<(), AppError> {
         match self {
+            EditorSession::ChangePassword { users: _ } => Ok(()),
             EditorSession::Range { session, ranges: _ } => {
                 if let Some(inner) = Arc::into_inner(session) {
                     inner.end().await
@@ -248,15 +250,24 @@ pub fn get_object_name(discovery: Option<&Discovery>, uid: UID, sp: Option<SPRef
     // Try all present feature descriptors.
     let empty = Discovery::new(vec![]);
     for desc in discovery.unwrap_or(&empty).iter() {
-        let lookup = get_lookup(desc.feature_code());
+        let Some(lookup) = get_feature_lookup(desc.feature_code()) else {
+            continue;
+        };
         if let Some(name) = lookup.by_uid(uid, sp.map(|sp| sp.as_uid())) {
             return name;
         }
     }
+
     // Try features sets that don't have a feature desriptor.
     if let Some(name) = spec::psid::OBJECT_LOOKUP.by_uid(uid, sp.map(|sp| sp.as_uid())) {
         return name;
     }
+
+    // Try core spec.
+    if let Some(name) = spec::core::OBJECT_LOOKUP.by_uid(uid, sp.map(|sp| sp.as_uid())) {
+        return name;
+    }
+
     // Format the UID as a hex number.
     format!("{:16x}", uid.as_u64())
 }
