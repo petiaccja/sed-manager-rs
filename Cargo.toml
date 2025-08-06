@@ -10,8 +10,3 @@ members = [
     "as_array",
     "as_array_macros"
 ]
-
-
-[patch.crates-io]
-slint = { git = "https://github.com/petiaccja/slint.git", branch = "fix-compile-error-1.88" }
-slint-build = { git = "https://github.com/petiaccja/slint.git", branch = "fix-compile-error-1.88" }
