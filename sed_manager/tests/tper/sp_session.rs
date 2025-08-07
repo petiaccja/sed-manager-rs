@@ -5,12 +5,14 @@
 
 use std::sync::Arc;
 
+use sed_manager::fake_device::data::object_table::CPINTable;
 use sed_manager::fake_device::FakeDevice;
 use sed_manager::fake_device::MSID_PASSWORD;
 use sed_manager::messaging::uid::UID;
 use sed_manager::rpc::Error as RPCError;
 use sed_manager::rpc::MethodStatus;
 use sed_manager::rpc::TokioRuntime;
+use sed_manager::spec;
 use sed_manager::spec::column_types::AuthorityRef;
 use sed_manager::spec::column_types::CredentialRef;
 use sed_manager::spec::column_types::LifeCycleState;
@@ -321,11 +323,17 @@ async fn activate() -> Result<(), RPCError> {
 
     let controller = device.controller();
     let controller = controller.lock().unwrap();
-    let locking_sp = controller.admin_sp.sp_specific.sp.get(&sp::LOCKING).unwrap();
-    let admin1_c_pin = controller.locking_sp.basic_sp.c_pin.get(&opal::locking::c_pin::ADMIN.nth(1).unwrap()).unwrap();
-    assert_eq!(locking_sp.life_cycle_state, LifeCycleState::Manufactured);
-    assert_eq!(admin1_c_pin.pin.as_slice(), MSID_PASSWORD.as_bytes());
 
+    {
+        let locking_sp_lcs = controller.get_life_cycle_state(sp::LOCKING)?;
+        assert_eq!(locking_sp_lcs, LifeCycleState::Manufactured);
+    }
+    {
+        let locking_sp = controller.get_security_provider(sp::LOCKING).unwrap();
+        let c_pin: &CPINTable = locking_sp.get_object_table_specific(table_id::C_PIN).unwrap();
+        let c_pin_admin1 = c_pin.get(&spec::opal::locking::c_pin::ADMIN.nth(1).unwrap()).unwrap();
+        assert_eq!(c_pin_admin1.pin.as_slice(), MSID_PASSWORD.as_bytes());
+    }
     Ok(())
 }
 
@@ -345,9 +353,10 @@ async fn revert() -> Result<(), RPCError> {
     // Is the locking SP deactivated?
     let controller = device.controller();
     let controller = controller.lock().unwrap();
-    let locking_sp = controller.admin_sp.sp_specific.sp.get(&sp::LOCKING).unwrap();
-    assert_eq!(locking_sp.life_cycle_state, LifeCycleState::ManufacturedInactive);
-
+    {
+        let locking_sp_lcs = controller.get_life_cycle_state(sp::LOCKING)?;
+        assert_eq!(locking_sp_lcs, LifeCycleState::ManufacturedInactive);
+    }
     Ok(())
 }
 
@@ -370,8 +379,9 @@ async fn revert_sp() -> Result<(), RPCError> {
     // Is the locking SP deactivated?
     let controller = device.controller();
     let controller = controller.lock().unwrap();
-    let locking_sp = controller.admin_sp.sp_specific.sp.get(&sp::LOCKING).unwrap();
-    assert_eq!(locking_sp.life_cycle_state, LifeCycleState::ManufacturedInactive);
-
+    {
+        let locking_sp_lcs = controller.get_life_cycle_state(sp::LOCKING)?;
+        assert_eq!(locking_sp_lcs, LifeCycleState::ManufacturedInactive);
+    }
     Ok(())
 }

@@ -3,40 +3,121 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
+use std::collections::HashMap;
+
+use crate::fake_device::data::access_control_table::AccessControlTable;
 use crate::fake_device::data::byte_table::ByteTable;
-use crate::fake_device::data::object_table::GenericTable;
+use crate::fake_device::data::object_table::{AuthorityTable, CPINTable, GenericTable, KAES256Table};
 use crate::messaging::uid::{TableUID, UID};
 use crate::messaging::value::{Bytes, Named, Value};
 use crate::rpc::MethodStatus;
 use crate::spec::basic_types::{List, NamedValue};
 use crate::spec::column_types::{
-    ACERef, AuthorityRef, BoolOrBytes, BytesOrRowValues, CellBlock, CredentialRef, MethodRef,
+    ACERef, AuthorityRef, BoolOrBytes, BytesOrRowValues, CPINRef, CellBlock, CredentialRef, KAES256Ref, Key256,
+    MethodRef,
 };
+use crate::spec::table_id;
 
-pub trait SecurityProvider {
-    fn get_object_table(&self, table: TableUID) -> Option<&dyn GenericTable>;
-    fn get_object_table_mut(&mut self, table: TableUID) -> Option<&mut dyn GenericTable>;
+pub struct SecurityProvider {
+    pub access_control: AccessControlTable,
+    pub object_tables: HashMap<TableUID, Box<dyn GenericTable>>,
+    pub byte_tables: HashMap<TableUID, ByteTable>,
+}
 
-    fn get_byte_table(&self, #[allow(unused)] table: TableUID) -> Option<&ByteTable> {
-        None
+impl SecurityProvider {
+    pub fn get_object_table(&self, table: TableUID) -> Option<&dyn GenericTable> {
+        self.object_tables.get(&table).map(|x| x.as_ref())
     }
 
-    fn get_byte_table_mut(&mut self, #[allow(unused)] table: TableUID) -> Option<&mut ByteTable> {
-        None
+    pub fn get_object_table_mut(&mut self, table: TableUID) -> Option<&mut dyn GenericTable> {
+        match self.object_tables.get_mut(&table) {
+            Some(table) => Some(table.as_mut()),
+            None => None,
+        }
     }
 
-    fn authenticate(&self, authority_id: AuthorityRef, proof: Option<Bytes>) -> Result<BoolOrBytes, MethodStatus>;
+    pub fn get_object_table_specific<SpecificTable: 'static>(&self, table: TableUID) -> Option<&SpecificTable> {
+        self.get_object_table(table)?.as_any().downcast_ref()
+    }
 
-    fn gen_key(
+    pub fn get_object_table_specific_mut<SpecificTable: 'static>(
         &mut self,
-        credential_id: CredentialRef,
-        public_exponent: Option<u64>,
-        pin_length: Option<u16>,
-    ) -> Result<(), MethodStatus>;
+        table: TableUID,
+    ) -> Option<&mut SpecificTable> {
+        self.get_object_table_mut(table)?.as_any_mut().downcast_mut()
+    }
 
-    fn get_acl(&self, invoking_id: UID, method_id: MethodRef) -> Result<Vec<ACERef>, MethodStatus>;
+    pub fn get_byte_table(&self, table: TableUID) -> Option<&ByteTable> {
+        self.byte_tables.get(&table)
+    }
 
-    fn get(&self, invoking_id: UID, cell_block: CellBlock) -> Result<BytesOrRowValues, MethodStatus> {
+    pub fn get_byte_table_mut(&mut self, table: TableUID) -> Option<&mut ByteTable> {
+        self.byte_tables.get_mut(&table)
+    }
+
+    pub fn authenticate(&self, authority_ref: AuthorityRef, proof: Option<Bytes>) -> Result<BoolOrBytes, MethodStatus> {
+        let table_c_pin: &CPINTable =
+            self.get_object_table_specific(table_id::C_PIN).ok_or(MethodStatus::TPerMalfunction)?;
+        let table_auth: &AuthorityTable =
+            self.get_object_table_specific(table_id::AUTHORITY).ok_or(MethodStatus::TPerMalfunction)?;
+
+        let Some(authority) = table_auth.get(&authority_ref) else {
+            return Err(MethodStatus::InvalidParameter);
+        };
+        let credential_ref = authority.credential;
+        if credential_ref.is_null() {
+            return Ok(BoolOrBytes::Bool(true));
+        };
+        if let Ok(c_pin_id) = CPINRef::try_new_other(credential_ref) {
+            if let Some(credential) = table_c_pin.get(&c_pin_id) {
+                let empty_provided_password = vec![];
+                let provided_password = proof.as_ref().unwrap_or(&empty_provided_password);
+                let success = provided_password == credential.pin.as_slice();
+                Ok(BoolOrBytes::Bool(success))
+            } else {
+                Err(MethodStatus::TPerMalfunction)
+            }
+        } else {
+            Err(MethodStatus::TPerMalfunction)
+        }
+    }
+
+    pub fn gen_key(
+        &mut self,
+        credential_ref: CredentialRef,
+        _public_exponent: Option<u64>,
+        _pin_length: Option<u16>,
+    ) -> Result<(), MethodStatus> {
+        let k_aes_256_table: &mut KAES256Table =
+            self.get_object_table_specific_mut(table_id::K_AES_256).ok_or(MethodStatus::NotAuthorized)?;
+
+        if let Ok(k_aes_256_id) = KAES256Ref::try_new_other(credential_ref) {
+            if let Some(object) = k_aes_256_table.get_mut(&k_aes_256_id) {
+                object.key = Key256::Bytes64([0xFF; 64]);
+                Ok(())
+            } else {
+                Err(MethodStatus::InvalidParameter)
+            }
+        } else {
+            Err(MethodStatus::InvalidParameter)
+        }
+    }
+
+    pub fn get_acl(&self, invoking_id: UID, method_id: MethodRef) -> Result<Vec<ACERef>, MethodStatus> {
+        let direct_acl = self.access_control.get(&invoking_id, &method_id);
+        let table_acl =
+            invoking_id.containing_table().map(|table| self.access_control.get(&table, &method_id)).flatten();
+        if direct_acl.is_none() && table_acl.is_none() {
+            Err(MethodStatus::InvalidParameter)
+        } else {
+            let mut merged_acl = Vec::new();
+            direct_acl.map(|acl| acl.acl.iter().cloned().for_each(|ace_ref| merged_acl.push(ace_ref)));
+            table_acl.map(|acl| acl.acl.iter().cloned().for_each(|ace_ref| merged_acl.push(ace_ref)));
+            Ok(merged_acl)
+        }
+    }
+
+    pub fn get(&self, invoking_id: UID, cell_block: CellBlock) -> Result<BytesOrRowValues, MethodStatus> {
         let Some(table_ref) = cell_block.target_table(invoking_id) else {
             return Err(MethodStatus::InvalidParameter);
         };
@@ -65,7 +146,7 @@ pub trait SecurityProvider {
         }
     }
 
-    fn set(
+    pub fn set(
         &mut self,
         invoking_id: UID,
         where_: Option<u64>,
@@ -107,7 +188,7 @@ pub trait SecurityProvider {
         }
     }
 
-    fn next(&self, table: TableUID, from: Option<UID>, count: Option<u64>) -> Result<List<UID>, MethodStatus> {
+    pub fn next(&self, table: TableUID, from: Option<UID>, count: Option<u64>) -> Result<List<UID>, MethodStatus> {
         let Some(table) = self.get_object_table(table) else {
             return Err(MethodStatus::InvalidParameter);
         };
@@ -129,15 +210,12 @@ enum DecodedSetParameters {
     ByteRange { table: TableUID, start_byte: u64, bytes: Vec<u8> },
 }
 
-fn decode_set_parameters<This: ?Sized>(
-    this: &This,
+fn decode_set_parameters(
+    this: &SecurityProvider,
     invoking_id: UID,
     where_: Option<u64>,
     values: Option<BytesOrRowValues>,
-) -> Result<DecodedSetParameters, MethodStatus>
-where
-    This: SecurityProvider,
-{
+) -> Result<DecodedSetParameters, MethodStatus> {
     if let Ok(table) = TableUID::try_from(invoking_id) {
         if let Some(_) = this.get_byte_table(table) {
             let Some(start_byte) = where_ else {

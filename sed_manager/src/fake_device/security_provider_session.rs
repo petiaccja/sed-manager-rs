@@ -6,7 +6,8 @@
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
-use crate::fake_device::data::security_providers::SecurityProvider;
+use crate::fake_device::data::object_table::AuthorityTable;
+use crate::fake_device::data::security_provider::SecurityProvider;
 use crate::messaging::uid::UID;
 use crate::messaging::value::Bytes;
 use crate::rpc::MethodStatus;
@@ -19,20 +20,29 @@ use crate::spec::objects::{ACEExpr as _, ACE};
 use crate::spec::opal::admin::sp;
 use crate::spec::{method_id, table_id};
 
-use super::data::OpalV2Controller;
+use super::data::Controller;
 
 pub struct SecurityProviderSession {
     this_sp: SPRef,
     write: bool,
-    controller: Arc<Mutex<OpalV2Controller>>,
-    authentications: Vec<AuthorityRef>,
+    controller: Arc<Mutex<Controller>>,
+    authenticated: Vec<AuthorityRef>,
     pub reverted: Vec<SPRef>, // SPs affected are added here after a call to Revert or RevertSP.
 }
 
 impl SecurityProviderSession {
-    pub fn new(sp: SPRef, write: bool, controller: Arc<Mutex<OpalV2Controller>>) -> Self {
+    pub fn new(
+        sp: SPRef,
+        write: bool,
+        host_sgn_auth: Option<AuthorityRef>,
+        controller: Arc<Mutex<Controller>>,
+    ) -> Self {
         use crate::spec::core::authority::ANYBODY;
-        Self { this_sp: sp, write, controller, authentications: vec![ANYBODY], reverted: Vec::new() }
+        let mut new = Self { this_sp: sp, write, controller, authenticated: vec![ANYBODY], reverted: Vec::new() };
+        if let Some(host_sgn_auth) = host_sgn_auth {
+            new.push_authenticated(host_sgn_auth);
+        };
+        new
     }
 
     pub fn this_sp(&self) -> SPRef {
@@ -48,15 +58,17 @@ impl SecurityProviderSession {
         if invoking_id != THIS_SP {
             return Err(MethodStatus::InvalidParameter);
         }
-        let controller = self.controller.lock().unwrap();
-        let Some(security_provider) = controller.get_security_provider(self.this_sp) else {
-            return Err(MethodStatus::TPerMalfunction);
+        let is_success = {
+            let controller = self.controller.lock().unwrap();
+            let Some(security_provider) = controller.get_security_provider(self.this_sp) else {
+                return Err(MethodStatus::TPerMalfunction);
+            };
+            security_provider.authenticate(authority, proof)
         };
-        let result = security_provider.authenticate(authority, proof);
-        if result == Ok(BoolOrBytes::Bool(true)) {
-            self.authentications.push(authority);
+        if is_success == Ok(BoolOrBytes::Bool(true)) {
+            self.push_authenticated(authority);
         }
-        result.map(|out| (out,))
+        is_success.map(|out| (out,))
     }
 
     pub fn get(&self, invoking_id: UID, cell_block: CellBlock) -> Result<(BytesOrRowValues,), MethodStatus> {
@@ -65,7 +77,7 @@ impl SecurityProviderSession {
             return Err(MethodStatus::TPerMalfunction);
         };
         let (uid, columns) = get_target_object(security_provider, invoking_id, &cell_block);
-        if !check_authorization(security_provider, &self.authentications, uid, method_id::GET, &columns) {
+        if !check_authorization(security_provider, &self.authenticated, uid, method_id::GET, &columns) {
             return Err(MethodStatus::NotAuthorized);
         }
         security_provider.get(invoking_id, cell_block).map(|out| (out,))
@@ -92,7 +104,7 @@ impl SecurityProviderSession {
         let Ok(table) = invoking_id.try_into() else {
             return Err(MethodStatus::InvalidParameter);
         };
-        if !check_authorization(security_provider, &self.authentications, invoking_id, method_id::NEXT, &[0]) {
+        if !check_authorization(security_provider, &self.authenticated, invoking_id, method_id::NEXT, &[0]) {
             return Err(MethodStatus::NotAuthorized);
         }
         security_provider.next(table, from, count).map(|out| (out,))
@@ -165,9 +177,31 @@ impl SecurityProviderSession {
         };
         controller.activate(sp)
     }
+
+    fn push_authenticated(&mut self, authority: AuthorityRef) {
+        let class = {
+            let controller = self.controller.lock().unwrap();
+            let Some(sp) = controller.get_security_provider(self.this_sp) else {
+                return;
+            };
+            let Some(auth_table) = sp.get_object_table_specific::<AuthorityTable>(table_id::AUTHORITY) else {
+                return;
+            };
+            let Some(auth_obj) = auth_table.get(&authority) else {
+                return;
+            };
+            auth_obj.class
+        };
+        if class != AuthorityRef::null() {
+            self.authenticated.push(class);
+        }
+        self.authenticated.push(authority);
+        self.authenticated.sort();
+        self.authenticated.dedup();
+    }
 }
 
-fn get_authorization_aces(sp: &dyn SecurityProvider, invoking_id: UID, method_id: MethodRef) -> Vec<&ACE> {
+fn get_authorization_aces(sp: &SecurityProvider, invoking_id: UID, method_id: MethodRef) -> Vec<&ACE> {
     let Ok(ace_refs) = sp.get_acl(invoking_id, method_id) else { return vec![] }; // No ACL record -> Not authorized.
     let ace_table = sp.get_object_table(table_id::ACE).expect("invalid device configuration: ACE table does not exist");
     let mut aces = Vec::new();
@@ -181,7 +215,7 @@ fn get_authorization_aces(sp: &dyn SecurityProvider, invoking_id: UID, method_id
     aces
 }
 
-fn get_target_object(sp: &dyn SecurityProvider, invoking_id: UID, cell_block: &CellBlock) -> (UID, Vec<u16>) {
+fn get_target_object(sp: &SecurityProvider, invoking_id: UID, cell_block: &CellBlock) -> (UID, Vec<u16>) {
     let Some(table_ref) = cell_block.target_table(invoking_id) else {
         return (UID::null(), vec![]);
     };
@@ -219,7 +253,7 @@ fn eval_authorization_aces(aces: &[&ACE], columns: &[u16], authenticated: &[Auth
 }
 
 fn check_authorization(
-    sp: &dyn SecurityProvider,
+    sp: &SecurityProvider,
     authenticated: &[AuthorityRef],
     invoking_id: UID,
     method_id: MethodRef,

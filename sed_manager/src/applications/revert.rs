@@ -50,7 +50,12 @@ pub async fn verify_reverted(tper: &TPer) -> Result<bool, Error> {
 mod tests {
     use std::sync::Arc;
 
-    use crate::{fake_device::FakeDevice, rpc::TokioRuntime, tper::TPer};
+    use crate::{
+        fake_device::{data::object_table::CPINTable, FakeDevice},
+        rpc::TokioRuntime,
+        spec::table_id,
+        tper::TPer,
+    };
 
     use super::*;
 
@@ -62,8 +67,10 @@ mod tests {
         {
             let controller = device.controller();
             let mut controller = controller.lock().unwrap();
-            let sid = controller.admin_sp.basic_sp.c_pin.get_mut(&spec::opal::admin::c_pin::SID).unwrap();
-            sid.pin = sid_password.into();
+            let admin_sp = controller.get_security_provider_mut(spec::opal::admin::sp::ADMIN).unwrap();
+            let c_pin_table: &mut CPINTable = admin_sp.get_object_table_specific_mut(table_id::C_PIN).unwrap();
+            let sid_c_pin = c_pin_table.get_mut(&spec::opal::admin::c_pin::SID).unwrap();
+            sid_c_pin.pin = sid_password.into();
         };
         let tper = TPer::new_on_default_com_id(device, runtime)?;
         revert(&tper, spec::core::authority::SID, sid_password.as_bytes(), spec::opal::admin::sp::ADMIN).await?;
@@ -79,8 +86,10 @@ mod tests {
         {
             let controller = device.controller();
             let mut controller = controller.lock().unwrap();
-            let sid = controller.admin_sp.basic_sp.c_pin.get_mut(&spec::opal::admin::c_pin::SID).unwrap();
-            sid.pin = sid_password.into();
+            let admin_sp = controller.get_security_provider_mut(spec::opal::admin::sp::ADMIN).unwrap();
+            let c_pin_table: &mut CPINTable = admin_sp.get_object_table_specific_mut(table_id::C_PIN).unwrap();
+            let sid_c_pin = c_pin_table.get_mut(&spec::opal::admin::c_pin::SID).unwrap();
+            sid_c_pin.pin = sid_password.into();
         };
         let tper = TPer::new_on_default_com_id(device, runtime)?;
         revert(&tper, spec::core::authority::SID, sid_password.as_bytes(), spec::opal::admin::sp::LOCKING).await?;

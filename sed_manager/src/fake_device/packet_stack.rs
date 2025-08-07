@@ -21,18 +21,18 @@ use crate::spec::basic_types::{List, NamedValue};
 use crate::spec::column_types::{AuthorityRef, MaxBytes32, MethodRef, SPRef};
 use crate::spec::{invoking_id::*, method_id::*, sm_method_id::*};
 
-use super::data::OpalV2Controller;
+use super::data::Controller;
 use super::security_provider_session::SecurityProviderSession;
 
 pub struct PacketStack {
-    controller: Arc<Mutex<OpalV2Controller>>,
+    controller: Arc<Mutex<Controller>>,
     capabilities: Properties,
     properties: Properties,
     security_provider_sessions: HashMap<SessionIdentifier, SecurityProviderSession>,
 }
 
 impl PacketStack {
-    pub fn new(capabilities: Properties, controller: Arc<Mutex<OpalV2Controller>>) -> Self {
+    pub fn new(capabilities: Properties, controller: Arc<Mutex<Controller>>) -> Self {
         Self {
             controller,
             capabilities,
@@ -180,25 +180,27 @@ impl PacketStack {
         (u32, u32, Option<Bytes>, Option<Bytes>, Option<Bytes>, Option<u32>, Option<u32>, Option<Bytes>),
         MethodStatus,
     > {
-        let controller = self.controller.lock().unwrap();
-        let result = controller.start_session(
-            hsn,
-            sp_uid,
-            write,
-            host_challenge,
-            host_exch_auth,
-            host_exch_cert,
-            host_sgn_auth,
-            host_sgn_cert,
-            session_timeout,
-            trans_timeout,
-            initial_credit,
-            signed_hash,
-        );
+        let result = {
+            let controller = self.controller.lock().unwrap();
+            controller.start_session(
+                hsn,
+                sp_uid,
+                write,
+                host_challenge,
+                host_exch_auth,
+                host_exch_cert,
+                host_sgn_auth,
+                host_sgn_cert,
+                session_timeout,
+                trans_timeout,
+                initial_credit,
+                signed_hash,
+            )
+        };
         match result {
             Ok(sync_session) => {
                 let id = SessionIdentifier { hsn: sync_session.0, tsn: sync_session.1 };
-                let sp_session = SecurityProviderSession::new(sp_uid, write, self.controller.clone());
+                let sp_session = SecurityProviderSession::new(sp_uid, write, host_sgn_auth, self.controller.clone());
                 self.security_provider_sessions.insert(id, sp_session);
                 Ok(sync_session)
             }

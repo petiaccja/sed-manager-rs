@@ -8,13 +8,14 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use crate::device::{Device, Error, Interface};
+use crate::fake_device::data::opal_v2;
 use crate::messaging::com_id::HANDLE_COM_ID_PROTOCOL;
 use crate::messaging::packet::PACKETIZED_PROTOCOL;
 use crate::rpc::{Properties, SessionIdentifier};
 use crate::spec::column_types::SPRef;
 
 use super::com_id_session::ComIDSession;
-use super::data::OpalV2Controller;
+use super::data::Controller;
 use super::discovery::{get_discovery, write_discovery, BASE_COM_ID, NUM_COM_IDS};
 
 const ROUTE_DISCOVERY: Route = Route { protocol: 0x01, com_id: 0x0001 };
@@ -43,7 +44,7 @@ const CAPABILITIES: Properties = Properties {
 pub struct FakeDevice {
     capabilities: Properties,
     sessions: Mutex<HashMap<u16, ComIDSession>>,
-    controller: Arc<Mutex<OpalV2Controller>>,
+    controller: Arc<Mutex<Controller>>,
 }
 
 #[derive(PartialEq, Eq)]
@@ -54,7 +55,7 @@ struct Route {
 
 impl FakeDevice {
     pub fn new() -> FakeDevice {
-        let controller = Arc::new(Mutex::new(OpalV2Controller::new()));
+        let controller = Arc::new(Mutex::new(opal_v2::new_controller()));
         let capabilities = CAPABILITIES;
         let mut sessions = HashMap::new();
         for i in 0..NUM_COM_IDS {
@@ -74,7 +75,7 @@ impl FakeDevice {
         sessions.iter().map(|session| session.1.active_sessions()).flatten().collect()
     }
 
-    pub fn controller(&self) -> Arc<Mutex<OpalV2Controller>> {
+    pub fn controller(&self) -> Arc<Mutex<Controller>> {
         self.controller.clone()
     }
 }

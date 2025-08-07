@@ -3,16 +3,17 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
+use crate::fake_device::data::object_table::{LockingTable, MBRControlTable};
 use crate::messaging::discovery::{
     Discovery, FeatureDescriptor, GeometryDescriptor, LockingDescriptor, OpalV2Descriptor, OwnerPasswordState,
     TPerDescriptor,
 };
 use crate::rpc::Properties;
 use crate::serialization::{OutputStream, Serialize};
-use crate::spec;
 use crate::spec::column_types::LifeCycleState;
+use crate::spec::{self, table_id};
 
-use super::data::OpalV2Controller;
+use super::data::Controller;
 
 pub const BASE_COM_ID: u16 = 4100;
 pub const NUM_COM_IDS: u16 = 1;
@@ -25,7 +26,7 @@ pub fn write_discovery(discovery: &Discovery, len: usize) -> Result<Vec<u8>, cra
     Ok(buffer)
 }
 
-pub fn get_discovery(properties: &Properties, controller: &OpalV2Controller) -> Discovery {
+pub fn get_discovery(properties: &Properties, controller: &Controller) -> Discovery {
     Discovery::new(vec![
         get_tper_feature_desc(properties),
         get_locking_feature_desc(controller),
@@ -46,14 +47,15 @@ fn get_tper_feature_desc(properties: &Properties) -> FeatureDescriptor {
     FeatureDescriptor::TPer(desc)
 }
 
-fn get_locking_feature_desc(controller: &OpalV2Controller) -> FeatureDescriptor {
-    let locking_sp = controller.admin_sp.sp_specific.sp.get(&spec::opal::admin::sp::LOCKING).unwrap();
-    let locking_enabled = locking_sp.life_cycle_state != LifeCycleState::ManufacturedInactive;
+fn get_locking_feature_desc(controller: &Controller) -> FeatureDescriptor {
+    let locking_sp = controller.get_security_provider(spec::opal::admin::sp::LOCKING).unwrap();
+    let locking_enabled =
+        controller.get_life_cycle_state(spec::opal::admin::sp::LOCKING) == Ok(LifeCycleState::Manufactured);
 
-    let locking_table = &controller.locking_sp.sp_specific.locking;
+    let locking_table: &LockingTable = locking_sp.get_object_table_specific(table_id::LOCKING).unwrap();
     let locked = locking_table.values().any(|range| range.read_locked || range.write_locked);
 
-    let mbr_control_table = &controller.locking_sp.sp_specific.mbr_control;
+    let mbr_control_table: &MBRControlTable = locking_sp.get_object_table_specific(table_id::MBR_CONTROL).unwrap();
     let mbr_control_row = mbr_control_table.values().next().unwrap();
     let mbr_enabled = mbr_control_row.enable;
     let mbr_done = mbr_control_row.done;

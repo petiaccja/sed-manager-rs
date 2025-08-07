@@ -4,7 +4,7 @@
 //L-----------------------------------------------------------------------------
 
 use crate::fake_device::data::access_control_table::{AccessControlEntry, AccessControlRef, AccessControlTable};
-use crate::fake_device::data::security_providers::locking_sp::{ADMIN_IDX, RANGE_IDX, USER_IDX};
+use crate::fake_device::data::opal_v2::locking_sp::{ADMIN_IDX, RANGE_IDX, USER_IDX};
 use crate::spec::opal::locking::*;
 
 pub fn preconfig_access_control() -> AccessControlTable {

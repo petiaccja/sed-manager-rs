@@ -18,26 +18,21 @@ use crate::serialization::vec_with_len::VecWithLen;
 use crate::serialization::{DeserializeBinary, SerializeBinary};
 use crate::spec::column_types::SPRef;
 
-use super::data::OpalV2Controller;
+use super::data::Controller;
 use super::packet_stack::PacketStack;
 
 pub struct ComIDSession {
     com_id: u16,
     com_id_ext: u16,
     capabilities: Properties,
-    controller: Arc<Mutex<OpalV2Controller>>,
+    controller: Arc<Mutex<Controller>>,
     com_queue: Queue<HandleComIdResponse>,
     packet_queue: Queue<ComPacket>,
     packet_stack: PacketStack,
 }
 
 impl ComIDSession {
-    pub fn new(
-        com_id: u16,
-        com_id_ext: u16,
-        capabilities: Properties,
-        controller: Arc<Mutex<OpalV2Controller>>,
-    ) -> Self {
+    pub fn new(com_id: u16, com_id_ext: u16, capabilities: Properties, controller: Arc<Mutex<Controller>>) -> Self {
         Self {
             com_id,
             com_id_ext,
