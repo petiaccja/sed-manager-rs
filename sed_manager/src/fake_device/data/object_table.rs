@@ -4,6 +4,7 @@
 //L-----------------------------------------------------------------------------
 
 use core::ops::{Deref, DerefMut};
+use core::any::Any;
 use std::collections::BTreeMap;
 
 use crate::messaging::uid::{TableUID, UID};
@@ -29,6 +30,7 @@ pub trait GenericTable {
     fn get_object(&self, uid: UID) -> Option<&dyn GenericObject>;
     fn get_object_mut(&mut self, uid: UID) -> Option<&mut dyn GenericObject>;
     fn next_from(&self, uid: Option<UID>) -> Option<UID>;
+    fn as_any(&self) -> &dyn Any;
 }
 
 pub struct ObjectTable<Object, ObjectRef, const THIS_TABLE: u64>(BTreeMap<ObjectRef, Object>)
@@ -83,8 +85,8 @@ where
 
 impl<Object, ObjectRef, const THIS_TABLE: u64> GenericTable for ObjectTable<Object, ObjectRef, THIS_TABLE>
 where
-    Object: GenericObject,
-    ObjectRef: TryFrom<UID> + Into<UID> + Ord + Copy,
+    Object: GenericObject + 'static,
+    ObjectRef: TryFrom<UID> + Into<UID> + Ord + Copy + 'static,
 {
     fn uid(&self) -> TableUID {
         TableUID::new(THIS_TABLE)
@@ -122,5 +124,9 @@ where
             let mut iter = self.0.range(..);
             iter.next().map(|(k, _v)| (*k).into())
         }
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self as &dyn Any
     }
 }

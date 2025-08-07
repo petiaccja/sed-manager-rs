@@ -12,7 +12,6 @@ use crate::spec::basic_types::{List, NamedValue};
 use crate::spec::column_types::{
     ACERef, AuthorityRef, BoolOrBytes, BytesOrRowValues, CellBlock, CredentialRef, MethodRef,
 };
-use crate::spec::invoking_id::THIS_SP;
 
 pub trait SecurityProvider {
     fn get_object_table(&self, table: TableUID) -> Option<&dyn GenericTable>;
@@ -38,34 +37,31 @@ pub trait SecurityProvider {
     fn get_acl(&self, invoking_id: UID, method_id: MethodRef) -> Result<Vec<ACERef>, MethodStatus>;
 
     fn get(&self, invoking_id: UID, cell_block: CellBlock) -> Result<BytesOrRowValues, MethodStatus> {
-        match decode_cell_block(self, invoking_id, cell_block)? {
-            DecodedCellBlock::Object { table, object, start_column, end_column } => {
-                let Some(table) = self.get_object_table(table) else {
-                    return Err(MethodStatus::InvalidParameter);
-                };
-                let Some(object) = table.get_object(object) else {
-                    return Err(MethodStatus::InvalidParameter);
-                };
-                let first = start_column.unwrap_or(0);
-                let last = end_column.map(|x| x + 1).unwrap_or(object.len() as u16);
-                Ok(BytesOrRowValues::RowValues(
-                    (first..last)
-                        .into_iter()
-                        .map(|idx| (idx, object.get(idx as usize)))
-                        .filter(|(_n, v)| !v.is_empty())
-                        .map(|(n, value)| Value::from(Named { name: n.into(), value }))
-                        .collect(),
-                ))
-            }
-            DecodedCellBlock::ByteRange { table, start_byte, end_byte } => {
-                let Some(table) = self.get_byte_table(table) else {
-                    return Err(MethodStatus::InvalidParameter);
-                };
-                let first = start_byte.unwrap_or(0);
-                let last = end_byte.map(|x| x + 1).unwrap_or(table.len() as u64);
-                let bytes = table.read(first as usize, (last - first) as usize)?;
-                Ok(BytesOrRowValues::Bytes(bytes))
-            }
+        let Some(table_ref) = cell_block.target_table(invoking_id) else {
+            return Err(MethodStatus::InvalidParameter);
+        };
+
+        if let Some(table) = self.get_object_table(table_ref) {
+            let object_cb = cell_block.try_into_object(invoking_id).map_err(|_| MethodStatus::InvalidParameter)?;
+            let object = table.get_object(object_cb.object).ok_or(MethodStatus::InvalidParameter)?;
+            let first = object_cb.start_column.unwrap_or(0);
+            let last = object_cb.end_column.map(|x| x + 1).unwrap_or(object.len() as u16);
+            Ok(BytesOrRowValues::RowValues(
+                (first..last)
+                    .into_iter()
+                    .map(|idx| (idx, object.get(idx as usize)))
+                    .filter(|(_n, v)| !v.is_empty())
+                    .map(|(n, value)| Value::from(Named { name: n.into(), value }))
+                    .collect(),
+            ))
+        } else if let Some(table) = self.get_byte_table(table_ref) {
+            let byte_cb = cell_block.try_into_byte(invoking_id).map_err(|_| MethodStatus::InvalidParameter)?;
+            let first = byte_cb.start_byte.unwrap_or(0);
+            let last = byte_cb.end_byte.map(|x| x + 1).unwrap_or(table.len() as u64);
+            let bytes = table.read(first as usize, (last - first) as usize)?;
+            Ok(BytesOrRowValues::Bytes(bytes))
+        } else {
+            Err(MethodStatus::InvalidParameter)
         }
     }
 
@@ -125,55 +121,6 @@ pub trait SecurityProvider {
             uids.push(uid);
         }
         Ok(List(uids))
-    }
-}
-
-enum DecodedCellBlock {
-    Object { table: TableUID, object: UID, start_column: Option<u16>, end_column: Option<u16> },
-    ByteRange { table: TableUID, start_byte: Option<u64>, end_byte: Option<u64> },
-}
-
-fn decode_cell_block<This: ?Sized>(
-    this: &This,
-    invoking_id: UID,
-    cell_block: CellBlock,
-) -> Result<DecodedCellBlock, MethodStatus>
-where
-    This: SecurityProvider,
-{
-    if invoking_id == THIS_SP {
-        let Some(table) = cell_block.table else {
-            return Err(MethodStatus::InvalidParameter);
-        };
-        let reduced = CellBlock { table: None, ..cell_block };
-        decode_cell_block(this, table.as_uid(), reduced)
-    } else if let Ok(table) = TableUID::try_from(invoking_id) {
-        if let Some(_) = this.get_byte_table(table) {
-            Ok(DecodedCellBlock::ByteRange { table, start_byte: cell_block.start_row, end_byte: cell_block.end_row })
-        } else if let Some(_) = this.get_object_table(table) {
-            let Some(object) = cell_block.start_row.map(|x| UID::new(x)) else {
-                return Err(MethodStatus::InvalidParameter);
-            };
-            if object.containing_table() != Some(table.as_uid()) {
-                return Err(MethodStatus::InvalidParameter);
-            }
-            let reduced = CellBlock { start_row: None, ..cell_block };
-            decode_cell_block(this, object, reduced)
-        } else {
-            Err(MethodStatus::InvalidParameter)
-        }
-    } else if let Some(table) = invoking_id.containing_table() {
-        if cell_block.end_row.is_some() {
-            return Err(MethodStatus::InvalidParameter);
-        }
-        Ok(DecodedCellBlock::Object {
-            table: table.try_into().unwrap(),
-            object: invoking_id,
-            start_column: cell_block.start_column,
-            end_column: cell_block.end_column,
-        })
-    } else {
-        Err(MethodStatus::InvalidParameter)
     }
 }
 

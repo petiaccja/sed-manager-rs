@@ -11,7 +11,7 @@ use crate::{
 
 macro_rules! all_columns {
     () => {
-        (0..32).into_iter().collect()
+        [].into_iter().collect()
     };
 }
 

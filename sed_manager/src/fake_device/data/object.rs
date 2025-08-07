@@ -3,6 +3,8 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
+use core::any::Any;
+
 use crate::messaging::uid::UID;
 use crate::messaging::value::Value;
 use crate::spec::objects::{Authority, LockingRange, MBRControl, TableDesc, ACE, CPIN, KAES256, SP};
@@ -12,6 +14,7 @@ pub trait GenericObject {
     fn len(&self) -> usize;
     fn get(&self, column: usize) -> Value;
     fn try_replace(&mut self, column: usize, value: Value) -> Result<Value, Value>;
+    fn as_any(&self) -> &dyn Any;
 }
 
 macro_rules! impl_generic_object {
@@ -31,6 +34,10 @@ macro_rules! impl_generic_object {
 
             fn try_replace(&mut self, column: usize, value: Value) -> Result<Value, Value> {
                 self.as_array_mut()[column].try_replace(value)
+            }
+
+            fn as_any(&self) -> &dyn Any {
+                self as &dyn Any
             }
         }
     };
