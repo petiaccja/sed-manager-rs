@@ -5,8 +5,9 @@
 
 use sed_manager::{
     applications::{
-        is_activating_locking_supported, is_mbr_editor_supported, is_permission_editor_supported,
-        is_range_editor_supported, is_revert_supported, is_taking_ownership_supported, is_user_editor_supported,
+        is_activating_locking_supported, is_change_password_supported, is_mbr_editor_supported,
+        is_permission_editor_supported, is_range_editor_supported, is_revert_supported, is_taking_ownership_supported,
+        is_user_editor_supported,
     },
     messaging::discovery::Discovery,
 };
@@ -18,6 +19,7 @@ impl ActivitySupport {
         Self {
             take_ownership: false,
             activate_locking: false,
+            change_password: false,
             range_editor: false,
             user_editor: false,
             access_control_editor: false,
@@ -31,6 +33,7 @@ impl ActivitySupport {
     pub fn from_discovery(discovery: &Discovery) -> Self {
         Self {
             activate_locking: is_activating_locking_supported(discovery),
+            change_password: is_change_password_supported(),
             com_id_status: false, // Always supported | Not implemented
             range_editor: is_range_editor_supported(discovery),
             access_control_editor: is_permission_editor_supported(discovery),

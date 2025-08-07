@@ -7,7 +7,10 @@ import { DeviceDescription, ExampleData as DeviceDescriptionExampleData } from "
 import { UnavailableDevicesPage} from "pages/unavailable_devices_page.slint";
 import { TabBar } from "widgets/tab_bar.slint";
 import { AlternativeLayout, AlternativeChild } from "widgets/alternative_layout.slint";
-import { DeviceListState, TroubleshootingState, UserEditorState, RangeEditorState, SingleStepState, PermissionEditorState, MBREditorState, SettingsState } from "state.slint";
+import { 
+    DeviceListState, TroubleshootingState, UserEditorState, RangeEditorState, SingleStepState, 
+    PermissionEditorState, MBREditorState, SettingsState, ChangePasswordState 
+} from "state.slint";
 import { Button, Spinner, Palette } from "std-widgets.slint";
 import { DevicePage } from "pages/device_page.slint";
 import { UnavailableDevicesPage } from "pages/unavailable_devices_page.slint";
@@ -23,7 +26,7 @@ import { DigitalUnit, DigitalUnitConversion } from "algorithm/digital_unit.slint
 export { 
     DeviceListState, TroubleshootingState, UserEditorState, RangeEditorState, 
     SingleStepState, PermissionEditorState, MBREditorState, SettingsState,
-    DigitalUnit, DigitalUnitConversion,
+    DigitalUnit, DigitalUnitConversion, ChangePasswordState,
 }
 
 component DriveTabView {

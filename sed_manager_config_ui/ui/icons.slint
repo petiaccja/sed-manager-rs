@@ -20,6 +20,7 @@ export global Icons {
     // Configure activities
     out property <image> take-ownership: @image-url("../images/action/rocket_launch.svg");
     out property <image> activate-locking: @image-url("../images/device/lock.svg");
+    out property <image> change-password: self.password;
     out property <image> edit-ranges: @image-url("../images/device/segment.svg");
     out property <image> edit-users: @image-url("../images/action/person_edit.svg");
     out property <image> edit-permissions: @image-url("../images/action/passkey.svg");
@@ -49,6 +50,7 @@ export global Icons {
 export global IconColors {
     out property <color> take-ownership: PaletteExtra.make-accented(#00da36, Palette.control-foreground, Palette.control-background);
     out property <color> activate-locking: PaletteExtra.make-accented(#ffd92f, Palette.control-foreground, Palette.control-background);
+    out property <color> change-password: PaletteExtra.make-accented(#017715, Palette.control-foreground, Palette.control-background);
     out property <color> edit-ranges: PaletteExtra.make-accented(#9900ff, Palette.control-foreground, Palette.control-background);
     out property <color> edit-users: PaletteExtra.make-accented(#006eff, Palette.control-foreground, Palette.control-background);
     out property <color> edit-permissions: PaletteExtra.make-accented(#ff9900, Palette.control-foreground, Palette.control-background);

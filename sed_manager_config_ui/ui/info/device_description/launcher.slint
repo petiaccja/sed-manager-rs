@@ -69,6 +69,23 @@ export component ActivityLauncher {
                     }
 
                     NavigationButton {
+                        text: "Change password";
+                        icon: Icons.change-password;
+                        height: button-height;
+                        navigation-direction: NavigationDirection.left;
+                        background: #00000000;
+                        icon-color: IconColors.change-password;
+                        enabled: activity-support.change-password;
+                        clicked => {
+                            select-activity(Activity.change-password);
+                        }
+                    }
+
+                    HorizontalSeparator {
+                        background: Palette.background;
+                    }
+
+                    NavigationButton {
                         text: "Edit ranges";
                         icon: Icons.edit-ranges;
                         height: button-height;

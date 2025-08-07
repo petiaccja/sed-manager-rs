@@ -53,6 +53,13 @@ export global SingleStepState {
     callback revert(device-idx: int, use-psid: bool, password: string, revert-admin: bool);
 }
 
+export global ChangePasswordState {
+    in property <[ExtendedStatus]> statuses;
+    in property <[[string]]> users;
+    callback list(device-idx: int);
+    callback change-password(device-idx: int, user-idx: int, password: string, new-password: string);
+}
+
 export global RangeEditorState {
     in property <[ExtendedStatus]> login-statuses;
     in property <[RangeList]> range-lists;

@@ -364,12 +364,8 @@ mod tests {
     #[test]
     fn from_tokens_extension_negative() {
         let input = -128_i8;
-        let tokens = vec![Token {
-            tag: Tag::ShortAtom,
-            is_byte: false,
-            is_signed: true,
-            data: vec![unsafe { core::mem::transmute::<i8, u8>(input) }],
-        }];
+        let tokens =
+            vec![Token { tag: Tag::ShortAtom, is_byte: false, is_signed: true, data: vec![i8::cast_unsigned(input)] }];
         let mut is = InputStream::<Token>::from(tokens);
         match i64::deserialize(&mut is) {
             Ok(value) => assert_eq!(value, input as i64),
