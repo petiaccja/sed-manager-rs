@@ -197,7 +197,7 @@ impl CellBlockWrite {
         }
     }
 
-    fn get_target_object(invoking_id: UID, where_uid: Option<UID>) -> Option<(TableUID, UID)> {
+    pub fn get_target_object(invoking_id: UID, where_uid: Option<UID>) -> Option<(TableUID, UID)> {
         let inv_table = invoking_id.is_table().then_some(invoking_id);
         let inv_obj = invoking_id.is_object().then_some(invoking_id);
         let where_obj = where_uid.filter(|uid| uid.is_object());

@@ -9,11 +9,11 @@ use std::sync::{Arc, Mutex};
 use crate::fake_device::data::object_table::AuthorityTable;
 use crate::fake_device::data::security_provider::SecurityProvider;
 use crate::messaging::uid::UID;
-use crate::messaging::value::Bytes;
+use crate::messaging::value::{Bytes, Value};
 use crate::rpc::MethodStatus;
 use crate::spec::basic_types::List;
 use crate::spec::column_types::{
-    ACERef, AuthorityRef, BoolOrBytes, BytesOrRowValues, CellBlock, CredentialRef, MethodRef, SPRef,
+    ACERef, AuthorityRef, BoolOrBytes, BytesOrRowValues, CellBlock, CellBlockWrite, CredentialRef, MethodRef, SPRef,
 };
 use crate::spec::invoking_id::THIS_SP;
 use crate::spec::objects::{ACEExpr as _, ACE};
@@ -76,11 +76,15 @@ impl SecurityProviderSession {
         let Some(security_provider) = controller.get_security_provider(self.this_sp) else {
             return Err(MethodStatus::TPerMalfunction);
         };
-        let (uid, columns) = get_target_object(security_provider, invoking_id, &cell_block);
-        if !check_authorization(security_provider, &self.authenticated, uid, method_id::GET, &columns) {
-            return Err(MethodStatus::NotAuthorized);
+        if let Some((uid, columns)) = get_target_object_read(security_provider, invoking_id, &cell_block) {
+            if check_authorization(security_provider, &self.authenticated, uid, method_id::GET, &columns) {
+                security_provider.get(invoking_id, cell_block).map(|out| (out,))
+            } else {
+                Err(MethodStatus::NotAuthorized)
+            }
+        } else {
+            Err(MethodStatus::InvalidParameter)
         }
-        security_provider.get(invoking_id, cell_block).map(|out| (out,))
     }
 
     pub fn set(
@@ -93,7 +97,15 @@ impl SecurityProviderSession {
         let Some(security_provider) = controller.get_security_provider_mut(self.this_sp) else {
             return Err(MethodStatus::TPerMalfunction);
         };
-        security_provider.set(invoking_id, where_, values)
+        if let Some((uid, columns)) = get_target_object_write(invoking_id, where_, values.as_ref()) {
+            if check_authorization(security_provider, &self.authenticated, uid, method_id::SET, &columns) {
+                security_provider.set(invoking_id, where_, values)
+            } else {
+                Err(MethodStatus::NotAuthorized)
+            }
+        } else {
+            Err(MethodStatus::InvalidParameter)
+        }
     }
 
     pub fn next(&self, invoking_id: UID, from: Option<UID>, count: Option<u64>) -> Result<(List<UID>,), MethodStatus> {
@@ -215,22 +227,38 @@ fn get_authorization_aces(sp: &SecurityProvider, invoking_id: UID, method_id: Me
     aces
 }
 
-fn get_target_object(sp: &SecurityProvider, invoking_id: UID, cell_block: &CellBlock) -> (UID, Vec<u16>) {
-    let Some(table_ref) = cell_block.get_target_table(invoking_id) else {
-        return (UID::null(), vec![]);
-    };
+fn get_target_object_read(sp: &SecurityProvider, invoking_id: UID, cell_block: &CellBlock) -> Option<(UID, Vec<u16>)> {
+    let table_ref = cell_block.get_target_table(invoking_id)?;
     if let Some(table) = sp.get_object_table(table_ref) {
-        let Ok(object_cb) = cell_block.clone().try_into_object(invoking_id) else {
-            return (UID::null(), vec![]);
-        };
-        let Some(object) = table.get_object(object_cb.object) else {
-            return (UID::null(), vec![]);
-        };
+        let object_cb = cell_block.clone().try_into_object(invoking_id).ok()?;
+        let object = table.get_object(object_cb.object)?;
         let first_column = object_cb.start_column.unwrap_or(0);
         let last_column = object_cb.end_column.map(|x| x + 1).unwrap_or(object.len() as u16);
-        (object_cb.object, (first_column..last_column).collect())
+        Some((object_cb.object, (first_column..last_column).collect()))
     } else {
-        (table_ref.as_uid(), vec![0])
+        Some((table_ref.as_uid(), vec![0]))
+    }
+}
+
+fn get_target_object_write(
+    invoking_id: UID,
+    where_: Option<u64>,
+    row_values: Option<&BytesOrRowValues>,
+) -> Option<(UID, Vec<u16>)> {
+    match row_values {
+        Some(BytesOrRowValues::RowValues(row_values)) => {
+            let (_, object) = CellBlockWrite::get_target_object(invoking_id, where_.map(|value| UID::new(value)))?;
+            let columns: Option<Vec<_>> = row_values
+                .iter()
+                .map(|value| match value {
+                    Value::Named(named) => u16::try_from(&named.name).ok(),
+                    _ => None,
+                })
+                .collect();
+            Some((object, columns?))
+        }
+        Some(BytesOrRowValues::Bytes(_)) => Some((invoking_id.is_table().then_some(invoking_id)?, vec![0])),
+        None => None,
     }
 }
 

@@ -4,6 +4,8 @@
 //L-----------------------------------------------------------------------------
 
 mod access_control_table;
+pub mod god_authority;
+
 pub mod byte_table;
 pub mod controller;
 pub mod object;

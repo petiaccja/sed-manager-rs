@@ -6,6 +6,7 @@
 use crate::fake_device::data::byte_table::ByteTable;
 use crate::fake_device::data::object_table::GenericTable;
 use crate::fake_device::data::security_provider::SecurityProvider;
+use crate::fake_device::god_authority::{append_god_access_control, append_god_ace, append_god_authority};
 use crate::spec::table_id;
 
 mod preconfig_access_control;
@@ -23,11 +24,11 @@ const RANGE_IDX: core::ops::RangeInclusive<u64> = 1_u64..=8_u64;
 const MBR_SIZE: u32 = 0x08000000;
 
 pub fn new_locking_sp() -> SecurityProvider {
-    let access_control = preconfig_access_control::preconfig_access_control();
+    let access_control = append_god_access_control(preconfig_access_control::preconfig_access_control());
     let object_tables = [
         Box::new(preconfig_table::preconfig_table()) as Box<dyn GenericTable>,
-        Box::new(preconfig_ace::preconfig_ace()) as Box<dyn GenericTable>,
-        Box::new(preconfig_authority::preconfig_authority()) as Box<dyn GenericTable>,
+        Box::new(append_god_ace(preconfig_ace::preconfig_ace())) as Box<dyn GenericTable>,
+        Box::new(append_god_authority(preconfig_authority::preconfig_authority())) as Box<dyn GenericTable>,
         Box::new(preconfig_c_pin::preconfig_c_pin()) as Box<dyn GenericTable>,
         Box::new(preconfig_locking::preconfig_locking()) as Box<dyn GenericTable>,
         Box::new(preconfig_k_aes_256::preconfig_k_aes_256()) as Box<dyn GenericTable>,

@@ -6,6 +6,7 @@
 use std::sync::Arc;
 
 use sed_manager::fake_device::data::object_table::CPINTable;
+use sed_manager::fake_device::god_authority::AUTHORITY_GOD;
 use sed_manager::fake_device::FakeDevice;
 use sed_manager::fake_device::MSID_PASSWORD;
 use sed_manager::messaging::uid::UID;
@@ -112,7 +113,7 @@ async fn set_success() -> Result<(), RPCError> {
     let runtime = Arc::new(TokioRuntime::new());
     let device = Arc::new(FakeDevice::new());
     let tper = TPer::new_on_default_com_id(device, runtime)?;
-    let session = tper.start_session(sp::ADMIN, None, None).await?;
+    let session = tper.start_session(sp::ADMIN, Some(AUTHORITY_GOD), None).await?;
     let object = opal::admin::c_pin::SID;
     session.set(object.as_uid(), CPIN::PIN, Password::from("1234")).await?;
     Ok(())
@@ -123,7 +124,7 @@ async fn set_multiple_success() -> Result<(), RPCError> {
     let runtime = Arc::new(TokioRuntime::new());
     let device = Arc::new(FakeDevice::new());
     let tper = TPer::new_on_default_com_id(device, runtime)?;
-    let session = tper.start_session(sp::ADMIN, None, None).await?;
+    let session = tper.start_session(sp::ADMIN, Some(AUTHORITY_GOD), None).await?;
     let object = opal::admin::c_pin::SID;
     let columns = [CPIN::COMMON_NAME, CPIN::PIN];
     session.set_multiple(object.as_uid(), columns, (Name::from("name"), Password::from("1234"))).await?;
@@ -135,7 +136,7 @@ async fn set_missing_object() -> Result<(), RPCError> {
     let runtime = Arc::new(TokioRuntime::new());
     let device = Arc::new(FakeDevice::new());
     let tper = TPer::new_on_default_com_id(device, runtime)?;
-    let session = tper.start_session(sp::ADMIN, None, None).await?;
+    let session = tper.start_session(sp::ADMIN, Some(AUTHORITY_GOD), None).await?;
     let result = session
         .set(UID::new(table_id::C_PIN.as_u64() + 0x2360_4327), CPIN::PIN, Password::from("1234"))
         .await;
@@ -148,7 +149,7 @@ async fn set_invalid_column() -> Result<(), RPCError> {
     let runtime = Arc::new(TokioRuntime::new());
     let device = Arc::new(FakeDevice::new());
     let tper = TPer::new_on_default_com_id(device, runtime)?;
-    let session = tper.start_session(sp::ADMIN, None, None).await?;
+    let session = tper.start_session(sp::ADMIN, Some(AUTHORITY_GOD), None).await?;
     let result = session.set(UID::new(table_id::C_PIN.as_u64() + 0x2360_4327), 57, Password::from("1234")).await;
     assert_eq!(result, Err(MethodStatus::InvalidParameter.into()));
     Ok(())
@@ -159,7 +160,7 @@ async fn set_invalid_type() -> Result<(), RPCError> {
     let runtime = Arc::new(TokioRuntime::new());
     let device = Arc::new(FakeDevice::new());
     let tper = TPer::new_on_default_com_id(device, runtime)?;
-    let session = tper.start_session(sp::ADMIN, None, None).await?;
+    let session = tper.start_session(sp::ADMIN, Some(AUTHORITY_GOD), None).await?;
     let result = session.set(UID::new(table_id::C_PIN.as_u64() + 0x2360_4327), 3, 35678u32).await;
     assert_eq!(result, Err(MethodStatus::InvalidParameter.into()));
     Ok(())
@@ -207,7 +208,7 @@ async fn write_success() -> Result<(), RPCError> {
     let device = Arc::new(FakeDevice::new());
     device.controller().lock().unwrap().activate(sp::LOCKING)?;
     let tper = TPer::new_on_default_com_id(device, runtime)?;
-    let session = tper.start_session(sp::LOCKING, None, None).await?;
+    let session = tper.start_session(sp::LOCKING, Some(AUTHORITY_GOD), None).await?;
     session.write(table_id::MBR, 0, &[1, 2, 3, 4]).await?;
     Ok(())
 }
@@ -218,7 +219,7 @@ async fn write_failure_start_oor() -> Result<(), RPCError> {
     let device = Arc::new(FakeDevice::new());
     device.controller().lock().unwrap().activate(sp::LOCKING)?;
     let tper = TPer::new_on_default_com_id(device, runtime)?;
-    let session = tper.start_session(sp::LOCKING, None, None).await?;
+    let session = tper.start_session(sp::LOCKING, Some(AUTHORITY_GOD), None).await?;
     let result = session.write(table_id::MBR, 1024 * 1024 * 1024, &[1, 2, 3, 4]).await;
     assert_eq!(result, Err(MethodStatus::InsufficientRows.into()));
     Ok(())
@@ -230,7 +231,7 @@ async fn write_failure_end_oor() -> Result<(), RPCError> {
     let device = Arc::new(FakeDevice::new());
     device.controller().lock().unwrap().activate(sp::LOCKING)?;
     let tper = TPer::new_on_default_com_id(device, runtime)?;
-    let session = tper.start_session(sp::LOCKING, None, None).await?;
+    let session = tper.start_session(sp::LOCKING, Some(AUTHORITY_GOD), None).await?;
     let result = session.write(table_id::MBR, 128 * 1024 * 1024 - 2, &[1, 2, 3, 4]).await;
     assert_eq!(result, Err(MethodStatus::InsufficientRows.into()));
     Ok(())
@@ -242,7 +243,7 @@ async fn write_failure_too_large() -> Result<(), RPCError> {
     let device = Arc::new(FakeDevice::new());
     device.controller().lock().unwrap().activate(sp::LOCKING)?;
     let tper = TPer::new_on_default_com_id(device, runtime)?;
-    let session = tper.start_session(sp::LOCKING, None, None).await?;
+    let session = tper.start_session(sp::LOCKING, Some(AUTHORITY_GOD), None).await?;
     let result = session.write(table_id::MBR, 0, &[0; 1024 * 1024]).await;
     assert_eq!(result, Err(RPCError::TokenTooLarge));
     Ok(())
@@ -308,7 +309,7 @@ async fn get_acl() -> Result<(), RPCError> {
     let tper = TPer::new_on_default_com_id(device, runtime)?;
     let session = tper.start_session(sp::ADMIN, None, None).await?;
     let acl = session.get_acl(table_id::TABLE.as_uid(), method_id::GET).await?;
-    assert_eq!(acl, vec![opal::admin::ace::ANYBODY]);
+    assert!(acl.contains(&opal::admin::ace::ANYBODY));
     Ok(())
 }
 

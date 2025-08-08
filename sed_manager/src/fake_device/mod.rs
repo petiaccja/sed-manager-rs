@@ -15,4 +15,5 @@ pub use device::FakeDevice;
 
 pub const MSID_PASSWORD: &str = "default_password";
 pub const PSID_PASSWORD: &str = "psid_password";
+pub use data::god_authority;
 pub use discovery::BASE_COM_ID;
