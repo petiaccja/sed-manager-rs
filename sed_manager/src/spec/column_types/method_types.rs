@@ -8,7 +8,7 @@ use sed_manager_macros::StructType;
 
 use crate::messaging::uid::{TableUID, UID};
 use crate::messaging::value::{Bytes, List, Value};
-use crate::spec::basic_types::TableReference;
+use crate::spec::basic_types::{NamedValue, TableReference};
 
 /// Specifies a part of an object table or byte table.
 ///
@@ -41,6 +41,12 @@ pub struct ByteCellBlock {
     pub table: TableUID,
     pub start_byte: Option<u64>,
     pub end_byte: Option<u64>,
+}
+
+pub enum CellBlockWrite {
+    Object { table: TableUID, object: UID, values: Vec<(u64, Value)> },
+    Byte { table: TableUID, start_byte: u64, bytes: Vec<u8> },
+    None,
 }
 
 /// Result returned by the Authenticate method.
@@ -103,7 +109,7 @@ impl CellBlock {
     /// Does not fully validate the [`CellBlock`] and the method call, so may return a table
     /// even if the method call is invalid. If a table is returned, it always is the table
     /// that the method call should operate on, regardless of the validity of the call.
-    pub fn target_table(&self, invoking_id: UID) -> Option<TableUID> {
+    pub fn get_target_table(&self, invoking_id: UID) -> Option<TableUID> {
         if let Ok(table) = TableUID::try_from(invoking_id) {
             Some(table)
         } else if let Some(Ok(table)) = invoking_id.containing_table().map(|table| TableUID::try_from(table)) {
@@ -166,6 +172,70 @@ impl CellBlock {
     }
 }
 
+impl CellBlockWrite {
+    pub fn try_new(
+        invoking_id: UID,
+        where_: Option<u64>,
+        values: Option<BytesOrRowValues>,
+    ) -> Result<Self, Option<BytesOrRowValues>> {
+        match values {
+            Some(BytesOrRowValues::RowValues(row_values)) => {
+                let where_uid = where_.map(|value| UID::new(value));
+                match Self::get_target_object(invoking_id, where_uid) {
+                    Some((table, object)) => {
+                        let values = Self::parse_row_values(row_values).map_err(|x| BytesOrRowValues::RowValues(x))?;
+                        Ok(Self::Object { table, object, values })
+                    }
+                    None => Err(Some(BytesOrRowValues::RowValues(row_values))),
+                }
+            }
+            Some(BytesOrRowValues::Bytes(bytes)) => match TableUID::try_from(invoking_id) {
+                Ok(table) => Ok(Self::Byte { table, start_byte: where_.unwrap_or(0), bytes }),
+                Err(_) => Err(Some(BytesOrRowValues::Bytes(bytes))),
+            },
+            None => Ok(Self::None),
+        }
+    }
+
+    fn get_target_object(invoking_id: UID, where_uid: Option<UID>) -> Option<(TableUID, UID)> {
+        let inv_table = invoking_id.is_table().then_some(invoking_id);
+        let inv_obj = invoking_id.is_object().then_some(invoking_id);
+        let where_obj = where_uid.filter(|uid| uid.is_object());
+        let (table, object) = if let (Some(table), Some(object)) = (inv_table, where_obj) {
+            (table, object)
+        } else if let (Some(object), None) = (inv_obj, where_uid) {
+            (object.containing_table().unwrap(), object)
+        } else {
+            return None;
+        };
+        if object.containing_table() == Some(table) {
+            Some((TableUID::try_from(table).unwrap(), object))
+        } else {
+            None
+        }
+    }
+
+    fn parse_row_values(row_values: Vec<Value>) -> Result<Vec<(u64, Value)>, Vec<Value>> {
+        let named_values: Vec<_> =
+            row_values.into_iter().map(|value| NamedValue::<u64, Value>::try_from(value)).collect();
+        if named_values.iter().all(|result| result.is_ok()) {
+            Ok(named_values
+                .into_iter()
+                .map(|result| result.unwrap())
+                .map(|named| (named.name, named.value))
+                .collect())
+        } else {
+            Err(named_values
+                .into_iter()
+                .map(|result| match result {
+                    Ok(named) => Value::from(named),
+                    Err(value) => value,
+                })
+                .collect())
+        }
+    }
+}
+
 impl TryFrom<Value> for BoolOrBytes {
     type Error = Value;
     fn try_from(value: Value) -> Result<Self, Self::Error> {
@@ -210,7 +280,7 @@ impl From<BytesOrRowValues> for Value {
 
 #[cfg(test)]
 mod tests {
-    use crate::spec::core::authority;
+    use crate::spec::core::{authority, template};
     use crate::spec::{invoking_id, table_id};
 
     use super::*;
@@ -237,7 +307,7 @@ mod tests {
             (invoking_id::THIS_SP, CellBlock { table: None, start_row: Some(t1_o1.as_u64()), ..empty }, None),
         ];
         for (i, (invoking_id, cell_block, expected)) in cases.iter().enumerate() {
-            assert_eq!(cell_block.target_table(*invoking_id), *expected, "case #{i}");
+            assert_eq!(cell_block.get_target_table(*invoking_id), *expected, "case #{i}");
         }
     }
 
@@ -313,5 +383,49 @@ mod tests {
             let result_cmp = result.map(|cb| cb.table);
             assert_eq!(result_cmp.ok(), *expected, "case #{i}");
         }
+    }
+
+    #[test]
+    fn cell_block_write_get_target_obj() {
+        let this_sp = invoking_id::THIS_SP;
+        let table = table_id::AUTHORITY;
+        let object = authority::SID.as_uid();
+        let other = template::BASE.as_uid();
+
+        assert_eq!(CellBlockWrite::get_target_object(this_sp, None), None);
+        assert_eq!(CellBlockWrite::get_target_object(this_sp, Some(object)), None);
+        assert_eq!(CellBlockWrite::get_target_object(this_sp, Some(table.as_uid())), None);
+        assert_eq!(CellBlockWrite::get_target_object(this_sp, Some(this_sp)), None);
+
+        assert_eq!(CellBlockWrite::get_target_object(table.as_uid(), None), None);
+        assert_eq!(CellBlockWrite::get_target_object(table.as_uid(), Some(object)), Some((table, object)));
+        assert_eq!(CellBlockWrite::get_target_object(table.as_uid(), Some(other)), None);
+        assert_eq!(CellBlockWrite::get_target_object(table.as_uid(), Some(table.as_uid())), None);
+        assert_eq!(CellBlockWrite::get_target_object(table.as_uid(), Some(this_sp)), None);
+
+        assert_eq!(CellBlockWrite::get_target_object(object, None), Some((table, object)));
+        assert_eq!(CellBlockWrite::get_target_object(object, Some(object)), None);
+        assert_eq!(CellBlockWrite::get_target_object(object, Some(other)), None);
+        assert_eq!(CellBlockWrite::get_target_object(object, Some(table.as_uid())), None);
+        assert_eq!(CellBlockWrite::get_target_object(object, Some(this_sp)), None);
+    }
+
+    #[test]
+    fn cell_block_write_parse_row_values_success() {
+        let expected = vec![(3u64, Value::from(45)), (8u64, Value::from(12))];
+        let encoded: Vec<Value> =
+            expected.iter().cloned().map(|(name, value)| NamedValue { name, value }.into()).collect();
+        let result = CellBlockWrite::parse_row_values(encoded);
+        assert_eq!(result, Ok(expected));
+    }
+
+    #[test]
+    fn cell_block_write_parse_row_values_failure() {
+        let encoded = vec![
+            Value::from(NamedValue { name: 5u64, value: Value::from(34) }),
+            Value::from(17),
+        ];
+        let result = CellBlockWrite::parse_row_values(encoded.clone());
+        assert_eq!(result, Err(encoded));
     }
 }

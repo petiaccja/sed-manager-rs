@@ -11,10 +11,10 @@ use crate::fake_device::data::object_table::{AuthorityTable, CPINTable, GenericT
 use crate::messaging::uid::{TableUID, UID};
 use crate::messaging::value::{Bytes, Named, Value};
 use crate::rpc::MethodStatus;
-use crate::spec::basic_types::{List, NamedValue};
+use crate::spec::basic_types::List;
 use crate::spec::column_types::{
-    ACERef, AuthorityRef, BoolOrBytes, BytesOrRowValues, CPINRef, CellBlock, CredentialRef, KAES256Ref, Key256,
-    MethodRef,
+    ACERef, AuthorityRef, BoolOrBytes, BytesOrRowValues, CPINRef, CellBlock, CellBlockWrite, CredentialRef, KAES256Ref,
+    Key256, MethodRef,
 };
 use crate::spec::table_id;
 
@@ -118,7 +118,7 @@ impl SecurityProvider {
     }
 
     pub fn get(&self, invoking_id: UID, cell_block: CellBlock) -> Result<BytesOrRowValues, MethodStatus> {
-        let Some(table_ref) = cell_block.target_table(invoking_id) else {
+        let Some(table_ref) = cell_block.get_target_table(invoking_id) else {
             return Err(MethodStatus::InvalidParameter);
         };
 
@@ -152,39 +152,36 @@ impl SecurityProvider {
         where_: Option<u64>,
         values: Option<BytesOrRowValues>,
     ) -> Result<(), MethodStatus> {
-        match decode_set_parameters(self, invoking_id, where_, values)? {
-            DecodedSetParameters::Object { table, object, mut values } => {
-                let Some(table) = self.get_object_table_mut(table) else {
-                    return Err(MethodStatus::InvalidParameter);
-                };
-                let Some(object) = table.get_object_mut(object) else {
-                    return Err(MethodStatus::InvalidParameter);
-                };
+        match CellBlockWrite::try_new(invoking_id, where_, values) {
+            Ok(CellBlockWrite::Object { table, object, values }) => {
+                let table = self.get_object_table_mut(table).ok_or(MethodStatus::InvalidParameter)?;
+                let object = table.get_object_mut(object).ok_or(MethodStatus::InvalidParameter)?;
 
-                let mut rollback_idx = None;
-                for (idx, (column, value)) in values.iter_mut().enumerate() {
-                    let old = object.get(*column as usize);
-                    if object.try_replace(*column as usize, core::mem::replace(value, old)).is_err() {
-                        rollback_idx = Some(idx);
-                        break;
-                    }
-                }
-
-                if let Some(rollback_idx) = rollback_idx {
-                    for (column, value) in values.into_iter().take(rollback_idx as usize) {
-                        object.try_replace(column as usize, value).expect("error in From<Value> impl");
-                    }
+                // Convert values to result(old, new) by try-updating the cells.
+                let replaced: Vec<_> = values
+                    .into_iter()
+                    .map(|(column, content)| (column, object.try_replace(column as usize, content)))
+                    .collect();
+                // If any cells failed...
+                if replaced.iter().any(|(_column, result)| result.is_err()) {
+                    // Unroll the cells that succeeded, i.e. result(Ok)
+                    replaced.into_iter().for_each(|(column, result)| {
+                        let _ = result.map(|old_content| {
+                            let _ =
+                                object.try_replace(column as usize, old_content).expect("error in From<Value> impl");
+                        });
+                    });
                     Err(MethodStatus::InvalidParameter)
                 } else {
                     Ok(())
                 }
             }
-            DecodedSetParameters::ByteRange { table, start_byte, bytes } => {
-                let Some(table) = self.get_byte_table_mut(table) else {
-                    return Err(MethodStatus::InvalidParameter);
-                };
+            Ok(CellBlockWrite::Byte { table, start_byte, bytes }) => {
+                let table = self.get_byte_table_mut(table).ok_or(MethodStatus::InvalidParameter)?;
                 table.write(start_byte as usize, bytes.as_slice())
             }
+            Ok(CellBlockWrite::None) => Ok(()),
+            Err(_) => Err(MethodStatus::InvalidParameter),
         }
     }
 
@@ -202,52 +199,5 @@ impl SecurityProvider {
             uids.push(uid);
         }
         Ok(List(uids))
-    }
-}
-
-enum DecodedSetParameters {
-    Object { table: TableUID, object: UID, values: Vec<(u64, Value)> },
-    ByteRange { table: TableUID, start_byte: u64, bytes: Vec<u8> },
-}
-
-fn decode_set_parameters(
-    this: &SecurityProvider,
-    invoking_id: UID,
-    where_: Option<u64>,
-    values: Option<BytesOrRowValues>,
-) -> Result<DecodedSetParameters, MethodStatus> {
-    if let Ok(table) = TableUID::try_from(invoking_id) {
-        if let Some(_) = this.get_byte_table(table) {
-            let Some(start_byte) = where_ else {
-                return Err(MethodStatus::InvalidParameter);
-            };
-            let BytesOrRowValues::Bytes(bytes) = values.unwrap_or(BytesOrRowValues::Bytes(vec![])) else {
-                return Err(MethodStatus::InvalidParameter);
-            };
-            Ok(DecodedSetParameters::ByteRange { table, start_byte, bytes })
-        } else if let Some(_) = this.get_object_table(table) {
-            let Some(object) = where_.map(|x| UID::new(x)) else {
-                return Err(MethodStatus::InvalidParameter);
-            };
-            if object.containing_table() != Some(table.as_uid()) {
-                return Err(MethodStatus::InvalidParameter);
-            }
-            decode_set_parameters(this, object, None, values)
-        } else {
-            Err(MethodStatus::InvalidParameter)
-        }
-    } else if let Some(table) = invoking_id.containing_table() {
-        if where_.is_some() {
-            return Err(MethodStatus::InvalidParameter);
-        }
-        let BytesOrRowValues::RowValues(row_values) = values.unwrap_or(BytesOrRowValues::RowValues(vec![])) else {
-            return Err(MethodStatus::InvalidParameter);
-        };
-        let row_values: Result<Vec<NamedValue<u64, Value>>, _> = row_values.into_iter().map(|x| x.try_into()).collect();
-        let row_values = row_values.map_err(|_| MethodStatus::InvalidParameter)?;
-        let values = row_values.into_iter().map(|x| (x.name, x.value)).collect();
-        Ok(DecodedSetParameters::Object { table: table.try_into().unwrap(), object: invoking_id, values })
-    } else {
-        Err(MethodStatus::InvalidParameter)
     }
 }

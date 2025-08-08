@@ -216,7 +216,7 @@ fn get_authorization_aces(sp: &SecurityProvider, invoking_id: UID, method_id: Me
 }
 
 fn get_target_object(sp: &SecurityProvider, invoking_id: UID, cell_block: &CellBlock) -> (UID, Vec<u16>) {
-    let Some(table_ref) = cell_block.target_table(invoking_id) else {
+    let Some(table_ref) = cell_block.get_target_table(invoking_id) else {
         return (UID::null(), vec![]);
     };
     if let Some(table) = sp.get_object_table(table_ref) {
