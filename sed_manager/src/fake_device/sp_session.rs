@@ -4,10 +4,10 @@
 //L-----------------------------------------------------------------------------
 
 use std::collections::HashSet;
-use std::sync::{Arc, Mutex};
 
 use crate::fake_device::data::object_table::AuthorityTable;
 use crate::fake_device::data::security_provider::SecurityProvider;
+use crate::fake_device::data::TPer;
 use crate::messaging::uid::UID;
 use crate::messaging::value::{Bytes, Value};
 use crate::rpc::MethodStatus;
@@ -20,35 +20,42 @@ use crate::spec::objects::{ACEExpr as _, ACE};
 use crate::spec::opal::admin::sp;
 use crate::spec::{method_id, table_id};
 
-use super::data::Controller;
-
-pub struct SecurityProviderSession {
+pub struct SPSession {
     this_sp: SPRef,
     write: bool,
-    controller: Arc<Mutex<Controller>>,
     authenticated: Vec<AuthorityRef>,
-    pub reverted: Vec<SPRef>, // SPs affected are added here after a call to Revert or RevertSP.
+    reverted_sps: Vec<SPRef>, // SPs affected are added here after a call to Revert or RevertSP.
 }
 
-impl SecurityProviderSession {
-    pub fn new(
-        sp: SPRef,
-        write: bool,
-        host_sgn_auth: Option<AuthorityRef>,
-        controller: Arc<Mutex<Controller>>,
-    ) -> Self {
+pub struct SPSessionExecutor<'session, 'tper> {
+    session: &'session mut SPSession,
+    tper: &'tper mut TPer,
+}
+
+impl SPSession {
+    pub fn new(tper: &mut TPer, sp: SPRef, write: bool, host_sgn_auth: Option<AuthorityRef>) -> Self {
         use crate::spec::core::authority::ANYBODY;
-        let mut new = Self { this_sp: sp, write, controller, authenticated: vec![ANYBODY], reverted: Vec::new() };
+        let mut new = Self { this_sp: sp, write, authenticated: vec![ANYBODY], reverted_sps: Vec::new() };
         if let Some(host_sgn_auth) = host_sgn_auth {
-            new.push_authenticated(host_sgn_auth);
+            new.on_tper(tper).push_authenticated(host_sgn_auth);
         };
         new
     }
 
-    pub fn this_sp(&self) -> SPRef {
+    pub fn sp(&self) -> SPRef {
         self.this_sp
     }
 
+    pub fn on_tper<'me, 'tper>(&'me mut self, tper: &'tper mut TPer) -> SPSessionExecutor<'me, 'tper> {
+        SPSessionExecutor { session: self, tper }
+    }
+
+    pub fn take_reverted_sps(&mut self) -> Vec<SPRef> {
+        core::mem::replace(&mut self.reverted_sps, vec![])
+    }
+}
+
+impl<'session, 'tper> SPSessionExecutor<'session, 'tper> {
     pub fn authenticate(
         &mut self,
         invoking_id: UID,
@@ -59,8 +66,7 @@ impl SecurityProviderSession {
             return Err(MethodStatus::InvalidParameter);
         }
         let is_success = {
-            let controller = self.controller.lock().unwrap();
-            let Some(security_provider) = controller.get_security_provider(self.this_sp) else {
+            let Some(security_provider) = self.tper.get_security_provider(self.session.sp()) else {
                 return Err(MethodStatus::TPerMalfunction);
             };
             security_provider.authenticate(authority, proof)
@@ -71,13 +77,12 @@ impl SecurityProviderSession {
         is_success.map(|out| (out,))
     }
 
-    pub fn get(&self, invoking_id: UID, cell_block: CellBlock) -> Result<(BytesOrRowValues,), MethodStatus> {
-        let controller = self.controller.lock().unwrap();
-        let Some(security_provider) = controller.get_security_provider(self.this_sp) else {
+    pub fn get(&mut self, invoking_id: UID, cell_block: CellBlock) -> Result<(BytesOrRowValues,), MethodStatus> {
+        let Some(security_provider) = self.tper.get_security_provider(self.session.sp()) else {
             return Err(MethodStatus::TPerMalfunction);
         };
         if let Some((uid, columns)) = get_target_object_read(security_provider, invoking_id, &cell_block) {
-            if check_authorization(security_provider, &self.authenticated, uid, method_id::GET, &columns) {
+            if check_authorization(security_provider, &self.session.authenticated, uid, method_id::GET, &columns) {
                 security_provider.get(invoking_id, cell_block).map(|out| (out,))
             } else {
                 Err(MethodStatus::NotAuthorized)
@@ -93,12 +98,11 @@ impl SecurityProviderSession {
         where_: Option<u64>,
         values: Option<BytesOrRowValues>,
     ) -> Result<(), MethodStatus> {
-        let mut controller = self.controller.lock().unwrap();
-        let Some(security_provider) = controller.get_security_provider_mut(self.this_sp) else {
+        let Some(security_provider) = self.tper.get_security_provider_mut(self.session.sp()) else {
             return Err(MethodStatus::TPerMalfunction);
         };
         if let Some((uid, columns)) = get_target_object_write(invoking_id, where_, values.as_ref()) {
-            if check_authorization(security_provider, &self.authenticated, uid, method_id::SET, &columns) {
+            if check_authorization(security_provider, &self.session.authenticated, uid, method_id::SET, &columns) {
                 security_provider.set(invoking_id, where_, values)
             } else {
                 Err(MethodStatus::NotAuthorized)
@@ -108,15 +112,14 @@ impl SecurityProviderSession {
         }
     }
 
-    pub fn next(&self, invoking_id: UID, from: Option<UID>, count: Option<u64>) -> Result<(List<UID>,), MethodStatus> {
-        let controller = self.controller.lock().unwrap();
-        let Some(security_provider) = controller.get_security_provider(self.this_sp) else {
+    pub fn next(&mut self, invoking_id: UID, from: Option<UID>, count: Option<u64>) -> Result<(List<UID>,), MethodStatus> {
+        let Some(security_provider) = self.tper.get_security_provider(self.session.sp()) else {
             return Err(MethodStatus::TPerMalfunction);
         };
         let Ok(table) = invoking_id.try_into() else {
             return Err(MethodStatus::InvalidParameter);
         };
-        if !check_authorization(security_provider, &self.authenticated, invoking_id, method_id::NEXT, &[0]) {
+        if !check_authorization(security_provider, &self.session.authenticated, invoking_id, method_id::NEXT, &[0]) {
             return Err(MethodStatus::NotAuthorized);
         }
         security_provider.next(table, from, count).map(|out| (out,))
@@ -131,15 +134,14 @@ impl SecurityProviderSession {
         let Ok(credential_id) = CredentialRef::try_from(invoking_id) else {
             return Err(MethodStatus::InvalidParameter);
         };
-        let mut controller = self.controller.lock().unwrap();
-        let Some(security_provider) = controller.get_security_provider_mut(self.this_sp) else {
+        let Some(security_provider) = self.tper.get_security_provider_mut(self.session.sp()) else {
             return Err(MethodStatus::TPerMalfunction);
         };
         security_provider.gen_key(credential_id, public_exponent, pin_length)
     }
 
     pub fn get_acl(
-        &self,
+        &mut self,
         invoking_id: UID,
         acl_invoking_id: UID,
         acl_method_id: MethodRef,
@@ -147,53 +149,46 @@ impl SecurityProviderSession {
         if invoking_id != table_id::ACCESS_CONTROL.as_uid() {
             return Err(MethodStatus::InvalidParameter);
         }
-        let mut controller = self.controller.lock().unwrap();
-        let Some(security_provider) = controller.get_security_provider_mut(self.this_sp) else {
+        let Some(security_provider) = self.tper.get_security_provider_mut(self.session.sp()) else {
             return Err(MethodStatus::TPerMalfunction);
         };
         security_provider.get_acl(acl_invoking_id, acl_method_id)
     }
 
     pub fn revert(&mut self, invoking_id: UID) -> Result<(), MethodStatus> {
-        let mut controller = self.controller.lock().unwrap();
-        if self.this_sp != sp::ADMIN {
+        if self.session.sp() != sp::ADMIN {
             return Err(MethodStatus::NotAuthorized);
         }
         let Ok(sp) = invoking_id.try_into() else {
             return Err(MethodStatus::InvalidParameter);
         };
-        controller.revert(sp).map(|reverted| {
-            self.reverted = reverted;
-            ()
+        self.tper.revert(sp).map(|reverted| {
+            self.session.reverted_sps = reverted;
         })
     }
 
     pub fn revert_sp(&mut self, invoking_id: UID, keep_global_range_key: Option<bool>) -> Result<(), MethodStatus> {
-        let mut controller = self.controller.lock().unwrap();
         if invoking_id != THIS_SP {
             return Err(MethodStatus::InvalidParameter);
         };
-        controller.revert_sp(self.this_sp, keep_global_range_key).map(|reverted| {
-            self.reverted = reverted;
-            ()
+        self.tper.revert_sp(self.session.sp(), keep_global_range_key).map(|reverted| {
+            self.session.reverted_sps = reverted;
         })
     }
 
-    pub fn activate(&self, invoking_id: UID) -> Result<(), MethodStatus> {
-        let mut controller = self.controller.lock().unwrap();
-        if self.this_sp != sp::ADMIN {
+    pub fn activate(&mut self, invoking_id: UID) -> Result<(), MethodStatus> {
+        if self.session.sp() != sp::ADMIN {
             return Err(MethodStatus::NotAuthorized);
         }
         let Ok(sp) = invoking_id.try_into() else {
             return Err(MethodStatus::InvalidParameter);
         };
-        controller.activate(sp)
+        self.tper.activate(sp)
     }
 
     fn push_authenticated(&mut self, authority: AuthorityRef) {
         let class = {
-            let controller = self.controller.lock().unwrap();
-            let Some(sp) = controller.get_security_provider(self.this_sp) else {
+            let Some(sp) = self.tper.get_security_provider(self.session.sp()) else {
                 return;
             };
             let Some(auth_table) = sp.get_object_table_specific::<AuthorityTable>(table_id::AUTHORITY) else {
@@ -205,11 +200,11 @@ impl SecurityProviderSession {
             auth_obj.class
         };
         if class != AuthorityRef::null() {
-            self.authenticated.push(class);
+            self.session.authenticated.push(class);
         }
-        self.authenticated.push(authority);
-        self.authenticated.sort();
-        self.authenticated.dedup();
+        self.session.authenticated.push(authority);
+        self.session.authenticated.sort();
+        self.session.authenticated.dedup();
     }
 }
 

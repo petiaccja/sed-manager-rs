@@ -79,6 +79,10 @@ impl MethodCall {
 }
 
 impl MethodResult {
+    pub fn new_fail(status: MethodStatus) -> Self {
+        Self { results: vec![], status }
+    }
+
     pub fn take_results(self) -> Result<Vec<Value>, MethodStatus> {
         match self.status {
             MethodStatus::Success => Ok(self.results),

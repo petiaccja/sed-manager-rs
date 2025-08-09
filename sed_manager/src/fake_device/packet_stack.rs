@@ -21,18 +21,18 @@ use crate::spec::basic_types::{List, NamedValue};
 use crate::spec::column_types::{AuthorityRef, MaxBytes32, MethodRef, SPRef};
 use crate::spec::{invoking_id::*, method_id::*, sm_method_id::*};
 
-use super::data::Controller;
-use super::security_provider_session::SecurityProviderSession;
+use super::data::TPer;
+use super::sp_session::SPSession;
 
 pub struct PacketStack {
-    controller: Arc<Mutex<Controller>>,
+    controller: Arc<Mutex<TPer>>,
     capabilities: Properties,
     properties: Properties,
-    security_provider_sessions: HashMap<SessionIdentifier, SecurityProviderSession>,
+    security_provider_sessions: HashMap<SessionIdentifier, SPSession>,
 }
 
 impl PacketStack {
-    pub fn new(capabilities: Properties, controller: Arc<Mutex<Controller>>) -> Self {
+    pub fn new(capabilities: Properties, controller: Arc<Mutex<TPer>>) -> Self {
         Self {
             controller,
             capabilities,
@@ -42,7 +42,7 @@ impl PacketStack {
     }
 
     pub fn active_sessions(&self) -> Vec<(SessionIdentifier, SPRef)> {
-        self.security_provider_sessions.iter().map(|(id, sp_session)| (*id, sp_session.this_sp())).collect()
+        self.security_provider_sessions.iter().map(|(id, sp_session)| (*id, sp_session.sp())).collect()
     }
 
     pub fn dispatch_packet(&mut self, request: Packet) -> Vec<Packet> {
@@ -122,15 +122,15 @@ impl PacketStack {
         extended_args.append(&mut call.args);
 
         let result = match method_id {
-            AUTHENTICATE => call_generic_sp_session(sp_session, SecurityProviderSession::authenticate, extended_args),
-            GET => call_generic_sp_session(sp_session as &_, SecurityProviderSession::get, extended_args),
-            SET => call_generic_sp_session(sp_session, SecurityProviderSession::set, extended_args),
-            NEXT => call_generic_sp_session(sp_session as &_, SecurityProviderSession::next, extended_args),
-            GEN_KEY => call_generic_sp_session(sp_session, SecurityProviderSession::gen_key, extended_args),
-            GET_ACL => call_generic_sp_session(sp_session as &_, SecurityProviderSession::get_acl, extended_args),
-            REVERT => call_generic_sp_session(sp_session, SecurityProviderSession::revert, extended_args),
-            REVERT_SP => call_generic_sp_session(sp_session, SecurityProviderSession::revert_sp, extended_args),
-            ACTIVATE => call_generic_sp_session(sp_session as &_, SecurityProviderSession::activate, extended_args),
+            AUTHENTICATE => call_generic_sp_session(sp_session, SPSession::authenticate, extended_args),
+            GET => call_generic_sp_session(sp_session as &_, SPSession::get, extended_args),
+            SET => call_generic_sp_session(sp_session, SPSession::set, extended_args),
+            NEXT => call_generic_sp_session(sp_session as &_, SPSession::next, extended_args),
+            GEN_KEY => call_generic_sp_session(sp_session, SPSession::gen_key, extended_args),
+            GET_ACL => call_generic_sp_session(sp_session as &_, SPSession::get_acl, extended_args),
+            REVERT => call_generic_sp_session(sp_session, SPSession::revert, extended_args),
+            REVERT_SP => call_generic_sp_session(sp_session, SPSession::revert_sp, extended_args),
+            ACTIVATE => call_generic_sp_session(sp_session as &_, SPSession::activate, extended_args),
             _ => Some(PackagedMethod::Result(invalid_parameter)),
         };
         let reverted = self.security_provider_sessions.get(&session_id).map(|s| s.reverted.clone()).unwrap_or(vec![]);
@@ -142,7 +142,7 @@ impl PacketStack {
         let affected_sessions: Vec<_> = self
             .security_provider_sessions
             .iter()
-            .filter(|(_, s)| reverted.contains(&s.this_sp()))
+            .filter(|(_, s)| reverted.contains(&s.sp()))
             .map(|(id, _)| *id)
             .collect();
         for id in affected_sessions {
@@ -200,7 +200,7 @@ impl PacketStack {
         match result {
             Ok(sync_session) => {
                 let id = SessionIdentifier { hsn: sync_session.0, tsn: sync_session.1 };
-                let sp_session = SecurityProviderSession::new(sp_uid, write, host_sgn_auth, self.controller.clone());
+                let sp_session = SPSession::new(sp_uid, write, host_sgn_auth, self.controller.clone());
                 self.security_provider_sessions.insert(id, sp_session);
                 Ok(sync_session)
             }

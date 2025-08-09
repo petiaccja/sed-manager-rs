@@ -14,13 +14,13 @@ use crate::spec::column_types::{AuthorityRef, BoolOrBytes, LifeCycleState, SPRef
 use crate::spec::opal::admin;
 use crate::spec::table_id;
 
-pub struct Controller {
+pub struct TPer {
     security_providers: HashMap<SPRef, SecurityProvider>,
     sp_factory: Box<dyn Fn(SPRef) -> SecurityProvider + Send + Sync + 'static>,
     tper_session_number: AtomicU32,
 }
 
-impl Controller {
+impl TPer {
     pub fn new(sp_factory: impl Fn(SPRef) -> SecurityProvider + Send + Sync + 'static, sp_list: &[SPRef]) -> Self {
         Self {
             security_providers: sp_list.iter().map(|sp_ref| (*sp_ref, sp_factory(*sp_ref))).collect(),

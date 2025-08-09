@@ -13,7 +13,7 @@ use crate::serialization::{OutputStream, Serialize};
 use crate::spec::column_types::LifeCycleState;
 use crate::spec::{self, table_id};
 
-use super::data::Controller;
+use super::data::TPer;
 
 pub const BASE_COM_ID: u16 = 4100;
 pub const NUM_COM_IDS: u16 = 1;
@@ -26,7 +26,7 @@ pub fn write_discovery(discovery: &Discovery, len: usize) -> Result<Vec<u8>, cra
     Ok(buffer)
 }
 
-pub fn get_discovery(properties: &Properties, controller: &Controller) -> Discovery {
+pub fn get_discovery(properties: &Properties, controller: &TPer) -> Discovery {
     Discovery::new(vec![
         get_tper_feature_desc(properties),
         get_locking_feature_desc(controller),
@@ -47,7 +47,7 @@ fn get_tper_feature_desc(properties: &Properties) -> FeatureDescriptor {
     FeatureDescriptor::TPer(desc)
 }
 
-fn get_locking_feature_desc(controller: &Controller) -> FeatureDescriptor {
+fn get_locking_feature_desc(controller: &TPer) -> FeatureDescriptor {
     let locking_sp = controller.get_security_provider(spec::opal::admin::sp::LOCKING).unwrap();
     let locking_enabled =
         controller.get_life_cycle_state(spec::opal::admin::sp::LOCKING) == Ok(LifeCycleState::Manufactured);

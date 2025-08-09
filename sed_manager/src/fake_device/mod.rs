@@ -5,11 +5,14 @@
 //L-----------------------------------------------------------------------------
 
 mod com_id_session;
+mod control_session;
+mod control_session_dispatcher;
 pub mod data;
 mod device;
 mod discovery;
 mod packet_stack;
-mod security_provider_session;
+mod sp_session;
+mod sp_session_dispatcher;
 
 pub use device::FakeDevice;
 

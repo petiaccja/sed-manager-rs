@@ -15,7 +15,7 @@ use crate::rpc::{Properties, SessionIdentifier};
 use crate::spec::column_types::SPRef;
 
 use super::com_id_session::ComIDSession;
-use super::data::Controller;
+use super::data::TPer;
 use super::discovery::{get_discovery, write_discovery, BASE_COM_ID, NUM_COM_IDS};
 
 const ROUTE_DISCOVERY: Route = Route { protocol: 0x01, com_id: 0x0001 };
@@ -44,7 +44,7 @@ const CAPABILITIES: Properties = Properties {
 pub struct FakeDevice {
     capabilities: Properties,
     sessions: Mutex<HashMap<u16, ComIDSession>>,
-    controller: Arc<Mutex<Controller>>,
+    controller: Arc<Mutex<TPer>>,
 }
 
 #[derive(PartialEq, Eq)]
@@ -75,7 +75,7 @@ impl FakeDevice {
         sessions.iter().map(|session| session.1.active_sessions()).flatten().collect()
     }
 
-    pub fn controller(&self) -> Arc<Mutex<Controller>> {
+    pub fn controller(&self) -> Arc<Mutex<TPer>> {
         self.controller.clone()
     }
 }
