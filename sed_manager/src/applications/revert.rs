@@ -67,7 +67,7 @@ mod tests {
         {
             let controller = device.controller();
             let mut controller = controller.lock().unwrap();
-            let admin_sp = controller.get_security_provider_mut(spec::opal::admin::sp::ADMIN).unwrap();
+            let admin_sp = controller.get_sp_mut(spec::opal::admin::sp::ADMIN).unwrap();
             let c_pin_table: &mut CPINTable = admin_sp.get_object_table_specific_mut(table_id::C_PIN).unwrap();
             let sid_c_pin = c_pin_table.get_mut(&spec::opal::admin::c_pin::SID).unwrap();
             sid_c_pin.pin = sid_password.into();
@@ -86,7 +86,7 @@ mod tests {
         {
             let controller = device.controller();
             let mut controller = controller.lock().unwrap();
-            let admin_sp = controller.get_security_provider_mut(spec::opal::admin::sp::ADMIN).unwrap();
+            let admin_sp = controller.get_sp_mut(spec::opal::admin::sp::ADMIN).unwrap();
             let c_pin_table: &mut CPINTable = admin_sp.get_object_table_specific_mut(table_id::C_PIN).unwrap();
             let sid_c_pin = c_pin_table.get_mut(&spec::opal::admin::c_pin::SID).unwrap();
             sid_c_pin.pin = sid_password.into();

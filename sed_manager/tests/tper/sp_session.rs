@@ -330,7 +330,7 @@ async fn activate() -> Result<(), RPCError> {
         assert_eq!(locking_sp_lcs, LifeCycleState::Manufactured);
     }
     {
-        let locking_sp = controller.get_security_provider(sp::LOCKING).unwrap();
+        let locking_sp = controller.get_sp(sp::LOCKING).unwrap();
         let c_pin: &CPINTable = locking_sp.get_object_table_specific(table_id::C_PIN).unwrap();
         let c_pin_admin1 = c_pin.get(&spec::opal::locking::c_pin::ADMIN.nth(1).unwrap()).unwrap();
         assert_eq!(c_pin_admin1.pin.as_slice(), MSID_PASSWORD.as_bytes());

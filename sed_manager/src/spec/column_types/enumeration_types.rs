@@ -16,7 +16,7 @@ define_column_type!(Year, 0x0000_0005_0000_0416_u64, "year_enum");
 define_column_type!(LogSelect, 0x0000_0005_0000_040C_u64, "log_select");
 
 #[repr(u8)]
-#[derive(EnumerationType, PartialEq, Eq, Clone, Debug)]
+#[derive(EnumerationType, PartialEq, Eq, Clone, Copy, Debug)]
 pub enum LifeCycleState {
     Issued = 0,
     IssuedDisabled = 1,

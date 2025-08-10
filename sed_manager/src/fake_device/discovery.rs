@@ -48,7 +48,7 @@ fn get_tper_feature_desc(properties: &Properties) -> FeatureDescriptor {
 }
 
 fn get_locking_feature_desc(controller: &TPer) -> FeatureDescriptor {
-    let locking_sp = controller.get_security_provider(spec::opal::admin::sp::LOCKING).unwrap();
+    let locking_sp = controller.get_sp(spec::opal::admin::sp::LOCKING).unwrap();
     let locking_enabled =
         controller.get_life_cycle_state(spec::opal::admin::sp::LOCKING) == Ok(LifeCycleState::Manufactured);
 

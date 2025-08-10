@@ -3,11 +3,11 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::fake_device::data::access_control_table::AccessControlTable;
 use crate::fake_device::data::byte_table::ByteTable;
-use crate::fake_device::data::object_table::{AuthorityTable, CPINTable, GenericTable, KAES256Table};
+use crate::fake_device::data::object_table::{ACETable, AuthorityTable, CPINTable, GenericTable, KAES256Table};
 use crate::messaging::uid::{TableUID, UID};
 use crate::messaging::value::{Bytes, Named, Value};
 use crate::rpc::MethodStatus;
@@ -16,6 +16,7 @@ use crate::spec::column_types::{
     ACERef, AuthorityRef, BoolOrBytes, BytesOrRowValues, CPINRef, CellBlock, CellBlockWrite, CredentialRef, KAES256Ref,
     Key256, MethodRef,
 };
+use crate::spec::objects::{ACEExpr as _, ACE};
 use crate::spec::table_id;
 
 pub struct SecurityProvider {
@@ -200,4 +201,45 @@ impl SecurityProvider {
         }
         Ok(List(uids))
     }
+
+    pub fn is_authorized(
+        &self,
+        authorities: &[AuthorityRef],
+        invoking_id: UID,
+        method_id: MethodRef,
+        columns: &[u16],
+    ) -> bool {
+        let Ok(acl) = self.get_acl(invoking_id, method_id) else {
+            return false;
+        };
+        let aces = acl
+            .iter()
+            .map(|ace_ref| self.get_ace(*ace_ref))
+            .collect::<Option<Vec<_>>>()
+            .expect("invalid device configuration: dangling ACERef");
+        is_authorized(authorities, &aces, columns)
+    }
+
+    fn get_ace(&self, ace_ref: ACERef) -> Option<&ACE> {
+        let ace_table: &ACETable = self.get_object_table_specific(table_id::ACE)?;
+        ace_table.get(&ace_ref)
+    }
+}
+
+fn is_authorized(authorities: &[AuthorityRef], aces: &[&ACE], columns: &[u16]) -> bool {
+    let mut authorized_columns = HashSet::new();
+    let mut all_columns = false;
+    for ace in aces {
+        let ace_expr = &ace.boolean_expr;
+        let is_authorized = ace_expr.eval(authorities).expect("invalid device configuration: ACE expression invalid");
+        if is_authorized {
+            if ace.columns.is_empty() {
+                all_columns = true;
+            }
+            for column in ace.columns.iter() {
+                authorized_columns.insert(column);
+            }
+        }
+    }
+    all_columns || columns.iter().all(|column| authorized_columns.contains(column))
 }
