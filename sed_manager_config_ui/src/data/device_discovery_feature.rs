@@ -132,16 +132,14 @@ impl From<&BlockSIDAuthDescriptor> for DeviceDiscoveryFeature {
     fn from(value: &BlockSIDAuthDescriptor) -> Self {
         let name = format!("{} features", value.feature_code());
         let properties = vec![
-            NameValuePair::new("SID's PIN same as MSID".into(), yes_or_no(value.sid_pin_same_as_msid).into()),
-            NameValuePair::new(
-                "SID's authentication blocked".into(),
-                yes_or_no(value.sid_authentication_blocked).into(),
-            ),
+            NameValuePair::new("SID & MSID PIN differ".into(), yes_or_no(value.sid_msid_pin_differ).into()),
+            NameValuePair::new("SID authentication blocked".into(), yes_or_no(value.sid_authentication_blocked).into()),
             NameValuePair::new(
                 "Locking SP freeze supported".into(),
                 yes_or_no(value.locking_sp_freeze_supported).into(),
             ),
             NameValuePair::new("Locking SP frozen".into(), yes_or_no(value.locking_sp_frozen).into()),
+            NameValuePair::new("Hardware reset unblocks".into(), yes_or_no(value.hw_reset_unblocks).into()),
         ];
         Self::new(name, properties)
     }

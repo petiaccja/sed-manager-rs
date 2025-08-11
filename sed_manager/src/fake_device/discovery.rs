@@ -3,10 +3,10 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use crate::fake_device::data::object_table::{LockingTable, MBRControlTable};
+use crate::fake_device::data::object_table::{CPINTable, LockingTable, MBRControlTable};
 use crate::messaging::discovery::{
-    Discovery, FeatureDescriptor, GeometryDescriptor, LockingDescriptor, OpalV2Descriptor, OwnerPasswordState,
-    TPerDescriptor,
+    BlockSIDAuthDescriptor, Discovery, FeatureDescriptor, GeometryDescriptor, LockingDescriptor, OpalV2Descriptor,
+    OwnerPasswordState, TPerDescriptor,
 };
 use crate::rpc::Properties;
 use crate::serialization::{OutputStream, Serialize};
@@ -26,13 +26,17 @@ pub fn write_discovery(discovery: &Discovery, len: usize) -> Result<Vec<u8>, cra
     Ok(buffer)
 }
 
-pub fn get_discovery(properties: &Properties, controller: &SecuritySubsystemClass) -> Discovery {
-    Discovery::new(vec![
+pub fn get_discovery(properties: &Properties, ssc: &SecuritySubsystemClass) -> Discovery {
+    let mut features = vec![
         get_tper_feature_desc(properties),
-        get_locking_feature_desc(controller),
+        get_locking_feature_desc(ssc),
         get_ssc_feature_desc(),
         get_geometry_feature_desc(),
-    ])
+    ];
+    if let Some(block_sid_auth_desc) = get_block_sid_authentication_desc(ssc) {
+        features.push(block_sid_auth_desc.into());
+    }
+    Discovery::new(features)
 }
 
 fn get_tper_feature_desc(properties: &Properties) -> FeatureDescriptor {
@@ -47,10 +51,9 @@ fn get_tper_feature_desc(properties: &Properties) -> FeatureDescriptor {
     FeatureDescriptor::TPer(desc)
 }
 
-fn get_locking_feature_desc(controller: &SecuritySubsystemClass) -> FeatureDescriptor {
-    let locking_sp = controller.get_sp(spec::opal::admin::sp::LOCKING).unwrap();
-    let locking_enabled =
-        controller.get_life_cycle_state(spec::opal::admin::sp::LOCKING) == Ok(LifeCycleState::Manufactured);
+fn get_locking_feature_desc(ssc: &SecuritySubsystemClass) -> FeatureDescriptor {
+    let locking_sp = ssc.get_sp(spec::opal::admin::sp::LOCKING).unwrap();
+    let locking_enabled = ssc.get_life_cycle_state(spec::opal::admin::sp::LOCKING) == Ok(LifeCycleState::Manufactured);
 
     let locking_table: &LockingTable = locking_sp.get_object_table_specific(table_id::LOCKING).unwrap();
     let locked = locking_table.values().any(|range| range.read_locked || range.write_locked);
@@ -90,4 +93,18 @@ fn get_geometry_feature_desc() -> FeatureDescriptor {
     let desc =
         GeometryDescriptor { align: true, logical_block_size: 512, alignment_granularity: 16, lowest_aligned_lba: 4 };
     FeatureDescriptor::Geometry(desc)
+}
+
+fn get_block_sid_authentication_desc(ssc: &SecuritySubsystemClass) -> Option<FeatureDescriptor> {
+    let admin_sp = ssc.get_admin_sp()?;
+    let c_pin_table: &CPINTable = admin_sp.get_object_table_specific(table_id::C_PIN)?;
+    let c_pin_sid = c_pin_table.get(&spec::opal::admin::c_pin::SID)?;
+    let c_pin_msid = c_pin_table.get(&spec::opal::admin::c_pin::MSID)?;
+    Some(FeatureDescriptor::BlockSIDAuth(BlockSIDAuthDescriptor {
+        locking_sp_frozen: false,
+        locking_sp_freeze_supported: false,
+        sid_authentication_blocked: false,
+        sid_msid_pin_differ: c_pin_sid.pin != c_pin_msid.pin,
+        hw_reset_unblocks: false,
+    }))
 }

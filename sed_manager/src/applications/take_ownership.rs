@@ -4,7 +4,7 @@
 //L-----------------------------------------------------------------------------
 
 use crate::applications::utility::get_admin_sp;
-use crate::messaging::discovery::{Discovery, LockingDescriptor};
+use crate::messaging::discovery::{BlockSIDAuthDescriptor, Discovery, LockingDescriptor};
 use crate::spec;
 use crate::spec::column_types::Password;
 use crate::spec::objects::CPIN;
@@ -13,10 +13,16 @@ use crate::tper::TPer;
 use super::error::Error;
 
 pub fn is_taking_ownership_supported(discovery: &Discovery) -> bool {
-    if let Some(locking_desc) = discovery.get::<LockingDescriptor>() {
-        // We cannot reliably tell from the discovery if someone has already taken
-        // ownership of the device. However, if locking is enabled, someone definitely has
-        // taken ownership, therefore taking ownership is not supported anymore.
+    if let Some(block_sid_auth_desc) = discovery.get::<BlockSIDAuthDescriptor>() {
+        // If the SID PIN has already been changed from the MSID PIN, someone
+        // has taken ownership.
+        !block_sid_auth_desc.sid_msid_pin_differ
+    } else if let Some(locking_desc) = discovery.get::<LockingDescriptor>() {
+        // If there is not block SID authentication descriptor, then we cannot
+        // tell from only the discovery if the SID PIN has been changed.
+        //
+        // However, if someone has activated locking, we can assume they have
+        // taken ownership, even if they haven't changed the SID PIN.
         !locking_desc.locking_enabled
     } else {
         // Otherwise, taking ownership is always supported.

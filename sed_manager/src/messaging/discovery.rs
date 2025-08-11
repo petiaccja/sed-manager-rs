@@ -156,7 +156,7 @@ pub struct BlockSIDAuthDescriptor {
     #[layout(offset = 0, bit_field(u8, 1))]
     pub sid_authentication_blocked: bool,
     #[layout(offset = 0, bit_field(u8, 0))]
-    pub sid_pin_same_as_msid: bool,
+    pub sid_msid_pin_differ: bool,
     #[layout(offset = 1, bit_field(u8, 0))]
     pub hw_reset_unblocks: bool,
 }
