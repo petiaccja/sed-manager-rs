@@ -139,6 +139,7 @@ impl From<&BlockSIDAuthDescriptor> for DeviceDiscoveryFeature {
                 yes_or_no(value.locking_sp_freeze_supported).into(),
             ),
             NameValuePair::new("Locking SP frozen".into(), yes_or_no(value.locking_sp_frozen).into()),
+            NameValuePair::new("Hardware reset unblocks".into(), yes_or_no(value.hw_reset_unblocks).into()),
         ];
         Self::new(name, properties)
     }
