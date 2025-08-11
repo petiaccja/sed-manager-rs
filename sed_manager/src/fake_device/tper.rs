@@ -76,9 +76,11 @@ impl TPer {
     > {
         let session_id = self.protocol_stack.add_session(sp_uid, hsn);
         if let Some(authority) = host_sgn_auth {
-            if let Err(err) = self.sp_session(session_id).unwrap().authenticate(THIS_SP, authority, host_challenge) {
+            if (BoolOrBytes::Bool(true),)
+                != self.sp_session(session_id).unwrap().authenticate(THIS_SP, authority, host_challenge)?
+            {
                 self.protocol_stack.remove_session(session_id);
-                return Err(err);
+                return Err(MethodStatus::NotAuthorized);
             }
         }
         self.sp_session(session_id).unwrap().commit_authentication(authority::ANYBODY).unwrap();
