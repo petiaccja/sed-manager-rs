@@ -1,3 +1,8 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
 /// The God authority can perform any action and modify any table without password authentication.
 ///
 /// This is useful for testing to bypass access control.
