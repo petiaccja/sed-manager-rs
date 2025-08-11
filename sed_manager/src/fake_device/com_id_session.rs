@@ -7,7 +7,7 @@ use std::collections::VecDeque as Queue;
 
 use crate::device::Error;
 use crate::fake_device::dispatch::dispatch;
-use crate::fake_device::firmware::Firmware;
+use crate::fake_device::tper::TPer;
 use crate::messaging::com_id::{
     ComIdRequestCode, ComIdState, HandleComIdRequest, HandleComIdResponse, StackResetResponsePayload, StackResetStatus,
     VerifyComIdValidResponsePayload,
@@ -33,7 +33,7 @@ impl ComIDSession {
         self.com_id
     }
 
-    pub fn on_security_send_com(&mut self, firmware: &mut Firmware, data: &[u8]) -> Result<(), Error> {
+    pub fn on_security_send_com(&mut self, firmware: &mut TPer, data: &[u8]) -> Result<(), Error> {
         let Ok(request) = HandleComIdRequest::from_bytes(data.into()) else {
             return Ok(());
         };
@@ -42,7 +42,7 @@ impl ComIDSession {
         Ok(())
     }
 
-    pub fn on_security_send_packet(&mut self, firmware: &mut Firmware, data: &[u8]) -> Result<(), Error> {
+    pub fn on_security_send_packet(&mut self, firmware: &mut TPer, data: &[u8]) -> Result<(), Error> {
         let Ok(request) = ComPacket::from_bytes(data.into()) else {
             return Ok(());
         };
@@ -86,7 +86,7 @@ impl ComIDSession {
         }
     }
 
-    fn process_com_handle(&mut self, firmware: &mut Firmware, request: HandleComIdRequest) -> HandleComIdResponse {
+    fn process_com_handle(&mut self, firmware: &mut TPer, request: HandleComIdRequest) -> HandleComIdResponse {
         match request.request_code {
             ComIdRequestCode::VerifyComIdValid => self.verify_com_id_valid(request.com_id, request.com_id_ext),
             ComIdRequestCode::StackReset => self.reset_stack(firmware, request.com_id, request.com_id_ext),
@@ -96,7 +96,7 @@ impl ComIDSession {
         }
     }
 
-    fn process_com_packet(&mut self, firmware: &mut Firmware, com_packet: ComPacket) -> Vec<ComPacket> {
+    fn process_com_packet(&mut self, firmware: &mut TPer, com_packet: ComPacket) -> Vec<ComPacket> {
         let responses: Vec<_> = com_packet
             .payload
             .into_vec()
@@ -117,13 +117,13 @@ impl ComIDSession {
         com_packets
     }
 
-    fn reset_stack(&mut self, firmware: &mut Firmware, com_id: u16, com_id_ext: u16) -> HandleComIdResponse {
+    fn reset_stack(&mut self, firmware: &mut TPer, com_id: u16, com_id_ext: u16) -> HandleComIdResponse {
         // In order to reset other sessions' stacks, the sessions would have to know about each other.
         // This is permitted by the spec, but I don't see a reason to implemented for only testing purposes.
         let payload = if com_id == self.com_id && self.com_id_ext == com_id_ext {
             self.com_queue.clear();
             self.packet_queue.clear();
-            firmware.transient.reset();
+            firmware.protocol_stack.reset();
             StackResetResponsePayload { stack_reset_status: StackResetStatus::Success }
         } else {
             StackResetResponsePayload { stack_reset_status: StackResetStatus::Failure }

@@ -12,19 +12,19 @@ use crate::spec::column_types::{AuthorityRef, SPRef};
 const INITIAL_TSN: u32 = 500;
 const INITIAL_PROPERTIES: Properties = Properties::ASSUMED;
 
-pub struct Transient {
-    sp_sessions: HashMap<SessionIdentifier, SPSessionState>,
+pub struct ProtocolStack {
+    sp_sessions: HashMap<SessionIdentifier, SPSessionData>,
     next_tsn: AtomicU32,
     pub capabilities: Properties,
     pub properties: Properties,
 }
 
-pub struct SPSessionState {
+pub struct SPSessionData {
     pub sp: SPRef,
     pub authenticated: Vec<AuthorityRef>,
 }
 
-impl Transient {
+impl ProtocolStack {
     pub fn new(capabilities: Properties) -> Self {
         Self {
             sp_sessions: HashMap::new(),
@@ -36,7 +36,7 @@ impl Transient {
 
     pub fn add_session(&mut self, sp: SPRef, hsn: u32) -> SessionIdentifier {
         let session_id = self.next_session_id(hsn);
-        let session = SPSessionState { sp, authenticated: vec![] };
+        let session = SPSessionData { sp, authenticated: vec![] };
         self.sp_sessions.insert(session_id, session);
         session_id
     }
@@ -49,11 +49,11 @@ impl Transient {
         self.sp_sessions.keys()
     }
 
-    pub fn get_session(&self, session_id: SessionIdentifier) -> Option<&SPSessionState> {
+    pub fn get_session(&self, session_id: SessionIdentifier) -> Option<&SPSessionData> {
         self.sp_sessions.get(&session_id)
     }
 
-    pub fn get_session_mut(&mut self, session_id: SessionIdentifier) -> Option<&mut SPSessionState> {
+    pub fn get_session_mut(&mut self, session_id: SessionIdentifier) -> Option<&mut SPSessionData> {
         self.sp_sessions.get_mut(&session_id)
     }
 

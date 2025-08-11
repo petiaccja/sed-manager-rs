@@ -5,6 +5,10 @@
 
 use std::sync::Arc;
 
+use sed_manager::applications::test_fixtures::make_activated_device;
+use sed_manager::applications::test_fixtures::make_owned_device;
+use sed_manager::applications::test_fixtures::setup_activated_tper;
+use sed_manager::applications::test_fixtures::SID_PASSWORD;
 use sed_manager::fake_device::data::object_table::CPINTable;
 use sed_manager::fake_device::god_authority::AUTHORITY_GOD;
 use sed_manager::fake_device::FakeDevice;
@@ -168,10 +172,7 @@ async fn set_invalid_type() -> Result<(), RPCError> {
 
 #[tokio::test]
 async fn read_success() -> Result<(), RPCError> {
-    let runtime = Arc::new(TokioRuntime::new());
-    let device = Arc::new(FakeDevice::new());
-    device.controller().lock().unwrap().activate(sp::LOCKING)?;
-    let tper = TPer::new_on_default_com_id(device, runtime)?;
+    let tper = setup_activated_tper();
     let session = tper.start_session(sp::LOCKING, None, None).await?;
     let bytes = session.read(table_id::MBR, 0, 1000).await?;
     assert_eq!(bytes.len(), 1000);
@@ -180,10 +181,7 @@ async fn read_success() -> Result<(), RPCError> {
 
 #[tokio::test]
 async fn read_failure_start_oor() -> Result<(), RPCError> {
-    let runtime = Arc::new(TokioRuntime::new());
-    let device = Arc::new(FakeDevice::new());
-    device.controller().lock().unwrap().activate(sp::LOCKING)?;
-    let tper = TPer::new_on_default_com_id(device, runtime)?;
+    let tper = setup_activated_tper();
     let session = tper.start_session(sp::LOCKING, None, None).await?;
     let result = session.read(table_id::MBR, 1024 * 1024 * 1024, 1000).await;
     assert_eq!(result, Err(MethodStatus::InsufficientRows.into()));
@@ -192,10 +190,7 @@ async fn read_failure_start_oor() -> Result<(), RPCError> {
 
 #[tokio::test]
 async fn read_failure_end_oor() -> Result<(), RPCError> {
-    let runtime = Arc::new(TokioRuntime::new());
-    let device = Arc::new(FakeDevice::new());
-    device.controller().lock().unwrap().activate(sp::LOCKING)?;
-    let tper = TPer::new_on_default_com_id(device, runtime)?;
+    let tper = setup_activated_tper();
     let session = tper.start_session(sp::LOCKING, None, None).await?;
     let result = session.read(table_id::MBR, 1000, 1024 * 1024 * 1024).await;
     assert_eq!(result, Err(MethodStatus::InsufficientRows.into()));
@@ -204,10 +199,7 @@ async fn read_failure_end_oor() -> Result<(), RPCError> {
 
 #[tokio::test]
 async fn write_success() -> Result<(), RPCError> {
-    let runtime = Arc::new(TokioRuntime::new());
-    let device = Arc::new(FakeDevice::new());
-    device.controller().lock().unwrap().activate(sp::LOCKING)?;
-    let tper = TPer::new_on_default_com_id(device, runtime)?;
+    let tper = setup_activated_tper();
     let session = tper.start_session(sp::LOCKING, Some(AUTHORITY_GOD), None).await?;
     session.write(table_id::MBR, 0, &[1, 2, 3, 4]).await?;
     Ok(())
@@ -215,10 +207,7 @@ async fn write_success() -> Result<(), RPCError> {
 
 #[tokio::test]
 async fn write_failure_start_oor() -> Result<(), RPCError> {
-    let runtime = Arc::new(TokioRuntime::new());
-    let device = Arc::new(FakeDevice::new());
-    device.controller().lock().unwrap().activate(sp::LOCKING)?;
-    let tper = TPer::new_on_default_com_id(device, runtime)?;
+    let tper = setup_activated_tper();
     let session = tper.start_session(sp::LOCKING, Some(AUTHORITY_GOD), None).await?;
     let result = session.write(table_id::MBR, 1024 * 1024 * 1024, &[1, 2, 3, 4]).await;
     assert_eq!(result, Err(MethodStatus::InsufficientRows.into()));
@@ -227,10 +216,7 @@ async fn write_failure_start_oor() -> Result<(), RPCError> {
 
 #[tokio::test]
 async fn write_failure_end_oor() -> Result<(), RPCError> {
-    let runtime = Arc::new(TokioRuntime::new());
-    let device = Arc::new(FakeDevice::new());
-    device.controller().lock().unwrap().activate(sp::LOCKING)?;
-    let tper = TPer::new_on_default_com_id(device, runtime)?;
+    let tper = setup_activated_tper();
     let session = tper.start_session(sp::LOCKING, Some(AUTHORITY_GOD), None).await?;
     let result = session.write(table_id::MBR, 128 * 1024 * 1024 - 2, &[1, 2, 3, 4]).await;
     assert_eq!(result, Err(MethodStatus::InsufficientRows.into()));
@@ -239,10 +225,7 @@ async fn write_failure_end_oor() -> Result<(), RPCError> {
 
 #[tokio::test]
 async fn write_failure_too_large() -> Result<(), RPCError> {
-    let runtime = Arc::new(TokioRuntime::new());
-    let device = Arc::new(FakeDevice::new());
-    device.controller().lock().unwrap().activate(sp::LOCKING)?;
-    let tper = TPer::new_on_default_com_id(device, runtime)?;
+    let tper = setup_activated_tper();
     let session = tper.start_session(sp::LOCKING, Some(AUTHORITY_GOD), None).await?;
     let result = session.write(table_id::MBR, 0, &[0; 1024 * 1024]).await;
     assert_eq!(result, Err(RPCError::TokenTooLarge));
@@ -317,24 +300,19 @@ async fn get_acl() -> Result<(), RPCError> {
 async fn activate() -> Result<(), RPCError> {
     use opal::admin::authority;
     let runtime = Arc::new(TokioRuntime::new());
-    let device = Arc::new(FakeDevice::new());
+    let device = Arc::new(make_owned_device());
     let tper = TPer::new_on_default_com_id(device.clone(), runtime)?;
-    let session = tper.start_session(sp::ADMIN, Some(authority::SID), Some(MSID_PASSWORD.as_bytes())).await?;
+    let session = tper.start_session(sp::ADMIN, Some(authority::SID), Some(SID_PASSWORD.as_bytes())).await?;
     let _ = session.activate(sp::LOCKING).await?;
 
-    let controller = device.controller();
-    let controller = controller.lock().unwrap();
-
-    {
-        let locking_sp_lcs = controller.get_life_cycle_state(sp::LOCKING)?;
+    device.with_tper(|tper| {
+        let locking_sp_lcs = tper.ssc.get_life_cycle_state(sp::LOCKING).expect("life cycle state expected");
         assert_eq!(locking_sp_lcs, LifeCycleState::Manufactured);
-    }
-    {
-        let locking_sp = controller.get_sp(sp::LOCKING).unwrap();
+        let locking_sp = tper.ssc.get_sp(sp::LOCKING).unwrap();
         let c_pin: &CPINTable = locking_sp.get_object_table_specific(table_id::C_PIN).unwrap();
         let c_pin_admin1 = c_pin.get(&spec::opal::locking::c_pin::ADMIN.nth(1).unwrap()).unwrap();
-        assert_eq!(c_pin_admin1.pin.as_slice(), MSID_PASSWORD.as_bytes());
-    }
+        assert_eq!(c_pin_admin1.pin.as_slice(), SID_PASSWORD.as_bytes());
+    });
     Ok(())
 }
 
@@ -342,22 +320,16 @@ async fn activate() -> Result<(), RPCError> {
 async fn revert() -> Result<(), RPCError> {
     use opal::admin::authority;
     let runtime = Arc::new(TokioRuntime::new());
-    let device = Arc::new(FakeDevice::new());
-
-    // Activate the locking SP.
-    device.controller().lock().unwrap().activate(sp::LOCKING)?;
+    let device = Arc::new(make_activated_device());
 
     let tper = TPer::new_on_default_com_id(device.clone(), runtime)?;
-    let session = tper.start_session(sp::ADMIN, Some(authority::SID), Some(MSID_PASSWORD.as_bytes())).await?;
+    let session = tper.start_session(sp::ADMIN, Some(authority::SID), Some(SID_PASSWORD.as_bytes())).await?;
     let _ = session.revert(sp::LOCKING).await?;
 
-    // Is the locking SP deactivated?
-    let controller = device.controller();
-    let controller = controller.lock().unwrap();
-    {
-        let locking_sp_lcs = controller.get_life_cycle_state(sp::LOCKING)?;
+    device.with_tper(|tper| {
+        let locking_sp_lcs = tper.ssc.get_life_cycle_state(sp::LOCKING).expect("life cycle state expected");
         assert_eq!(locking_sp_lcs, LifeCycleState::ManufacturedInactive);
-    }
+    });
     Ok(())
 }
 
@@ -365,24 +337,19 @@ async fn revert() -> Result<(), RPCError> {
 async fn revert_sp() -> Result<(), RPCError> {
     use opal::locking::authority;
     let runtime = Arc::new(TokioRuntime::new());
-    let device = Arc::new(FakeDevice::new());
-
-    // Activate the locking SP.
-    device.controller().lock().unwrap().activate(sp::LOCKING)?;
+    let device = Arc::new(make_activated_device());
 
     let tper = TPer::new_on_default_com_id(device.clone(), runtime)?;
     let session = tper
-        .start_session(sp::LOCKING, Some(authority::ADMIN.nth(1).unwrap()), Some(MSID_PASSWORD.as_bytes()))
+        .start_session(sp::LOCKING, Some(authority::ADMIN.nth(1).unwrap()), Some(SID_PASSWORD.as_bytes()))
         .await?;
     let _ = session.revert_sp(None).await?;
     session.abort_session();
 
     // Is the locking SP deactivated?
-    let controller = device.controller();
-    let controller = controller.lock().unwrap();
-    {
-        let locking_sp_lcs = controller.get_life_cycle_state(sp::LOCKING)?;
+    device.with_tper(|tper| {
+        let locking_sp_lcs = tper.ssc.get_life_cycle_state(sp::LOCKING).expect("life cycle state expected");
         assert_eq!(locking_sp_lcs, LifeCycleState::ManufacturedInactive);
-    }
+    });
     Ok(())
 }

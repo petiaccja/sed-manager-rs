@@ -5,38 +5,39 @@
 
 use crate::fake_device::data::object_table::AuthorityTable;
 use crate::fake_device::data::security_provider::SecurityProvider;
-use crate::fake_device::data::{object_table::CPINTable, TPer};
-use crate::fake_device::transient::Transient;
+use crate::fake_device::data::SecuritySubsystemClass;
+use crate::fake_device::protocol_stack::ProtocolStack;
 use crate::messaging::uid::UID;
 use crate::messaging::value::{Bytes, Value};
 use crate::rpc::{MethodStatus, Properties, SessionIdentifier};
 use crate::spec::basic_types::{List, NamedValue};
 use crate::spec::column_types::{
-    ACERef, AuthorityRef, BoolOrBytes, BytesOrRowValues, CellBlock, CellBlockWrite, CredentialRef, LifeCycleState,
-    MaxBytes32, MethodRef, SPRef,
+    ACERef, AuthorityRef, BoolOrBytes, BytesOrRowValues, CellBlock, CellBlockWrite, CredentialRef, MaxBytes32,
+    MethodRef, SPRef,
 };
+use crate::spec::core::authority;
 use crate::spec::invoking_id::THIS_SP;
+use crate::spec::method_id;
 use crate::spec::table_id;
-use crate::spec::{self, method_id};
 
-pub struct Firmware {
-    pub tper: TPer,
-    pub transient: Transient,
+pub struct TPer {
+    pub ssc: SecuritySubsystemClass,
+    pub protocol_stack: ProtocolStack,
     pruned_session_ids: Vec<SessionIdentifier>,
 }
 
 pub struct SPSession<'fw> {
     session_id: SessionIdentifier,
-    firmware: &'fw mut Firmware,
+    firmware: &'fw mut TPer,
 }
 
-impl Firmware {
-    pub fn new(tper: TPer, capabilities: Properties) -> Self {
-        Self { tper, transient: Transient::new(capabilities), pruned_session_ids: Vec::new() }
+impl TPer {
+    pub fn new(tper: SecuritySubsystemClass, capabilities: Properties) -> Self {
+        Self { ssc: tper, protocol_stack: ProtocolStack::new(capabilities), pruned_session_ids: Vec::new() }
     }
 
     pub fn sp_session<'me>(&'me mut self, session_id: SessionIdentifier) -> Option<SPSession<'me>> {
-        self.transient.get_session(session_id)?;
+        self.protocol_stack.get_session(session_id)?;
         Some(SPSession { session_id, firmware: self })
     }
 
@@ -50,9 +51,9 @@ impl Firmware {
     ) -> Result<(List<NamedValue<MaxBytes32, u32>>, Option<List<NamedValue<MaxBytes32, u32>>>), MethodStatus> {
         let host_properties = host_properties.unwrap_or(List::new());
         let host_properties = Properties::from_list(host_properties.as_slice());
-        let common_properties = Properties::common(&self.transient.capabilities, &host_properties);
-        self.transient.properties = common_properties.clone();
-        Ok((self.transient.capabilities.to_list(), Some(common_properties.to_list())))
+        let common_properties = Properties::common(&self.protocol_stack.capabilities, &host_properties);
+        self.protocol_stack.properties = common_properties.clone();
+        Ok((self.protocol_stack.capabilities.to_list(), Some(common_properties.to_list())))
     }
 
     pub fn start_session(
@@ -73,73 +74,43 @@ impl Firmware {
         (u32, u32, Option<Bytes>, Option<Bytes>, Option<Bytes>, Option<u32>, Option<u32>, Option<Bytes>),
         MethodStatus,
     > {
-        let session_id = self.transient.add_session(sp_uid, hsn);
+        let session_id = self.protocol_stack.add_session(sp_uid, hsn);
         if let Some(authority) = host_sgn_auth {
             if let Err(err) = self.sp_session(session_id).unwrap().authenticate(THIS_SP, authority, host_challenge) {
-                self.transient.remove_session(session_id);
+                self.protocol_stack.remove_session(session_id);
                 return Err(err);
             }
         }
+        self.sp_session(session_id).unwrap().commit_authentication(authority::ANYBODY).unwrap();
         Ok((session_id.hsn, session_id.tsn, None, None, None, None, None, None))
     }
 }
 
 impl<'fw> SPSession<'fw> {
-    pub fn activate(&mut self, _invoking_id: UID, sp_ref: SPRef) -> Result<(), MethodStatus> {
-        if self.firmware.tper.get_life_cycle_state(sp_ref) != Ok(LifeCycleState::ManufacturedInactive) {
-            return Err(MethodStatus::InvalidParameter);
-        }
-        self.firmware.tper.set_life_cycle_state(sp_ref, LifeCycleState::Manufactured)?;
+    pub fn end(&mut self) {
+        self.firmware.protocol_stack.remove_session(self.session_id);
+    }
 
-        // Copy PINs from Admin SP.
-        let sid_c_pin_value = {
-            let Some(admin_sp) = self.firmware.tper.get_admin_sp() else {
-                return Ok(()); // No Admin SP, nothing to copy.
-            };
-            let Some(admin_c_pins) = admin_sp.get_object_table_specific::<CPINTable>(table_id::C_PIN) else {
-                return Ok(());
-            };
-            let Some(sid_c_pin) = admin_c_pins.get(&spec::opal::admin::c_pin::SID) else {
-                return Ok(());
-            };
-            sid_c_pin.pin.clone()
-        };
+    pub fn activate(&mut self, invoking_id: UID) -> Result<(), MethodStatus> {
+        let sp_ref = SPRef::try_from(invoking_id).map_err(|_| MethodStatus::InvalidParameter)?;
+        self.firmware.ssc.activate_sp(sp_ref)
+    }
 
-        let activated_sp = self.firmware.tper.get_sp_mut(sp_ref).ok_or(MethodStatus::InvalidParameter)?;
-        let Some(activated_c_pins) = activated_sp.get_object_table_specific_mut::<CPINTable>(table_id::C_PIN) else {
-            return Ok(());
-        };
-        for c_pin in activated_c_pins.values_mut() {
-            c_pin.pin = sid_c_pin_value.clone();
-        }
+    pub fn revert(&mut self, invoking_id: UID) -> Result<(), MethodStatus> {
+        let sp_ref = SPRef::try_from(invoking_id).map_err(|_| MethodStatus::InvalidParameter)?;
+        let reverted_sps = self.firmware.ssc.revert_sp(sp_ref)?;
+        let pruned_session_ids =
+            reverted_sps.iter().map(|sp| self.firmware.protocol_stack.prune_sessions(*sp)).flatten();
+        self.firmware.pruned_session_ids.extend(pruned_session_ids);
         Ok(())
     }
 
-    pub fn revert(&mut self, invoking_id: UID, sp: SPRef) -> Result<(), MethodStatus> {
-        self.revert_sp(invoking_id, sp, None)
-    }
-
-    pub fn revert_sp(
-        &mut self,
-        _invoking_id: UID,
-        sp_ref: SPRef,
-        _keep_global_range_key: Option<bool>,
-    ) -> Result<(), MethodStatus> {
-        let admin_sp_ref = self.firmware.tper.get_admin_sp_uid().ok_or(MethodStatus::TPerMalfunction)?;
-        if sp_ref == admin_sp_ref {
-            // Revert all security providers.
-            for (sp_ref, sp) in &mut self.firmware.tper.security_providers {
-                *sp = (self.firmware.tper.sp_factory)(*sp_ref);
-                self.firmware.pruned_session_ids.append(&mut self.firmware.transient.prune_sessions(*sp_ref));
-            }
-            Ok(())
+    pub fn revert_sp(&mut self, invoking_id: UID, _keep_global_range_key: Option<bool>) -> Result<(), MethodStatus> {
+        if invoking_id != THIS_SP {
+            Err(MethodStatus::InvalidParameter)
         } else {
-            // Revert only the specified security provider.
-            self.firmware.tper.set_life_cycle_state(sp_ref, LifeCycleState::Manufactured)?;
-            let reset_sp = (self.firmware.tper.sp_factory)(sp_ref);
-            *self.firmware.tper.get_sp_mut(sp_ref).ok_or(MethodStatus::InvalidParameter)? = reset_sp;
-            self.firmware.pruned_session_ids.append(&mut self.firmware.transient.prune_sessions(sp_ref));
-            Ok(())
+            let sp_uid = self.this_sp_uid()?;
+            self.revert(sp_uid.as_uid())
         }
     }
 
@@ -227,21 +198,25 @@ impl<'fw> SPSession<'fw> {
         sp.get_acl(acl_invoking_id, acl_method_id)
     }
 
+    fn this_sp_uid(&self) -> Result<SPRef, MethodStatus> {
+        Ok(self.firmware.protocol_stack.get_session(self.session_id).ok_or(MethodStatus::Fail)?.sp)
+    }
+
     fn this_sp(&self) -> Result<&SecurityProvider, MethodStatus> {
-        let state = self.firmware.transient.get_session(self.session_id).ok_or(MethodStatus::Fail)?;
-        self.firmware.tper.get_sp(state.sp).ok_or(MethodStatus::TPerMalfunction)
+        let sp_uid = self.this_sp_uid()?;
+        self.firmware.ssc.get_sp(sp_uid).ok_or(MethodStatus::TPerMalfunction)
     }
 
     fn this_sp_mut(&mut self) -> Result<&mut SecurityProvider, MethodStatus> {
-        let state = self.firmware.transient.get_session(self.session_id).ok_or(MethodStatus::Fail)?;
-        self.firmware.tper.get_sp_mut(state.sp).ok_or(MethodStatus::TPerMalfunction)
+        let sp_uid = self.this_sp_uid()?;
+        self.firmware.ssc.get_sp_mut(sp_uid).ok_or(MethodStatus::TPerMalfunction)
     }
 
     fn is_authorized(&self, invoking_id: UID, method_id: MethodRef, columns: &[u16]) -> bool {
-        let Some(state) = self.firmware.transient.get_session(self.session_id) else {
+        let Some(state) = self.firmware.protocol_stack.get_session(self.session_id) else {
             return false;
         };
-        let Some(sp) = self.firmware.tper.get_sp(state.sp) else {
+        let Some(sp) = self.firmware.ssc.get_sp(state.sp) else {
             return false;
         };
         sp.is_authorized(&state.authenticated, invoking_id, method_id, columns)
@@ -294,7 +269,7 @@ impl<'fw> SPSession<'fw> {
             .ok_or(MethodStatus::TPerMalfunction)?;
         let auth_obj = auth_table.get(&authority).ok_or(MethodStatus::InvalidParameter)?;
         let class = auth_obj.class;
-        let session = self.firmware.transient.get_session_mut(self.session_id).ok_or(MethodStatus::Fail)?;
+        let session = self.firmware.protocol_stack.get_session_mut(self.session_id).ok_or(MethodStatus::Fail)?;
         if class != AuthorityRef::null() {
             session.authenticated.push(class);
         }

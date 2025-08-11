@@ -10,12 +10,12 @@ pub use admin_sp::new_admin_sp;
 pub use locking_sp::new_locking_sp;
 
 use crate::fake_device::data::security_provider::SecurityProvider;
-use crate::fake_device::data::TPer;
+use crate::fake_device::data::SecuritySubsystemClass;
 use crate::spec::column_types::SPRef;
 use crate::spec::opal;
 
-pub fn new_controller() -> TPer {
-    TPer::new(sp_factory, &[opal::admin::sp::ADMIN, opal::admin::sp::LOCKING])
+pub fn new_controller() -> SecuritySubsystemClass {
+    SecuritySubsystemClass::new(sp_factory, &[opal::admin::sp::ADMIN, opal::admin::sp::LOCKING])
 }
 
 fn sp_factory(sp_ref: SPRef) -> SecurityProvider {

@@ -9,12 +9,12 @@ mod com_id_session;
 pub mod data;
 mod device;
 mod discovery;
-mod firmware;
+mod tper;
 // mod packet_stack;
 // mod sp_session;
 // mod sp_session_dispatcher;
-mod transient;
 mod dispatch;
+mod protocol_stack;
 
 pub use device::FakeDevice;
 

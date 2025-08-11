@@ -7,10 +7,10 @@ mod access_control_table;
 pub mod god_authority;
 
 pub mod byte_table;
-pub mod tper;
 pub mod object;
 pub mod object_table;
 pub mod opal_v2;
 pub mod security_provider;
+pub mod ssc;
 
-pub use tper::TPer;
+pub use ssc::SecuritySubsystemClass;

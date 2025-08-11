@@ -107,14 +107,14 @@ pub async fn list_password_authorities(tper: &TPer) -> Result<Vec<(SPRef, Author
 
 #[cfg(test)]
 mod tests {
-    use crate::applications::utility::tests::{setup_activated_tper, setup_factory_tper};
+    use crate::applications::test_fixtures::{setup_activated_tper, setup_factory_tper};
     use crate::spec::{opal, psid};
 
     use super::*;
 
     #[tokio::test]
     async fn get_active_sps_factory() -> Result<(), Error> {
-        let tper = setup_factory_tper().await;
+        let tper = setup_factory_tper();
         let mut authorities = get_active_security_providers(&tper).await?;
         let mut expected = [opal::admin::sp::ADMIN];
         authorities.sort();
@@ -125,7 +125,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_active_sps_activated() -> Result<(), Error> {
-        let tper = setup_activated_tper().await;
+        let tper = setup_activated_tper();
         let mut authorities = get_active_security_providers(&tper).await?;
         let mut expected = [opal::admin::sp::ADMIN, opal::admin::sp::LOCKING];
         authorities.sort();
@@ -136,7 +136,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_password_auths_admin() -> Result<(), Error> {
-        let tper = setup_activated_tper().await;
+        let tper = setup_activated_tper();
         let mut authorities = get_password_authorities(&tper, opal::admin::sp::ADMIN).await?;
         let mut expected = [
             opal::admin::authority::SID,
@@ -154,7 +154,7 @@ mod tests {
 
     #[tokio::test]
     async fn list_authorities_factory() -> Result<(), Error> {
-        let tper = setup_factory_tper().await;
+        let tper = setup_factory_tper();
         let mut authorities = list_password_authorities(&tper).await?;
         let mut expected = [
             (opal::admin::sp::ADMIN, opal::admin::authority::SID),
@@ -172,7 +172,7 @@ mod tests {
 
     #[tokio::test]
     async fn list_authorities_activated() -> Result<(), Error> {
-        let tper = setup_activated_tper().await;
+        let tper = setup_activated_tper();
         let mut authorities = list_password_authorities(&tper).await?;
         let mut expected = [
             (opal::admin::sp::ADMIN, opal::admin::authority::SID),

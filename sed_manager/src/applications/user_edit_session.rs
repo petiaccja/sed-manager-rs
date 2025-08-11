@@ -84,14 +84,15 @@ impl UserEditSession {
 
 #[cfg(test)]
 mod tests {
-    use crate::{applications::utility::tests::setup_activated_tper, fake_device::MSID_PASSWORD, spec};
-
     use super::*;
+
+    use crate::applications::test_fixtures::{setup_activated_tper, LOCKING_ADMIN1_PASSWORD};
+    use crate::spec;
 
     #[tokio::test]
     async fn list_users() -> Result<(), Error> {
-        let tper = setup_activated_tper().await;
-        let session = UserEditSession::start(&tper, MSID_PASSWORD.as_bytes()).await?;
+        let tper = setup_activated_tper();
+        let session = UserEditSession::start(&tper, LOCKING_ADMIN1_PASSWORD.as_bytes()).await?;
         let users = session.list_users().await?;
         assert_eq!(users.len(), 12);
         assert!(users.contains(&spec::opal::locking::authority::ADMIN.nth(1).unwrap()));
@@ -103,8 +104,8 @@ mod tests {
 
     #[tokio::test]
     async fn set_enabled() -> Result<(), Error> {
-        let tper = setup_activated_tper().await;
-        let session = UserEditSession::start(&tper, MSID_PASSWORD.as_bytes()).await?;
+        let tper = setup_activated_tper();
+        let session = UserEditSession::start(&tper, LOCKING_ADMIN1_PASSWORD.as_bytes()).await?;
         let user = spec::opal::locking::authority::USER.nth(2).unwrap();
         session.set_enabled(user, true).await?;
         let user = session.get_user(user).await?;
@@ -114,8 +115,8 @@ mod tests {
 
     #[tokio::test]
     async fn set_name() -> Result<(), Error> {
-        let tper = setup_activated_tper().await;
-        let session = UserEditSession::start(&tper, MSID_PASSWORD.as_bytes()).await?;
+        let tper = setup_activated_tper();
+        let session = UserEditSession::start(&tper, LOCKING_ADMIN1_PASSWORD.as_bytes()).await?;
         let user = spec::opal::locking::authority::USER.nth(2).unwrap();
         session.set_name(user, "Winnie the Pooh").await?;
         let user = session.get_user(user).await?;
@@ -125,10 +126,10 @@ mod tests {
 
     #[tokio::test]
     async fn set_password() -> Result<(), Error> {
-        let tper = setup_activated_tper().await;
+        let tper = setup_activated_tper();
         let user = spec::opal::locking::authority::USER.nth(2).unwrap();
         {
-            let session = UserEditSession::start(&tper, MSID_PASSWORD.as_bytes()).await?;
+            let session = UserEditSession::start(&tper, LOCKING_ADMIN1_PASSWORD.as_bytes()).await?;
             session.set_enabled(user, true).await?;
             session.set_password(user, "12345".as_bytes()).await?;
             session.end().await?;

@@ -149,14 +149,16 @@ fn update_permission_expr(
 
 #[cfg(test)]
 mod tests {
-    use crate::{applications::utility::tests::setup_activated_tper, fake_device::MSID_PASSWORD, spec};
+
+    use crate::applications::test_fixtures::{setup_activated_tper, LOCKING_ADMIN1_PASSWORD};
+    use crate::spec;
 
     use super::*;
 
     #[tokio::test]
     async fn list_users() -> Result<(), Error> {
-        let tper = setup_activated_tper().await;
-        let session = PermissionEditSession::start(&tper, MSID_PASSWORD.as_bytes()).await?;
+        let tper = setup_activated_tper();
+        let session = PermissionEditSession::start(&tper, LOCKING_ADMIN1_PASSWORD.as_bytes()).await?;
         let users = session.list_users().await?;
         assert_eq!(users.len(), 9);
         assert!(users.contains(&spec::opal::locking::authority::USERS));
@@ -167,8 +169,8 @@ mod tests {
 
     #[tokio::test]
     async fn list_ranges() -> Result<(), Error> {
-        let tper = setup_activated_tper().await;
-        let session = PermissionEditSession::start(&tper, MSID_PASSWORD.as_bytes()).await?;
+        let tper = setup_activated_tper();
+        let session = PermissionEditSession::start(&tper, LOCKING_ADMIN1_PASSWORD.as_bytes()).await?;
         let ranges = session.list_ranges().await?;
         assert_eq!(ranges.len(), 9);
         assert!(ranges.contains(&spec::opal::locking::locking::GLOBAL_RANGE));
@@ -179,8 +181,8 @@ mod tests {
 
     #[tokio::test]
     async fn mbr_permission() -> Result<(), Error> {
-        let tper = setup_activated_tper().await;
-        let session = PermissionEditSession::start(&tper, MSID_PASSWORD.as_bytes()).await?;
+        let tper = setup_activated_tper();
+        let session = PermissionEditSession::start(&tper, LOCKING_ADMIN1_PASSWORD.as_bytes()).await?;
         let user = spec::opal::locking::authority::USER.nth(1).unwrap();
         let current = session.get_mbr_permission(user).await?;
         assert_eq!(current, false);
@@ -189,8 +191,8 @@ mod tests {
 
     #[tokio::test]
     async fn read_permission() -> Result<(), Error> {
-        let tper = setup_activated_tper().await;
-        let session = PermissionEditSession::start(&tper, MSID_PASSWORD.as_bytes()).await?;
+        let tper = setup_activated_tper();
+        let session = PermissionEditSession::start(&tper, LOCKING_ADMIN1_PASSWORD.as_bytes()).await?;
         let user = spec::opal::locking::authority::USER.nth(1).unwrap();
         let range = spec::opal::locking::locking::GLOBAL_RANGE;
         let current = session.get_read_permission(user, range).await?;
@@ -203,8 +205,8 @@ mod tests {
 
     #[tokio::test]
     async fn write_permission() -> Result<(), Error> {
-        let tper = setup_activated_tper().await;
-        let session = PermissionEditSession::start(&tper, MSID_PASSWORD.as_bytes()).await?;
+        let tper = setup_activated_tper();
+        let session = PermissionEditSession::start(&tper, LOCKING_ADMIN1_PASSWORD.as_bytes()).await?;
         let user = spec::opal::locking::authority::USER.nth(1).unwrap();
         let range = spec::opal::locking::locking::GLOBAL_RANGE;
         let current = session.get_write_permission(user, range).await?;

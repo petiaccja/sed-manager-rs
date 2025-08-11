@@ -7,7 +7,7 @@ use std::ops::Deref as _;
 
 use crate::call_with_tuple::CallSelfWithTuple;
 use crate::device::Error;
-use crate::fake_device::firmware::{Firmware, SPSession};
+use crate::fake_device::tper::{SPSession, TPer};
 use crate::messaging::packet::{SubPacket, SubPacketKind};
 use crate::messaging::token::Token;
 use crate::messaging::uid::UID;
@@ -19,7 +19,7 @@ use crate::serialization::{Deserialize as _, InputStream, OutputStream, Serializ
 use crate::spec::column_types::MethodRef;
 use crate::spec::{invoking_id, method_id, sm_method_id};
 
-pub fn dispatch(firmware: &mut Firmware, packet: Packet) -> Vec<Packet> {
+pub fn dispatch(firmware: &mut TPer, packet: Packet) -> Vec<Packet> {
     let session_id = SessionIdentifier::from(&packet);
     if session_id == CONTROL_SESSION_ID {
         if let Ok(packaged_methods) = split_packet(&packet) {
@@ -46,7 +46,10 @@ pub fn dispatch(firmware: &mut Firmware, packet: Packet) -> Vec<Packet> {
             for packaged_method in packaged_methods {
                 let result = match packaged_method {
                     PackagedMethod::Call(call) => PackagedMethod::Result(dispatch_sp_method(&mut session, call)),
-                    PackagedMethod::EndOfSession => PackagedMethod::EndOfSession,
+                    PackagedMethod::EndOfSession => {
+                        session.end();
+                        PackagedMethod::EndOfSession
+                    }
                     PackagedMethod::Result(_) => {
                         abort = true;
                         break;
@@ -57,7 +60,7 @@ pub fn dispatch(firmware: &mut Firmware, packet: Packet) -> Vec<Packet> {
 
             let mut pruned_session_ids = firmware.take_pruned_session_ids();
             if abort {
-                firmware.transient.remove_session(session_id);
+                firmware.protocol_stack.remove_session(session_id);
                 pruned_session_ids.push(session_id);
             }
 
@@ -67,7 +70,7 @@ pub fn dispatch(firmware: &mut Firmware, packet: Packet) -> Vec<Packet> {
             let sm_packets = bundle_methods(CONTROL_SESSION_ID, &sm_results);
             sp_packets.into_iter().chain(sm_packets).collect()
         } else {
-            firmware.transient.remove_session(session_id);
+            firmware.protocol_stack.remove_session(session_id);
             let close_session = prepare_close_session(session_id);
             bundle_methods(CONTROL_SESSION_ID, &[close_session])
         }
@@ -76,7 +79,7 @@ pub fn dispatch(firmware: &mut Firmware, packet: Packet) -> Vec<Packet> {
     }
 }
 
-fn dispatch_sm_method(firmware: &mut Firmware, call: MethodCall) -> Option<MethodCall> {
+fn dispatch_sm_method(firmware: &mut TPer, call: MethodCall) -> Option<MethodCall> {
     use sm_method_id::*;
 
     if call.invoking_id != invoking_id::SESSION_MANAGER {
@@ -85,8 +88,8 @@ fn dispatch_sm_method(firmware: &mut Firmware, call: MethodCall) -> Option<Metho
 
     let args = call.args;
     match call.method_id {
-        PROPERTIES => call_sm_method(firmware, Firmware::properties, args, PROPERTIES),
-        START_SESSION => call_sm_method(firmware, Firmware::start_session, args, SYNC_SESSION),
+        PROPERTIES => call_sm_method(firmware, TPer::properties, args, PROPERTIES),
+        START_SESSION => call_sm_method(firmware, TPer::start_session, args, SYNC_SESSION),
         _ => None,
     }
 }
@@ -123,13 +126,13 @@ fn prepare_close_session(session_id: SessionIdentifier) -> PackagedMethod {
 }
 
 fn call_sm_method<'fw, Function, Output, Tuple>(
-    firmware: &'fw mut Firmware,
+    firmware: &'fw mut TPer,
     f: Function,
     args: Vec<Value>,
     response_method: UID,
 ) -> Option<MethodCall>
 where
-    Function: CallSelfWithTuple<&'fw mut Firmware, Result<Output, MethodStatus>, Tuple>,
+    Function: CallSelfWithTuple<&'fw mut TPer, Result<Output, MethodStatus>, Tuple>,
     Tuple: TryFromMethodArgs<Error = MethodStatus>,
     Output: IntoMethodArgs,
 {

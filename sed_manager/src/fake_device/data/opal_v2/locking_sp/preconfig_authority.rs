@@ -12,6 +12,7 @@ use super::{ADMIN_IDX, USER_IDX};
 
 pub fn preconfig_authority() -> AuthorityTable {
     let mut items = vec![
+        Authority { uid: authority::ANYBODY, name: "Anybody".into(), is_class: false, ..Default::default() },
         Authority {
             uid: authority::ADMINS,
             name: "Admins".into(),
