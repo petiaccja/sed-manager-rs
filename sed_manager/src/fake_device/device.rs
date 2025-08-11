@@ -148,7 +148,7 @@ impl Device for FakeDevice {
         let mut state = self.state.lock().unwrap();
 
         if route == ROUTE_DISCOVERY {
-            let discovery = get_discovery(&&state.tper.protocol_stack.capabilities, &state.tper.ssc);
+            let discovery = get_discovery(&state.tper.protocol_stack.capabilities, &state.tper.ssc);
             write_discovery(&discovery, len)
         } else if route == ROUTE_GET_COMID {
             unimplemented!("dynamic com ID management is not implemented for the fake device")
