@@ -4,17 +4,12 @@
 //L-----------------------------------------------------------------------------
 
 mod com_id_session;
-// mod control_session;
-// mod control_session_dispatcher;
 pub mod data;
 mod device;
 mod discovery;
-mod tper;
-// mod packet_stack;
-// mod sp_session;
-// mod sp_session_dispatcher;
 mod dispatch;
 mod protocol_stack;
+mod tper;
 
 pub use device::FakeDevice;
 
