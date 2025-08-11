@@ -157,9 +157,9 @@ pub fn preconfig_ace() -> ACETable {
     }
 
     // Ranges
-    let range_start_to_active_key = LockingRange::RANGE_START..LockingRange::ACTIVE_KEY;
-    let range_start_to_lor = LockingRange::RANGE_START..LockingRange::LOCK_ON_RESET;
-    let range_admins_set = LockingRange::READ_LOCK_ENABLED..LockingRange::LOCK_ON_RESET;
+    let range_start_to_active_key = LockingRange::RANGE_START..=LockingRange::ACTIVE_KEY;
+    let range_start_to_lor = LockingRange::RANGE_START..=LockingRange::LOCK_ON_RESET;
+    let range_admins_set = LockingRange::READ_LOCK_ENABLED..=LockingRange::LOCK_ON_RESET;
     {
         // K_AES_256
         items.push(ACE {

@@ -93,27 +93,3 @@ pub async fn start_admin1_session(tper: &TPer, admin1_password: &[u8]) -> Result
     let admin1 = get_locking_admins(ssc.feature_code())?.nth(1).unwrap();
     Ok(tper.start_session(locking_sp, Some(admin1), Some(admin1_password)).await?)
 }
-
-#[cfg(test)]
-pub mod tests {
-    use std::sync::Arc;
-
-    use crate::fake_device::FakeDevice;
-    use crate::rpc::TokioRuntime;
-    use crate::spec;
-    use crate::tper::TPer;
-
-    pub async fn setup_factory_tper() -> TPer {
-        let runtime = Arc::new(TokioRuntime::new());
-        let device = Arc::new(FakeDevice::new());
-        TPer::new_on_default_com_id(device, runtime).unwrap()
-    }
-
-    pub async fn setup_activated_tper() -> TPer {
-        use spec::opal::admin::sp::LOCKING;
-        let runtime = Arc::new(TokioRuntime::new());
-        let device = Arc::new(FakeDevice::new());
-        device.controller().lock().unwrap().activate(LOCKING).unwrap();
-        TPer::new_on_default_com_id(device, runtime).unwrap()
-    }
-}

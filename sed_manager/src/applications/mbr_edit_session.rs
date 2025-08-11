@@ -108,8 +108,7 @@ impl MBREditSession {
 
 #[cfg(test)]
 mod tests {
-    use crate::applications::utility::tests::setup_activated_tper;
-    use crate::fake_device::MSID_PASSWORD;
+    use crate::applications::test_fixtures::{setup_activated_tper, LOCKING_ADMIN1_PASSWORD};
     use crate::messaging::discovery::LockingDescriptor;
 
     use super::*;
@@ -152,8 +151,8 @@ mod tests {
 
     #[tokio::test]
     async fn get_size() -> Result<(), Error> {
-        let tper = setup_activated_tper().await;
-        let session = MBREditSession::start(&tper, MSID_PASSWORD.as_bytes()).await?;
+        let tper = setup_activated_tper();
+        let session = MBREditSession::start(&tper, LOCKING_ADMIN1_PASSWORD.as_bytes()).await?;
         let mbr_size = session.get_size().await?;
         assert_eq!(mbr_size, 0x08000000);
         Ok(())
@@ -161,8 +160,8 @@ mod tests {
 
     #[tokio::test]
     async fn set_enabled() -> Result<(), Error> {
-        let tper = setup_activated_tper().await;
-        let session = MBREditSession::start(&tper, MSID_PASSWORD.as_bytes()).await?;
+        let tper = setup_activated_tper();
+        let session = MBREditSession::start(&tper, LOCKING_ADMIN1_PASSWORD.as_bytes()).await?;
         assert_eq!(is_mbr_enabled(&tper).await?, false);
         assert_eq!(session.get_enabled().await?, false);
         session.set_enabled(true).await?;
@@ -173,8 +172,8 @@ mod tests {
 
     #[tokio::test]
     async fn set_done() -> Result<(), Error> {
-        let tper = setup_activated_tper().await;
-        let session = MBREditSession::start(&tper, MSID_PASSWORD.as_bytes()).await?;
+        let tper = setup_activated_tper();
+        let session = MBREditSession::start(&tper, LOCKING_ADMIN1_PASSWORD.as_bytes()).await?;
         assert_eq!(is_mbr_done(&tper).await?, false);
         assert_eq!(session.get_done().await?, false);
         session.set_done(true).await?;
@@ -185,8 +184,8 @@ mod tests {
 
     #[tokio::test]
     async fn upload_success() -> Result<(), Error> {
-        let tper = setup_activated_tper().await;
-        let session = MBREditSession::start(&tper, MSID_PASSWORD.as_bytes()).await?;
+        let tper = setup_activated_tper();
+        let session = MBREditSession::start(&tper, LOCKING_ADMIN1_PASSWORD.as_bytes()).await?;
         let file = make_simulated_file(1 * 1024 * 1024); // 1 megabyte
         session.upload(file, |_| (), || false).await
     }

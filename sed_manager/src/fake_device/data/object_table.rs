@@ -3,6 +3,7 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
+use core::any::Any;
 use core::ops::{Deref, DerefMut};
 use std::collections::BTreeMap;
 
@@ -24,11 +25,13 @@ pub type KAES256Table = ObjectTable<KAES256, KAES256Ref, { table_id::K_AES_256.a
 pub type LockingTable = ObjectTable<LockingRange, LockingRangeRef, { table_id::LOCKING.as_u64() }>;
 pub type SPTable = ObjectTable<SP, SPRef, { table_id::SP.as_u64() }>;
 
-pub trait GenericTable {
+pub trait GenericTable: Send + Sync {
     fn uid(&self) -> TableUID;
     fn get_object(&self, uid: UID) -> Option<&dyn GenericObject>;
     fn get_object_mut(&mut self, uid: UID) -> Option<&mut dyn GenericObject>;
     fn next_from(&self, uid: Option<UID>) -> Option<UID>;
+    fn as_any(&self) -> &dyn Any;
+    fn as_any_mut(&mut self) -> &mut dyn Any;
 }
 
 pub struct ObjectTable<Object, ObjectRef, const THIS_TABLE: u64>(BTreeMap<ObjectRef, Object>)
@@ -83,8 +86,8 @@ where
 
 impl<Object, ObjectRef, const THIS_TABLE: u64> GenericTable for ObjectTable<Object, ObjectRef, THIS_TABLE>
 where
-    Object: GenericObject,
-    ObjectRef: TryFrom<UID> + Into<UID> + Ord + Copy,
+    Object: GenericObject + Send + Sync + 'static,
+    ObjectRef: TryFrom<UID> + Into<UID> + Ord + Copy + Send + Sync + 'static,
 {
     fn uid(&self) -> TableUID {
         TableUID::new(THIS_TABLE)
@@ -122,5 +125,13 @@ where
             let mut iter = self.0.range(..);
             iter.next().map(|(k, _v)| (*k).into())
         }
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self as &dyn Any
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self as &mut dyn Any
     }
 }

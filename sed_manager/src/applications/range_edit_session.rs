@@ -95,16 +95,15 @@ impl RangeEditSession {
 
 #[cfg(test)]
 mod tests {
-    use crate::applications::utility::tests::setup_activated_tper;
-    use crate::fake_device::MSID_PASSWORD;
+    use crate::applications::test_fixtures::{setup_activated_tper, LOCKING_ADMIN1_PASSWORD};
     use crate::spec;
 
     use super::*;
 
     #[tokio::test]
     async fn list_ranges() -> Result<(), Error> {
-        let tper = setup_activated_tper().await;
-        let session = RangeEditSession::start(&tper, MSID_PASSWORD.as_bytes()).await?;
+        let tper = setup_activated_tper();
+        let session = RangeEditSession::start(&tper, LOCKING_ADMIN1_PASSWORD.as_bytes()).await?;
         let ranges = session.list_ranges().await?;
         assert_eq!(ranges.len(), 9);
         assert!(ranges.contains(&spec::opal::locking::locking::GLOBAL_RANGE));
@@ -115,8 +114,8 @@ mod tests {
 
     #[tokio::test]
     async fn set_get_global_range() -> Result<(), Error> {
-        let tper = setup_activated_tper().await;
-        let session = RangeEditSession::start(&tper, MSID_PASSWORD.as_bytes()).await?;
+        let tper = setup_activated_tper();
+        let session = RangeEditSession::start(&tper, LOCKING_ADMIN1_PASSWORD.as_bytes()).await?;
         let uid = spec::opal::locking::locking::GLOBAL_RANGE;
         let range = session.get_range(uid).await?;
         assert_eq!(range.uid, uid);
@@ -130,8 +129,8 @@ mod tests {
 
     #[tokio::test]
     async fn set_get_any_range() -> Result<(), Error> {
-        let tper = setup_activated_tper().await;
-        let session = RangeEditSession::start(&tper, MSID_PASSWORD.as_bytes()).await?;
+        let tper = setup_activated_tper();
+        let session = RangeEditSession::start(&tper, LOCKING_ADMIN1_PASSWORD.as_bytes()).await?;
         let uid = spec::opal::locking::locking::RANGE.nth(1).unwrap();
         let range = session.get_range(uid).await?;
         assert_eq!(range.uid, uid);
@@ -145,8 +144,8 @@ mod tests {
 
     #[tokio::test]
     async fn erase_range() -> Result<(), Error> {
-        let tper = setup_activated_tper().await;
-        let session = RangeEditSession::start(&tper, MSID_PASSWORD.as_bytes()).await?;
+        let tper = setup_activated_tper();
+        let session = RangeEditSession::start(&tper, LOCKING_ADMIN1_PASSWORD.as_bytes()).await?;
         let uid = spec::opal::locking::locking::GLOBAL_RANGE;
         session.erase_range(uid).await?;
         // We cannot really check if GenKey was called properly, because the FakeDevice does

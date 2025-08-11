@@ -4,17 +4,18 @@
 //L-----------------------------------------------------------------------------
 
 use core::time::Duration;
-use std::collections::HashMap;
+use std::ops::DerefMut;
 use std::sync::{Arc, Mutex};
 
 use crate::device::{Device, Error, Interface};
+use crate::fake_device::data::opal_v2;
+use crate::fake_device::tper::TPer;
 use crate::messaging::com_id::HANDLE_COM_ID_PROTOCOL;
 use crate::messaging::packet::PACKETIZED_PROTOCOL;
 use crate::rpc::{Properties, SessionIdentifier};
 use crate::spec::column_types::SPRef;
 
 use super::com_id_session::ComIDSession;
-use super::data::OpalV2Controller;
 use super::discovery::{get_discovery, write_discovery, BASE_COM_ID, NUM_COM_IDS};
 
 const ROUTE_DISCOVERY: Route = Route { protocol: 0x01, com_id: 0x0001 };
@@ -41,41 +42,57 @@ const CAPABILITIES: Properties = Properties {
 };
 
 pub struct FakeDevice {
-    capabilities: Properties,
-    sessions: Mutex<HashMap<u16, ComIDSession>>,
-    controller: Arc<Mutex<OpalV2Controller>>,
+    state: Arc<Mutex<DeviceState>>,
+}
+
+struct DeviceState {
+    tper: TPer,
+    com_id_session: ComIDSession,
 }
 
 #[derive(PartialEq, Eq)]
 struct Route {
-    protocol: u8,
-    com_id: u16,
+    pub protocol: u8,
+    pub com_id: u16,
 }
 
 impl FakeDevice {
     pub fn new() -> FakeDevice {
-        let controller = Arc::new(Mutex::new(OpalV2Controller::new()));
-        let capabilities = CAPABILITIES;
-        let mut sessions = HashMap::new();
-        for i in 0..NUM_COM_IDS {
-            let com_id = BASE_COM_ID + i;
-            let session = ComIDSession::new(com_id, 0x0000, capabilities.clone(), controller.clone());
-            sessions.insert(BASE_COM_ID + i, session);
-        }
-        FakeDevice { capabilities, controller, sessions: sessions.into() }
+        assert_eq!(
+            NUM_COM_IDS, 1,
+            "only a single ComID is supported due to lack of ComID multiplexing in firmware state"
+        );
+        let tper = opal_v2::new_controller();
+        let state =
+            DeviceState { tper: TPer::new(tper, CAPABILITIES), com_id_session: ComIDSession::new(BASE_COM_ID, 0x0000) };
+        FakeDevice { state: Arc::new(Mutex::new(state)) }
     }
 
-    pub fn capabilities(&self) -> &Properties {
-        &self.capabilities
+    pub fn capabilities(&self) -> Properties {
+        let state = self.state.lock().unwrap();
+        state.tper.protocol_stack.capabilities.clone()
     }
 
     pub fn active_sessions(&self) -> Vec<(SessionIdentifier, SPRef)> {
-        let sessions = self.sessions.lock().unwrap();
-        sessions.iter().map(|session| session.1.active_sessions()).flatten().collect()
+        let state = self.state.lock().unwrap();
+        state
+            .tper
+            .protocol_stack
+            .list_sessions()
+            .filter_map(|session_id| {
+                state.tper.protocol_stack.get_session(*session_id).map(|session| (*session_id, session.sp))
+            })
+            .collect()
     }
 
-    pub fn controller(&self) -> Arc<Mutex<OpalV2Controller>> {
-        self.controller.clone()
+    pub fn with_tper<T>(&self, f: impl FnOnce(&TPer) -> T) -> T {
+        let state = self.state.lock().unwrap();
+        f(&state.tper)
+    }
+
+    pub fn with_tper_mut<T>(&self, f: impl FnOnce(&mut TPer) -> T) -> T {
+        let mut state = self.state.lock().unwrap();
+        f(&mut state.tper)
     }
 }
 
@@ -107,15 +124,17 @@ impl Device for FakeDevice {
     fn security_send(&self, security_protocol: u8, protocol_specific: [u8; 2], data: &[u8]) -> Result<(), Error> {
         let com_id = u16::from_be_bytes(protocol_specific);
         let route = Route { protocol: security_protocol, com_id };
+        let mut state = self.state.lock().unwrap();
+        let DeviceState { tper: firmware, com_id_session: session } = state.deref_mut();
 
         if route == ROUTE_DISCOVERY {
             Ok(()) // Discovery on IF-SEND is simply ignored.
         } else if route == ROUTE_TPER_RESET {
             unimplemented!("TPer reset is not implemented for the fake device")
-        } else if let Some(session) = self.sessions.lock().unwrap().get_mut(&com_id) {
+        } else if session.com_id() == com_id {
             match security_protocol {
-                HANDLE_COM_ID_PROTOCOL => session.on_security_send_com(data),
-                PACKETIZED_PROTOCOL => session.on_security_send_packet(data),
+                HANDLE_COM_ID_PROTOCOL => session.on_security_send_com(firmware, data),
+                PACKETIZED_PROTOCOL => session.on_security_send_packet(firmware, data),
                 _ => Err(Error::InvalidProtocolOrComID),
             }
         } else {
@@ -126,17 +145,17 @@ impl Device for FakeDevice {
     fn security_recv(&self, security_protocol: u8, protocol_specific: [u8; 2], len: usize) -> Result<Vec<u8>, Error> {
         let com_id = u16::from_be_bytes(protocol_specific);
         let route = Route { protocol: security_protocol, com_id };
+        let mut state = self.state.lock().unwrap();
 
         if route == ROUTE_DISCOVERY {
-            let controller = self.controller.lock().unwrap();
-            let discovery = get_discovery(&self.capabilities, &controller);
+            let discovery = get_discovery(&state.tper.protocol_stack.capabilities, &state.tper.ssc);
             write_discovery(&discovery, len)
         } else if route == ROUTE_GET_COMID {
             unimplemented!("dynamic com ID management is not implemented for the fake device")
-        } else if let Some(session) = self.sessions.lock().unwrap().get_mut(&com_id) {
+        } else if state.com_id_session.com_id() == com_id {
             match security_protocol {
-                HANDLE_COM_ID_PROTOCOL => session.on_security_recv_com(len),
-                PACKETIZED_PROTOCOL => session.on_security_recv_packet(len),
+                HANDLE_COM_ID_PROTOCOL => state.com_id_session.on_security_recv_com(len),
+                PACKETIZED_PROTOCOL => state.com_id_session.on_security_recv_packet(len),
                 _ => Err(Error::InvalidProtocolOrComID),
             }
         } else {

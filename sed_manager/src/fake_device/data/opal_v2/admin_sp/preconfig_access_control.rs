@@ -4,6 +4,7 @@
 //L-----------------------------------------------------------------------------
 
 use crate::fake_device::data::access_control_table::{AccessControlEntry, AccessControlRef, AccessControlTable};
+use crate::spec::invoking_id;
 use crate::spec::opal::admin::*;
 
 pub fn preconfig_access_control() -> AccessControlTable {
@@ -52,6 +53,31 @@ pub fn preconfig_access_control() -> AccessControlTable {
         (
             AccessControlRef::new(c_pin::MSID.into(), method_id::GET),
             AccessControlEntry { acl: vec![ace::C_PIN_MSID_GET_PIN].into(), ..Default::default() },
+        ),
+        // SP
+        (
+            AccessControlRef::new(invoking_id::THIS_SP.into(), method_id::AUTHENTICATE),
+            AccessControlEntry { acl: vec![ace::ANYBODY].into(), ..Default::default() },
+        ),
+        (
+            AccessControlRef::new(invoking_id::THIS_SP.into(), method_id::RANDOM),
+            AccessControlEntry { acl: vec![ace::ANYBODY].into(), ..Default::default() },
+        ),
+        (
+            AccessControlRef::new(table_id::SP.into(), method_id::NEXT),
+            AccessControlEntry { acl: vec![ace::ANYBODY].into(), ..Default::default() },
+        ),
+        (
+            AccessControlRef::new(table_id::SP.into(), method_id::GET),
+            AccessControlEntry { acl: vec![ace::ANYBODY].into(), ..Default::default() },
+        ),
+        (
+            AccessControlRef::new(table_id::SP.into(), method_id::REVERT),
+            AccessControlEntry { acl: vec![ace::SP_SID, ace::ADMIN].into(), ..Default::default() },
+        ),
+        (
+            AccessControlRef::new(table_id::SP.into(), method_id::ACTIVATE),
+            AccessControlEntry { acl: vec![ace::SP_SID].into(), ..Default::default() },
         ),
     ];
 
