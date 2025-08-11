@@ -93,24 +93,40 @@ impl<'fw> SPSession<'fw> {
 
     pub fn activate(&mut self, invoking_id: UID) -> Result<(), MethodStatus> {
         let sp_ref = SPRef::try_from(invoking_id).map_err(|_| MethodStatus::InvalidParameter)?;
-        self.firmware.ssc.activate_sp(sp_ref)
+        if self.is_authorized(invoking_id, method_id::ACTIVATE, &[0]) {
+            self.firmware.ssc.activate_sp(sp_ref)
+        } else {
+            Err(MethodStatus::NotAuthorized)
+        }
     }
 
     pub fn revert(&mut self, invoking_id: UID) -> Result<(), MethodStatus> {
         let sp_ref = SPRef::try_from(invoking_id).map_err(|_| MethodStatus::InvalidParameter)?;
-        let reverted_sps = self.firmware.ssc.revert_sp(sp_ref)?;
-        let pruned_session_ids =
-            reverted_sps.iter().map(|sp| self.firmware.protocol_stack.prune_sessions(*sp)).flatten();
-        self.firmware.pruned_session_ids.extend(pruned_session_ids);
-        Ok(())
+        if self.is_authorized(invoking_id, method_id::REVERT, &[0]) {
+            let reverted_sps = self.firmware.ssc.revert_sp(sp_ref)?;
+            let pruned_session_ids =
+                reverted_sps.iter().map(|sp| self.firmware.protocol_stack.prune_sessions(*sp)).flatten();
+            self.firmware.pruned_session_ids.extend(pruned_session_ids);
+            Ok(())
+        } else {
+            Err(MethodStatus::NotAuthorized)
+        }
     }
 
     pub fn revert_sp(&mut self, invoking_id: UID, _keep_global_range_key: Option<bool>) -> Result<(), MethodStatus> {
         if invoking_id != THIS_SP {
             Err(MethodStatus::InvalidParameter)
         } else {
-            let sp_uid = self.this_sp_uid()?;
-            self.revert(sp_uid.as_uid())
+            let sp_ref = self.this_sp_uid()?;
+            if self.is_authorized(invoking_id, method_id::REVERT_SP, &[0]) {
+                let reverted_sps = self.firmware.ssc.revert_sp(sp_ref)?;
+                let pruned_session_ids =
+                    reverted_sps.iter().map(|sp| self.firmware.protocol_stack.prune_sessions(*sp)).flatten();
+                self.firmware.pruned_session_ids.extend(pruned_session_ids);
+                Ok(())
+            } else {
+                Err(MethodStatus::NotAuthorized)
+            }
         }
     }
 
@@ -178,11 +194,15 @@ impl<'fw> SPSession<'fw> {
         public_exponent: Option<u64>,
         pin_length: Option<u16>,
     ) -> Result<(), MethodStatus> {
-        let Ok(credential_id) = CredentialRef::try_from(invoking_id) else {
-            return Err(MethodStatus::InvalidParameter);
-        };
-        let sp = self.this_sp_mut()?;
-        sp.gen_key(credential_id, public_exponent, pin_length)
+        if self.is_authorized(invoking_id, method_id::GEN_KEY, &[0]) {
+            let Ok(credential_id) = CredentialRef::try_from(invoking_id) else {
+                return Err(MethodStatus::InvalidParameter);
+            };
+            let sp = self.this_sp_mut()?;
+            sp.gen_key(credential_id, public_exponent, pin_length)
+        } else {
+            return Err(MethodStatus::NotAuthorized);
+        }
     }
 
     pub fn get_acl(

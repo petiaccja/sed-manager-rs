@@ -8,6 +8,7 @@ use std::sync::Arc;
 use sed_manager::applications::test_fixtures::make_activated_device;
 use sed_manager::applications::test_fixtures::make_owned_device;
 use sed_manager::applications::test_fixtures::setup_activated_tper;
+use sed_manager::applications::test_fixtures::LOCKING_ADMIN1_PASSWORD;
 use sed_manager::applications::test_fixtures::SID_PASSWORD;
 use sed_manager::fake_device::data::object_table::CPINTable;
 use sed_manager::fake_device::god_authority::AUTHORITY_GOD;
@@ -267,7 +268,7 @@ async fn gen_key_success() -> Result<(), RPCError> {
     let runtime = Arc::new(TokioRuntime::new());
     let device = Arc::new(FakeDevice::new());
     let tper = TPer::new_on_default_com_id(device, runtime)?;
-    let session = tper.start_session(sp::LOCKING, None, None).await?;
+    let session = tper.start_session(sp::LOCKING, Some(AUTHORITY_GOD), None).await?;
     let object = CredentialRef::new_other(k_aes_256::GLOBAL_RANGE_KEY);
     let _ = session.gen_key(object, None, None).await?;
     Ok(())
@@ -279,7 +280,7 @@ async fn gen_key_invalid_object() -> Result<(), RPCError> {
     let runtime = Arc::new(TokioRuntime::new());
     let device = Arc::new(FakeDevice::new());
     let tper = TPer::new_on_default_com_id(device, runtime)?;
-    let session = tper.start_session(sp::LOCKING, None, None).await?;
+    let session = tper.start_session(sp::LOCKING, Some(AUTHORITY_GOD), None).await?;
     let object = CredentialRef::new_other(k_aes_256::RANGE_KEY.nth(364).unwrap());
     assert!(session.gen_key(object, None, None).await.is_err());
     Ok(())
@@ -341,7 +342,7 @@ async fn revert_sp() -> Result<(), RPCError> {
 
     let tper = TPer::new_on_default_com_id(device.clone(), runtime)?;
     let session = tper
-        .start_session(sp::LOCKING, Some(authority::ADMIN.nth(1).unwrap()), Some(SID_PASSWORD.as_bytes()))
+        .start_session(sp::LOCKING, Some(authority::ADMIN.nth(1).unwrap()), Some(LOCKING_ADMIN1_PASSWORD.as_bytes()))
         .await?;
     let _ = session.revert_sp(None).await?;
     session.abort_session();
