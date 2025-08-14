@@ -150,7 +150,7 @@ pub fn preconfig_ace() -> ACETable {
         // C_PIN
         items.push(ACE {
             uid: ace::C_PIN_USER_SET_PIN.nth(user_idx).unwrap(),
-            boolean_expr: ace_expr!((authority::ADMINS)),
+            boolean_expr: ace_expr!((authority::ADMINS) (authority::USER.nth(user_idx).unwrap()) ||),
             columns: [CPIN::PIN].into(),
             ..Default::default()
         });
