@@ -16,7 +16,7 @@ mod user_edit_session;
 mod utility;
 
 pub use activate_locking::{activate_locking, is_activating_locking_supported, verify_locking_activation};
-pub use change_password::{is_change_password_supported, list_password_authorities};
+pub use change_password::{change_password, is_change_password_supported, list_password_authorities};
 pub use error::Error;
 pub use mbr_edit_session::{is_mbr_editor_supported, MBREditSession};
 pub use permission_session::{is_permission_editor_supported, PermissionEditSession};
