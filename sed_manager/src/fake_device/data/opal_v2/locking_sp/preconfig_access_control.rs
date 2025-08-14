@@ -110,9 +110,14 @@ pub fn preconfig_access_control() -> AccessControlTable {
     // Admins
     for admin_idx in ADMIN_IDX {
         // Authority
+        let admin_set_acl = if admin_idx == 1 {
+            vec![ace::ADMINS_SET_COMMON_NAME]
+        } else {
+            vec![ace::ADMINS_SET_COMMON_NAME, ace::AUTHORITY_SET_ENABLED]
+        };
         items.push((
             AccessControlRef::new(authority::ADMIN.nth(admin_idx).unwrap().into(), method_id::SET),
-            AccessControlEntry { acl: vec![ace::ADMINS_SET_COMMON_NAME].into(), ..Default::default() },
+            AccessControlEntry { acl: admin_set_acl.into(), ..Default::default() },
         ));
         // C_PIN
         items.push((

@@ -6,11 +6,32 @@
 use crate::applications::{get_admin_sp, get_locking_sp};
 use crate::messaging::discovery::FeatureCode;
 use crate::spec::column_types::{AuthMethod, AuthorityRef, LifeCycleState, SPRef};
-use crate::spec::objects::{Authority, SP};
+use crate::spec::objects::{Authority, CPIN, SP};
 use crate::spec::{self, table_id};
 use crate::tper::{Session, TPer};
 
 use super::Error;
+
+pub async fn change_password(
+    tper: &TPer,
+    sp: SPRef,
+    authority: AuthorityRef,
+    password: &[u8],
+    new_password: &[u8],
+) -> Result<(), Error> {
+    let session = tper.start_session(sp, Some(authority), Some(password)).await?;
+    session
+        .with(async |session| {
+            let credential = if let Some(idx) = spec::opal::locking::authority::USER.index_of(authority) {
+                // Unfortunately, User#N authorities don't have an ACE to query their own C_PIN credential.
+                spec::opal::locking::c_pin::USER.nth(idx).ok_or(Error::InternalError)?
+            } else {
+                session.get(authority.as_uid(), Authority::CREDENTIAL).await?
+            };
+            session.set(credential.as_uid(), CPIN::PIN, new_password).await.map_err(|err| err.into())
+        })
+        .await
+}
 
 pub fn is_change_password_supported() -> bool {
     true
@@ -107,7 +128,13 @@ pub async fn list_password_authorities(tper: &TPer) -> Result<Vec<(SPRef, Author
 
 #[cfg(test)]
 mod tests {
-    use crate::applications::test_fixtures::{setup_activated_tper, setup_factory_tper};
+    use std::sync::Arc;
+
+    use crate::applications::test_fixtures::{make_activated_device, setup_activated_tper, setup_factory_tper};
+    use crate::fake_device::data::object_table::{AuthorityTable, CPINTable};
+    use crate::fake_device::FakeDevice;
+    use crate::rpc::{MethodStatus, TokioRuntime};
+    use crate::spec::column_types::CPINRef;
     use crate::spec::{opal, psid};
 
     use super::*;
@@ -197,6 +224,62 @@ mod tests {
         authorities.sort();
         expected.sort();
         assert_eq!(authorities, expected);
+        Ok(())
+    }
+
+    fn get_pin(device: &FakeDevice, sp_ref: SPRef, authority_ref: AuthorityRef) -> Vec<u8> {
+        device.with_tper(|tper| {
+            let sp = tper.ssc.get_sp(sp_ref).unwrap();
+            let authorities: &AuthorityTable = sp.get_object_table_specific(table_id::AUTHORITY).unwrap();
+            let authority = authorities.get(&authority_ref).unwrap();
+            let credential_ref = authority.credential;
+            let c_pins: &CPINTable = sp.get_object_table_specific(table_id::C_PIN).unwrap();
+            let credential = c_pins.get(&CPINRef::try_from(credential_ref.as_uid()).unwrap()).unwrap();
+            credential.pin.to_vec()
+        })
+    }
+
+    #[tokio::test]
+    async fn change_password_user1_success() -> Result<(), Error> {
+        let runtime = Arc::new(TokioRuntime::new());
+        let device = Arc::new(make_activated_device());
+        let tper = TPer::new_on_default_com_id(device.clone(), runtime)?;
+        let authority = opal::locking::authority::USER.nth(1).unwrap();
+        let sp = opal::admin::sp::LOCKING;
+        let password = get_pin(&*device, sp, authority);
+        let new_password = "kjgfjs".as_bytes();
+        change_password(&tper, sp, authority, &password, new_password).await?;
+        assert_eq!(get_pin(&*device, sp, authority), new_password);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn change_password_admin1_success() -> Result<(), Error> {
+        let runtime = Arc::new(TokioRuntime::new());
+        let device = Arc::new(make_activated_device());
+        let tper = TPer::new_on_default_com_id(device.clone(), runtime)?;
+        let authority = opal::locking::authority::ADMIN.nth(1).unwrap();
+        let sp = opal::admin::sp::LOCKING;
+        let password = get_pin(&*device, sp, authority);
+        let new_password = "kjgfjs".as_bytes();
+        change_password(&tper, sp, authority, &password, new_password).await?;
+        assert_eq!(get_pin(&*device, sp, authority), new_password);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn change_password_failed_authentication() -> Result<(), Error> {
+        let runtime = Arc::new(TokioRuntime::new());
+        let device = Arc::new(make_activated_device());
+        let tper = TPer::new_on_default_com_id(device.clone(), runtime)?;
+        let authority = opal::locking::authority::USER.nth(1).unwrap();
+        let sp = opal::admin::sp::LOCKING;
+        let password = "luvcgw".as_bytes();
+        let new_password = "kjgfjs".as_bytes();
+        assert_eq!(
+            change_password(&tper, sp, authority, &password, new_password).await,
+            Err(Error::RPCError(MethodStatus::NotAuthorized.into()))
+        );
         Ok(())
     }
 }

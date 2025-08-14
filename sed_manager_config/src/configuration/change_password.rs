@@ -5,7 +5,6 @@
 
 use std::rc::Rc;
 
-use sed_manager::spec::objects::{Authority, CPIN};
 use sed_manager_config_ui::ExtendedStatus;
 use slint::{ComponentHandle as _, Model, SharedString};
 
@@ -100,7 +99,7 @@ async fn change_password(
     password: String,
     new_password: String,
 ) -> Result<(), AppError> {
-    let (sp, auth) = backend
+    let (sp, authority) = backend
         .peek_mut(|backend| {
             let session = backend.get_session(device_idx)?;
             match session {
@@ -111,13 +110,7 @@ async fn change_password(
         .ok_or(AppError::InternalError)?;
 
     let tper = backend.peek_mut(|backend| backend.get_tper(device_idx))?;
-    let session = tper.start_session(sp, Some(auth), Some(password.as_bytes())).await?;
-    session
-        .with(async |session| {
-            let credential = session.get(auth.as_uid(), Authority::CREDENTIAL).await?;
-            session.set(credential, CPIN::PIN, new_password.as_bytes()).await?;
-            Ok(())
-        })
+    sed_manager::applications::change_password(&*tper, sp, authority, password.as_bytes(), new_password.as_bytes())
         .await
 }
 
