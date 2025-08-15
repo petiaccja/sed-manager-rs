@@ -60,6 +60,33 @@ component DriveTabView {
                     }
                 }
             }
+
+            Island {
+                width: 42px;
+                height: 32px;
+                IconButton {
+                    width: 100%;
+                    height: 100%;
+                    icon: {
+                        if Palette.color-scheme == ColorScheme.dark {
+                            Icons.dark-mode
+                        } else if Palette.color-scheme == ColorScheme.light {
+                            Icons.light-mode
+                        } else {
+                            Icons.contrast
+                        }
+                    };
+                    clicked => {
+                        if Palette.color-scheme == ColorScheme.dark {
+                            Palette.color-scheme = ColorScheme.light;
+                        } else if Palette.color-scheme == ColorScheme.light {
+                            Palette.color-scheme = ColorScheme.dark;
+                        } else {
+                            Palette.color-scheme = ColorScheme.dark;
+                        }
+                    }
+                }
+            }
         }
 
         AlternativeLayout {
