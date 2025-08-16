@@ -11,9 +11,10 @@ import {
     DeviceListState, TroubleshootingState, UserEditorState, RangeEditorState, SingleStepState, 
     PermissionEditorState, MBREditorState, SettingsState, ChangePasswordState 
 } from "state.slint";
-import { Button, Spinner, Palette } from "std-widgets.slint";
+import { Button, Palette } from "std-widgets.slint";
 import { DevicePage } from "pages/device_page.slint";
 import { UnavailableDevicesPage } from "pages/unavailable_devices_page.slint";
+import { Theme } from "data/theme.slint";
 import { Status } from "data/status.slint";
 import { StatusIndicator } from "widgets/progress.slint";
 import { PaletteExtra, Island } from "widgets/visual.slint";
@@ -57,6 +58,33 @@ component DriveTabView {
                     icon: Icons.refresh;
                     clicked => {
                         DeviceListState.list();
+                    }
+                }
+            }
+
+            Island {
+                width: 42px;
+                height: 32px;
+                IconButton {
+                    width: 100%;
+                    height: 100%;
+                    icon: {
+                        if SettingsState.theme == Theme.dark {
+                            Icons.dark-mode
+                        } else if SettingsState.theme == Theme.light {
+                            Icons.light-mode
+                        } else {
+                            Icons.contrast
+                        }
+                    };
+                    clicked => {
+                        if SettingsState.theme == Theme.dark {
+                            SettingsState.theme = Theme.light
+                        } else if SettingsState.theme == Theme.light {
+                            SettingsState.theme = Theme.system
+                        } else {
+                            SettingsState.theme = Theme.dark
+                        }
                     }
                 }
             }
@@ -139,14 +167,11 @@ component LoadingView {
 }
 
 export component AppWindow inherits Window {
-    title: "SED Manager";
+    title: "SEDManager";
     icon: Icons.sed-manager;
     preferred-width: 960px;
     preferred-height: 600px;
     private property <bool> loaded: DeviceListState.extended-status.status == Status.success && DeviceListState.tab-names.length != 0;
-    public function show-license() {
-        license-popup.visible = true;
-    }
     callback quit();
     VerticalLayout {
         if loaded: DriveTabView { }
@@ -157,11 +182,10 @@ export component AppWindow inherits Window {
         preferred-width: 100%;
         preferred-height: 100%;
         license-text: SettingsState.license-text;
-        license-changed: SettingsState.license-changed;
-        visible: false;
+        license-changed: !SettingsState.accepted-license-fingerprint.is-empty;
+        visible: SettingsState.accepted-license-fingerprint != SettingsState.license-fingerprint;
         accept => {
-            self.visible = false;
-            SettingsState.accept-license();
+            SettingsState.accepted-license-fingerprint = SettingsState.license-fingerprint;
         }
         decline => {
             quit();

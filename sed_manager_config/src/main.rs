@@ -20,7 +20,6 @@ mod utility;
 use backend::Backend;
 use core::error::Error;
 use frontend::Frontend;
-use license::{get_license_fingerprint, get_plain_license};
 use slint::ComponentHandle;
 use std::rc::Rc;
 use utility::PeekCell;
@@ -35,7 +34,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let backend = Rc::new(PeekCell::new(Backend::new()));
 
     // Load settings.
-    let settings = Rc::new(PeekCell::new(settings::load().unwrap_or(settings::Settings::default())));
+    let settings = settings::load().unwrap_or(settings::Settings::default());
 
     // Configure callbacks.
     let _ = slint::BackendSelector::new().backend_name("winit".into()).renderer_name("skia".into()).select();
@@ -46,31 +45,24 @@ fn main() -> Result<(), Box<dyn Error>> {
     configuration::set_callbacks(backend.clone(), frontend.clone());
     troubleshooting::set_callbacks(backend.clone(), frontend.clone());
     device_list::set_callbacks(backend.clone(), frontend.clone());
-    settings::set_callbacks(settings.clone(), frontend.clone());
     app_window.on_quit(|| {
         let _ = slint::quit_event_loop();
     });
 
     // Set parameters for the about page and the license.
     let ui_settings = app_window.global::<ui::SettingsState>();
-    ui_settings.set_license_text(get_plain_license().into());
-    ui_settings.set_license_changed(settings.peek(|settings| settings.accepted_license_fingerprint.is_some()));
+    settings::set_ui(settings, &ui_settings);
 
     // Refresh device list right after starting.
     let _ = app_window.show();
     app_window.global::<ui::DeviceListState>().invoke_list();
 
-    // Show license agreement if not already accepted.
-    let accepted_license_fingerprint = settings.peek(|settings| settings.accepted_license_fingerprint.clone());
-    if accepted_license_fingerprint != Some(get_license_fingerprint()) {
-        app_window.invoke_show_license();
-    }
-
     // Display GUI.
     app_window.run()?;
 
     // Save settings if changed.
-    if let Err(error) = settings::save(&settings.peek(|settings| settings.clone())) {
+    let settings = settings::get_ui(&ui_settings);
+    if let Err(error) = settings::save(&settings) {
         eprint!("Cannot save settings: {error}");
     }
 
