@@ -10,6 +10,8 @@ import { RangeAccess } from "data/range_access.slint";
 import { DeviceDescription } from "data/device_description.slint";
 import { UnavailableDevice } from "data/unavailable_device.slint";
 import { MBRControl } from "data/mbr_control.slint";
+import { Theme } from "data/theme.slint";
+import { Palette } from "std-widgets.slint";
 
 export struct RangeList {
     names: [string],
@@ -125,6 +127,16 @@ export global DeviceListState {
 
 export global SettingsState {
     in property <string> license-text;
-    in property <bool> license-changed;
-    callback accept-license();
+    in property <string> accepted-license-fingerprint;
+    in property <string> license-fingerprint;
+    in property <Theme> theme;
+    changed theme => {
+        if theme == Theme.dark {
+            Palette.color-scheme = ColorScheme.dark;
+        } else if theme == Theme.light {
+            Palette.color-scheme = ColorScheme.light;
+        } else {
+            Palette.color-scheme = ColorScheme.unknown;
+        }
+    }
 }

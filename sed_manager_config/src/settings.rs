@@ -3,31 +3,35 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use slint::ComponentHandle as _;
 use std::fs;
 use std::io::{Read, Write};
-use std::rc::Rc;
 
-use crate::frontend::Frontend;
-use crate::license::get_license_fingerprint;
+use crate::license::{get_license_fingerprint, get_plain_license};
 use crate::ui;
-use crate::utility::PeekCell;
 
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct Settings {
     #[serde(default = "make_none")]
     pub accepted_license_fingerprint: Option<String>,
+    #[serde(default = "default_theme")]
+    pub theme: ui::Theme,
 }
 
-pub fn set_callbacks(settings: Rc<PeekCell<Settings>>, frontend: Frontend) {
-    frontend.with(move |window| {
-        let settings_state = window.global::<ui::SettingsState>();
-        settings_state.on_accept_license(move || {
-            settings.peek_mut(|settings| {
-                settings.accepted_license_fingerprint = Some(get_license_fingerprint());
-            });
-        });
-    });
+pub fn set_ui(settings: Settings, ui: &ui::SettingsState) {
+    ui.set_license_text(get_plain_license().into());
+    ui.set_accepted_license_fingerprint(settings.accepted_license_fingerprint.unwrap_or("".into()).into());
+    ui.set_license_fingerprint(get_license_fingerprint().into());
+    ui.set_theme(settings.theme);
+}
+
+pub fn get_ui(ui: &ui::SettingsState) -> Settings {
+    let accepted_license_fingerprint: String = ui.get_accepted_license_fingerprint().into();
+    let theme = ui.get_theme();
+    Settings {
+        accepted_license_fingerprint: (!accepted_license_fingerprint.is_empty())
+            .then_some(accepted_license_fingerprint),
+        theme,
+    }
 }
 
 pub fn save(settings: &Settings) -> Result<(), std::io::Error> {
@@ -58,4 +62,8 @@ pub fn load() -> Result<Settings, std::io::Error> {
 
 fn make_none<T>() -> Option<T> {
     None
+}
+
+fn default_theme() -> ui::Theme {
+    ui::Theme::System
 }

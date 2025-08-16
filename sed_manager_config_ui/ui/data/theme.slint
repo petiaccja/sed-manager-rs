@@ -1,0 +1,6 @@
+@rust-attr(derive(serde::Serialize, serde::Deserialize))
+export enum Theme {
+    system, // The first is always the default.
+    dark,
+    light,
+}
