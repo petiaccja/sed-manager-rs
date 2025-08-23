@@ -153,8 +153,6 @@ const SCSI_TRANSLATION_INC_512: bool = false;
 mod test {
     use super::*;
 
-    use skip_test::may_skip;
-
     use crate::device::windows::drive_list::list_physical_drives;
 
     fn get_nvme_drives() -> Vec<NVMeDevice> {
@@ -167,7 +165,6 @@ mod test {
     }
 
     #[test]
-    #[may_skip]
     fn test_nvme_identify_controller() -> Result<(), DeviceError> {
         let _nvme_drives = get_nvme_drives();
         Ok(())

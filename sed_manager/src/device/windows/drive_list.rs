@@ -169,10 +169,8 @@ pub fn list_physical_drives() -> Result<Vec<String>, DeviceError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use skip_test::{may_skip, skip};
 
     #[test]
-    #[may_skip]
     fn test_get_physical_drives() -> Result<(), DeviceError> {
         // There must be at least one physical drive, so this test should pass.
         match list_physical_drives() {
@@ -180,7 +178,7 @@ mod tests {
                 assert!(!physical_drives.is_empty());
                 Ok(())
             }
-            Err(DeviceError::PermissionDenied) => skip!(),
+            Err(DeviceError::PermissionDenied) => Ok(()),
             Err(err) => Err(err),
         }
     }
