@@ -5,7 +5,7 @@
 
 use crate::spec::objects::LockingRange;
 use crate::spec::opal::locking::*;
-use crate::{fake_device::data::object_table::LockingTable, messaging::uid::ObjectUID};
+use crate::{messaging::uid::ObjectUID, virtual_device::data::object_table::LockingTable};
 
 use super::RANGE_IDX;
 

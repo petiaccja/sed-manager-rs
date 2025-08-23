@@ -131,11 +131,11 @@ mod tests {
     use std::sync::Arc;
 
     use crate::applications::test_fixtures::{make_activated_device, setup_activated_tper, setup_factory_tper};
-    use crate::fake_device::data::object_table::{AuthorityTable, CPINTable};
-    use crate::fake_device::FakeDevice;
     use crate::rpc::{MethodStatus, TokioRuntime};
     use crate::spec::column_types::CPINRef;
     use crate::spec::{opal, psid};
+    use crate::virtual_device::data::object_table::{AuthorityTable, CPINTable};
+    use crate::virtual_device::VirtualDevice;
 
     use super::*;
 
@@ -227,7 +227,7 @@ mod tests {
         Ok(())
     }
 
-    fn get_pin(device: &FakeDevice, sp_ref: SPRef, authority_ref: AuthorityRef) -> Vec<u8> {
+    fn get_pin(device: &VirtualDevice, sp_ref: SPRef, authority_ref: AuthorityRef) -> Vec<u8> {
         device.with_tper(|tper| {
             let sp = tper.ssc.get_sp(sp_ref).unwrap();
             let authorities: &AuthorityTable = sp.get_object_table_specific(table_id::AUTHORITY).unwrap();

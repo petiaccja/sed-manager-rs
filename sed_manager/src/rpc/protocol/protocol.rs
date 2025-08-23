@@ -309,14 +309,14 @@ pub fn discover(device: &dyn Device) -> Result<Discovery, Error> {
 mod tests {
     use super::*;
     use crate::{
-        fake_device::{FakeDevice, BASE_COM_ID},
         rpc::{protocol::runtime::TokioRuntime, MethodCall},
         spec::{invoking_id::SESSION_MANAGER, sm_method_id::PROPERTIES},
+        virtual_device::{VirtualDevice, BASE_COM_ID},
     };
 
     #[tokio::test]
     async fn send_com_id_success() {
-        let device = Arc::new(FakeDevice::new()) as Arc<dyn Device>;
+        let device = Arc::new(VirtualDevice::new()) as Arc<dyn Device>;
         let runtime = TokioRuntime::new();
         let (command, done) = Protocol::spawn(device, &runtime, BASE_COM_ID, 0, Properties::ASSUMED);
 
@@ -331,7 +331,7 @@ mod tests {
 
     #[tokio::test]
     async fn send_session_success() {
-        let device = Arc::new(FakeDevice::new()) as Arc<dyn Device>;
+        let device = Arc::new(VirtualDevice::new()) as Arc<dyn Device>;
         let runtime = TokioRuntime::new();
         let (command, done) = Protocol::spawn(device, &runtime, BASE_COM_ID, 0, Properties::ASSUMED);
         let id = SessionIdentifier { hsn: 0, tsn: 0 };

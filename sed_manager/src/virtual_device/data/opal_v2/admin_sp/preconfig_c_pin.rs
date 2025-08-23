@@ -3,10 +3,10 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use crate::fake_device::PSID_PASSWORD;
-use crate::fake_device::{data::object_table::CPINTable, MSID_PASSWORD};
 use crate::spec::opal::admin::*;
 use crate::spec::{self, objects::CPIN};
+use crate::virtual_device::PSID_PASSWORD;
+use crate::virtual_device::{data::object_table::CPINTable, MSID_PASSWORD};
 
 use super::ADMIN_IDX;
 

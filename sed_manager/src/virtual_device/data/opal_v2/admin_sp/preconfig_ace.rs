@@ -5,8 +5,8 @@
 
 use crate::spec::opal::admin::*;
 use crate::{
-    fake_device::data::object_table::ACETable,
     spec::objects::{ace::ace_expr, Authority, ACE, CPIN},
+    virtual_device::data::object_table::ACETable,
 };
 
 macro_rules! all_columns {

@@ -3,9 +3,9 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use crate::fake_device::data::access_control_table::{AccessControlEntry, AccessControlRef, AccessControlTable};
 use crate::spec::invoking_id;
 use crate::spec::opal::admin::*;
+use crate::virtual_device::data::access_control_table::{AccessControlEntry, AccessControlRef, AccessControlTable};
 
 pub fn preconfig_access_control() -> AccessControlTable {
     use crate::spec::{method_id, table_id};

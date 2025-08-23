@@ -11,7 +11,7 @@ mod dispatch;
 mod protocol_stack;
 mod tper;
 
-pub use device::FakeDevice;
+pub use device::VirtualDevice;
 
 pub const MSID_PASSWORD: &str = "default_password";
 pub const PSID_PASSWORD: &str = "psid_password";

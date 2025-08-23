@@ -8,12 +8,12 @@ use std::ops::DerefMut;
 use std::sync::{Arc, Mutex};
 
 use crate::device::{Device, Error, Interface};
-use crate::fake_device::data::opal_v2;
-use crate::fake_device::tper::TPer;
 use crate::messaging::com_id::HANDLE_COM_ID_PROTOCOL;
 use crate::messaging::packet::PACKETIZED_PROTOCOL;
 use crate::rpc::{Properties, SessionIdentifier};
 use crate::spec::column_types::SPRef;
+use crate::virtual_device::data::opal_v2;
+use crate::virtual_device::tper::TPer;
 
 use super::com_id_session::ComIDSession;
 use super::discovery::{get_discovery, write_discovery, BASE_COM_ID, NUM_COM_IDS};
@@ -41,7 +41,7 @@ const CAPABILITIES: Properties = Properties {
     def_trans_timeout: Duration::from_secs(10),
 };
 
-pub struct FakeDevice {
+pub struct VirtualDevice {
     state: Arc<Mutex<DeviceState>>,
 }
 
@@ -56,8 +56,8 @@ struct Route {
     pub com_id: u16,
 }
 
-impl FakeDevice {
-    pub fn new() -> FakeDevice {
+impl VirtualDevice {
+    pub fn new() -> VirtualDevice {
         assert_eq!(
             NUM_COM_IDS, 1,
             "only a single ComID is supported due to lack of ComID multiplexing in firmware state"
@@ -65,7 +65,7 @@ impl FakeDevice {
         let tper = opal_v2::new_controller();
         let state =
             DeviceState { tper: TPer::new(tper, CAPABILITIES), com_id_session: ComIDSession::new(BASE_COM_ID, 0x0000) };
-        FakeDevice { state: Arc::new(Mutex::new(state)) }
+        VirtualDevice { state: Arc::new(Mutex::new(state)) }
     }
 
     pub fn capabilities(&self) -> Properties {
@@ -96,7 +96,7 @@ impl FakeDevice {
     }
 }
 
-impl Device for FakeDevice {
+impl Device for VirtualDevice {
     fn path(&self) -> Option<String> {
         None
     }

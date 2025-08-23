@@ -6,8 +6,6 @@
 use std::collections::VecDeque as Queue;
 
 use crate::device::Error;
-use crate::fake_device::dispatch::dispatch;
-use crate::fake_device::tper::TPer;
 use crate::messaging::com_id::{
     ComIdRequestCode, ComIdState, HandleComIdRequest, HandleComIdResponse, StackResetResponsePayload, StackResetStatus,
     VerifyComIdValidResponsePayload,
@@ -16,6 +14,8 @@ use crate::messaging::packet::ComPacket;
 use crate::messaging::value::Bytes;
 use crate::serialization::vec_with_len::VecWithLen;
 use crate::serialization::{DeserializeBinary, SerializeBinary};
+use crate::virtual_device::dispatch::dispatch;
+use crate::virtual_device::tper::TPer;
 
 pub struct ComIDSession {
     com_id: u16,

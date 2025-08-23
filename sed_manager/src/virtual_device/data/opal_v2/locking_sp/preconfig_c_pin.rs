@@ -4,7 +4,7 @@
 //L-----------------------------------------------------------------------------
 
 use crate::spec::opal::locking::*;
-use crate::{fake_device::data::object_table::CPINTable, spec::objects::CPIN};
+use crate::{spec::objects::CPIN, virtual_device::data::object_table::CPINTable};
 
 use super::{ADMIN_IDX, USER_IDX};
 

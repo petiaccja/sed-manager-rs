@@ -3,16 +3,16 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-/// The God authority can perform any action and modify any table without password authentication.
-///
-/// This is useful for testing to bypass access control.
-use crate::fake_device::data::access_control_table::{AccessControlEntry, AccessControlRef, AccessControlTable};
-use crate::fake_device::data::object_table::{ACETable, AuthorityTable};
 use crate::messaging::uid::TableUID;
 use crate::spec::column_types::{ACERef, AuthMethod, AuthorityRef, MethodRef};
 use crate::spec::objects::ace::ace_expr;
 use crate::spec::objects::{Authority, ACE};
 use crate::spec::{method_id, table_id};
+/// The God authority can perform any action and modify any table without password authentication.
+///
+/// This is useful for testing to bypass access control.
+use crate::virtual_device::data::access_control_table::{AccessControlEntry, AccessControlRef, AccessControlTable};
+use crate::virtual_device::data::object_table::{ACETable, AuthorityTable};
 
 /// A special authority that has permissions for everything and needs no login.
 pub const AUTHORITY_GOD: AuthorityRef = AuthorityRef::new(table_id::AUTHORITY.as_u64() + 0xFFF_FFF0);

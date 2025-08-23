@@ -4,7 +4,7 @@
 //L-----------------------------------------------------------------------------
 
 use crate::spec::opal::locking::*;
-use crate::{fake_device::data::object_table::KAES256Table, spec::objects::KAES256};
+use crate::{spec::objects::KAES256, virtual_device::data::object_table::KAES256Table};
 
 use super::RANGE_IDX;
 

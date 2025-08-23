@@ -3,10 +3,10 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use crate::fake_device::data::access_control_table::{AccessControlEntry, AccessControlRef, AccessControlTable};
-use crate::fake_device::data::opal_v2::locking_sp::{ADMIN_IDX, RANGE_IDX, USER_IDX};
 use crate::spec::invoking_id;
 use crate::spec::opal::locking::*;
+use crate::virtual_device::data::access_control_table::{AccessControlEntry, AccessControlRef, AccessControlTable};
+use crate::virtual_device::data::opal_v2::locking_sp::{ADMIN_IDX, RANGE_IDX, USER_IDX};
 
 pub fn preconfig_access_control() -> AccessControlTable {
     use crate::spec::{method_id, table_id};

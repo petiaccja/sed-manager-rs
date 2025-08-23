@@ -3,8 +3,8 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use crate::fake_device::data::object_table::TableTable;
+use crate::{spec::objects::MBRControl, virtual_device::data::object_table::MBRControlTable};
 
-pub fn preconfig_table() -> TableTable {
-    TableTable::new()
+pub fn preconfig_mbr_control() -> MBRControlTable {
+    [MBRControl { ..Default::default() }].into_iter().collect()
 }

@@ -3,7 +3,6 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use crate::fake_device::data::object_table::{CPINTable, LockingTable, MBRControlTable};
 use crate::messaging::discovery::{
     BlockSIDAuthDescriptor, Discovery, FeatureDescriptor, GeometryDescriptor, LockingDescriptor, OpalV2Descriptor,
     OwnerPasswordState, TPerDescriptor,
@@ -12,6 +11,7 @@ use crate::rpc::Properties;
 use crate::serialization::{OutputStream, Serialize};
 use crate::spec::column_types::LifeCycleState;
 use crate::spec::{self, table_id};
+use crate::virtual_device::data::object_table::{CPINTable, LockingTable, MBRControlTable};
 
 use super::data::SecuritySubsystemClass;
 

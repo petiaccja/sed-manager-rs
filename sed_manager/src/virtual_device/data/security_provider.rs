@@ -5,9 +5,6 @@
 
 use std::collections::{HashMap, HashSet};
 
-use crate::fake_device::data::access_control_table::AccessControlTable;
-use crate::fake_device::data::byte_table::ByteTable;
-use crate::fake_device::data::object_table::{ACETable, AuthorityTable, CPINTable, GenericTable, KAES256Table};
 use crate::messaging::uid::{TableUID, UID};
 use crate::messaging::value::{Bytes, Named, Value};
 use crate::rpc::MethodStatus;
@@ -18,6 +15,9 @@ use crate::spec::column_types::{
 };
 use crate::spec::objects::{ACEExpr as _, ACE};
 use crate::spec::table_id;
+use crate::virtual_device::data::access_control_table::AccessControlTable;
+use crate::virtual_device::data::byte_table::ByteTable;
+use crate::virtual_device::data::object_table::{ACETable, AuthorityTable, CPINTable, GenericTable, KAES256Table};
 
 pub struct SecurityProvider {
     pub access_control: AccessControlTable,

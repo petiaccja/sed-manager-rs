@@ -3,10 +3,10 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use crate::fake_device::data::object_table::AuthorityTable;
 use crate::spec::column_types::{AuthMethod, CredentialRef};
 use crate::spec::objects::Authority;
 use crate::spec::opal::locking::*;
+use crate::virtual_device::data::object_table::AuthorityTable;
 
 use super::{ADMIN_IDX, USER_IDX};
 

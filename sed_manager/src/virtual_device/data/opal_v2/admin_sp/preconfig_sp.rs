@@ -3,8 +3,8 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use crate::fake_device::data::object_table::SPTable;
 use crate::spec::{column_types::LifeCycleState, objects::SP, opal::admin::*};
+use crate::virtual_device::data::object_table::SPTable;
 
 pub fn preconfig_sp() -> SPTable {
     let items = [

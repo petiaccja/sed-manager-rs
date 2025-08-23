@@ -5,11 +5,11 @@
 
 use std::collections::HashMap;
 
-use crate::fake_device::data::object_table::{CPINTable, SPTable};
-use crate::fake_device::data::security_provider::SecurityProvider;
 use crate::rpc::MethodStatus;
 use crate::spec::column_types::{LifeCycleState, SPRef};
 use crate::spec::{self, opal, table_id};
+use crate::virtual_device::data::object_table::{CPINTable, SPTable};
+use crate::virtual_device::data::security_provider::SecurityProvider;
 
 pub struct SecuritySubsystemClass {
     pub security_providers: HashMap<SPRef, SecurityProvider>,

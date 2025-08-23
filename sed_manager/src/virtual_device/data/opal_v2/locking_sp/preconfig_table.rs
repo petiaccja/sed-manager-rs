@@ -4,8 +4,8 @@
 //L-----------------------------------------------------------------------------
 
 use crate::{
-    fake_device::data::object_table::TableTable,
     spec::{self, column_types::TableKind, objects::TableDesc},
+    virtual_device::data::object_table::TableTable,
 };
 
 use super::MBR_SIZE;

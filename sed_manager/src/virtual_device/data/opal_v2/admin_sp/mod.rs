@@ -3,9 +3,9 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use crate::fake_device::data::object_table::GenericTable;
-use crate::fake_device::data::security_provider::SecurityProvider;
-use crate::fake_device::god_authority::{append_god_access_control, append_god_ace, append_god_authority};
+use crate::virtual_device::data::object_table::GenericTable;
+use crate::virtual_device::data::security_provider::SecurityProvider;
+use crate::virtual_device::god_authority::{append_god_access_control, append_god_ace, append_god_authority};
 
 mod preconfig_access_control;
 mod preconfig_ace;

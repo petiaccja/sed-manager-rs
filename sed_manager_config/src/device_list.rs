@@ -236,6 +236,6 @@ fn list_blocking() -> Result<HwDeviceList, DeviceError> {
         }
     }
     #[cfg(debug_assertions)]
-    devices.push(Arc::new(sed_manager::fake_device::FakeDevice::new()) as Arc<dyn Device>);
+    devices.push(Arc::new(sed_manager::virtual_device::VirtualDevice::new()) as Arc<dyn Device>);
     Ok(HwDeviceList { opened: devices, unavailable: unavailable_devices })
 }

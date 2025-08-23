@@ -3,10 +3,6 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use crate::fake_device::data::object_table::AuthorityTable;
-use crate::fake_device::data::security_provider::SecurityProvider;
-use crate::fake_device::data::SecuritySubsystemClass;
-use crate::fake_device::protocol_stack::ProtocolStack;
 use crate::messaging::uid::UID;
 use crate::messaging::value::{Bytes, Value};
 use crate::rpc::{MethodStatus, Properties, SessionIdentifier};
@@ -19,6 +15,10 @@ use crate::spec::core::authority;
 use crate::spec::invoking_id::THIS_SP;
 use crate::spec::method_id;
 use crate::spec::table_id;
+use crate::virtual_device::data::object_table::AuthorityTable;
+use crate::virtual_device::data::security_provider::SecurityProvider;
+use crate::virtual_device::data::SecuritySubsystemClass;
+use crate::virtual_device::protocol_stack::ProtocolStack;
 
 pub struct TPer {
     pub ssc: SecuritySubsystemClass,

@@ -7,7 +7,6 @@ use std::ops::Deref as _;
 
 use crate::call_with_tuple::CallSelfWithTuple;
 use crate::device::Error;
-use crate::fake_device::tper::{SPSession, TPer};
 use crate::messaging::packet::{SubPacket, SubPacketKind};
 use crate::messaging::token::Token;
 use crate::messaging::uid::UID;
@@ -18,6 +17,7 @@ use crate::serialization::vec_without_len::VecWithoutLen;
 use crate::serialization::{Deserialize as _, InputStream, OutputStream, Serialize as _};
 use crate::spec::column_types::MethodRef;
 use crate::spec::{invoking_id, method_id, sm_method_id};
+use crate::virtual_device::tper::{SPSession, TPer};
 
 pub fn dispatch(firmware: &mut TPer, packet: Packet) -> Vec<Packet> {
     let session_id = SessionIdentifier::from(&packet);
