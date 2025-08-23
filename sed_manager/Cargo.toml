@@ -1,5 +1,5 @@
 [package]
-name = "sed-manager"
+name = "sed_manager"
 version = "0.1.1"
 edition = "2021"
 
@@ -7,9 +7,9 @@ edition = "2021"
 build = "build.rs"
 
 [dependencies]
-sed-manager-macros = { path = "../sed_manager_macros" }
-skip-test = { path = "../skip_test" }
-as-array = { path = "../as_array" }
+sed_manager_macros = { path = "../sed_manager_macros" }
+skip_test = { path = "../skip_test" }
+as_array = { path = "../as_array" }
 
 [dependencies.winapi]
 version = "0.3.9"

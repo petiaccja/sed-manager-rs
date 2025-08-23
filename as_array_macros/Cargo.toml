@@ -1,5 +1,5 @@
 [package]
-name = "as-array-macros"
+name = "as_array_macros"
 version = "0.1.1"
 edition = "2021"
 

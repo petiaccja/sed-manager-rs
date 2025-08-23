@@ -1,7 +1,7 @@
 [package]
-name = "skip-test"
+name = "skip_test"
 version = "0.1.1"
 edition = "2021"
 
 [dependencies]
-skip-test-macros = { path = "../skip_test_macros" }
+skip_test_macros = { path = "../skip_test_macros" }
