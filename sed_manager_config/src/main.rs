@@ -18,19 +18,42 @@ mod ui;
 mod utility;
 
 use backend::Backend;
+use clap::Parser;
 use core::error::Error;
 use frontend::Frontend;
 use slint::ComponentHandle;
 use std::rc::Rc;
 use utility::PeekCell;
 
+use crate::logging::Log;
+
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+struct Args {
+    /// Set log level to "trace", "debug", "info", "warn" or "error".
+    #[arg(long)]
+    log_level: Option<tracing::Level>,
+
+    /// File path to write logs, specify "stdout" to use the standard output.
+    #[arg(long)]
+    log_file: Option<std::path::PathBuf>,
+
+    /// Log sensitive data exchanged with the storage device, like passwords. ONLY FOR DEBUGGING!
+    #[arg(long, default_value_t = false)]
+    log_sensitive: bool,
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
-    let log_level = if cfg!(debug_assertions) {
-        logging::get_level().or(Some(tracing::Level::DEBUG))
-    } else {
-        logging::get_level()
-    };
-    let _guard = log_level.map(|log_level| logging::init(log_level));
+    let args = Args::parse();
+
+    let _logger = Log::start(
+        match cfg!(debug_assertions) {
+            true => args.log_level.or(Some(tracing::Level::DEBUG)),
+            false => args.log_level,
+        },
+        args.log_file,
+    );
+
     let backend = Rc::new(PeekCell::new(Backend::new()));
 
     // Load settings.
