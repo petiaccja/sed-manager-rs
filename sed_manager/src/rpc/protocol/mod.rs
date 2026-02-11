@@ -16,7 +16,7 @@ mod sync_protocol;
 mod tracing;
 
 pub use command::CommandSender;
-pub use protocol::discover;
 pub use protocol::Protocol;
+pub use protocol::discover;
 pub use runtime::{Runtime, TokioRuntime};
-pub use session_identifier::{SessionIdentifier, CONTROL_SESSION_ID};
+pub use session_identifier::{CONTROL_SESSION_ID, SessionIdentifier};

@@ -236,11 +236,7 @@ impl<T: Into<Value>> IntoMethodArgs for Vec<T> {
 impl TryFromMethodArgs for () {
     type Error = MethodStatus;
     fn try_from_method_args(args: Vec<Value>) -> Result<Self, Self::Error> {
-        if args.is_empty() {
-            Ok(())
-        } else {
-            Err(MethodStatus::InvalidParameter)
-        }
+        if args.is_empty() { Ok(()) } else { Err(MethodStatus::InvalidParameter) }
     }
 }
 

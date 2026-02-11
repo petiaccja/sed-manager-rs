@@ -1,13 +1,13 @@
 [package]
-name = "sed-manager-config-ui"
+name = "sed_manager_config_ui"
 version = "0.1.1"
-edition = "2021"
+edition = "2024"
 
 [package.metadata]
 build = "build.rs"
 
 [dependencies]
-sed-manager = { path = "../sed_manager" }
+sed_manager = { path = "../sed_manager" }
 
 [dependencies.slint]
 version = "1.12.0"

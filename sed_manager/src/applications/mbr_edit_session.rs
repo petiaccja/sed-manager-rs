@@ -11,7 +11,7 @@ use crate::spec::objects::{MBRControl, TableDesc};
 use crate::spec::table_id;
 use crate::tper::{Session, TPer};
 
-use super::{utility::start_admin1_session, Error};
+use super::{Error, utility::start_admin1_session};
 
 pub fn is_mbr_editor_supported(discovery: &Discovery) -> bool {
     // Enterprise and KPIO never support MBR shadowing.
@@ -108,7 +108,7 @@ impl MBREditSession {
 
 #[cfg(test)]
 mod tests {
-    use crate::applications::test_fixtures::{setup_activated_tper, LOCKING_ADMIN1_PASSWORD};
+    use crate::applications::test_fixtures::{LOCKING_ADMIN1_PASSWORD, setup_activated_tper};
     use crate::messaging::discovery::LockingDescriptor;
 
     use super::*;

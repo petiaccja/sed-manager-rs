@@ -68,9 +68,9 @@ mod tests {
     use std::sync::Arc;
 
     use crate::{
-        fake_device::{FakeDevice, MSID_PASSWORD},
         rpc::TokioRuntime,
         tper::TPer,
+        virtual_device::{MSID_PASSWORD, VirtualDevice},
     };
 
     use super::*;
@@ -79,7 +79,7 @@ mod tests {
     async fn activate_locking_success_no_pw() -> Result<(), Error> {
         let sid_password = MSID_PASSWORD.as_bytes();
         let new_password = None;
-        let device = Arc::new(FakeDevice::new());
+        let device = Arc::new(VirtualDevice::new());
         let runtime = Arc::new(TokioRuntime::new());
         let tper = TPer::new_on_default_com_id(device, runtime)?;
         activate_locking(&tper, sid_password, new_password).await?;
@@ -91,7 +91,7 @@ mod tests {
     async fn activate_locking_success_with_pw() -> Result<(), Error> {
         let sid_password = MSID_PASSWORD.as_bytes();
         let new_password = Some("macilaci".as_bytes());
-        let device = Arc::new(FakeDevice::new());
+        let device = Arc::new(VirtualDevice::new());
         let runtime = Arc::new(TokioRuntime::new());
         let tper = TPer::new_on_default_com_id(device, runtime)?;
         activate_locking(&tper, sid_password, new_password).await?;
@@ -103,7 +103,7 @@ mod tests {
     async fn activate_locking_already_locked() -> Result<(), Error> {
         let sid_password = MSID_PASSWORD.as_bytes();
         let new_password = Some("macilaci".as_bytes());
-        let device = Arc::new(FakeDevice::new());
+        let device = Arc::new(VirtualDevice::new());
         let runtime = Arc::new(TokioRuntime::new());
         let tper = TPer::new_on_default_com_id(device, runtime)?;
         activate_locking(&tper, sid_password, new_password).await?;

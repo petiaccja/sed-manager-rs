@@ -3,14 +3,14 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use sed_manager::fake_device::FakeDevice;
 use sed_manager::messaging::discovery::{LockingDescriptor, OpalV2Descriptor, OwnerPasswordState, TPerDescriptor};
 use sed_manager::rpc::Error as RPCError;
 use sed_manager::tper::discover;
+use sed_manager::virtual_device::VirtualDevice;
 
 #[test]
 fn discovery_normal() -> Result<(), RPCError> {
-    let device = FakeDevice::new();
+    let device = VirtualDevice::new();
     let discovery = discover(&device)?;
 
     let Some(tper_desc) = discovery.get::<TPerDescriptor>() else {

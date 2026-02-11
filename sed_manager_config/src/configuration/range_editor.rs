@@ -9,12 +9,12 @@ use sed_manager::messaging::discovery::GeometryDescriptor;
 use sed_manager::spec::objects::LockingRange;
 use slint::{ComponentHandle as _, Model as _};
 
-use sed_manager::applications::{get_locking_sp, Error as AppError, RangeEditSession};
+use sed_manager::applications::{Error as AppError, RangeEditSession, get_locking_sp};
 
-use crate::backend::{get_object_name, Backend, EditorSession};
+use crate::backend::{Backend, EditorSession, get_object_name};
 use crate::frontend::Frontend;
 use crate::ui;
-use crate::utility::{as_vec_model, into_vec_model, PeekCell};
+use crate::utility::{PeekCell, as_vec_model, into_vec_model};
 
 pub fn init(frontend: &Frontend, num_devices: usize) {
     frontend.with(|window| {

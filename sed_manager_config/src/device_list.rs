@@ -9,13 +9,13 @@ use std::sync::Arc;
 use sed_manager::messaging::discovery::Discovery;
 use slint::{ComponentHandle as _, Model, ToSharedString};
 
-use sed_manager::device::{list_physical_drives, open_device, Device, Error as DeviceError};
+use sed_manager::device::{Device, Error as DeviceError, list_physical_drives, open_device};
 use sed_manager::rpc::Error as RPCError;
 
 use crate::backend::Backend;
 use crate::frontend::Frontend;
 use crate::ui;
-use crate::utility::{into_vec_model, run_in_thread, PeekCell};
+use crate::utility::{PeekCell, into_vec_model, run_in_thread};
 
 pub fn clear(frontend: &Frontend) {
     frontend.with(|window| {
@@ -236,6 +236,6 @@ fn list_blocking() -> Result<HwDeviceList, DeviceError> {
         }
     }
     #[cfg(debug_assertions)]
-    devices.push(Arc::new(sed_manager::fake_device::FakeDevice::new()) as Arc<dyn Device>);
+    devices.push(Arc::new(sed_manager::virtual_device::VirtualDevice::new()) as Arc<dyn Device>);
     Ok(HwDeviceList { opened: devices, unavailable: unavailable_devices })
 }

@@ -16,7 +16,7 @@ use tokio::io::AsyncReadExt;
 use crate::backend::{Backend, EditorSession};
 use crate::frontend::Frontend;
 use crate::ui;
-use crate::utility::{into_vec_model, PeekCell};
+use crate::utility::{PeekCell, into_vec_model};
 
 pub fn init(frontend: &Frontend, num_devices: usize) {
     frontend.with(|window| {

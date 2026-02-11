@@ -4,8 +4,8 @@
 //L-----------------------------------------------------------------------------
 
 use core::ops::{Deref, DerefMut};
-use core::ptr::{null_mut, NonNull};
-use std::alloc::{alloc, dealloc, handle_alloc_error, Layout, LayoutError};
+use core::ptr::{NonNull, null_mut};
+use std::alloc::{Layout, LayoutError, alloc, dealloc, handle_alloc_error};
 
 pub struct AlignedArray {
     layout: Layout,

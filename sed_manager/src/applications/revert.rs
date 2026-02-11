@@ -33,17 +33,17 @@ pub async fn revert(tper: &TPer, authority: AuthorityRef, password: &[u8], sp: S
 mod tests {
     use std::sync::Arc;
 
-    use crate::applications::test_fixtures::{make_activated_device, SID_PASSWORD};
-    use crate::fake_device::{data::object_table::CPINTable, FakeDevice};
+    use crate::applications::test_fixtures::{SID_PASSWORD, make_activated_device};
     use crate::rpc::TokioRuntime;
     use crate::spec;
     use crate::spec::column_types::LifeCycleState;
     use crate::spec::table_id;
     use crate::tper::TPer;
+    use crate::virtual_device::{VirtualDevice, data::object_table::CPINTable};
 
     use super::*;
 
-    pub fn is_admin_in_factory_state(device: &FakeDevice) -> bool {
+    pub fn is_admin_in_factory_state(device: &VirtualDevice) -> bool {
         device.with_tper(|tper| {
             let admin_sp = tper.ssc.get_admin_sp().unwrap();
             let c_pin_table: &CPINTable = admin_sp.get_object_table_specific(table_id::C_PIN).unwrap();
@@ -53,7 +53,7 @@ mod tests {
         })
     }
 
-    pub fn is_locking_in_factory_state(device: &FakeDevice) -> bool {
+    pub fn is_locking_in_factory_state(device: &VirtualDevice) -> bool {
         device.with_tper(|tper| {
             println!("{:?}", tper.ssc.get_life_cycle_state(spec::opal::admin::sp::LOCKING));
             tper.ssc.get_life_cycle_state(spec::opal::admin::sp::LOCKING) == Ok(LifeCycleState::ManufacturedInactive)

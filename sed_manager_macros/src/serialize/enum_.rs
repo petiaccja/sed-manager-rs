@@ -6,7 +6,7 @@
 use std::{collections::HashMap, sync::LazyLock};
 
 use proc_macro2::TokenStream as TokenStream2;
-use quote::{format_ident, quote, TokenStreamExt};
+use quote::{TokenStreamExt, format_ident, quote};
 
 use crate::parse::numeric_enum::NumericEnum;
 

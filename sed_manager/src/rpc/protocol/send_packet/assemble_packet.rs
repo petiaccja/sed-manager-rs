@@ -5,7 +5,7 @@
 
 use core::task::Poll::*;
 
-use crate::messaging::packet::{Packet, SubPacket, PACKET_HEADER_LEN, SUB_PACKET_HEADER_LEN};
+use crate::messaging::packet::{PACKET_HEADER_LEN, Packet, SUB_PACKET_HEADER_LEN, SubPacket};
 use crate::rpc::protocol::promise::Promise;
 use crate::rpc::protocol::shared::pipe::{SinkPipe, SourcePipe};
 use crate::rpc::{Error, PackagedMethod, Properties};

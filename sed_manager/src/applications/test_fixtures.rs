@@ -5,21 +5,21 @@
 
 use std::sync::Arc;
 
-use crate::fake_device::data::object_table::CPINTable;
-use crate::fake_device::FakeDevice;
 use crate::rpc::TokioRuntime;
 use crate::spec::{self, table_id};
 use crate::tper::TPer;
+use crate::virtual_device::VirtualDevice;
+use crate::virtual_device::data::object_table::CPINTable;
 
 pub const SID_PASSWORD: &str = "sid_password";
 pub const LOCKING_ADMIN1_PASSWORD: &str = "L_admin1_pw";
 
-pub fn make_factory_device() -> FakeDevice {
-    FakeDevice::new()
+pub fn make_factory_device() -> VirtualDevice {
+    VirtualDevice::new()
 }
 
-pub fn make_owned_device() -> FakeDevice {
-    let device = FakeDevice::new();
+pub fn make_owned_device() -> VirtualDevice {
+    let device = VirtualDevice::new();
     device.with_tper_mut(|tper| {
         let admin_sp = tper.ssc.get_admin_sp_mut().unwrap();
         let c_pin_table: &mut CPINTable = admin_sp.get_object_table_specific_mut(table_id::C_PIN).unwrap();
@@ -29,7 +29,7 @@ pub fn make_owned_device() -> FakeDevice {
     device
 }
 
-pub fn make_activated_device() -> FakeDevice {
+pub fn make_activated_device() -> VirtualDevice {
     let device = make_owned_device();
     device.with_tper_mut(|tper| {
         tper.ssc.activate_sp(spec::opal::admin::sp::LOCKING).unwrap();

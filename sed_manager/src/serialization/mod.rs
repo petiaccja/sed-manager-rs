@@ -11,7 +11,7 @@ mod stream;
 pub mod vec_with_len;
 pub mod vec_without_len;
 
-pub use error::{annotate_field, Error};
+pub use error::{Error, annotate_field};
 pub use sed_manager_macros::{Deserialize, Serialize};
 pub use serialize::{Deserialize, DeserializeBinary, Serialize, SerializeBinary};
 pub use stream::{ByteOrder, InputStream, ItemRead, ItemWrite, OutputStream, Seek, SeekFrom};

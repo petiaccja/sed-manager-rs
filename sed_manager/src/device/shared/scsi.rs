@@ -79,7 +79,9 @@ pub enum SenseKey {
     UnitAttention = 0x6,
     #[error("Data protect: the read/written block is protected")]
     DataProtect = 0x7,
-    #[error("Blank check: a write-once device or a sequential-access device encountered blank medium or format-defined end-of-data")]
+    #[error(
+        "Blank check: a write-once device or a sequential-access device encountered blank medium or format-defined end-of-data"
+    )]
     BlankCheck = 0x8,
     #[error("Vendor specific: the sense data is vendor specific")]
     VendorSpecific = 0x9,
@@ -87,7 +89,9 @@ pub enum SenseKey {
     AbortedCopy = 0xA,
     #[error("Aborted command: the device server aborted the command")]
     AbortedCommand = 0xB,
-    #[error("Volume overflow: a buffered SCSI device has reached the end-of-partition and data may remain in the buffer that has not been written to the medium")]
+    #[error(
+        "Volume overflow: a buffered SCSI device has reached the end-of-partition and data may remain in the buffer that has not been written to the medium"
+    )]
     VolumeOverflow = 0xD,
     #[error("Miscompare: the source data did not match the data read from the medium")]
     Miscompare = 0xE,

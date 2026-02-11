@@ -7,11 +7,11 @@ use core::task::Poll::*;
 
 use crate::messaging::packet::{SubPacket, SubPacketKind};
 use crate::messaging::token::Token;
-use crate::rpc::protocol::shared::pipe::{SinkPipe, SourcePipe};
 use crate::rpc::Error;
+use crate::rpc::protocol::shared::pipe::{SinkPipe, SourcePipe};
 
-use crate::serialization::vec_without_len::VecWithoutLen;
 use crate::serialization::DeserializeBinary;
+use crate::serialization::vec_without_len::VecWithoutLen;
 
 pub type Input = SubPacket;
 pub type Output = Result<Token, Error>;

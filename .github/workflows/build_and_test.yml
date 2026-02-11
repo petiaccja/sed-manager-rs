@@ -35,8 +35,14 @@ jobs:
     - name: Install dependencies
       if: matrix.os == 'ubuntu-latest'
       run: |
-        sudo apt install libfontconfig-dev
-        sudo apt install libfreetype-dev        
+        sudo apt-get update
+        sudo apt-get install libfontconfig-dev
+        sudo apt-get install libfreetype-dev
+
+    - name: Install Rust toolchain
+      run: |
+        rustup toolchain install 1.92
+        rustup default 1.92
 
     - name: Build
       run: cargo build --profile ${{ matrix.cargo_profile }} --verbose
@@ -49,8 +55,8 @@ jobs:
       with:
         name: sed-manager-${{ matrix.os_name }}-${{ matrix.cargo_profile }}
         path: |
-          ${{ github.workspace }}/target/${{ matrix.cargo_folder }}/sed-manager-config*
-          ${{ github.workspace }}/target/${{ matrix.cargo_folder }}/sed-manager-unlock*
+          ${{ github.workspace }}/target/${{ matrix.cargo_folder }}/sed_manager_config*
+          ${{ github.workspace }}/target/${{ matrix.cargo_folder }}/sed_manager_unlock*
           !${{ github.workspace }}/target/${{ matrix.cargo_folder }}/*.d
           !${{ github.workspace }}/target/${{ matrix.cargo_folder }}/*.pdb
         if-no-files-found: error

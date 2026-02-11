@@ -7,7 +7,7 @@ use core::ops::{Deref, DerefMut};
 use core::time::Duration;
 
 use crate::serialization::{
-    vec_with_len::VecWithLen, Deserialize, Error as SerializeError, InputStream, ItemRead, OutputStream, Serialize,
+    Deserialize, Error as SerializeError, InputStream, ItemRead, OutputStream, Serialize, vec_with_len::VecWithLen,
 };
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]

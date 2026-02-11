@@ -5,8 +5,8 @@
 
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
-use quote::{quote, TokenStreamExt};
-use syn::{self, parse_macro_input, DeriveInput};
+use quote::{TokenStreamExt, quote};
+use syn::{self, DeriveInput, parse_macro_input};
 
 use crate::parse::data_enum::DataEnum;
 

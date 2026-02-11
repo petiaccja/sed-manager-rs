@@ -9,8 +9,8 @@ use crate::spec::objects::LockingRange;
 use crate::spec::table_id;
 use crate::tper::{Session, TPer};
 
-use super::utility::start_admin1_session;
 use super::Error;
+use super::utility::start_admin1_session;
 
 pub fn is_range_editor_supported(discovery: &Discovery) -> bool {
     // KPIO uses a different system.
@@ -95,7 +95,7 @@ impl RangeEditSession {
 
 #[cfg(test)]
 mod tests {
-    use crate::applications::test_fixtures::{setup_activated_tper, LOCKING_ADMIN1_PASSWORD};
+    use crate::applications::test_fixtures::{LOCKING_ADMIN1_PASSWORD, setup_activated_tper};
     use crate::spec;
 
     use super::*;

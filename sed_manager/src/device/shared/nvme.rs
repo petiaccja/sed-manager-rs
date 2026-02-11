@@ -104,7 +104,9 @@ pub enum GenericStatusCode {
     AccessDenied = 0x15,
     #[error("SGL offset invalid")]
     InvalidSGLOffset = 0x16,
-    #[error("Host identifier inconsistent format: the NVM subsystem detected the simultaneous use of 64-bit and 128-bit Host Identifier values on different controllers")]
+    #[error(
+        "Host identifier inconsistent format: the NVM subsystem detected the simultaneous use of 64-bit and 128-bit Host Identifier values on different controllers"
+    )]
     InconsistentHostIdentifier = 0x18,
     #[error("Keep alive timer expired")]
     KeepAliveExpored = 0x19,
@@ -122,7 +124,9 @@ pub enum GenericStatusCode {
     CommandNotSupportedForCMB = 0x1F,
     #[error("Namespace is write protected: the command is prohibited while the namespace is write protected")]
     NamespaceWriteProtected = 0x20,
-    #[error("Command interrupted: command processing was interrupted and the controller is unable to successfully complete the command")]
+    #[error(
+        "Command interrupted: command processing was interrupted and the controller is unable to successfully complete the command"
+    )]
     Interrupted = 0x21,
     #[error("Transient ASDacement Handle List")]
     InvalidPlacementHandleList = 0x2A,
@@ -132,7 +136,9 @@ pub enum GenericStatusCode {
     CapacityExceeded = 0x81,
     #[error("Namespace not ready: the namespace is not ready to be accessed")]
     NamespaceNotReady = 0x82,
-    #[error("Reservation conflict: the command was aborted due to a conflict with a reservation held on the accessed namespace")]
+    #[error(
+        "Reservation conflict: the command was aborted due to a conflict with a reservation held on the accessed namespace"
+    )]
     ReservationConflict = 0x83,
     #[error("Format in progress: a Format NVM command is in progress on the namespace")]
     FormatInProgress = 0x84,

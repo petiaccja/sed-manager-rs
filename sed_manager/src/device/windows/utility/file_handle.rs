@@ -14,7 +14,7 @@ use winapi::{
     },
 };
 
-use crate::device::{shared::string::ToNullTerminated, Error};
+use crate::device::{Error, shared::string::ToNullTerminated};
 
 use crate::device::windows::error::get_last_error;
 

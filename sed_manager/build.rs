@@ -161,11 +161,7 @@ impl SecurityProvider {
     }
 
     fn canonical_name(&self) -> &str {
-        if self.name != "*" {
-            &self.name
-        } else {
-            "all"
-        }
+        if self.name != "*" { &self.name } else { "all" }
     }
 
     fn ident(&self) -> Ident {

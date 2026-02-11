@@ -9,7 +9,7 @@ use crate::spec::objects::{Authority, CPIN};
 use crate::spec::table_id;
 use crate::tper::{Session, TPer};
 
-use super::{utility::start_admin1_session, Error};
+use super::{Error, utility::start_admin1_session};
 
 pub fn is_user_editor_supported(discovery: &Discovery) -> bool {
     // Enterprise does not allow changing authorities, aside from their password.
@@ -86,7 +86,7 @@ impl UserEditSession {
 mod tests {
     use super::*;
 
-    use crate::applications::test_fixtures::{setup_activated_tper, LOCKING_ADMIN1_PASSWORD};
+    use crate::applications::test_fixtures::{LOCKING_ADMIN1_PASSWORD, setup_activated_tper};
     use crate::spec;
 
     #[tokio::test]

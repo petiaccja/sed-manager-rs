@@ -5,12 +5,12 @@
 
 pub mod applications;
 pub mod device;
-pub mod fake_device;
 pub mod messaging;
 pub mod rpc;
 pub mod serialization;
 pub mod spec;
 pub mod tper;
+pub mod virtual_device;
 
 mod call_with_tuple;
 mod variadics;

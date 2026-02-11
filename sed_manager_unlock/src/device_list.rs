@@ -5,7 +5,7 @@
 
 use std::sync::Arc;
 
-use sed_manager::device::{list_physical_drives, open_device, Device, Error as DeviceError};
+use sed_manager::device::{Device, Error as DeviceError, list_physical_drives, open_device};
 use sed_manager::messaging::discovery::{Discovery, LockingDescriptor};
 use sed_manager::rpc::discover;
 

@@ -16,15 +16,15 @@ use crate::messaging::packet::ComPacket;
 use crate::rpc::{Error, PackagedMethod, Properties, SessionIdentifier};
 use crate::serialization::DeserializeBinary;
 
+use super::CommandSender;
 use super::command::Command;
 use super::promise::Promise;
-use super::receive_packet::{self, commit, ReceivePacket};
+use super::receive_packet::{self, ReceivePacket, commit};
 use super::runtime::{DynamicTimer, Runtime, Timer};
 use super::send_packet::{self, SendPacket};
 use super::shared::buffer::Buffer;
 use super::shared::pipe::{SinkPipe, SourcePipe};
 use super::sync_protocol::{roundtrip_com_id, roundtrip_packet};
-use super::CommandSender;
 
 pub struct Protocol {
     rx: mpsc::UnboundedReceiver<Command>,
@@ -309,14 +309,14 @@ pub fn discover(device: &dyn Device) -> Result<Discovery, Error> {
 mod tests {
     use super::*;
     use crate::{
-        fake_device::{FakeDevice, BASE_COM_ID},
-        rpc::{protocol::runtime::TokioRuntime, MethodCall},
+        rpc::{MethodCall, protocol::runtime::TokioRuntime},
         spec::{invoking_id::SESSION_MANAGER, sm_method_id::PROPERTIES},
+        virtual_device::{BASE_COM_ID, VirtualDevice},
     };
 
     #[tokio::test]
     async fn send_com_id_success() {
-        let device = Arc::new(FakeDevice::new()) as Arc<dyn Device>;
+        let device = Arc::new(VirtualDevice::new()) as Arc<dyn Device>;
         let runtime = TokioRuntime::new();
         let (command, done) = Protocol::spawn(device, &runtime, BASE_COM_ID, 0, Properties::ASSUMED);
 
@@ -331,7 +331,7 @@ mod tests {
 
     #[tokio::test]
     async fn send_session_success() {
-        let device = Arc::new(FakeDevice::new()) as Arc<dyn Device>;
+        let device = Arc::new(VirtualDevice::new()) as Arc<dyn Device>;
         let runtime = TokioRuntime::new();
         let (command, done) = Protocol::spawn(device, &runtime, BASE_COM_ID, 0, Properties::ASSUMED);
         let id = SessionIdentifier { hsn: 0, tsn: 0 };

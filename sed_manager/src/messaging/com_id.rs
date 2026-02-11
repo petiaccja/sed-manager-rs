@@ -3,7 +3,7 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use crate::serialization::{vec_with_len::VecWithLen, Deserialize, InputStream, Serialize};
+use crate::serialization::{Deserialize, InputStream, Serialize, vec_with_len::VecWithLen};
 
 /// The transfer length for IF-RECV for HANDLE_COM_ID_REQUESTs that fits the
 /// response for NO_RESPONSE_AVAILABLE, VERIFY_COM_ID_VALID, and STACK_RESET

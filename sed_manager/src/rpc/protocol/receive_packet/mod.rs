@@ -243,10 +243,10 @@ mod tests {
 
     use crate::messaging::packet::{SubPacket, SubPacketKind};
     use crate::messaging::token::{SerializeTokens, Tag};
-    use crate::rpc::args::IntoMethodArgs;
     use crate::rpc::MethodCall;
-    use crate::serialization::vec_without_len::VecWithoutLen;
+    use crate::rpc::args::IntoMethodArgs;
     use crate::serialization::SerializeBinary;
+    use crate::serialization::vec_without_len::VecWithoutLen;
     use crate::spec::invoking_id::SESSION_MANAGER;
     use crate::spec::sm_method_id;
 

@@ -137,11 +137,7 @@ where
             return None;
         }
         let new_expr = stack.pop().unwrap_or(vec![]);
-        if new_expr.as_slice() == pattern {
-            Some(vec![])
-        } else {
-            Some(new_expr)
-        }
+        if new_expr.as_slice() == pattern { Some(vec![]) } else { Some(new_expr) }
     }
 
     fn normalize(&self) -> Option<Vec<ACEOperand>> {

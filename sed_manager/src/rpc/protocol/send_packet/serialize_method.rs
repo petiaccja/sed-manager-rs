@@ -11,8 +11,8 @@ use crate::rpc::protocol::promise::Promise;
 use crate::rpc::protocol::shared::pipe::{SinkPipe, SourcePipe};
 use crate::rpc::protocol::tracing::trace_method;
 use crate::rpc::{Error, PackagedMethod, Properties};
-use crate::serialization::vec_without_len::VecWithoutLen;
 use crate::serialization::SerializeBinary;
+use crate::serialization::vec_without_len::VecWithoutLen;
 
 pub type Input = Promise<PackagedMethod, PackagedMethod, Error>;
 pub type Output = Promise<SubPacket, PackagedMethod, Error>;

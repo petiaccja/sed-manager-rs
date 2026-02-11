@@ -106,7 +106,12 @@ fn serialize_struct_rounded_field() {
     let mut os = OutputStream::<u8>::new();
     data.serialize(&mut os).unwrap();
 
-    assert_eq!(os.as_slice(), [0x12_u8, 0x34_u8, 0x00_u8, 0x00_u8, 0x00_u8, 0x00_u8, 0x00_u8, 0x00_u8])
+    assert_eq!(
+        os.as_slice(),
+        [
+            0x12_u8, 0x34_u8, 0x00_u8, 0x00_u8, 0x00_u8, 0x00_u8, 0x00_u8, 0x00_u8
+        ]
+    )
 }
 
 #[test]
@@ -116,7 +121,12 @@ fn serialize_struct_rounded_struct_single() {
     let mut os = OutputStream::<u8>::new();
     data.serialize(&mut os).unwrap();
 
-    assert_eq!(os.as_slice(), [0x12_u8, 0x34_u8, 0x00_u8, 0x00_u8, 0x00_u8, 0x00_u8, 0x00_u8, 0x00_u8])
+    assert_eq!(
+        os.as_slice(),
+        [
+            0x12_u8, 0x34_u8, 0x00_u8, 0x00_u8, 0x00_u8, 0x00_u8, 0x00_u8, 0x00_u8
+        ]
+    )
 }
 
 #[test]
@@ -126,7 +136,12 @@ fn serialize_struct_rounded_struct_multiple() {
     let mut os = OutputStream::<u8>::new();
     data.serialize(&mut os).unwrap();
 
-    assert_eq!(os.as_slice(), [0x12_u8, 0x34_u8, 0x56_u8, 0x78_u8, 0x91_u8, 0x01_u8, 0x11_u8, 0x26_u8, 0x00])
+    assert_eq!(
+        os.as_slice(),
+        [
+            0x12_u8, 0x34_u8, 0x56_u8, 0x78_u8, 0x91_u8, 0x01_u8, 0x11_u8, 0x26_u8, 0x00
+        ]
+    )
 }
 
 const DESERIALIZE_DATA: [u8; 9] = [

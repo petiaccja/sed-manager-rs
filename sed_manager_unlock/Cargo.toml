@@ -1,10 +1,10 @@
 [package]
-name = "sed-manager-unlock"
+name = "sed_manager_unlock"
 version = "0.1.1"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
-sed-manager = { path = "../sed_manager" }
+sed_manager = { path = "../sed_manager" }
 time = "= 0.3.38" # 0.3.40 does not compile.
 
 [dependencies.tokio]

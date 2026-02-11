@@ -198,9 +198,5 @@ const TIMEOUT: u32 = 10;
 
 fn check_ata_status(task_file: &[u8; 8]) -> Result<(), DeviceError> {
     let status = ATAError::from_task_file(task_file.clone());
-    if status.success() {
-        Ok(())
-    } else {
-        Err(DeviceError::ATAError(status))
-    }
+    if status.success() { Ok(()) } else { Err(DeviceError::ATAError(status)) }
 }

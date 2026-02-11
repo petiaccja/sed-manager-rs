@@ -6,7 +6,7 @@
 use std::sync::Arc;
 
 use sed_manager::applications::{
-    get_feature_lookup, Error as AppError, MBREditSession, PermissionEditSession, RangeEditSession, UserEditSession,
+    Error as AppError, MBREditSession, PermissionEditSession, RangeEditSession, UserEditSession, get_feature_lookup,
 };
 use sed_manager::device::{Device, Error as DeviceError};
 use sed_manager::messaging::discovery::{Discovery, Feature};

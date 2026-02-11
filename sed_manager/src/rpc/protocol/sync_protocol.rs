@@ -5,7 +5,7 @@
 
 use crate::device::Device;
 use crate::messaging::com_id::{
-    HandleComIdRequest, HandleComIdResponse, HANDLE_COM_ID_PROTOCOL, HANDLE_COM_ID_RESPONSE_LEN,
+    HANDLE_COM_ID_PROTOCOL, HANDLE_COM_ID_RESPONSE_LEN, HandleComIdRequest, HandleComIdResponse,
 };
 use crate::messaging::packet::{ComPacket, PACKETIZED_PROTOCOL};
 use crate::rpc::{Error, Properties};

@@ -5,7 +5,7 @@
 
 use core::ops::Deref;
 
-use crate::serialization::{vec_with_len::VecWithLen, Deserialize, Serialize};
+use crate::serialization::{Deserialize, Serialize, vec_with_len::VecWithLen};
 
 pub const COM_PACKET_HEADER_LEN: usize = 20;
 pub const PACKET_HEADER_LEN: usize = 24;
