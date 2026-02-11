@@ -11,8 +11,8 @@ pub use locking_sp::new_locking_sp;
 
 use crate::spec::column_types::SPRef;
 use crate::spec::opal;
-use crate::virtual_device::data::security_provider::SecurityProvider;
 use crate::virtual_device::data::SecuritySubsystemClass;
+use crate::virtual_device::data::security_provider::SecurityProvider;
 
 pub fn new_controller() -> SecuritySubsystemClass {
     SecuritySubsystemClass::new(sp_factory, &[opal::admin::sp::ADMIN, opal::admin::sp::LOCKING])

@@ -3,7 +3,7 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use super::{annotate_field, stream::Seek, Deserialize, Error, InputStream, OutputStream, Serialize};
+use super::{Deserialize, Error, InputStream, OutputStream, Serialize, annotate_field, stream::Seek};
 use core::{ops::Deref, ops::DerefMut};
 
 /// A vector of `T` with special a serialization format.

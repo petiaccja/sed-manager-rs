@@ -13,7 +13,7 @@ use crate::spec::column_types::{
     ACERef, AuthorityRef, BoolOrBytes, BytesOrRowValues, CPINRef, CellBlock, CellBlockWrite, CredentialRef, KAES256Ref,
     Key256, MethodRef,
 };
-use crate::spec::objects::{ACEExpr as _, ACE};
+use crate::spec::objects::{ACE, ACEExpr as _};
 use crate::spec::table_id;
 use crate::virtual_device::data::access_control_table::AccessControlTable;
 use crate::virtual_device::data::byte_table::ByteTable;

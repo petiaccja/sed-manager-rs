@@ -11,7 +11,7 @@ use winapi::{
     um::{
         ioapiset::DeviceIoControl,
         winioctl::{
-            PropertyStandardQuery, StorageDeviceProperty, IOCTL_STORAGE_QUERY_PROPERTY, STORAGE_PROPERTY_QUERY,
+            IOCTL_STORAGE_QUERY_PROPERTY, PropertyStandardQuery, STORAGE_PROPERTY_QUERY, StorageDeviceProperty,
         },
     },
 };
@@ -19,7 +19,7 @@ use winapi::{
 use crate::device::windows::error::get_last_error;
 use crate::device::windows::utility::file_handle::FileHandle;
 use crate::device::windows::utility::ioctl::{STORAGE_BUS_TYPE, STORAGE_DEVICE_DESCRIPTOR};
-use crate::device::{shared::string::FromNullTerminated, Device, Error, Interface};
+use crate::device::{Device, Error, Interface, shared::string::FromNullTerminated};
 
 pub struct GenericDevice {
     file: FileHandle,

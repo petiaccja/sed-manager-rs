@@ -10,7 +10,7 @@ mod struct_;
 mod validate;
 
 use proc_macro::TokenStream;
-use syn::{parse_macro_input, spanned::Spanned, DeriveInput};
+use syn::{DeriveInput, parse_macro_input, spanned::Spanned};
 
 use enum_::{gen_deserialize_enum, gen_serialize_enum};
 use struct_::{gen_deserialize_struct, gen_serialize_struct};

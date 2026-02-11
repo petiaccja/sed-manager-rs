@@ -12,13 +12,13 @@ use winapi::{
     shared::{
         minwindef::DWORD,
         winerror::{
-            ERROR_ACCESS_DENIED, ERROR_FILE_NOT_FOUND, ERROR_INVALID_DATA, ERROR_INVALID_PARAMETER,
-            ERROR_NOT_SUPPORTED, ERROR_PATH_NOT_FOUND, E_ACCESSDENIED, E_INVALIDARG, FAILED,
+            E_ACCESSDENIED, E_INVALIDARG, ERROR_ACCESS_DENIED, ERROR_FILE_NOT_FOUND, ERROR_INVALID_DATA,
+            ERROR_INVALID_PARAMETER, ERROR_NOT_SUPPORTED, ERROR_PATH_NOT_FOUND, FAILED,
         },
     },
     um::{
         errhandlingapi::GetLastError,
-        winbase::{FormatMessageW, FORMAT_MESSAGE_FROM_SYSTEM, FORMAT_MESSAGE_IGNORE_INSERTS},
+        winbase::{FORMAT_MESSAGE_FROM_SYSTEM, FORMAT_MESSAGE_IGNORE_INSERTS, FormatMessageW},
         winnt::{HRESULT, LANG_NEUTRAL, MAKELANGID, SUBLANG_DEFAULT},
     },
 };
@@ -76,11 +76,7 @@ pub fn get_last_error() -> Result<(), Error> {
 }
 
 pub fn check_hresult(hr: HRESULT) -> Result<(), Error> {
-    if FAILED(hr) {
-        Err(Error::COM(hr))
-    } else {
-        Ok(())
-    }
+    if FAILED(hr) { Err(Error::COM(hr)) } else { Ok(()) }
 }
 
 fn format_win32_error(code: DWORD) -> Option<String> {

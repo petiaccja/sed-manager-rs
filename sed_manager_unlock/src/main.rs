@@ -26,11 +26,7 @@ use device_list::DeviceList;
 use error::Error;
 
 fn check_quit(input: &str) -> Result<(), Error> {
-    if input == ":q" || input == ":exit" {
-        Err(Error::Quit)
-    } else {
-        Ok(())
-    }
+    if input == ":q" || input == ":exit" { Err(Error::Quit) } else { Ok(()) }
 }
 
 fn read_line() -> Result<String, Error> {

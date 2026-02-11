@@ -12,7 +12,7 @@ use crate::messaging::token::Token;
 use crate::messaging::uid::UID;
 use crate::messaging::{packet::Packet, value::Value};
 use crate::rpc::args::{IntoMethodArgs, TryFromMethodArgs, UnwrapMethodArgs as _};
-use crate::rpc::{MethodCall, MethodResult, MethodStatus, PackagedMethod, SessionIdentifier, CONTROL_SESSION_ID};
+use crate::rpc::{CONTROL_SESSION_ID, MethodCall, MethodResult, MethodStatus, PackagedMethod, SessionIdentifier};
 use crate::serialization::vec_without_len::VecWithoutLen;
 use crate::serialization::{Deserialize as _, InputStream, OutputStream, Serialize as _};
 use crate::spec::column_types::MethodRef;

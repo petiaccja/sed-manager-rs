@@ -8,12 +8,12 @@ use std::rc::Rc;
 use sed_manager_config_ui::ExtendedStatus;
 use slint::{ComponentHandle as _, Model, SharedString};
 
-use sed_manager::applications::{self, get_admin_sp, Error as AppError};
+use sed_manager::applications::{self, Error as AppError, get_admin_sp};
 
-use crate::backend::{get_object_name, Backend, EditorSession};
+use crate::backend::{Backend, EditorSession, get_object_name};
 use crate::frontend::Frontend;
 use crate::ui;
-use crate::utility::{into_vec_model, PeekCell};
+use crate::utility::{PeekCell, into_vec_model};
 
 pub fn init(frontend: &Frontend, num_devices: usize) {
     frontend.with(|window| {

@@ -16,7 +16,7 @@ use crate::virtual_device::data::opal_v2;
 use crate::virtual_device::tper::TPer;
 
 use super::com_id_session::ComIDSession;
-use super::discovery::{get_discovery, write_discovery, BASE_COM_ID, NUM_COM_IDS};
+use super::discovery::{BASE_COM_ID, NUM_COM_IDS, get_discovery, write_discovery};
 
 const ROUTE_DISCOVERY: Route = Route { protocol: 0x01, com_id: 0x0001 };
 const ROUTE_GET_COMID: Route = Route { protocol: 0x02, com_id: 0x0000 };

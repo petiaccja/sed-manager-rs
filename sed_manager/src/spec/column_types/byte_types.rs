@@ -54,7 +54,7 @@ impl From<String> for Name {
 impl TryFrom<Name> for String {
     type Error = FromUtf8Error;
     fn try_from(value: Name) -> Result<Self, Self::Error> {
-        String::from_utf8(value.0 .0)
+        String::from_utf8(value.0.0)
     }
 }
 
@@ -73,6 +73,6 @@ impl From<String> for Password {
 impl TryFrom<Password> for String {
     type Error = FromUtf8Error;
     fn try_from(value: Password) -> Result<Self, Self::Error> {
-        String::from_utf8(value.0 .0)
+        String::from_utf8(value.0.0)
     }
 }

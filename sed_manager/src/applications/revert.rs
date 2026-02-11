@@ -33,13 +33,13 @@ pub async fn revert(tper: &TPer, authority: AuthorityRef, password: &[u8], sp: S
 mod tests {
     use std::sync::Arc;
 
-    use crate::applications::test_fixtures::{make_activated_device, SID_PASSWORD};
+    use crate::applications::test_fixtures::{SID_PASSWORD, make_activated_device};
     use crate::rpc::TokioRuntime;
     use crate::spec;
     use crate::spec::column_types::LifeCycleState;
     use crate::spec::table_id;
     use crate::tper::TPer;
-    use crate::virtual_device::{data::object_table::CPINTable, VirtualDevice};
+    use crate::virtual_device::{VirtualDevice, data::object_table::CPINTable};
 
     use super::*;
 

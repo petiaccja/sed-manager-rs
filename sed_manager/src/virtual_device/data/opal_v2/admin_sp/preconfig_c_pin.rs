@@ -6,7 +6,7 @@
 use crate::spec::opal::admin::*;
 use crate::spec::{self, objects::CPIN};
 use crate::virtual_device::PSID_PASSWORD;
-use crate::virtual_device::{data::object_table::CPINTable, MSID_PASSWORD};
+use crate::virtual_device::{MSID_PASSWORD, data::object_table::CPINTable};
 
 use super::ADMIN_IDX;
 

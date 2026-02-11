@@ -292,7 +292,7 @@ impl<'value> TryFrom<&'value Value> for &'value Named {
     type Error = &'value Value;
     fn try_from(value: &'value Value) -> Result<Self, Self::Error> {
         match value {
-            Value::Named(ref value) => Ok(&*value),
+            Value::Named(value) => Ok(&*value),
             _ => Err(value),
         }
     }
@@ -302,7 +302,7 @@ impl<'value> TryFrom<&'value Value> for &'value Bytes {
     type Error = &'value Value;
     fn try_from(value: &'value Value) -> Result<Self, Self::Error> {
         match value {
-            Value::Bytes(ref value) => Ok(value),
+            Value::Bytes(value) => Ok(value),
             _ => Err(value),
         }
     }
@@ -312,7 +312,7 @@ impl<'value> TryFrom<&'value Value> for &'value [u8] {
     type Error = &'value Value;
     fn try_from(value: &'value Value) -> Result<Self, Self::Error> {
         match value {
-            Value::Bytes(ref items) => match Self::try_from(items.as_slice()) {
+            Value::Bytes(items) => match Self::try_from(items.as_slice()) {
                 Ok(array) => Ok(array),
                 Err(_) => Err(value),
             },
@@ -325,7 +325,7 @@ impl<'value, const N: usize> TryFrom<&'value Value> for &'value [u8; N] {
     type Error = &'value Value;
     fn try_from(value: &'value Value) -> Result<Self, Self::Error> {
         match value {
-            Value::Bytes(ref items) => match Self::try_from(items.as_slice()) {
+            Value::Bytes(items) => match Self::try_from(items.as_slice()) {
                 Ok(array) => Ok(array),
                 Err(_) => Err(value),
             },
@@ -338,7 +338,7 @@ impl<'value> TryFrom<&'value Value> for &'value List {
     type Error = &'value Value;
     fn try_from(value: &'value Value) -> Result<Self, Self::Error> {
         match value {
-            Value::List(ref value) => Ok(value),
+            Value::List(value) => Ok(value),
             _ => Err(value),
         }
     }
@@ -348,7 +348,7 @@ impl<'value> TryFrom<&'value Value> for Named {
     type Error = &'value Value;
     fn try_from(value: &'value Value) -> Result<Self, Self::Error> {
         match value {
-            Value::Named(ref value) => Ok(value.as_ref().clone()),
+            Value::Named(value) => Ok(value.as_ref().clone()),
             _ => Err(value),
         }
     }
@@ -358,7 +358,7 @@ impl<'value> TryFrom<&'value Value> for Bytes {
     type Error = &'value Value;
     fn try_from(value: &'value Value) -> Result<Self, Self::Error> {
         match value {
-            Value::Bytes(ref value) => Ok(value.clone()),
+            Value::Bytes(value) => Ok(value.clone()),
             _ => Err(value),
         }
     }
@@ -368,7 +368,7 @@ impl<'value, const N: usize> TryFrom<&'value Value> for [u8; N] {
     type Error = &'value Value;
     fn try_from(value: &'value Value) -> Result<Self, Self::Error> {
         match value {
-            Value::Bytes(ref items) => match Self::try_from(items.as_slice()) {
+            Value::Bytes(items) => match Self::try_from(items.as_slice()) {
                 Ok(array) => Ok(array),
                 Err(_) => Err(value),
             },
@@ -381,7 +381,7 @@ impl<'value> TryFrom<&'value Value> for List {
     type Error = &'value Value;
     fn try_from(value: &'value Value) -> Result<Self, Self::Error> {
         match value {
-            Value::List(ref value) => Ok(value.clone()),
+            Value::List(value) => Ok(value.clone()),
             _ => Err(value),
         }
     }

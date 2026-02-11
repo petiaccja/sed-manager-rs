@@ -3,8 +3,8 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use crate::spec::objects::{ace::ace_expr, ACE};
-use crate::spec::objects::{Authority, LockingRange, MBRControl, CPIN, KAES256};
+use crate::spec::objects::{ACE, ace::ace_expr};
+use crate::spec::objects::{Authority, CPIN, KAES256, LockingRange, MBRControl};
 use crate::spec::opal::locking::*;
 use crate::virtual_device::data::object_table::ACETable;
 

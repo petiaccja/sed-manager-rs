@@ -15,9 +15,9 @@ use crate::spec::core::authority;
 use crate::spec::invoking_id::THIS_SP;
 use crate::spec::method_id;
 use crate::spec::table_id;
+use crate::virtual_device::data::SecuritySubsystemClass;
 use crate::virtual_device::data::object_table::AuthorityTable;
 use crate::virtual_device::data::security_provider::SecurityProvider;
-use crate::virtual_device::data::SecuritySubsystemClass;
 use crate::virtual_device::protocol_stack::ProtocolStack;
 
 pub struct TPer {

@@ -3,7 +3,7 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use quote::{quote, ToTokens};
+use quote::{ToTokens, quote};
 use syn::{self, spanned::Spanned};
 
 use super::ByteOrder;

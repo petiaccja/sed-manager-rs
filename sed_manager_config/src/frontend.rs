@@ -18,10 +18,6 @@ impl Frontend {
     }
 
     pub fn with<Output>(&self, f: impl FnOnce(ui::AppWindow) -> Output) -> Option<Output> {
-        if let Some(value) = self.value.upgrade() {
-            Some(f(value))
-        } else {
-            None
-        }
+        if let Some(value) = self.value.upgrade() { Some(f(value)) } else { None }
     }
 }

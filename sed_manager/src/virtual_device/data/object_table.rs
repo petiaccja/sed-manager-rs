@@ -11,7 +11,7 @@ use crate::messaging::uid::{TableUID, UID};
 use crate::spec::column_types::{
     ACERef, AuthorityRef, CPINRef, KAES256Ref, LockingRangeRef, MBRControlRef, SPRef, TableDescRef,
 };
-use crate::spec::objects::{Authority, LockingRange, MBRControl, TableDesc, ACE, CPIN, KAES256, SP};
+use crate::spec::objects::{ACE, Authority, CPIN, KAES256, LockingRange, MBRControl, SP, TableDesc};
 use crate::spec::table_id;
 
 use super::object::GenericObject;

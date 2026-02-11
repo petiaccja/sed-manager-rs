@@ -200,11 +200,7 @@ impl Serialize<u8> for Token {
 
 fn extend_tiny_atom(data: u8, is_signed: bool) -> u8 {
     let extension = if is_signed {
-        if (data >> 5) & 1 == 0 {
-            0b0000_0000
-        } else {
-            0b1100_0000
-        }
+        if (data >> 5) & 1 == 0 { 0b0000_0000 } else { 0b1100_0000 }
     } else {
         0b0000_0000
     };

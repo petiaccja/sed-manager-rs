@@ -7,7 +7,7 @@ use core::any::Any;
 
 use crate::messaging::uid::UID;
 use crate::messaging::value::Value;
-use crate::spec::objects::{Authority, LockingRange, MBRControl, TableDesc, ACE, CPIN, KAES256, SP};
+use crate::spec::objects::{ACE, Authority, CPIN, KAES256, LockingRange, MBRControl, SP, TableDesc};
 
 pub trait GenericObject {
     fn uid(&self) -> UID;

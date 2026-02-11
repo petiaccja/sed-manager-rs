@@ -104,8 +104,8 @@ impl<const TABLE_MASK: u64> TryFrom<UIDRange> for ObjectUIDRange<TABLE_MASK> {
 
 #[cfg(test)]
 mod tests {
-    use super::UIDRange;
     use super::UID;
+    use super::UIDRange;
 
     const BASE: UID = UID::new(1000);
 

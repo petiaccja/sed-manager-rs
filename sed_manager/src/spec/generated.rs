@@ -29,7 +29,7 @@ include!(concat!(env!("OUT_DIR"), "/spec.rs"));
 #[cfg(test)]
 mod tests {
     use super::core::all::table_id::TABLE_LOOKUP;
-    use crate::spec::{lookup::TableLookup, ObjectLookup};
+    use crate::spec::{ObjectLookup, lookup::TableLookup};
 
     use super::*;
 

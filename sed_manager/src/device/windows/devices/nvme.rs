@@ -3,14 +3,14 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
+use crate::device::Error as DeviceError;
 use crate::device::device::{Device, Interface};
 use crate::device::shared::aligned_array::AlignedArray;
 use crate::device::shared::memory::write_nonoverlapping;
 use crate::device::shared::nvme::IdentifyController;
-use crate::device::windows::utility::file_handle::FileHandle;
-use crate::device::windows::utility::ioctl::{ioctl_in_out, STORAGE_PROTOCOL_SPECIFIC_DATA, STORAGE_PROTOCOL_TYPE};
 use crate::device::windows::Error as WindowsError;
-use crate::device::Error as DeviceError;
+use crate::device::windows::utility::file_handle::FileHandle;
+use crate::device::windows::utility::ioctl::{STORAGE_PROTOCOL_SPECIFIC_DATA, STORAGE_PROTOCOL_TYPE, ioctl_in_out};
 use crate::serialization::{Deserialize, InputStream, Seek as _, SeekFrom};
 
 use core::mem::offset_of;
@@ -18,8 +18,8 @@ use std::os::windows::raw::HANDLE;
 use winapi::shared::winerror::ERROR_INVALID_DATA;
 use winapi::um::winioctl::{IOCTL_STORAGE_QUERY_PROPERTY, STORAGE_PROPERTY_QUERY};
 
-use super::scsi;
 use super::GenericDevice;
+use super::scsi;
 
 pub struct NVMeDevice {
     file: FileHandle,

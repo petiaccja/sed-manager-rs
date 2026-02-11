@@ -46,7 +46,7 @@ impl DataVariant {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use quote::{quote, ToTokens};
+    use quote::{ToTokens, quote};
 
     #[test]
     fn parse_normal() -> Result<(), syn::Error> {

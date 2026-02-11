@@ -3,7 +3,7 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use crate::device::windows::error::{check_hresult, Error};
+use crate::device::windows::error::{Error, check_hresult};
 use core::ptr::null_mut;
 use std::cell::OnceCell;
 use std::sync::OnceLock;
@@ -11,7 +11,7 @@ use std::sync::OnceLock;
 use winapi::{
     shared::rpcdce::{RPC_C_AUTHN_LEVEL_DEFAULT, RPC_C_IMP_LEVEL_IMPERSONATE},
     um::{
-        combaseapi::{CoInitializeEx, CoInitializeSecurity, CoUninitialize, COINITBASE_MULTITHREADED},
+        combaseapi::{COINITBASE_MULTITHREADED, CoInitializeEx, CoInitializeSecurity, CoUninitialize},
         objidlbase::EOAC_NONE,
     },
 };

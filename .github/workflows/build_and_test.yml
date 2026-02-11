@@ -37,7 +37,12 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install libfontconfig-dev
-        sudo apt-get install libfreetype-dev        
+        sudo apt-get install libfreetype-dev
+
+    - name: Install Rust toolchain
+      run: |
+        rustup toolchain install 1.92
+        rustup default 1.92
 
     - name: Build
       run: cargo build --profile ${{ matrix.cargo_profile }} --verbose

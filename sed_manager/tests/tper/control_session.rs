@@ -8,7 +8,7 @@ use std::sync::Arc;
 use sed_manager::rpc::{Error as RPCError, MethodStatus, Properties, TokioRuntime};
 use sed_manager::spec::{self, opal};
 use sed_manager::tper::TPer;
-use sed_manager::virtual_device::{VirtualDevice, MSID_PASSWORD};
+use sed_manager::virtual_device::{MSID_PASSWORD, VirtualDevice};
 
 #[tokio::test]
 async fn properties_with_host() -> Result<(), RPCError> {
@@ -42,10 +42,11 @@ async fn start_session_no_pw() -> Result<(), RPCError> {
     let device = Arc::new(VirtualDevice::new());
     {
         let tper = TPer::new_on_default_com_id(device.clone(), runtime)?;
-        assert!(tper
-            .start_session(opal::admin::sp::ADMIN.into(), Some(spec::core::authority::SID), None)
-            .await
-            .is_err_and(|err| err == RPCError::MethodFailed(MethodStatus::NotAuthorized)));
+        assert!(
+            tper.start_session(opal::admin::sp::ADMIN.into(), Some(spec::core::authority::SID), None)
+                .await
+                .is_err_and(|err| err == RPCError::MethodFailed(MethodStatus::NotAuthorized))
+        );
     }
     assert!(device.active_sessions().is_empty());
     Ok(())
@@ -57,10 +58,15 @@ async fn start_session_wrong_pw() -> Result<(), RPCError> {
     let device = Arc::new(VirtualDevice::new());
     {
         let tper = TPer::new_on_default_com_id(device.clone(), runtime)?;
-        assert!(tper
-            .start_session(opal::admin::sp::ADMIN.into(), Some(spec::core::authority::SID), Some("hgfjsgf".as_bytes()))
+        assert!(
+            tper.start_session(
+                opal::admin::sp::ADMIN.into(),
+                Some(spec::core::authority::SID),
+                Some("hgfjsgf".as_bytes())
+            )
             .await
-            .is_err_and(|err| err == RPCError::MethodFailed(MethodStatus::NotAuthorized)));
+            .is_err_and(|err| err == RPCError::MethodFailed(MethodStatus::NotAuthorized))
+        );
     }
     assert!(device.active_sessions().is_empty());
     Ok(())

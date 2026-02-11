@@ -70,7 +70,7 @@ mod tests {
     use crate::{
         rpc::TokioRuntime,
         tper::TPer,
-        virtual_device::{VirtualDevice, MSID_PASSWORD},
+        virtual_device::{MSID_PASSWORD, VirtualDevice},
     };
 
     use super::*;

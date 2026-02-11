@@ -4,11 +4,11 @@
 //L-----------------------------------------------------------------------------
 
 use proc_macro2::TokenStream as TokenStream2;
-use quote::{quote, ToTokens, TokenStreamExt};
+use quote::{ToTokens, TokenStreamExt, quote};
 
 use crate::parse::{
-    data_struct::{DataField, DataStruct, LayoutAttr},
     ByteOrder,
+    data_struct::{DataField, DataStruct, LayoutAttr},
 };
 
 fn gen_optional<T: quote::ToTokens>(opt: Option<T>) -> TokenStream2 {

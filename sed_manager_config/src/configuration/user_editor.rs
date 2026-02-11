@@ -7,12 +7,12 @@ use std::rc::Rc;
 
 use slint::{ComponentHandle as _, Model};
 
-use sed_manager::applications::{get_locking_sp, Error as AppError, UserEditSession};
+use sed_manager::applications::{Error as AppError, UserEditSession, get_locking_sp};
 
-use crate::backend::{get_object_name, Backend, EditorSession};
+use crate::backend::{Backend, EditorSession, get_object_name};
 use crate::frontend::Frontend;
 use crate::ui;
-use crate::utility::{as_vec_model, into_vec_model, PeekCell};
+use crate::utility::{PeekCell, as_vec_model, into_vec_model};
 
 pub fn init(frontend: &Frontend, num_devices: usize) {
     frontend.with(|window| {

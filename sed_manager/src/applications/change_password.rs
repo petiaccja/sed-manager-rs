@@ -71,8 +71,8 @@ async fn is_password_authority(
     ssc: FeatureCode,
     sp: SPRef,
 ) -> Result<bool, Error> {
-    use spec::opal::admin::sp::LOCKING;
     use FeatureCode::*;
+    use spec::opal::admin::sp::LOCKING;
 
     if [OpalV1, OpalV2, Opalite, PyriteV1, PyriteV2, Ruby, KeyPerIO].contains(&ssc) && sp == LOCKING {
         // On these SSCs, Anybody can enumerate the Authority table, but not Get its objects.
@@ -134,8 +134,8 @@ mod tests {
     use crate::rpc::{MethodStatus, TokioRuntime};
     use crate::spec::column_types::CPINRef;
     use crate::spec::{opal, psid};
-    use crate::virtual_device::data::object_table::{AuthorityTable, CPINTable};
     use crate::virtual_device::VirtualDevice;
+    use crate::virtual_device::data::object_table::{AuthorityTable, CPINTable};
 
     use super::*;
 

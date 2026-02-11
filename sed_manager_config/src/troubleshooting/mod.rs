@@ -14,7 +14,7 @@ use sed_manager::rpc::Error as RPCError;
 use crate::backend::Backend;
 use crate::frontend::Frontend;
 use crate::ui;
-use crate::utility::{into_vec_model, PeekCell};
+use crate::utility::{PeekCell, into_vec_model};
 
 pub fn init(frontend: &Frontend, num_devices: usize) {
     frontend.with(|window| {

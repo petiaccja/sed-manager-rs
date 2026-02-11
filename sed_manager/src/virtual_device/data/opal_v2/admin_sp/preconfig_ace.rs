@@ -5,7 +5,7 @@
 
 use crate::spec::opal::admin::*;
 use crate::{
-    spec::objects::{ace::ace_expr, Authority, ACE, CPIN},
+    spec::objects::{ACE, Authority, CPIN, ace::ace_expr},
     virtual_device::data::object_table::ACETable,
 };
 

@@ -8,8 +8,8 @@ use std::sync::Arc;
 use crate::rpc::TokioRuntime;
 use crate::spec::{self, table_id};
 use crate::tper::TPer;
-use crate::virtual_device::data::object_table::CPINTable;
 use crate::virtual_device::VirtualDevice;
+use crate::virtual_device::data::object_table::CPINTable;
 
 pub const SID_PASSWORD: &str = "sid_password";
 pub const LOCKING_ADMIN1_PASSWORD: &str = "L_admin1_pw";

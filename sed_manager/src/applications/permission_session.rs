@@ -6,11 +6,11 @@
 use crate::messaging::discovery::{Discovery, LockingDescriptor};
 use crate::spec::basic_types::List;
 use crate::spec::column_types::{ACEOperand, ACERef, AuthorityRef, LockingRangeRef};
-use crate::spec::objects::{ACEExpr, Authority, LockingRange, ACE};
+use crate::spec::objects::{ACE, ACEExpr, Authority, LockingRange};
 use crate::spec::{self, method_id, table_id};
 use crate::tper::{Session, TPer};
 
-use super::{utility::start_admin1_session, Error};
+use super::{Error, utility::start_admin1_session};
 
 pub fn is_permission_editor_supported(discovery: &Discovery) -> bool {
     super::is_user_editor_supported(discovery) && super::is_range_editor_supported(discovery)
@@ -150,7 +150,7 @@ fn update_permission_expr(
 #[cfg(test)]
 mod tests {
 
-    use crate::applications::test_fixtures::{setup_activated_tper, LOCKING_ADMIN1_PASSWORD};
+    use crate::applications::test_fixtures::{LOCKING_ADMIN1_PASSWORD, setup_activated_tper};
     use crate::spec;
 
     use super::*;

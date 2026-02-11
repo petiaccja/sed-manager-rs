@@ -5,11 +5,11 @@
 
 use std::sync::Arc;
 
+use sed_manager::applications::test_fixtures::LOCKING_ADMIN1_PASSWORD;
+use sed_manager::applications::test_fixtures::SID_PASSWORD;
 use sed_manager::applications::test_fixtures::make_activated_device;
 use sed_manager::applications::test_fixtures::make_owned_device;
 use sed_manager::applications::test_fixtures::setup_activated_tper;
-use sed_manager::applications::test_fixtures::LOCKING_ADMIN1_PASSWORD;
-use sed_manager::applications::test_fixtures::SID_PASSWORD;
 use sed_manager::messaging::uid::UID;
 use sed_manager::rpc::Error as RPCError;
 use sed_manager::rpc::MethodStatus;
@@ -25,10 +25,10 @@ use sed_manager::spec::objects::CPIN;
 use sed_manager::spec::opal;
 use sed_manager::spec::table_id;
 use sed_manager::tper::TPer;
+use sed_manager::virtual_device::MSID_PASSWORD;
+use sed_manager::virtual_device::VirtualDevice;
 use sed_manager::virtual_device::data::object_table::CPINTable;
 use sed_manager::virtual_device::god_authority::AUTHORITY_GOD;
-use sed_manager::virtual_device::VirtualDevice;
-use sed_manager::virtual_device::MSID_PASSWORD;
 
 use opal::admin::sp;
 

@@ -6,8 +6,8 @@
 use std::fs;
 use std::path::PathBuf;
 
-use crate::device::linux::Error as LinuxError;
 use crate::device::Error as DeviceError;
+use crate::device::linux::Error as LinuxError;
 
 pub fn get_nvme_controller(device: PathBuf) -> PathBuf {
     const PREFIX: &str = "nvme";
@@ -16,11 +16,7 @@ pub fn get_nvme_controller(device: PathBuf) -> PathBuf {
         if name.starts_with(PREFIX) {
             let cut = name[PREFIX.len()..].find('n').unwrap_or(name.len()) + PREFIX.len();
             let controller = device.with_file_name(&name[0..cut]);
-            if controller.exists() {
-                controller
-            } else {
-                device
-            }
+            if controller.exists() { controller } else { device }
         } else {
             device
         }

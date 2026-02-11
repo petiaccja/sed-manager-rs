@@ -6,7 +6,7 @@
 use crate::messaging::uid::TableUID;
 use crate::spec::column_types::{ACERef, AuthMethod, AuthorityRef, MethodRef};
 use crate::spec::objects::ace::ace_expr;
-use crate::spec::objects::{Authority, ACE};
+use crate::spec::objects::{ACE, Authority};
 use crate::spec::{method_id, table_id};
 /// The God authority can perform any action and modify any table without password authentication.
 ///

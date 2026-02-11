@@ -3,7 +3,7 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use super::token::{get_tag, is_data, Tag, Token, TokenStreamError};
+use super::token::{Tag, Token, TokenStreamError, get_tag, is_data};
 use super::value::{Bytes, Command, List, Named, Value};
 use crate::serialization::{
     Deserialize, Error as SerializeError, InputStream, ItemRead, ItemWrite, OutputStream, Serialize,

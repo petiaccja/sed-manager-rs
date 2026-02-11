@@ -7,7 +7,7 @@ use tokio::sync::Mutex;
 
 use crate::messaging::value::Bytes;
 use crate::rpc::args::{IntoMethodArgs as _, UnwrapMethodArgs as _};
-use crate::rpc::{CommandSender, Error as RPCError, MethodCall, PackagedMethod, Properties, CONTROL_SESSION_ID};
+use crate::rpc::{CONTROL_SESSION_ID, CommandSender, Error as RPCError, MethodCall, PackagedMethod, Properties};
 use crate::spec::basic_types::{List, NamedValue};
 use crate::spec::column_types::{AuthorityRef, MaxBytes32, SPRef};
 use crate::spec::{invoking_id::*, sm_method_id::*};

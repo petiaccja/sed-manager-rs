@@ -3,11 +3,11 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
+use super::ByteOrder;
+use super::ItemRead;
 use super::error::Error;
 use super::serialize::{Deserialize, Serialize};
 use super::stream::{InputStream, ItemWrite, OutputStream};
-use super::ByteOrder;
-use super::ItemRead;
 
 macro_rules! serialize_integer {
     ($int_ty:ty) => {
