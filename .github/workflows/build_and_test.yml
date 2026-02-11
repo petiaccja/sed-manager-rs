@@ -35,8 +35,9 @@ jobs:
     - name: Install dependencies
       if: matrix.os == 'ubuntu-latest'
       run: |
-        sudo apt install libfontconfig-dev
-        sudo apt install libfreetype-dev        
+        sudo apt-get update
+        sudo apt-get install libfontconfig-dev
+        sudo apt-get install libfreetype-dev        
 
     - name: Build
       run: cargo build --profile ${{ matrix.cargo_profile }} --verbose
