@@ -25,7 +25,7 @@ pub fn trace_method(result: &PackagedMethod, direction: &str) {
             );
         }
         PackagedMethod::Result(result) => {
-            let results = sanitize(Value::from(result.results.clone()), UID::null(), UID::null());
+            let results = Value::from(result.results.clone());
             tracing::event!(
                 tracing::Level::DEBUG,
                 status = result.status.to_string(),
