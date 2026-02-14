@@ -9,41 +9,28 @@ build = "build.rs"
 [dependencies]
 sed_manager = { path = "../sed_manager" }
 sed_manager_config_ui = { path = "../sed_manager_config_ui" }
-
-[dependencies.slint]
-version = "1.12.0"
-default-features = false
-features = ["std", "compat-1-2", "backend-winit", "renderer-skia", "renderer-femtovg"]
-
-[dependencies.tokio]
-version = "1.41.0"
-default-features = false
-features = ["sync", "fs", "io-util", "rt-multi-thread"]
-
-[dependencies.tracing]
-version = "0.1.41"
-
-[dependencies.tracing-appender]
-version = "0.2.3"
-
-[dependencies.tracing-subscriber]
-version = "0.3.19"
-
-[dependencies.rfd]
-version = "0.15.2"
-features = ["xdg-portal"]
-
-[dependencies.serde_json]
-version = "1.0.138"
-
-[dependencies.serde]
-version = "1.0.219"
-
-[dependencies.dirs]
-version = "6.0.0"
-
-[dependencies.regex]
-version = "1.11.1"
-
-[dependencies.sha2]
-version = "0.10.9"
+slint = { version = "1.12.0", default-features = false, features = [
+    "std",
+    "compat-1-2",
+    "backend-winit",
+    "renderer-skia",
+    "renderer-femtovg",
+] }
+tokio = { version = "1.41.0", default-features = false, features = [
+    "sync",
+    "fs",
+    "io-util",
+    "rt-multi-thread",
+] }
+tracing = { version = "0.1.41" }
+tracing-appender = { version = "0.2.3" }
+tracing-subscriber = { version = "0.3.22", default-features = true, features = [
+    "json",
+] }
+rfd = { version = "0.15.2", features = ["xdg-portal"] }
+serde_json = { version = "1.0.138" }
+serde = { version = "1.0.219" }
+dirs = { version = "6.0.0" }
+regex = { version = "1.11.1" }
+sha2 = { version = "0.10.9" }
+clap = { version = "=4.5.55", features = ["derive"] }

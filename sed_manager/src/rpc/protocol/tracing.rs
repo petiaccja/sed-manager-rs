@@ -3,36 +3,33 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
+use std::collections::HashSet;
+use std::sync::LazyLock;
+
+use crate::messaging::uid::UID;
 use crate::messaging::value::{Named, Value};
 use crate::rpc::{Error, PackagedMethod};
-use crate::spec::ObjectLookup as _;
+use crate::spec::{method_id, table_id};
 
 pub fn trace_method(result: &PackagedMethod, direction: &str) {
-    use crate::spec::core::OBJECT_LOOKUP;
     match result {
         PackagedMethod::Call(call) => {
-            let mut invoking_id = OBJECT_LOOKUP.by_uid(call.invoking_id, None).unwrap_or(call.invoking_id.to_string());
-            let method_id = OBJECT_LOOKUP.by_uid(call.method_id, None).unwrap_or(call.method_id.to_string());
-            if let Some(table) = call.invoking_id.containing_table() {
-                let table = OBJECT_LOOKUP.by_uid(table, None).unwrap_or(table.to_string());
-                invoking_id = format!("{table}::{invoking_id}")
-            }
-            let args = format!("{:?}", sanitize(Value::from(call.args.clone())));
+            let args = sanitize(Value::from(call.args.clone()), call.invoking_id, call.method_id);
             tracing::event!(
                 tracing::Level::DEBUG,
-                method_id = method_id,
-                invoking_id = invoking_id,
+                method_id = call.method_id.to_string(),
+                invoking_id = call.invoking_id.to_string(),
                 status = call.status.to_string(),
-                args = args,
+                args = to_trace_json(&args),
                 "[{direction}] CALL"
             );
         }
         PackagedMethod::Result(result) => {
-            let results = format!("{:?}", sanitize(Value::from(result.results.clone())));
+            let results = sanitize(Value::from(result.results.clone()), UID::null(), UID::null());
             tracing::event!(
                 tracing::Level::DEBUG,
                 status = result.status.to_string(),
-                results = results,
+                results = to_trace_json(&results),
                 "[{direction}] RESULT"
             );
         }
@@ -47,13 +44,53 @@ pub fn trace_maybe_method(result: &Result<PackagedMethod, Error>, direction: &st
     }
 }
 
+static NON_SENSITIVE_METHODS: LazyLock<HashSet<UID>> = LazyLock::new(|| {
+    [
+        method_id::ACTIVATE.as_uid(),
+        method_id::ADD_ACE.as_uid(),
+        method_id::ERASE.as_uid(),
+        method_id::GEN_KEY.as_uid(),
+        method_id::GET_ACL.as_uid(),
+        method_id::NEXT.as_uid(),
+        method_id::REACTIVATE.as_uid(),
+        method_id::REMOVE_ACE.as_uid(),
+        method_id::REVERT.as_uid(),
+        method_id::REVERT_SP.as_uid(),
+    ]
+    .into_iter()
+    .collect()
+});
+
+static NON_SENSITIVE_TABLES: LazyLock<HashSet<UID>> = LazyLock::new(|| {
+    [
+        table_id::ACCESS_CONTROL.into(),
+        table_id::ACE.into(),
+        table_id::AUTHORITY.into(),
+        table_id::LOCKING.into(),
+        table_id::LOCKING_INFO.into(),
+        table_id::MBR_CONTROL.into(),
+        table_id::SP.into(),
+        table_id::SP_INFO.into(),
+        table_id::TABLE.into(),
+        table_id::T_PER_INFO.into(),
+    ]
+    .into_iter()
+    .collect()
+});
+
 /// Remove sensitive information from values so that they are not present in log files.
 ///
 /// The most sensitive information is passwords, but sensitive information can
 /// also be uploaded to the DataStore and MBR tables.
 /// Luckily, all sensitive information is stored as bytes, so we can just redact
 /// all byte data from [`Value`]s.
-fn sanitize(value: Value) -> Value {
+fn sanitize(value: Value, invoking_id: UID, method_id: UID) -> Value {
+    if NON_SENSITIVE_METHODS.contains(&method_id) {
+        return value;
+    }
+    if invoking_id.containing_table().is_some_and(|table_id| NON_SENSITIVE_TABLES.contains(&table_id)) {
+        return value;
+    }
     match value {
         Value::Empty => value,
         Value::Int8(_) => value,
@@ -65,8 +102,40 @@ fn sanitize(value: Value) -> Value {
         Value::Uint32(_) => value,
         Value::Uint64(_) => value,
         Value::Command(_) => value,
-        Value::Named(named) => Value::from(Named { name: named.name, value: sanitize(named.value) }),
-        Value::Bytes(_) => Value::from(Vec::<u8>::new()),
-        Value::List(list) => Value::from(list.into_iter().map(|v| sanitize(v)).collect::<Vec<_>>()),
+        Value::Named(named) => {
+            Value::from(Named { name: named.name, value: sanitize(named.value, invoking_id, method_id) })
+        }
+        Value::Bytes(_) => Value::from(Vec::from(b"REDACTED")),
+        Value::List(list) => {
+            Value::from(list.into_iter().map(|v| sanitize(v, invoking_id, method_id)).collect::<Vec<_>>())
+        }
+    }
+}
+
+fn to_trace_json(value: &Value) -> String {
+    match value {
+        Value::Empty => "null".into(),
+        Value::Int8(n) => format!("{{ \"i8\": {n}}}"),
+        Value::Int16(n) => format!("{{ \"i16\": {n}}}"),
+        Value::Int32(n) => format!("{{ \"i32\": {n}}}"),
+        Value::Int64(n) => format!("{{ \"i64\": {n}}}"),
+        Value::Uint8(n) => format!("{{ \"u8\": {n}}}"),
+        Value::Uint16(n) => format!("{{ \"u16\": {n}}}"),
+        Value::Uint32(n) => format!("{{ \"u32\": {n}}}"),
+        Value::Uint64(n) => format!("{{ \"u64\": {n}}}"),
+        Value::Command(command) => format!("{{ \"command\": \"{command:?}\"}}"),
+        Value::Named(named) => {
+            format!(
+                "{{ \"named\": {{ \"name\": {}, \"value\": {} }} }}",
+                to_trace_json(&named.name),
+                to_trace_json(&named.value)
+            )
+        }
+        Value::Bytes(items) => {
+            format!("{{ \"bytes\": [ {} ] }}", items.iter().map(|b| b.to_string()).collect::<Vec<_>>().join(", "))
+        }
+        Value::List(values) => {
+            format!("{{ \"list\": [ {} ] }}", values.iter().map(|v| to_trace_json(v)).collect::<Vec<_>>().join(", "))
+        }
     }
 }
