@@ -26,6 +26,7 @@ impl Log {
                 log_file => tracing_appender::non_blocking(File::create(log_file)?),
             };
             let subscriber = tracing_subscriber::fmt()
+                .json()
                 .with_ansi(false)
                 .with_writer(non_blocking)
                 .with_max_level(log_level)

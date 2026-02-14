@@ -24,7 +24,9 @@ tokio = { version = "1.41.0", default-features = false, features = [
 ] }
 tracing = { version = "0.1.41" }
 tracing-appender = { version = "0.2.3" }
-tracing-subscriber = { version = "0.3.19" }
+tracing-subscriber = { version = "0.3.22", default-features = true, features = [
+    "json",
+] }
 rfd = { version = "0.15.2", features = ["xdg-portal"] }
 serde_json = { version = "1.0.138" }
 serde = { version = "1.0.219" }
