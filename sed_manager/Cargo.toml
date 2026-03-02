@@ -9,32 +9,32 @@ build = "build.rs"
 [dependencies]
 sed_manager_macros = { path = "../sed_manager_macros" }
 as_array = { path = "../as_array" }
-
-[dependencies.winapi]
-version = "0.3.9"
-default-features = false
-features = ["std", "ioapiset", "errhandlingapi", "fileapi", "winnt", "handleapi", "winioctl", "wbemcli", "combaseapi", "oleauto", "winbase", "ntddscsi"]
-
-[dependencies.nix]
-version = "0.29"
-default-features = false
-features = ["fs", "ioctl"]
-
-[dependencies.thiserror]
-version = "1.0.66"
-
-[dependencies.tokio]
-version = "1.41.0"
-default-features = false
-features = ["rt", "sync", "rt-multi-thread", "time", "macros"]
-
-[dependencies.tokio-util]
-version = "0.7.14"
-default-features = false
-features = ["rt"]
-
-[dependencies.tracing]
-version = "0.1.41"
+sorbit = { version = "0.1.0" }
+winapi = { version = "0.3.9", default-features = false, features = [
+    "std",
+    "ioapiset",
+    "errhandlingapi",
+    "fileapi",
+    "winnt",
+    "handleapi",
+    "winioctl",
+    "wbemcli",
+    "combaseapi",
+    "oleauto",
+    "winbase",
+    "ntddscsi",
+] }
+nix = { version = "0.29", default-features = false, features = ["fs", "ioctl"] }
+thiserror = { version = "1.0.66" }
+tokio = { version = "1.41.0", default-features = false, features = [
+    "rt",
+    "sync",
+    "rt-multi-thread",
+    "time",
+    "macros",
+] }
+tokio-util = { version = "0.7.14", default-features = false, features = ["rt"] }
+tracing = { version = "0.1.41" }
 
 [build-dependencies]
 quote = "1.0.37"
