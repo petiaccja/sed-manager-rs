@@ -5,11 +5,13 @@
 
 use super::stream::{InputStream, OutputStream};
 
+#[deprecated = "serialization is being replaced by sorbit, which is much more organized than this ad-hoc system"]
 pub trait Serialize<Item> {
     type Error: core::error::Error;
     fn serialize(&self, stream: &mut OutputStream<Item>) -> Result<(), Self::Error>;
 }
 
+#[deprecated = "serialization is being replaced by sorbit, which is much more organized than this ad-hoc system"]
 pub trait Deserialize<Item>
 where
     Self: Sized,

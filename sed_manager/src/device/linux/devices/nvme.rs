@@ -12,7 +12,7 @@ use core::ptr::null_mut;
 use nix::ioctl_readwrite;
 
 use crate::device::linux::utility::FileHandle;
-use crate::device::shared::nvme::{GenericStatusCode, IdentifyController, Opcode, StatusCode};
+use crate::device::shared::nvme::{GenericStatusCode, IdentifyController, Opcode, StatusCode, StatusField};
 use crate::device::{Device, Error, Interface};
 use crate::serialization::DeserializeBinary;
 
@@ -137,7 +137,9 @@ fn make_cdw10(security_protocol: u8, protocol_specific: [u8; 2]) -> u32 {
 /// The NVMe status is encoded in the lowest 11 bits of the value returned by `ioctl`.
 fn check_ioctl_err(ioctl_err: i32) -> Result<(), Error> {
     let ioctl_err: u32 = unsafe { core::mem::transmute(ioctl_err) };
-    let status = StatusCode::try_from(ioctl_err).unwrap_or(StatusCode::InvalidStatusField);
+    let status = StatusField::from_bytes(ioctl_err << 17)
+        .map(|status_field| status_field.status_code())
+        .unwrap_or(StatusCode::InvalidStatusField);
     match status {
         StatusCode::Generic(GenericStatusCode::Success) => match ioctl_err {
             0 => Ok(()),

@@ -6,8 +6,10 @@
 //! Implements parts of the NVMe specification that is relevant for drive encryption.
 //! The official specification is accessible on [NVMe's website](https://nvmexpress.org/specifications/).
 
-use crate::device::Error as DeviceError;
-use crate::serialization::{Deserialize, DeserializeBinary, Serialize};
+use crate::serialization::DeserializeBinary;
+use crate::{device::Error as DeviceError, serialization::DeserializeBinarySorbit};
+use num_enum::{FromPrimitive, IntoPrimitive};
+use sorbit::{Deserialize, PackInto, UnpackFrom};
 
 /// NVMe opcodes. These are combined opcodes, containing both the function and the data transfer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -21,7 +23,7 @@ pub enum Opcode {
 
 /// The data structure returned by the Identify controller Admin command.
 #[derive(Deserialize, Clone, Debug, PartialEq, Eq)]
-#[layout(little_endian)]
+#[sorbit(byte_order=little_endian)]
 pub struct IdentifyController {
     pub vendor_id: u16,
     pub subsystem_vendor_id: u16,
@@ -30,8 +32,25 @@ pub struct IdentifyController {
     pub firmware_revision: [u8; 8],
     pub recommended_arbitration_burst: u8,
     pub ieee_oui_identifier: [u8; 3],
-    #[layout(offset = 256, bit_field(u16, 0))]
+    #[sorbit(bit_field=_oacs, repr=u16, offset=256, bit_numbering=LSB0)]
+    #[sorbit(bits = 0)]
     pub security_send_receive_supported: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[sorbit(byte_order=little_endian)]
+pub struct StatusField {
+    #[sorbit(bit_field=_all, repr=u32, bit_numbering=LSB0)]
+    #[sorbit(bits = 31)]
+    do_not_retry: bool,
+    #[sorbit(bit_field=_all, bits=30)]
+    more: bool,
+    #[sorbit(bit_field=_all, bits=28..=29)]
+    retry_delay: u8,
+    #[sorbit(bit_field=_all, bits=25..=27)]
+    status_code_type: StatusCodeType,
+    #[sorbit(bit_field=_all, bits=17..=24)]
+    status_code: u8,
 }
 
 /// NVMe status codes. These indicate the success/failure of an NVMe command.
@@ -47,6 +66,7 @@ pub enum StatusCode {
 }
 
 /// NVMe status code types.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PackInto, UnpackFrom)]
 #[repr(u8)]
 pub enum StatusCodeType {
     Generic = 0x0,
@@ -57,7 +77,7 @@ pub enum StatusCodeType {
 }
 
 /// Exhaustive list of generic status code values.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, thiserror::Error)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error, IntoPrimitive, FromPrimitive)]
 #[repr(u8)]
 pub enum GenericStatusCode {
     #[error("The command completed successfully")]
@@ -152,9 +172,9 @@ pub enum GenericStatusCode {
     UnrecoveredError = 0x88,
     #[error("Key exists")]
     KeyExists = 0x89,
-    #[error("Error code not recognized")]
-    #[fallback]
-    Unknown,
+    #[error("Unrecognized error: {0:02x}h")]
+    #[num_enum(catch_all)]
+    Unrecognized(u8),
 }
 
 impl IdentifyController {
@@ -172,7 +192,7 @@ impl IdentifyController {
 impl core::fmt::Display for StatusCode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            StatusCode::Generic(code) => write!(f, "{code} (type=0h, code={:02x}h)", *code as u8),
+            StatusCode::Generic(code) => write!(f, "{code} (type=0h, code={:02x}h)", u8::from(*code)),
             StatusCode::CommandSpecific(code) => write!(f, "Command specific error (type=1h, code={:02x}h)", code),
             StatusCode::MediaIntegrity(code) => write!(f, "Media integrity error (type=2h, code={:02x}h)", code),
             StatusCode::PathRelated(code) => write!(f, "Path related error (type=3h, code={:02x}h)", code),
@@ -182,39 +202,69 @@ impl core::fmt::Display for StatusCode {
     }
 }
 
-impl TryFrom<u32> for StatusCode {
-    type Error = u32;
-    fn try_from(value: u32) -> Result<Self, Self::Error> {
-        let bytes = value.to_le_bytes();
-        let code = bytes[0]; // Status code is exactly 8 bits.
-        let status_code_type = bytes[1] & 0b111; // Status code type is exactly 3 bits.
-        let generic = GenericStatusCode::try_from(code).unwrap_or(GenericStatusCode::Unknown);
-        let status_code = match status_code_type {
-            _ if status_code_type == StatusCodeType::Generic as u8 => Self::Generic(generic),
-            _ if status_code_type == StatusCodeType::CommandSpecific as u8 => Self::CommandSpecific(code),
-            _ if status_code_type == StatusCodeType::MediaIntegrity as u8 => Self::MediaIntegrity(code),
-            _ if status_code_type == StatusCodeType::PathRelated as u8 => Self::PathRelated(code),
-            _ => Self::Unknown(code),
-        };
-        Ok(status_code)
+impl StatusField {
+    pub fn status_code(&self) -> StatusCode {
+        let status_code = self.status_code;
+        match self.status_code_type {
+            StatusCodeType::Generic => StatusCode::Generic(GenericStatusCode::from(status_code)),
+            StatusCodeType::CommandSpecific => StatusCode::CommandSpecific(status_code),
+            StatusCodeType::MediaIntegrity => StatusCode::MediaIntegrity(status_code),
+            StatusCodeType::PathRelated => StatusCode::PathRelated(status_code),
+            _ => StatusCode::Unknown(status_code),
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::serialization::DeserializeBinarySorbit as _;
+
     use super::*;
 
     #[test]
     fn status_code_from_integer_generic() {
-        let encoded = 0b1_000_00000001; // First bit should be ignored.
-        let status = StatusCode::try_from(encoded).unwrap();
+        let encoded = 0b0_0_00_000_00000001_0_0000_0000_0000_0000_u32; // First bit should be ignored.
+        let status = StatusField::from_bytes(&encoded.to_le_bytes()).unwrap().status_code();
         assert_eq!(status, StatusCode::Generic(GenericStatusCode::InvalidCommandOpcode));
     }
 
     #[test]
     fn status_code_from_integer_cmd_specific() {
-        let encoded = 0b1_001_00000001;
-        let status = StatusCode::try_from(encoded).unwrap();
+        let encoded = 0b0_0_00_001_00000001_0_0000_0000_0000_0000_u32;
+        let status = StatusField::from_bytes(&encoded.to_le_bytes()).unwrap().status_code();
         assert_eq!(status, StatusCode::CommandSpecific(1));
+    }
+
+    #[test]
+    fn serialization_identify_controller() -> Result<(), Box<dyn std::error::Error>> {
+        let content = IdentifyController {
+            vendor_id: 0x1234,
+            subsystem_vendor_id: 0x5678,
+            serial_number: *b"123                 ",
+            model_number: *b"456                                     ",
+            firmware_revision: *b"789     ",
+            recommended_arbitration_burst: 0x12,
+            ieee_oui_identifier: [0x34, 0x56, 0x67],
+            security_send_receive_supported: true,
+        };
+        let bytes: Vec<_> = [
+            &[0x34, 0x12],
+            &[0x78, 0x56],
+            b"123                 ".as_slice(),
+            b"456                                     ".as_slice(),
+            b"789     ".as_slice(),
+            &[0x12],
+            &[0x34, 0x56, 0x67],
+            &[0x00; 180],
+            &[0x01, 0x00],
+        ]
+        .iter()
+        .map(|x| x.iter())
+        .flatten()
+        .cloned()
+        .collect();
+        println!("{}", bytes.len());
+        assert_eq!(IdentifyController::from_bytes(bytes.as_ref())?, content);
+        Ok(())
     }
 }

@@ -11,7 +11,7 @@ use crate::device::shared::nvme::IdentifyController;
 use crate::device::windows::Error as WindowsError;
 use crate::device::windows::utility::file_handle::FileHandle;
 use crate::device::windows::utility::ioctl::{STORAGE_PROTOCOL_SPECIFIC_DATA, STORAGE_PROTOCOL_TYPE, ioctl_in_out};
-use crate::serialization::{Deserialize, InputStream, Seek as _, SeekFrom};
+use crate::serialization::DeserializeBinarySorbit as _;
 
 use core::mem::offset_of;
 use std::os::windows::raw::HANDLE;
@@ -139,9 +139,8 @@ fn identify_controller(handle: HANDLE) -> Result<IdentifyController, WindowsErro
 
     let _ = ioctl_in_out(handle, IOCTL_STORAGE_QUERY_PROPERTY, &mut buffer)?;
 
-    let mut stream = InputStream::from(buffer.into_vec());
-    stream.seek(SeekFrom::Start((data_offset + response_offset) as u64)).unwrap();
-    IdentifyController::deserialize(&mut stream).map_err(|_| WindowsError::Win32(ERROR_INVALID_DATA))
+    let identify_ctrl_buffer = &buffer[(data_offset + response_offset)..];
+    IdentifyController::from_bytes(identify_ctrl_buffer).map_err(|_| WindowsError::Win32(ERROR_INVALID_DATA))
 }
 
 /// The value of the INC_512 flag for SCSI to NVMe translation.
