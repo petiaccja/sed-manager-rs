@@ -11,12 +11,11 @@ use winapi::shared::ntddscsi::{
 
 use crate::device::shared::aligned_array::AlignedArray;
 use crate::device::shared::scsi::{
-    DescriptorSenseData, FixedSenseData, SCSIError, SecurityProtocolIn, SecurityProtocolOut, SenseKey,
-    SenseResponseCode,
+    Command, DescriptorSenseData, FixedSenseData, SCSIError, SenseKey, SenseResponseCode,
 };
 use crate::device::windows::utility::{file_handle::FileHandle, ioctl::ioctl_in_out};
 use crate::device::{Device, Error as DeviceError, Interface};
-use crate::serialization::{DeserializeBinary, SerializeBinary};
+use crate::serialization::{DeserializeBinarySorbit as _, SerializeBinarySorbit as _};
 
 use super::GenericDevice;
 
@@ -110,7 +109,8 @@ pub fn security_protocol_in(
     data_in: &mut [u8],
     inc_512: bool,
 ) -> Result<(), DeviceError> {
-    let command = SecurityProtocolIn::new(security_protocol, security_protocol_specific, data_in.len() as u32, inc_512);
+    let command =
+        Command::security_protocol_in(security_protocol, security_protocol_specific, data_in.len() as u32, inc_512);
     let cdb = command.to_bytes().expect("command serialization should be infallible");
     assert!(cdb.len() <= 16);
     let mut extended_cdb = cdb.iter().cloned().chain(core::iter::repeat(0));
@@ -144,7 +144,7 @@ pub fn security_protocol_out(
     inc_512: bool,
 ) -> Result<(), DeviceError> {
     let command =
-        SecurityProtocolOut::new(security_protocol, security_protocol_specific, data_out.len() as u32, inc_512);
+        Command::security_protocol_out(security_protocol, security_protocol_specific, data_out.len() as u32, inc_512);
     let cdb = command.to_bytes().expect("command serialization should be infallible");
     assert!(cdb.len() <= 16);
     let mut extended_cdb = cdb.iter().cloned().chain(core::iter::repeat(0));
@@ -199,7 +199,7 @@ impl CommandWithSense {
 fn check_sense_info(scsi_result: u8, sense_info: &[u8]) -> Result<(), DeviceError> {
     if scsi_result != 0 {
         let raw_response_code = sense_info[0] & 0b0111_1111; // Bit 7 is reserved. See the sense info data structures in the shared scsi `mod`.
-        let response_code = SenseResponseCode::try_from(raw_response_code).unwrap_or(SenseResponseCode::Unrecognized);
+        let response_code = SenseResponseCode::from(raw_response_code);
         match response_code {
             SenseResponseCode::CurrentFixed => Err(parse_fixed_sense_info(sense_info)),
             SenseResponseCode::DeferredFixed => Ok(()),

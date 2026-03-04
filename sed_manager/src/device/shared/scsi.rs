@@ -3,9 +3,8 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use sed_manager_macros::Deserialize;
-
-use crate::serialization::Serialize;
+use num_enum::FromPrimitive;
+use sorbit::{Deserialize, Serialize, UnpackFrom};
 
 #[derive(Serialize, Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
@@ -15,28 +14,35 @@ pub enum Opcode {
 }
 
 #[derive(Serialize, Debug, Clone, PartialEq, Eq)]
+#[repr(u8)]
+pub enum Command {
+    SecurityProtocolIn(SecurityProtocolIn) = 0xA2,
+    SecurityProtocolOut(SecurityProtocolOut) = 0xB5,
+}
+
+#[derive(Serialize, Debug, Clone, PartialEq, Eq)]
+#[sorbit(byte_order=big_endian)]
 pub struct SecurityProtocolIn {
-    opcode: Opcode,
     security_protocol: u8,
     security_protocol_specific: u16,
-    #[layout(offset = 4, bit_field(u8, 7))]
+    #[sorbit(offset = 3, bit_field=_inc_512, repr=u8, bits=7, bit_numbering=LSB0)]
     inc_512: bool,
-    #[layout(offset = 6)]
+    #[sorbit(offset = 5)]
     allocation_length: u32,
-    #[layout(offset = 11)]
+    #[sorbit(offset = 10)]
     control: u8,
 }
 
 #[derive(Serialize, Debug, Clone, PartialEq, Eq)]
+#[sorbit(byte_order=big_endian)]
 pub struct SecurityProtocolOut {
-    opcode: Opcode,
     security_protocol: u8,
     security_protocol_specific: u16,
-    #[layout(offset = 4, bit_field(u8, 7))]
+    #[sorbit(offset = 3, bit_field=_inc_512, repr=u8, bits=7, bit_numbering=LSB0)]
     inc_512: bool,
-    #[layout(offset = 6)]
+    #[sorbit(offset = 5)]
     transfer_length: u32,
-    #[layout(offset = 11)]
+    #[sorbit(offset = 10)]
     control: u8,
 }
 
@@ -48,7 +54,7 @@ pub struct SCSIError {
     pub parse_failed: bool,
 }
 
-#[derive(Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Deserialize, Debug, Clone, Copy, PartialEq, Eq, UnpackFrom, FromPrimitive)]
 #[repr(u8)]
 pub enum SenseResponseCode {
     CurrentFixed = 0x70,
@@ -56,11 +62,12 @@ pub enum SenseResponseCode {
     CurrentDescriptor = 0x72,
     DeferredDescriptor = 0x73,
     VendorSpecific = 0x7F,
-    #[fallback]
+    #[sorbit(catch_all)]
+    #[num_enum(default)]
     Unrecognized,
 }
 
-#[derive(Deserialize, Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[derive(Deserialize, Debug, Clone, Copy, PartialEq, Eq, thiserror::Error, UnpackFrom)]
 #[repr(u8)]
 pub enum SenseKey {
     #[error("No sense: no specific sense key information to be reported")]
@@ -101,9 +108,9 @@ pub enum SenseKey {
 
 #[derive(Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct DescriptorSenseData {
-    #[layout(offset = 0, bit_field(u8, 0..=6)) ]
+    #[sorbit(offset = 0, bit_field=_byte_0, repr=u8, bits=0..=6)]
     pub response_code: SenseResponseCode,
-    #[layout(offset = 1, bit_field(u8, 0..=3)) ]
+    #[sorbit(offset = 1, bit_field=_byte_1, repr=u8, bits=0..=3)]
     pub sense_key: SenseKey,
     pub additional_sense_code: u8,
     pub additional_sense_code_qualifier: u8,
@@ -111,11 +118,11 @@ pub struct DescriptorSenseData {
 
 #[derive(Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct FixedSenseData {
-    #[layout(offset = 0, bit_field(u8, 0..=6)) ]
+    #[sorbit(offset = 0, bit_field=_byte_0, repr=u8, bits=0..=6) ]
     pub response_code: SenseResponseCode,
-    #[layout(offset = 2, bit_field(u8, 0..=3)) ]
+    #[sorbit(offset = 2, bit_field=_byte_2, repr=u8, bits=0..=3) ]
     pub sense_key: SenseKey,
-    #[layout(offset = 12)]
+    #[sorbit(offset = 12)]
     pub additional_sense_code: u8,
     pub additional_sense_code_qualifier: u8,
 }
@@ -129,10 +136,39 @@ fn convert_buffer_len(num_bytes: u32, inc_512: bool) -> u32 {
     }
 }
 
+impl Command {
+    pub fn security_protocol_in(
+        security_protocol: u8,
+        security_protocol_specific: u16,
+        alloc_len_bytes: u32,
+        inc_512: bool,
+    ) -> Self {
+        Self::SecurityProtocolIn(SecurityProtocolIn::new(
+            security_protocol,
+            security_protocol_specific,
+            alloc_len_bytes,
+            inc_512,
+        ))
+    }
+
+    pub fn security_protocol_out(
+        security_protocol: u8,
+        security_protocol_specific: u16,
+        trans_len_bytes: u32,
+        inc_512: bool,
+    ) -> Self {
+        Self::SecurityProtocolOut(SecurityProtocolOut::new(
+            security_protocol,
+            security_protocol_specific,
+            trans_len_bytes,
+            inc_512,
+        ))
+    }
+}
+
 impl SecurityProtocolIn {
     pub fn new(security_protocol: u8, security_protocol_specific: u16, alloc_len_bytes: u32, inc_512: bool) -> Self {
         Self {
-            opcode: Opcode::SecurityProtocolIn,
             security_protocol,
             security_protocol_specific,
             inc_512,
@@ -145,7 +181,6 @@ impl SecurityProtocolIn {
 impl SecurityProtocolOut {
     pub fn new(security_protocol: u8, security_protocol_specific: u16, trans_len_bytes: u32, inc_512: bool) -> Self {
         Self {
-            opcode: Opcode::SecurityProtocolOut,
             security_protocol,
             security_protocol_specific,
             inc_512,
@@ -184,6 +219,8 @@ impl Default for SCSIError {
 
 #[cfg(test)]
 mod tests {
+    use crate::serialization::{DeserializeBinarySorbit, SerializeBinary, SerializeBinarySorbit as _};
+
     use super::*;
 
     #[test]
@@ -224,5 +261,64 @@ mod tests {
     #[should_panic]
     fn security_protocol_in_new_512_err() {
         let _ = SecurityProtocolIn::new(0, 0, 235, true);
+    }
+
+    #[test]
+    fn serialize_security_protocol_in() {
+        let bytes = [
+            0xA2, 0x12, 0x34, 0x56, 0x80, 0x00, 0x12, 0x34, 0xAB, 0xCD, 0x00, 0x56,
+        ];
+        let value = Command::SecurityProtocolIn(SecurityProtocolIn {
+            security_protocol: 0x12,
+            security_protocol_specific: 0x3456,
+            inc_512: true,
+            allocation_length: 0x1234ABCD,
+            control: 0x56,
+        });
+        assert_eq!(&value.to_bytes().unwrap(), &bytes);
+    }
+
+    #[test]
+    fn serialize_security_protocol_out() {
+        let bytes = [
+            0xB5, 0x12, 0x34, 0x56, 0x80, 0x00, 0x12, 0x34, 0xAB, 0xCD, 0x00, 0x56,
+        ];
+        let value = Command::SecurityProtocolOut(SecurityProtocolOut {
+            security_protocol: 0x12,
+            security_protocol_specific: 0x3456,
+            inc_512: true,
+            transfer_length: 0x1234ABCD,
+            control: 0x56,
+        });
+        assert_eq!(&value.to_bytes().unwrap(), &bytes);
+    }
+
+    #[test]
+    fn deserialize_descriptor_sense_data() {
+        let bytes = [0x72, 0x02, 0x12, 0x34, 0x00, 0x00, 0x56];
+        let value = DescriptorSenseData {
+            response_code: SenseResponseCode::CurrentDescriptor,
+            sense_key: SenseKey::NotReady,
+            additional_sense_code: 0x12,
+            additional_sense_code_qualifier: 0x34,
+        };
+        assert_eq!(value, DescriptorSenseData::from_bytes(&bytes).unwrap());
+    }
+
+    #[test]
+    fn deserialize_fixed_sense_data() {
+        let mut bytes = [0x00_u8; 18];
+        bytes[0] = 0x70;
+        bytes[2] = 0x02;
+        bytes[12] = 0x12;
+        bytes[13] = 0x34;
+
+        let value = FixedSenseData {
+            response_code: SenseResponseCode::CurrentFixed,
+            sense_key: SenseKey::NotReady,
+            additional_sense_code: 0x12,
+            additional_sense_code_qualifier: 0x34,
+        };
+        assert_eq!(value, FixedSenseData::from_bytes(&bytes).unwrap());
     }
 }
