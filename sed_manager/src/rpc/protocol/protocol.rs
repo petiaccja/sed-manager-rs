@@ -7,6 +7,7 @@ use core::task::Poll;
 use core::time::Duration;
 use std::sync::Arc;
 
+use sorbit::ser_de::FromBytes as _;
 use tokio::sync::{mpsc, oneshot};
 
 use crate::device::Device;
@@ -301,7 +302,7 @@ fn append_command(batches: &mut Vec<CommandBatch>, command: Command) {
 
 pub fn discover(device: &dyn Device) -> Result<Discovery, Error> {
     let data = device.security_recv(0x01, 0x0001_u16.to_be_bytes(), 4096)?;
-    let discovery = Discovery::from_bytes(data)?;
+    let discovery = Discovery::from_bytes(&data)?;
     Ok(discovery.remove_empty())
 }
 

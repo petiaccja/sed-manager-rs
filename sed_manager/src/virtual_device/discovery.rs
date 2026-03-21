@@ -3,12 +3,15 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
+use std::marker::PhantomData;
+
+use sorbit::ser_de::ToBytes;
+
 use crate::messaging::discovery::{
     BlockSIDAuthDescriptor, Discovery, FeatureDescriptor, GeometryDescriptor, LockingDescriptor, OpalV2Descriptor,
     OwnerPasswordState, TPerDescriptor,
 };
 use crate::rpc::Properties;
-use crate::serialization::{OutputStream, Serialize};
 use crate::spec::column_types::LifeCycleState;
 use crate::spec::{self, table_id};
 use crate::virtual_device::data::object_table::{CPINTable, LockingTable, MBRControlTable};
@@ -19,9 +22,7 @@ pub const BASE_COM_ID: u16 = 4100;
 pub const NUM_COM_IDS: u16 = 1;
 
 pub fn write_discovery(discovery: &Discovery, len: usize) -> Result<Vec<u8>, crate::device::Error> {
-    let mut stream = OutputStream::<u8>::new();
-    discovery.serialize(&mut stream).unwrap();
-    let mut buffer = stream.take();
+    let mut buffer = discovery.to_bytes().unwrap();
     buffer.resize(len, 0); // If the transfer length is too small, the truncated buffer must be returned.
     Ok(buffer)
 }
@@ -36,11 +37,13 @@ pub fn get_discovery(properties: &Properties, ssc: &SecuritySubsystemClass) -> D
     if let Some(block_sid_auth_desc) = get_block_sid_authentication_desc(ssc) {
         features.push(block_sid_auth_desc.into());
     }
-    Discovery::new(features)
+    Discovery::from(features)
 }
 
 fn get_tper_feature_desc(properties: &Properties) -> FeatureDescriptor {
     let desc = TPerDescriptor {
+        version: PhantomData,
+        length: PhantomData,
         sync_supported: true,
         async_supported: properties.asynchronous,
         ack_nak_supported: properties.ack_nak,
@@ -64,6 +67,8 @@ fn get_locking_feature_desc(ssc: &SecuritySubsystemClass) -> FeatureDescriptor {
     let mbr_done = mbr_control_row.done;
 
     let desc = LockingDescriptor {
+        version: PhantomData,
+        length: PhantomData,
         hw_reset_supported: true,
         locked,
         locking_enabled,
@@ -78,6 +83,8 @@ fn get_locking_feature_desc(ssc: &SecuritySubsystemClass) -> FeatureDescriptor {
 
 fn get_ssc_feature_desc() -> FeatureDescriptor {
     let desc = OpalV2Descriptor {
+        version: 1,
+        length: PhantomData,
         base_com_id: BASE_COM_ID,
         num_com_ids: NUM_COM_IDS,
         no_range_crossing: false,
@@ -90,8 +97,14 @@ fn get_ssc_feature_desc() -> FeatureDescriptor {
 }
 
 fn get_geometry_feature_desc() -> FeatureDescriptor {
-    let desc =
-        GeometryDescriptor { align: true, logical_block_size: 512, alignment_granularity: 16, lowest_aligned_lba: 4 };
+    let desc = GeometryDescriptor {
+        version: PhantomData,
+        length: PhantomData,
+        align: true,
+        logical_block_size: 512,
+        alignment_granularity: 16,
+        lowest_aligned_lba: 4,
+    };
     FeatureDescriptor::Geometry(desc)
 }
 
@@ -101,6 +114,8 @@ fn get_block_sid_authentication_desc(ssc: &SecuritySubsystemClass) -> Option<Fea
     let c_pin_sid = c_pin_table.get(&spec::opal::admin::c_pin::SID)?;
     let c_pin_msid = c_pin_table.get(&spec::opal::admin::c_pin::MSID)?;
     Some(FeatureDescriptor::BlockSIDAuth(BlockSIDAuthDescriptor {
+        version: 2,
+        length: PhantomData,
         locking_sp_frozen: false,
         locking_sp_freeze_supported: false,
         sid_authentication_blocked: false,

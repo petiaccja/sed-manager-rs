@@ -3,15 +3,17 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use core::ops::{Deref, DerefMut};
 use core::time::Duration;
+use std::marker::PhantomData;
 
-use crate::serialization::{
-    Deserialize, Error as SerializeError, InputStream, ItemRead, OutputStream, Serialize, vec_with_len::VecWithLen,
+use sorbit::{
+    Deserialize, Serialize, collection,
+    ser_de::{Deserialize, MultiPassSerialize, RevisableSerializer, Serialize, Span},
 };
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u16)]
+#[sorbit(byte_order=big_endian)]
 pub enum FeatureCode {
     TPer = 0x0001,
     Locking = 0x0002,
@@ -27,12 +29,13 @@ pub enum FeatureCode {
     PyriteV2 = 0x0303,
     Ruby = 0x0304,
     KeyPerIO = 0x0305,
-    #[fallback]
-    Unrecognized = 0xFFFF,
+    #[sorbit(catch_all)]
+    Unrecognized(u16),
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
+#[sorbit(byte_order=big_endian)]
 pub enum OwnerPasswordState {
     SameAsMSID = 0x00,
     VendorSpecified = 0xFF,
@@ -55,147 +58,201 @@ pub trait SecuritySubsystemClass: Feature {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-#[layout(round = 12)]
+#[sorbit(len=14, byte_order=big_endian)]
 pub struct TPerDescriptor {
-    #[layout(offset = 0, bit_field(u8, 6))]
+    #[sorbit(bit_field = _ver, repr=u8, bits=4..=7)]
+    #[sorbit(value = constant(0x01))]
+    pub version: PhantomData<u8>,
+    #[sorbit(value = constant(0x0C))]
+    pub length: PhantomData<u8>,
+
+    #[sorbit(bit_field=_0, repr=u8, bits=6)]
     pub com_id_mgmt_supported: bool,
-    #[layout(offset = 0, bit_field(u8, 4))]
+    #[sorbit(bit_field=_0, bits=4)]
     pub streaming_supported: bool,
-    #[layout(offset = 0, bit_field(u8, 3))]
+    #[sorbit(bit_field=_0, bits=3)]
     pub buffer_mgmt_supported: bool,
-    #[layout(offset = 0, bit_field(u8, 2))]
+    #[sorbit(bit_field=_0, bits=2)]
     pub ack_nak_supported: bool,
-    #[layout(offset = 0, bit_field(u8, 1))]
+    #[sorbit(bit_field=_0, bits=1)]
     pub async_supported: bool,
-    #[layout(offset = 0, bit_field(u8, 0))]
+    #[sorbit(bit_field=_0, bits=0)]
     pub sync_supported: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-#[layout(round = 12)]
+#[sorbit(len=14, byte_order=big_endian)]
 pub struct LockingDescriptor {
-    #[layout(offset = 0, bit_field(u8, 7))]
+    #[sorbit(bit_field = _ver, repr=u8, bits=4..=7)]
+    #[sorbit(value = constant(0x01))]
+    pub version: PhantomData<u8>,
+    #[sorbit(value = constant(0x0C))]
+    pub length: PhantomData<u8>,
+
+    #[sorbit(bit_field=_0, repr=u8, bits=7)]
     pub hw_reset_supported: bool,
-    #[layout(offset = 0, bit_field(u8, 6))]
+    #[sorbit(bit_field=_0, bits=6)]
     pub mbr_shadowing_not_supported: bool,
-    #[layout(offset = 0, bit_field(u8, 5))]
+    #[sorbit(bit_field=_0, bits=5)]
     pub mbr_done: bool,
-    #[layout(offset = 0, bit_field(u8, 4))]
+    #[sorbit(bit_field=_0, bits=4)]
     pub mbr_enabled: bool,
-    #[layout(offset = 0, bit_field(u8, 3))]
+    #[sorbit(bit_field=_0, bits=3)]
     pub media_encryption: bool,
-    #[layout(offset = 0, bit_field(u8, 2))]
+    #[sorbit(bit_field=_0, bits=2)]
     pub locked: bool,
-    #[layout(offset = 0, bit_field(u8, 1))]
+    #[sorbit(bit_field=_0, bits=1)]
     pub locking_enabled: bool,
-    #[layout(offset = 0, bit_field(u8, 0))]
+    #[sorbit(bit_field=_0, bits=0)]
     pub locking_supported: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[sorbit(len=30, byte_order=big_endian)]
 pub struct GeometryDescriptor {
-    #[layout(offset = 0, bit_field(u8, 0))]
+    #[sorbit(bit_field = _ver, repr=u8, bits=4..=7)]
+    #[sorbit(value = constant(0x01))]
+    pub version: PhantomData<u8>,
+    #[sorbit(value = constant(0x1C))]
+    pub length: PhantomData<u8>,
+
+    #[sorbit(bit_field=_0, repr=u8, bits=0)]
     pub align: bool,
-    #[layout(offset = 8)]
+    #[sorbit(offset = 10)]
     pub logical_block_size: u32,
     pub alignment_granularity: u64,
     pub lowest_aligned_lba: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[sorbit(byte_order=big_endian)]
 pub struct DataRemovalMechanism {
-    #[layout(offset = 2, bit_field(u8, 5))]
+    #[sorbit(bit_field = _0, repr = u8, bits = 5)]
     pub vendor_erase: bool,
-    #[layout(offset = 2, bit_field(u8, 2))]
+    #[sorbit(bit_field = _0, bits = 2)]
     pub crypto_erase: bool,
-    #[layout(offset = 2, bit_field(u8, 1))]
+    #[sorbit(bit_field = _0, bits = 1)]
     pub block_erase: bool,
-    #[layout(offset = 2, bit_field(u8, 0))]
+    #[sorbit(bit_field = _0, bits = 0)]
     pub overwrite: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[sorbit(byte_order=big_endian)]
 pub struct DataRemovalTime {
-    #[layout(offset = 0, bit_field(u8, 5))]
+    #[sorbit(bit_field = _0, repr = u8, bits = 5)]
     pub vendor_erase_unit: bool,
-    #[layout(offset = 0, bit_field(u8, 2))]
+    #[sorbit(bit_field = _0, bits = 2)]
     pub crypto_erase_unit: bool,
-    #[layout(offset = 0, bit_field(u8, 1))]
+    #[sorbit(bit_field = _0, bits = 1)]
     pub block_erase_unit: bool,
-    #[layout(offset = 0, bit_field(u8, 0))]
+    #[sorbit(bit_field = _0, bits = 0)]
     pub overwrite_unit: bool,
-    #[layout(offset = 1)]
+    #[sorbit(offset = 1)]
     pub overwrite_amount: u16,
-    #[layout(offset = 3)]
+    #[sorbit(offset = 3)]
     pub block_erase_amount: u16,
-    #[layout(offset = 5)]
+    #[sorbit(offset = 5)]
     pub crypto_erase_amount: u16,
-    #[layout(offset = 11)]
+    #[sorbit(offset = 11)]
     pub vendor_erase_amount: u16,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-#[layout(round = 32)]
+#[sorbit(byte_order=big_endian)]
+#[sorbit(len = 34)]
 pub struct DataRemovalDescriptor {
-    #[layout(offset = 1, bit_field(u8, 1))]
+    #[sorbit(bit_field = _ver, repr=u8, bits=4..=7)]
+    #[sorbit(value = constant(0x02))]
+    pub version: PhantomData<u8>,
+    #[sorbit(value = constant(0x20))]
+    pub length: PhantomData<u8>,
+
+    #[sorbit(bit_field = _0, repr = u8, offset = 3, bits = 1)]
     pub interrupted: bool,
-    #[layout(offset = 1, bit_field(u8, 0))]
+    #[sorbit(bit_field = _0, bits = 0)]
     pub processing: bool,
-    #[layout(offset = 2)]
     pub supported_mechanism: DataRemovalMechanism,
     pub removal_time: DataRemovalTime,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-#[layout(round = 12)]
+#[sorbit(len = 14)]
 pub struct BlockSIDAuthDescriptor {
-    #[layout(offset = 0, bit_field(u8, 3))]
+    #[sorbit(bit_field = _ver, repr=u8, bits=4..=7)]
+    pub version: u8,
+    #[sorbit(value = constant(0x0C))]
+    pub length: PhantomData<u8>,
+
+    #[sorbit(bit_field = _0, repr = u8, bits = 3)]
     pub locking_sp_frozen: bool,
-    #[layout(offset = 0, bit_field(u8, 2))]
+    #[sorbit(bit_field = _0,bits = 2)]
     pub locking_sp_freeze_supported: bool,
-    #[layout(offset = 0, bit_field(u8, 1))]
+    #[sorbit( bit_field = _0,  bits = 1)]
     pub sid_authentication_blocked: bool,
-    #[layout(offset = 0, bit_field(u8, 0))]
+    #[sorbit(bit_field = _0,  bits = 0)]
     pub sid_msid_pin_differ: bool,
-    #[layout(offset = 1, bit_field(u8, 0))]
+    #[sorbit(bit_field = _1, repr=u8, bits=0)]
     pub hw_reset_unblocks: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-#[layout(round = 12)]
+#[sorbit(len = 14)]
 pub struct AdditionalDataStoreTablesDescriptor {
-    #[layout(offset = 2)]
+    #[sorbit(bit_field = _ver, repr=u8, bits=4..=7)]
+    #[sorbit(value = constant(0x02))]
+    pub version: PhantomData<u8>,
+    #[sorbit(bit_field = _ver, bits=0..=3)]
+    pub minor_version: u8,
+    #[sorbit(value = constant(0x0C))]
+    pub length: PhantomData<u8>,
+
+    #[sorbit(offset = 4)]
     pub max_num_tables: u16,
     pub max_total_size_of_tables: u32,
     pub table_size_alignment: u32,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-#[layout(round = 16)]
+#[sorbit(len = 18)]
 pub struct EnterpriseDescriptor {
+    #[sorbit(bit_field = _ver, repr=u8, bits=3..=7)]
+    pub version: u8,
+    #[sorbit(value = constant(0x10))]
+    pub length: PhantomData<u8>,
+
     pub base_com_id: u16,
     pub num_com_ids: u16,
-    #[layout(offset = 4, bit_field(u8, 0))]
+    #[sorbit(bit_field = _0, repr=u8, bits=0)]
     pub no_range_crossing: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-#[layout(round = 16)]
+#[sorbit(len = 18)]
 pub struct OpalV1Descriptor {
+    #[sorbit(bit_field = _ver, repr=u8, bits=4..=7)]
+    pub version: u8,
+    #[sorbit(value = constant(0x10))]
+    pub length: PhantomData<u8>,
+
     pub base_com_id: u16,
     pub num_com_ids: u16,
-    #[layout(offset = 4, bit_field(u8, 0))]
+    #[sorbit(bit_field = _0, repr = u8, bits=0)]
     pub no_range_crossing: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-#[layout(round = 16)]
+#[sorbit(len = 18)]
 pub struct OpalV2Descriptor {
+    #[sorbit(bit_field = _ver, repr=u8, bits=4..=7)]
+    pub version: u8,
+    #[sorbit(value = constant(0x10))]
+    pub length: PhantomData<u8>,
+
     pub base_com_id: u16,
     pub num_com_ids: u16,
-    #[layout(offset = 4, bit_field(u8, 0))]
+    #[sorbit(bit_field = _0, repr=u8, bits=0)]
     pub no_range_crossing: bool,
-    #[layout(offset = 5)]
     pub num_locking_admins_supported: u16,
     pub num_locking_users_supported: u16,
     pub initial_owner_pw: OwnerPasswordState,
@@ -203,43 +260,62 @@ pub struct OpalV2Descriptor {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-#[layout(round = 16)]
+#[sorbit(len = 18)]
 pub struct OpaliteDescriptor {
+    #[sorbit(bit_field = _ver, repr=u8, bits=4..=7)]
+    pub version: u8,
+    #[sorbit(value = constant(0x10))]
+    pub length: PhantomData<u8>,
+
     pub base_com_id: u16,
     pub num_com_ids: u16,
-    #[layout(offset = 9)]
+    #[sorbit(offset = 11)]
     pub initial_owner_pw: OwnerPasswordState,
     pub reverted_owner_pw: OwnerPasswordState,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-#[layout(round = 16)]
+#[sorbit(len = 18)]
 pub struct PyriteV1Descriptor {
+    #[sorbit(bit_field = _ver, repr=u8, bits=4..=7)]
+    pub version: u8,
+    #[sorbit(value = constant(0x10))]
+    pub length: PhantomData<u8>,
+
     pub base_com_id: u16,
     pub num_com_ids: u16,
-    #[layout(offset = 9)]
+    #[sorbit(offset = 11)]
     pub initial_owner_pw: OwnerPasswordState,
     pub reverted_owner_pw: OwnerPasswordState,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-#[layout(round = 16)]
+#[sorbit(len = 18)]
 pub struct PyriteV2Descriptor {
+    #[sorbit(bit_field = _ver, repr=u8, bits=4..=7)]
+    pub version: u8,
+    #[sorbit(value = constant(0x10))]
+    pub length: PhantomData<u8>,
+
     pub base_com_id: u16,
     pub num_com_ids: u16,
-    #[layout(offset = 9)]
+    #[sorbit(offset = 11)]
     pub initial_owner_pw: OwnerPasswordState,
     pub reverted_owner_pw: OwnerPasswordState,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-#[layout(round = 16)]
+#[sorbit(len = 18)]
 pub struct RubyDescriptor {
+    #[sorbit(bit_field = _ver, repr=u8, bits=4..=7)]
+    pub version: u8,
+    #[sorbit(value = constant(0x10))]
+    pub length: PhantomData<u8>,
+
     pub base_com_id: u16,
     pub num_com_ids: u16,
-    #[layout(offset = 4, bit_field(u8, 0))]
+    #[sorbit(bit_field = _0, repr = u8, bits = 0)]
     pub no_range_crossing: bool,
-    #[layout(offset = 5)]
     pub num_locking_admins_supported: u16,
     pub num_locking_users_supported: u16,
     pub initial_owner_pw: OwnerPasswordState,
@@ -247,61 +323,66 @@ pub struct RubyDescriptor {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-#[layout(round = 48)]
+#[sorbit(len = 46)]
 pub struct KeyPerIODescriptor {
+    #[sorbit(bit_field = _ver, repr=u8, bits=4..=7)]
+    pub version: u8,
+    #[sorbit(bit_field = _ver, repr=u8, bits=0..=3)]
+    pub minor_version: u8,
+    #[sorbit(value = constant(0x10))]
+    pub length: PhantomData<u8>,
+
     pub base_com_id_p1: u16,
     pub num_com_ids_p1: u16,
     pub base_com_id_p3: u16,
     pub num_com_ids_p3: u16,
-    #[layout(offset = 8)]
+    #[sorbit(offset = 10)]
     pub initial_owner_pw: OwnerPasswordState,
     pub reverted_owner_pw: OwnerPasswordState,
     pub num_kpio_admins_supported: u16,
 
-    #[layout(offset = 12, bit_field(u8, 5))]
+    #[sorbit(bit_field = _0, repr = u8, bits = 5)]
     pub replay_protection_enabled: bool,
-    #[layout(offset = 12, bit_field(u8, 4))]
+    #[sorbit(bit_field = _0, bits = 4)]
     pub replay_protection_supported: bool,
-    #[layout(offset = 12, bit_field(u8, 3))]
+    #[sorbit(bit_field = _0, bits = 3)]
     pub incorrect_key_detection_supported: bool,
-    #[layout(offset = 12, bit_field(u8, 2))]
+    #[sorbit(bit_field = _0, bits = 2)]
     pub tweak_key_required: bool,
-    #[layout(offset = 12, bit_field(u8, 1))]
+    #[sorbit(bit_field = _0, bits = 1)]
     pub kpio_scope: bool,
-    #[layout(offset = 12, bit_field(u8, 0))]
+    #[sorbit(bit_field = _0, bits = 0)]
     pub kpio_enabled: bool,
 
-    #[layout(offset = 13)]
     pub max_key_uid_len: u16,
 
-    #[layout(offset = 15, bit_field(u8, 0))]
+    #[sorbit(offset = 17, bit_field = _1,  repr = u8,bits = 0)]
     pub kmip_key_injection_supported: bool,
 
-    #[layout(offset = 17, bit_field(u8, 2))]
+    #[sorbit(offset = 19, bit_field = _2, repr = u8, bits = 2)]
     pub nist_rsa_oaep_supported: bool,
-    #[layout(offset = 17, bit_field(u8, 1))]
+    #[sorbit(bit_field = _2, bits = 1)]
     pub nist_aes_gcm_supported: bool,
-    #[layout(offset = 17, bit_field(u8, 0))]
+    #[sorbit(bit_field = _2, bits = 0)]
     pub nist_aes_kw_supported: bool,
 
-    #[layout(offset = 19, bit_field(u8, 0))]
-    pub rsa2k_wrapping_supported: bool,
-
-    #[layout(offset = 21, bit_field(u8, 0))]
+    #[sorbit(offset = 21, bit_field = _3, repr = u8, bits = 0)]
     pub aes256_wrapping_supported: bool,
-    #[layout(offset = 21, bit_field(u8, 1))]
+
+    #[sorbit(offset = 23, bit_field = _4, repr = u8, bits = 0)]
+    pub rsa2k_wrapping_supported: bool,
+    #[sorbit(bit_field = _4, bits = 1)]
     pub rsa3k_wrapping_supported: bool,
-    #[layout(offset = 21, bit_field(u8, 2))]
+    #[sorbit(bit_field = _4, bits = 2)]
     pub rsa4k_wrapping_supported: bool,
 
-    #[layout(offset = 23, bit_field(u8, 1))]
+    #[sorbit(offset = 25, bit_field = _5, repr = u8, bits = 1)]
     pub pki_kek_transport_supported: bool,
-    #[layout(offset = 23, bit_field(u8, 0))]
+    #[sorbit(bit_field = _5, bits = 0)]
     pub plaintext_kek_prov_supported: bool,
 
-    #[layout(offset = 28)]
+    #[sorbit(offset = 30)]
     pub num_keks_supported: u32,
-
     pub total_key_tags_supported: u32,
     pub max_key_tags_per_namespace: u16,
     pub get_nonce_cmd_nonce_len: u8,
@@ -314,51 +395,39 @@ pub struct UnrecognizedDescriptor {
     pub length: u8,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum FeatureDescriptor {
-    TPer(TPerDescriptor),
-    Locking(LockingDescriptor),
-    Geometry(GeometryDescriptor),
-    DataRemoval(DataRemovalDescriptor),
-    BlockSIDAuth(BlockSIDAuthDescriptor),
-    AdditionalDataStoreTables(AdditionalDataStoreTablesDescriptor),
-    Enterprise(EnterpriseDescriptor),
-    OpalV1(OpalV1Descriptor),
-    OpalV2(OpalV2Descriptor),
-    Opalite(OpaliteDescriptor),
-    PyriteV1(PyriteV1Descriptor),
-    PyriteV2(PyriteV2Descriptor),
-    Ruby(RubyDescriptor),
-    KeyPerIO(KeyPerIODescriptor),
-    Unrecognized(UnrecognizedDescriptor),
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-#[layout(round = 4)]
-struct RawFeatureDescriptor {
-    feature_code: FeatureCode,
-    version: u8,
-    payload: VecWithLen<u8, u8>,
-}
-
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-#[layout(round = 48)]
-pub struct DiscoveryHeader {
-    pub length_of_data: u32,
+#[repr(u16)]
+#[sorbit(byte_order=big_endian)]
+pub enum FeatureDescriptor {
+    TPer(TPerDescriptor) = 0x0001,
+    Locking(LockingDescriptor) = 0x0002,
+    Geometry(GeometryDescriptor) = 0x0003,
+    DataRemoval(DataRemovalDescriptor) = 0x0404,
+    BlockSIDAuth(BlockSIDAuthDescriptor) = 0x0402,
+    AdditionalDataStoreTables(AdditionalDataStoreTablesDescriptor) = 0x0202,
+    Enterprise(EnterpriseDescriptor) = 0x0100,
+    OpalV1(OpalV1Descriptor) = 0x0200,
+    OpalV2(OpalV2Descriptor) = 0x0203,
+    Opalite(OpaliteDescriptor) = 0x0301,
+    PyriteV1(PyriteV1Descriptor) = 0x0302,
+    PyriteV2(PyriteV2Descriptor) = 0x0303,
+    Ruby(RubyDescriptor) = 0x0304,
+    KeyPerIO(KeyPerIODescriptor) = 0x0305,
+    #[sorbit(catch_all)]
+    Unrecognized(u16),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Discovery {
     pub major_version: u16,
     pub minor_version: u16,
-    #[layout(offset = 16)]
     pub vendor_unique: [u8; 32],
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct Discovery {
-    feature_descriptors: VecWithLen<FeatureDescriptor, DiscoveryHeader>,
+    pub feature_descriptors: Vec<FeatureDescriptor>,
 }
 
 impl Discovery {
-    pub fn new(feature_descriptors: Vec<FeatureDescriptor>) -> Discovery {
-        Discovery { feature_descriptors: feature_descriptors.into() }
+    pub fn new() -> Discovery {
+        Self::default()
     }
 
     pub fn get<'me, T>(&'me self) -> Option<&'me T>
@@ -375,15 +444,9 @@ impl Discovery {
         let feature_descriptors: Vec<_> = self
             .feature_descriptors
             .into_iter()
-            .filter(|desc| {
-                desc != &FeatureDescriptor::Unrecognized(UnrecognizedDescriptor {
-                    feature_code: 0,
-                    length: 0,
-                    version: 0,
-                })
-            })
+            .filter(|desc| desc != &FeatureDescriptor::Unrecognized(0))
             .collect();
-        Self { feature_descriptors: feature_descriptors.into() }
+        Self { feature_descriptors, ..self }
     }
 
     pub fn get_common_features(&self) -> impl Iterator<Item = &FeatureDescriptor> {
@@ -400,23 +463,68 @@ impl Discovery {
 }
 
 impl IntoIterator for Discovery {
-    type Item = <VecWithLen<FeatureDescriptor, DiscoveryHeader> as IntoIterator>::Item;
-    type IntoIter = <VecWithLen<FeatureDescriptor, DiscoveryHeader> as IntoIterator>::IntoIter;
+    type Item = FeatureDescriptor;
+    type IntoIter = <Vec<FeatureDescriptor> as IntoIterator>::IntoIter;
     fn into_iter(self) -> Self::IntoIter {
         self.feature_descriptors.into_iter()
     }
 }
 
-impl Deref for Discovery {
-    type Target = Vec<FeatureDescriptor>;
-    fn deref(&self) -> &Self::Target {
-        self.feature_descriptors.deref()
+impl FromIterator<FeatureDescriptor> for Discovery {
+    fn from_iter<T: IntoIterator<Item = FeatureDescriptor>>(iter: T) -> Self {
+        Self::from(iter.into_iter().collect::<Vec<_>>())
     }
 }
 
-impl DerefMut for Discovery {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        self.feature_descriptors.deref_mut()
+impl From<Vec<FeatureDescriptor>> for Discovery {
+    fn from(value: Vec<FeatureDescriptor>) -> Self {
+        Self { feature_descriptors: value, ..Default::default() }
+    }
+}
+
+impl Default for Discovery {
+    fn default() -> Self {
+        Self {
+            major_version: 0x0000,
+            minor_version: 0x0001,
+            vendor_unique: Default::default(),
+            feature_descriptors: Default::default(),
+        }
+    }
+}
+
+impl MultiPassSerialize for Discovery {
+    fn serialize<S: RevisableSerializer>(&self, serializer: &mut S) -> Result<S::Success, S::Error> {
+        let (span, length_span) = serializer.serialize_composite(|se| {
+            let length: u32 = 0;
+            let length_span = length.serialize(se)?;
+            self.major_version.serialize(se)?;
+            self.minor_version.serialize(se)?;
+            se.pad(16)?;
+            self.vendor_unique.serialize(se)?;
+            collection::items(&self.feature_descriptors).serialize(se)?;
+            Ok(length_span)
+        })?;
+        serializer.revise_span(&length_span, |se| {
+            let length: u32 = span.len() as u32 - 4;
+            length.serialize(se)
+        })?;
+        Ok(span)
+    }
+}
+
+impl Deserialize for Discovery {
+    fn deserialize<D: sorbit::ser_de::Deserializer>(deserializer: &mut D) -> Result<Self, D::Error> {
+        let length = u32::deserialize(deserializer)?;
+        let major_version = u16::deserialize(deserializer)?;
+        let minor_version = u16::deserialize(deserializer)?;
+        deserializer.pad(16)?;
+        let vendor_unique = <[u8; 32]>::deserialize(deserializer)?;
+        let byte_count = length - 44;
+        let feature_descriptors = collection::deserialize_items_by_byte_count(deserializer, &byte_count)?;
+        let mut discovery = Self { major_version, minor_version, vendor_unique, feature_descriptors };
+        discovery.feature_descriptors.retain(|desc| matches!(desc, FeatureDescriptor::Unrecognized(0)));
+        Ok(discovery)
     }
 }
 
@@ -501,7 +609,7 @@ impl Feature for FeatureDescriptor {
             FeatureDescriptor::PyriteV2(desc) => desc.feature_code(),
             FeatureDescriptor::Ruby(desc) => desc.feature_code(),
             FeatureDescriptor::KeyPerIO(desc) => desc.feature_code(),
-            FeatureDescriptor::Unrecognized(_) => FeatureCode::Unrecognized,
+            FeatureDescriptor::Unrecognized(code) => FeatureCode::Unrecognized(*code),
         }
     }
     fn version(&self) -> u8 {
@@ -520,7 +628,7 @@ impl Feature for FeatureDescriptor {
             FeatureDescriptor::PyriteV2(desc) => desc.version(),
             FeatureDescriptor::Ruby(desc) => desc.version(),
             FeatureDescriptor::KeyPerIO(desc) => desc.version(),
-            FeatureDescriptor::Unrecognized(desc) => desc.version,
+            FeatureDescriptor::Unrecognized(_) => 0,
         }
     }
 }
@@ -580,96 +688,6 @@ impl_desc_try_from!(PyriteV2Descriptor, PyriteV2);
 impl_desc_try_from!(RubyDescriptor, Ruby);
 impl_desc_try_from!(KeyPerIODescriptor, KeyPerIO);
 
-impl Serialize<u8> for FeatureDescriptor {
-    type Error = SerializeError;
-    fn serialize(&self, stream: &mut OutputStream<u8>) -> Result<(), Self::Error> {
-        let mut raw_stream = OutputStream::<u8>::new();
-        match self {
-            FeatureDescriptor::TPer(desc) => desc.serialize(&mut raw_stream),
-            FeatureDescriptor::Locking(desc) => desc.serialize(&mut raw_stream),
-            FeatureDescriptor::Geometry(desc) => desc.serialize(&mut raw_stream),
-            FeatureDescriptor::DataRemoval(desc) => desc.serialize(&mut raw_stream),
-            FeatureDescriptor::BlockSIDAuth(desc) => desc.serialize(&mut raw_stream),
-            FeatureDescriptor::AdditionalDataStoreTables(desc) => desc.serialize(&mut raw_stream),
-            FeatureDescriptor::OpalV2(desc) => desc.serialize(&mut raw_stream),
-            FeatureDescriptor::Enterprise(desc) => desc.serialize(&mut raw_stream),
-            FeatureDescriptor::OpalV1(desc) => desc.serialize(&mut raw_stream),
-            FeatureDescriptor::Opalite(desc) => desc.serialize(&mut raw_stream),
-            FeatureDescriptor::PyriteV1(desc) => desc.serialize(&mut raw_stream),
-            FeatureDescriptor::PyriteV2(desc) => desc.serialize(&mut raw_stream),
-            FeatureDescriptor::Ruby(desc) => desc.serialize(&mut raw_stream),
-            FeatureDescriptor::KeyPerIO(desc) => desc.serialize(&mut raw_stream),
-            FeatureDescriptor::Unrecognized(_) => Ok(()),
-        }?;
-        let raw = RawFeatureDescriptor {
-            feature_code: self.feature_code(),
-            version: self.version(),
-            payload: raw_stream.take().into(),
-        };
-        raw.serialize(stream)
-    }
-}
-
-impl Deserialize<u8> for FeatureDescriptor {
-    type Error = SerializeError;
-    fn deserialize(stream: &mut crate::serialization::InputStream<u8>) -> Result<Self, Self::Error> {
-        let raw_feature_code = stream.peek_exact(2).map(|slc| u16::from_be_bytes(slc.try_into().unwrap()));
-        let raw = RawFeatureDescriptor::deserialize(stream)?;
-        let len = raw.payload.len();
-        let mut raw_stream = InputStream::from(raw.payload.into_vec());
-        let desc = match raw.feature_code {
-            FeatureCode::TPer => FeatureDescriptor::TPer(TPerDescriptor::deserialize(&mut raw_stream)?),
-            FeatureCode::Locking => FeatureDescriptor::Locking(LockingDescriptor::deserialize(&mut raw_stream)?),
-            FeatureCode::Geometry => FeatureDescriptor::Geometry(GeometryDescriptor::deserialize(&mut raw_stream)?),
-            FeatureCode::DataRemoval => {
-                FeatureDescriptor::DataRemoval(DataRemovalDescriptor::deserialize(&mut raw_stream)?)
-            }
-            FeatureCode::BlockSIDAuth => {
-                FeatureDescriptor::BlockSIDAuth(BlockSIDAuthDescriptor::deserialize(&mut raw_stream)?)
-            }
-            FeatureCode::AdditionalDataStoreTables => FeatureDescriptor::AdditionalDataStoreTables(
-                AdditionalDataStoreTablesDescriptor::deserialize(&mut raw_stream)?,
-            ),
-            FeatureCode::OpalV2 => FeatureDescriptor::OpalV2(OpalV2Descriptor::deserialize(&mut raw_stream)?),
-            FeatureCode::Enterprise => {
-                FeatureDescriptor::Enterprise(EnterpriseDescriptor::deserialize(&mut raw_stream)?)
-            }
-            FeatureCode::OpalV1 => FeatureDescriptor::OpalV1(OpalV1Descriptor::deserialize(&mut raw_stream)?),
-            FeatureCode::Opalite => FeatureDescriptor::Opalite(OpaliteDescriptor::deserialize(&mut raw_stream)?),
-            FeatureCode::PyriteV1 => FeatureDescriptor::PyriteV1(PyriteV1Descriptor::deserialize(&mut raw_stream)?),
-            FeatureCode::PyriteV2 => FeatureDescriptor::PyriteV2(PyriteV2Descriptor::deserialize(&mut raw_stream)?),
-            FeatureCode::Ruby => FeatureDescriptor::Ruby(RubyDescriptor::deserialize(&mut raw_stream)?),
-            FeatureCode::KeyPerIO => FeatureDescriptor::KeyPerIO(KeyPerIODescriptor::deserialize(&mut raw_stream)?),
-            FeatureCode::Unrecognized => FeatureDescriptor::Unrecognized(UnrecognizedDescriptor {
-                feature_code: raw_feature_code.unwrap_or(FeatureCode::Unrecognized as u16),
-                version: raw.version,
-                length: len as u8,
-            }),
-        };
-        Ok(desc)
-    }
-}
-
-impl TryFrom<DiscoveryHeader> for usize {
-    type Error = <usize as TryFrom<u32>>::Error;
-    fn try_from(value: DiscoveryHeader) -> Result<Self, Self::Error> {
-        Self::try_from(value.length_of_data)
-    }
-}
-
-impl TryFrom<usize> for DiscoveryHeader {
-    type Error = <u32 as TryFrom<usize>>::Error;
-    fn try_from(value: usize) -> Result<DiscoveryHeader, Self::Error> {
-        let length_of_data: u32 = value.try_into()?;
-        Ok(DiscoveryHeader {
-            length_of_data: length_of_data,
-            major_version: 0,
-            minor_version: 1,
-            vendor_unique: [0; 32],
-        })
-    }
-}
-
 fn removal_time(format_bit: bool, amount: u16) -> Option<Duration> {
     if amount == 0 {
         None
@@ -714,7 +732,438 @@ impl core::fmt::Display for FeatureCode {
             FeatureCode::PyriteV2 => write!(f, "Pyrite 2.0"),
             FeatureCode::Ruby => write!(f, "Ruby"),
             FeatureCode::KeyPerIO => write!(f, "Key per I/O"),
-            FeatureCode::Unrecognized => write!(f, "Unrecognized"),
+            FeatureCode::Unrecognized(code) => write!(f, "Unrecognized feature 0x{code:04X}"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use sorbit::ser_de::{FromBytes, ToBytes};
+
+    use super::*;
+
+    #[test]
+    fn serialize_tper_desc() {
+        #[rustfmt::skip]
+        let bytes = [
+            0x00, 0x01, // Feature code.
+            0x10, // Version | reserved.
+            0x0C, // Length.
+            0b0101_0101, // Flags,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // Reserved.
+        ];
+        let value = FeatureDescriptor::TPer(TPerDescriptor {
+            version: PhantomData,
+            length: PhantomData,
+            com_id_mgmt_supported: true,
+            streaming_supported: true,
+            buffer_mgmt_supported: false,
+            ack_nak_supported: true,
+            async_supported: false,
+            sync_supported: true,
+        });
+        assert_eq!(value.to_bytes().unwrap(), &bytes);
+        assert_eq!(FeatureDescriptor::from_bytes(&bytes).unwrap(), value);
+    }
+
+    #[test]
+    fn serialize_locking_desc() {
+        #[rustfmt::skip]
+        let bytes = [
+            0x00, 0x02, // Feature code.
+            0x10, // Version | reserved.
+            0x0C, // Length.
+            0b0101_0101, // Flags,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // Reserved.
+        ];
+        let value = FeatureDescriptor::Locking(LockingDescriptor {
+            version: PhantomData,
+            length: PhantomData,
+            hw_reset_supported: false,
+            mbr_shadowing_not_supported: true,
+            mbr_done: false,
+            mbr_enabled: true,
+            media_encryption: false,
+            locked: true,
+            locking_enabled: false,
+            locking_supported: true,
+        });
+        assert_eq!(value.to_bytes().unwrap(), &bytes);
+        assert_eq!(FeatureDescriptor::from_bytes(&bytes).unwrap(), value);
+    }
+
+    #[test]
+    fn serialize_geometry_desc() {
+        #[rustfmt::skip]
+        let bytes = [
+            0x00, 0x03, // Feature code.
+            0x10, // Version | reserved.
+            0x1C, // Length.
+            1, // Align.
+            0, 0, 0, 0, 0, 0, 0, // Reserved.
+            0x00, 0x00, 0x00, 0x50, // Logical block size.
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x60, // Alignment.
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x70, // Lowest LBA.
+        ];
+        let value = FeatureDescriptor::Geometry(GeometryDescriptor {
+            version: PhantomData,
+            length: PhantomData,
+            align: true,
+            logical_block_size: 0x50,
+            alignment_granularity: 0x60,
+            lowest_aligned_lba: 0x70,
+        });
+        assert_eq!(value.to_bytes().unwrap(), &bytes);
+        assert_eq!(FeatureDescriptor::from_bytes(&bytes).unwrap(), value);
+    }
+
+    #[test]
+    fn serialize_data_removal_desc() {
+        #[rustfmt::skip]
+        let bytes = [
+            0x04, 0x04, // Feature code.
+            0x20, // Version | reserved.
+            0x20, // Length.
+            0, // Reserved.
+            0b10, // Interrupted / processing.
+            0b0010_0101, // Supported mechanism.
+            0b0010_0101, // Format.
+            0x00, 0x01, // Vendor erase time
+            0x00, 0x02, // Crypto erase time
+            0x00, 0x03, // Block erase time
+            0, 0, 0, 0, // Reserved
+            0x00, 0x04, // Overwrite time
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // Reserved
+
+        ];
+        let value = FeatureDescriptor::DataRemoval(DataRemovalDescriptor {
+            version: PhantomData,
+            length: PhantomData,
+            interrupted: true,
+            processing: false,
+            supported_mechanism: DataRemovalMechanism {
+                vendor_erase: true,
+                crypto_erase: true,
+                block_erase: false,
+                overwrite: true,
+            },
+            removal_time: DataRemovalTime {
+                vendor_erase_unit: true,
+                crypto_erase_unit: true,
+                block_erase_unit: false,
+                overwrite_unit: true,
+                overwrite_amount: 1,
+                block_erase_amount: 2,
+                crypto_erase_amount: 3,
+                vendor_erase_amount: 4,
+            },
+        });
+        assert_eq!(value.to_bytes().unwrap(), &bytes);
+        assert_eq!(FeatureDescriptor::from_bytes(&bytes).unwrap(), value);
+    }
+
+    #[test]
+    fn serialize_block_sid_desc() {
+        #[rustfmt::skip]
+        let bytes = [
+            0x04, 0x02, // Feature code.
+            0x20, // Version | reserved.
+            0x0C, // Length.
+            0b0000_0101, // Flags.
+            0b0000_0001, // HW reset.
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // Reserved.
+        ];
+        let value = FeatureDescriptor::BlockSIDAuth(BlockSIDAuthDescriptor {
+            version: 0x02,
+            length: PhantomData,
+            locking_sp_frozen: false,
+            locking_sp_freeze_supported: true,
+            sid_authentication_blocked: false,
+            sid_msid_pin_differ: true,
+            hw_reset_unblocks: true,
+        });
+        assert_eq!(value.to_bytes().unwrap(), &bytes);
+        assert_eq!(FeatureDescriptor::from_bytes(&bytes).unwrap(), value);
+    }
+
+    #[test]
+    fn serialize_additional_data_store_desc() {
+        #[rustfmt::skip]
+        let bytes = [
+            0x02, 0x02, // Feature code.
+            0x21, // Version | minor version.
+            0x0C, // Length.
+            0, 0, // Reserved
+            0x00, 0x01, // Max num tables
+            0x00, 0x00, 0x00, 0x02, // Max total size
+            0x00, 0x00, 0x00, 0x03, // Alignment
+            
+        ];
+        let value = FeatureDescriptor::AdditionalDataStoreTables(AdditionalDataStoreTablesDescriptor {
+            version: PhantomData,
+            length: PhantomData,
+            minor_version: 1,
+            max_num_tables: 0x01,
+            max_total_size_of_tables: 0x02,
+            table_size_alignment: 0x03,
+        });
+        assert_eq!(value.to_bytes().unwrap(), &bytes);
+        assert_eq!(FeatureDescriptor::from_bytes(&bytes).unwrap(), value);
+    }
+
+    #[test]
+    fn serialize_enterprise_desc() {
+        #[rustfmt::skip]
+        let bytes = [
+            0x01, 0x00, // Feature code.
+            0b00001_000, // Version.
+            0x10, // Length.
+            0x00, 0x02, // Base ComID
+            0x00, 0x01, // Num ComIDs
+            0b0000_0001, // Range crossing
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // Reserved            
+        ];
+        let value = FeatureDescriptor::Enterprise(EnterpriseDescriptor {
+            version: 1,
+            length: PhantomData,
+            base_com_id: 2,
+            num_com_ids: 1,
+            no_range_crossing: true,
+        });
+        assert_eq!(value.to_bytes().unwrap(), &bytes);
+        assert_eq!(FeatureDescriptor::from_bytes(&bytes).unwrap(), value);
+    }
+
+    #[test]
+    fn serialize_opal_v1_desc() {
+        #[rustfmt::skip]
+        let bytes = [
+            0x02, 0x00, // Feature code.
+            0b0001_0000, // Version.
+            0x10, // Length.
+            0x00, 0x02, // Base ComID
+            0x00, 0x01, // Num ComIDs
+            0b0000_0001, // Range crossing
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // Reserved            
+        ];
+        let value = FeatureDescriptor::OpalV1(OpalV1Descriptor {
+            version: 1,
+            length: PhantomData,
+            base_com_id: 2,
+            num_com_ids: 1,
+            no_range_crossing: true,
+        });
+        assert_eq!(value.to_bytes().unwrap(), &bytes);
+        assert_eq!(FeatureDescriptor::from_bytes(&bytes).unwrap(), value);
+    }
+
+    #[test]
+    fn serialize_opal_v2_desc() {
+        #[rustfmt::skip]
+        let bytes = [
+            0x02, 0x03, // Feature code.
+            0b0001_0000, // Version.
+            0x10, // Length.
+            0x00, 0x02, // Base ComID
+            0x00, 0x01, // Num ComIDs
+            0b0000_0001, // Range crossing
+            0x00, 0x04, // Num admins
+            0x00, 0x08, // Num users
+            0xFF, // Initial PIN
+            0xFF, // Reverted PIN
+            0, 0, 0, 0, 0, // Reserved
+        ];
+        let value = FeatureDescriptor::OpalV2(OpalV2Descriptor {
+            version: 1,
+            length: PhantomData,
+            base_com_id: 2,
+            num_com_ids: 1,
+            no_range_crossing: true,
+            num_locking_admins_supported: 4,
+            num_locking_users_supported: 8,
+            initial_owner_pw: OwnerPasswordState::VendorSpecified,
+            reverted_owner_pw: OwnerPasswordState::VendorSpecified,
+        });
+        assert_eq!(value.to_bytes().unwrap(), &bytes);
+        assert_eq!(FeatureDescriptor::from_bytes(&bytes).unwrap(), value);
+    }
+
+    #[test]
+    fn serialize_opalite_desc() {
+        #[rustfmt::skip]
+        let bytes = [
+            0x03, 0x01, // Feature code.
+            0b0001_0000, // Version.
+            0x10, // Length.
+            0x00, 0x02, // Base ComID
+            0x00, 0x01, // Num ComIDs
+            0, 0, 0, 0, 0, // Reserved
+            0xFF, // Initial PIN
+            0xFF, // Reverted PIN
+            0, 0, 0, 0, 0, // Reserved
+        ];
+        let value = FeatureDescriptor::Opalite(OpaliteDescriptor {
+            version: 1,
+            length: PhantomData,
+            base_com_id: 2,
+            num_com_ids: 1,
+            initial_owner_pw: OwnerPasswordState::VendorSpecified,
+            reverted_owner_pw: OwnerPasswordState::VendorSpecified,
+        });
+        assert_eq!(value.to_bytes().unwrap(), &bytes);
+        assert_eq!(FeatureDescriptor::from_bytes(&bytes).unwrap(), value);
+    }
+
+    #[test]
+    fn serialize_pyrite_v1_desc() {
+        #[rustfmt::skip]
+        let bytes = [
+            0x03, 0x02, // Feature code.
+            0b0001_0000, // Version.
+            0x10, // Length.
+            0x00, 0x02, // Base ComID
+            0x00, 0x01, // Num ComIDs
+            0, 0, 0, 0, 0, // Reserved
+            0xFF, // Initial PIN
+            0xFF, // Reverted PIN
+            0, 0, 0, 0, 0, // Reserved
+        ];
+        let value = FeatureDescriptor::PyriteV1(PyriteV1Descriptor {
+            version: 1,
+            length: PhantomData,
+            base_com_id: 2,
+            num_com_ids: 1,
+            initial_owner_pw: OwnerPasswordState::VendorSpecified,
+            reverted_owner_pw: OwnerPasswordState::VendorSpecified,
+        });
+        assert_eq!(value.to_bytes().unwrap(), &bytes);
+        assert_eq!(FeatureDescriptor::from_bytes(&bytes).unwrap(), value);
+    }
+
+    #[test]
+    fn serialize_pyrite_v2_desc() {
+        #[rustfmt::skip]
+        let bytes = [
+            0x03, 0x03, // Feature code.
+            0b0001_0000, // Version.
+            0x10, // Length.
+            0x00, 0x02, // Base ComID
+            0x00, 0x01, // Num ComIDs
+            0, 0, 0, 0, 0, // Reserved
+            0xFF, // Initial PIN
+            0xFF, // Reverted PIN
+            0, 0, 0, 0, 0, // Reserved
+        ];
+        let value = FeatureDescriptor::PyriteV2(PyriteV2Descriptor {
+            version: 1,
+            length: PhantomData,
+            base_com_id: 2,
+            num_com_ids: 1,
+            initial_owner_pw: OwnerPasswordState::VendorSpecified,
+            reverted_owner_pw: OwnerPasswordState::VendorSpecified,
+        });
+        assert_eq!(value.to_bytes().unwrap(), &bytes);
+        assert_eq!(FeatureDescriptor::from_bytes(&bytes).unwrap(), value);
+    }
+
+    #[test]
+    fn serialize_ruby_desc() {
+        #[rustfmt::skip]
+        let bytes = [
+            0x03, 0x04, // Feature code.
+            0b0001_0000, // Version.
+            0x10, // Length.
+            0x00, 0x02, // Base ComID
+            0x00, 0x01, // Num ComIDs
+            0b0000_0001, // Range crossing
+            0x00, 0x04, // Num admins
+            0x00, 0x08, // Num users
+            0xFF, // Initial PIN
+            0xFF, // Reverted PIN
+            0, 0, 0, 0, 0, // Reserved
+        ];
+        let value = FeatureDescriptor::Ruby(RubyDescriptor {
+            version: 1,
+            length: PhantomData,
+            base_com_id: 2,
+            num_com_ids: 1,
+            no_range_crossing: true,
+            num_locking_admins_supported: 4,
+            num_locking_users_supported: 8,
+            initial_owner_pw: OwnerPasswordState::VendorSpecified,
+            reverted_owner_pw: OwnerPasswordState::VendorSpecified,
+        });
+        assert_eq!(value.to_bytes().unwrap(), &bytes);
+        assert_eq!(FeatureDescriptor::from_bytes(&bytes).unwrap(), value);
+    }
+
+    #[test]
+    fn serialize_kpio_desc() {
+        #[rustfmt::skip]
+        let bytes = [
+            0x03, 0x05, // Feature code.
+            0b0001_0000, // Version.
+            0x10, // Length.
+            0x00, 0x02, // Base ComID 0x01
+            0x00, 0x01, // Num ComIDs 0x01
+            0x00, 0x04, // Base ComID 0x03
+            0x00, 0x01, // Num ComIDs 0x03
+            0xFF, // Initial PIN
+            0xFF, // Reverted PIN
+            0x00, 0x04, // Num admins
+            0b0001_0101, // Flags @ 16
+            0x01, 0x00, // Max unique identifier len
+            0b0000_0001, // KMIP
+            0, // Reserved
+            0b0000_0101, // Flags @ 21
+            0, // Reserved
+            0b0000_0001, // AES256 wrapping key
+            0, // Reserved
+            0b0000_0101, // RSA 2/3/4 wrapping keys
+            0, // Reserved
+            0b0000_0011, // PKI KEK
+            0, 0, 0, 0, // Reserved
+            0x00, 0x00, 0x00, 0x01, // Num KEKs
+            0x00, 0x00, 0x00, 0x02, // Num key tags
+            0x00, 0x03, // Key tags per NS
+            0x04, // None length
+            0, 0, 0, 0, 0, // Reserved
+        ];
+        let value = FeatureDescriptor::KeyPerIO(KeyPerIODescriptor {
+            version: 1,
+            minor_version: 0,
+            length: PhantomData,
+            base_com_id_p1: 2,
+            num_com_ids_p1: 1,
+            base_com_id_p3: 4,
+            num_com_ids_p3: 1,
+            initial_owner_pw: OwnerPasswordState::VendorSpecified,
+            reverted_owner_pw: OwnerPasswordState::VendorSpecified,
+            num_kpio_admins_supported: 4,
+            replay_protection_enabled: false,
+            replay_protection_supported: true,
+            incorrect_key_detection_supported: false,
+            tweak_key_required: true,
+            kpio_scope: false,
+            kpio_enabled: true,
+            max_key_uid_len: 256,
+            kmip_key_injection_supported: true,
+            nist_rsa_oaep_supported: true,
+            nist_aes_gcm_supported: false,
+            nist_aes_kw_supported: true,
+            aes256_wrapping_supported: true,
+            rsa4k_wrapping_supported: true,
+            rsa3k_wrapping_supported: false,
+            rsa2k_wrapping_supported: true,
+            pki_kek_transport_supported: true,
+            plaintext_kek_prov_supported: true,
+            num_keks_supported: 1,
+            total_key_tags_supported: 2,
+            max_key_tags_per_namespace: 3,
+            get_nonce_cmd_nonce_len: 4,
+        });
+        assert_eq!(value.to_bytes().unwrap(), &bytes);
+        assert_eq!(FeatureDescriptor::from_bytes(&bytes).unwrap(), value);
     }
 }
