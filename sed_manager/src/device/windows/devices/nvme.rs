@@ -11,9 +11,9 @@ use crate::device::shared::nvme::IdentifyController;
 use crate::device::windows::Error as WindowsError;
 use crate::device::windows::utility::file_handle::FileHandle;
 use crate::device::windows::utility::ioctl::{STORAGE_PROTOCOL_SPECIFIC_DATA, STORAGE_PROTOCOL_TYPE, ioctl_in_out};
-use crate::serialization::DeserializeBinarySorbit as _;
 
 use core::mem::offset_of;
+use sorbit::ser_de::FromBytes as _;
 use std::os::windows::raw::HANDLE;
 use winapi::shared::winerror::ERROR_INVALID_DATA;
 use winapi::um::winioctl::{IOCTL_STORAGE_QUERY_PROPERTY, STORAGE_PROPERTY_QUERY};

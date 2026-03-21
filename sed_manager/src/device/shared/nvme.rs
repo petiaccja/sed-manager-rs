@@ -6,10 +6,10 @@
 //! Implements parts of the NVMe specification that is relevant for drive encryption.
 //! The official specification is accessible on [NVMe's website](https://nvmexpress.org/specifications/).
 
+use crate::device::Error as DeviceError;
 use crate::serialization::DeserializeBinary;
-use crate::{device::Error as DeviceError, serialization::DeserializeBinarySorbit};
 use num_enum::{FromPrimitive, IntoPrimitive};
-use sorbit::{Deserialize, PackInto, UnpackFrom};
+use sorbit::{Deserialize, PackInto, UnpackFrom, ser_de::FromBytes as _, ser_de::ToBytes as _};
 
 /// NVMe opcodes. These are combined opcodes, containing both the function and the data transfer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -217,8 +217,6 @@ impl StatusField {
 
 #[cfg(test)]
 mod tests {
-    use crate::serialization::DeserializeBinarySorbit as _;
-
     use super::*;
 
     #[test]

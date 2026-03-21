@@ -9,7 +9,7 @@ build = "build.rs"
 [dependencies]
 sed_manager_macros = { path = "../sed_manager_macros" }
 as_array = { path = "../as_array" }
-sorbit = { version = "0.1.0", git = "https://github.com/petiaccja/sorbit", rev = "655c695956c269c2c09abcd9187a6917e4e96067" }
+sorbit = { version = "0.1.0", git = "https://github.com/petiaccja/sorbit", rev = "53849ab3af5910a7bd55308cc49fe864eaef5723" }
 num_enum = { version = "0.7.5" }
 winapi = { version = "0.3.9", default-features = false, features = [
     "std",

@@ -219,7 +219,7 @@ impl Default for SCSIError {
 
 #[cfg(test)]
 mod tests {
-    use crate::serialization::{DeserializeBinarySorbit, SerializeBinary, SerializeBinarySorbit as _};
+    use sorbit::ser_de::{FromBytes as _, ToBytes as _};
 
     use super::*;
 
