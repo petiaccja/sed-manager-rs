@@ -5,10 +5,12 @@
 
 use std::collections::VecDeque as Queue;
 
+use sorbit::ser_de::{FromBytes as _, ToBytes as _};
+
 use crate::device::Error;
 use crate::messaging::com_id::{
-    ComIdRequestCode, ComIdState, HandleComIdRequest, HandleComIdResponse, StackResetResponsePayload, StackResetStatus,
-    VerifyComIdValidResponsePayload,
+    ComIdRequestCode, ComIdState, Date, HandleComIdRequest, HandleComIdResponse, HandleComIdResponseParams,
+    StackResetStatus,
 };
 use crate::messaging::packet::ComPacket;
 use crate::messaging::value::Bytes;
@@ -120,35 +122,39 @@ impl ComIDSession {
     fn reset_stack(&mut self, firmware: &mut TPer, com_id: u16, com_id_ext: u16) -> HandleComIdResponse {
         // In order to reset other sessions' stacks, the sessions would have to know about each other.
         // This is permitted by the spec, but I don't see a reason to implemented for only testing purposes.
-        let payload = if com_id == self.com_id && self.com_id_ext == com_id_ext {
+        let status = if com_id == self.com_id && self.com_id_ext == com_id_ext {
             self.com_queue.clear();
             self.packet_queue.clear();
             firmware.protocol_stack.reset();
-            StackResetResponsePayload { stack_reset_status: StackResetStatus::Success }
+            StackResetStatus::Success
         } else {
-            StackResetResponsePayload { stack_reset_status: StackResetStatus::Failure }
+            StackResetStatus::Failure
         };
         HandleComIdResponse {
             com_id,
             com_id_ext,
-            request_code: ComIdRequestCode::StackReset,
-            payload: payload.to_bytes().unwrap().into(),
+            params: HandleComIdResponseParams::StackReset { available_data_length: 4, status },
         }
     }
 
     fn verify_com_id_valid(&mut self, com_id: u16, com_id_ext: u16) -> HandleComIdResponse {
         // To report correct values for other com IDs, session would have to know about each other.
         // This is not worth implementing for a test device.
-        let payload = if com_id == self.com_id && self.com_id_ext == com_id_ext {
-            VerifyComIdValidResponsePayload { com_id_state: ComIdState::Associated }
+        let com_id_state = if com_id == self.com_id && self.com_id_ext == com_id_ext {
+            ComIdState::Associated
         } else {
-            VerifyComIdValidResponsePayload { com_id_state: ComIdState::Invalid }
+            ComIdState::Invalid
         };
         HandleComIdResponse {
             com_id,
             com_id_ext,
-            request_code: ComIdRequestCode::StackReset,
-            payload: payload.to_bytes().unwrap().into(),
+            params: HandleComIdResponseParams::VerifyComIdValid {
+                available_data_length: 0x22,
+                com_id_state,
+                time_of_allocation: Date::unsupported(),
+                time_of_expiry: Date::unsupported(),
+                time_since_reset: Date::unsupported(),
+            },
         }
     }
 }
@@ -157,8 +163,7 @@ fn no_com_id_response(com_id: u16, com_id_ext: u16) -> HandleComIdResponse {
     HandleComIdResponse {
         com_id,
         com_id_ext,
-        request_code: crate::messaging::com_id::ComIdRequestCode::StackReset,
-        payload: VecWithLen::new(),
+        params: HandleComIdResponseParams::NoResponseAvailable { available_data_length: 0 },
     }
 }
 

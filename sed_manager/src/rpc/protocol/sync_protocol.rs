@@ -3,9 +3,12 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
+use sorbit::ser_de::{FromBytes as _, ToBytes as _};
+
 use crate::device::Device;
 use crate::messaging::com_id::{
     HANDLE_COM_ID_PROTOCOL, HANDLE_COM_ID_RESPONSE_LEN, HandleComIdRequest, HandleComIdResponse,
+    HandleComIdResponseParams,
 };
 use crate::messaging::packet::{ComPacket, PACKETIZED_PROTOCOL};
 use crate::rpc::{Error, Properties};
@@ -58,8 +61,8 @@ pub async fn roundtrip_com_id(
         let transfer_len = HANDLE_COM_ID_RESPONSE_LEN;
         let protocol_specific = com_id.to_be_bytes();
         let data = device.security_recv(protocol, protocol_specific, transfer_len)?;
-        let response = HandleComIdResponse::from_bytes(data)?;
-        if response.payload.is_empty() {
+        let response = HandleComIdResponse::from_bytes(&data)?;
+        if let HandleComIdResponseParams::NoResponseAvailable { .. } = response.params {
             retry.sleep().await?;
         } else {
             break Ok(response);

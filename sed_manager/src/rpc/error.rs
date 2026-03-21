@@ -8,6 +8,8 @@ use crate::device::Error as DeviceError;
 use crate::messaging::token::TokenStreamError;
 use crate::serialization::Error as SerializeError;
 
+use sorbit::error::Error as SorbitError;
+
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum Error {
     // Encoding-related.
@@ -15,6 +17,8 @@ pub enum Error {
     TokenStreamFailed(TokenStreamError),
     #[error("Serialization failure: {}", .0)]
     SerializationFailed(SerializeError),
+    #[error("Serialization failure (sorbit): {}", .0)]
+    SerializationFailedSorbit(SorbitError),
 
     // Protocol-related.
     #[error("Security command failure: {}", .0)]
@@ -39,6 +43,10 @@ pub enum Error {
     EOSExpected,
     #[error("The returned values are not of the requested type/format")]
     ResultTypeMismatch,
+    #[error("The reveived ComID response refers to an unexpected ComID")]
+    ComIDResponseComIDMismatch,
+    #[error("The reveived ComID response contains results of a different request")]
+    ComIDResponseCodeMismatch,
 
     // Method-related.
     #[error("{}", .0)]
@@ -62,6 +70,12 @@ impl From<TokenStreamError> for Error {
 impl From<SerializeError> for Error {
     fn from(value: SerializeError) -> Self {
         Error::SerializationFailed(value)
+    }
+}
+
+impl From<SorbitError> for Error {
+    fn from(value: SorbitError) -> Self {
+        Error::SerializationFailedSorbit(value)
     }
 }
 
