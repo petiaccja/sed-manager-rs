@@ -19,7 +19,7 @@ pub type Output = Result<Token, Error>;
 pub fn deserialize_sub_packet(input: &mut dyn SourcePipe<Input>, output: &mut dyn SinkPipe<Output>) {
     while let Ready(Some(sub_packet)) = input.pop() {
         let tokens = match sub_packet.kind {
-            SubPacketKind::Data => VecWithoutLen::<Token>::from_bytes(sub_packet.payload.into_vec()),
+            SubPacketKind::Data => VecWithoutLen::<Token>::from_bytes(sub_packet.payload),
             _ => Ok(VecWithoutLen::new()),
         };
         match tokens {

@@ -205,7 +205,7 @@ fn bundle_methods(id: SessionIdentifier, methods: &[PackagedMethod]) -> Vec<Pack
         .map(|bytes| Packet {
             host_session_number: id.hsn,
             tper_session_number: id.tsn,
-            payload: vec![SubPacket { kind: SubPacketKind::Data, payload: bytes.into() }].into(),
+            payload: vec![SubPacket { kind: SubPacketKind::Data, length: 0, payload: bytes.into() }].into(),
             ..Default::default()
         })
         .collect()

@@ -12,7 +12,6 @@ use crate::messaging::com_id::{
 };
 use crate::messaging::packet::{ComPacket, PACKETIZED_PROTOCOL};
 use crate::rpc::{Error, Properties};
-use crate::serialization::{DeserializeBinary as _, SerializeBinary};
 
 use super::retry::Retry;
 
@@ -79,5 +78,5 @@ fn optimal_transfer_len(properties: &Properties, min_transfer: u32, outstanding_
 fn recv_partial_packet(device: &dyn Device, com_id: u16, transfer_len: usize) -> Result<ComPacket, Error> {
     let protocol_specific = com_id.to_be_bytes();
     let data = device.security_recv(PACKETIZED_PROTOCOL, protocol_specific, transfer_len)?;
-    Ok(ComPacket::from_bytes(data)?)
+    Ok(ComPacket::from_bytes(&data)?)
 }

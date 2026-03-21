@@ -260,14 +260,21 @@ mod tests {
 
     fn make_com_packet(id: SessionIdentifier, valid: bool) -> ComPacket {
         let byte = if valid { Tag::EndOfSession as u8 } else { 0xFE };
-        let sub_packet = SubPacket { kind: SubPacketKind::Data, payload: vec![byte].into() };
+        let sub_packet = SubPacket { kind: SubPacketKind::Data, length: 0, payload: vec![byte].into() };
         let packet = Packet {
             host_session_number: id.hsn,
             tper_session_number: id.tsn,
             payload: vec![sub_packet].into(),
             ..Default::default()
         };
-        ComPacket { com_id: 2048, com_id_ext: 0, outstanding_data: 0, min_transfer: 0, payload: vec![packet].into() }
+        ComPacket {
+            com_id: 2048,
+            com_id_ext: 0,
+            outstanding_data: 0,
+            min_transfer: 0,
+            length: 0,
+            payload: vec![packet].into(),
+        }
     }
 
     fn make_close_session(to_close: SessionIdentifier) -> ComPacket {
@@ -278,14 +285,21 @@ mod tests {
         ));
         let tokens = method.to_tokens().unwrap();
         let bytes = VecWithoutLen::from(tokens).to_bytes().unwrap();
-        let sub_packet = SubPacket { kind: SubPacketKind::Data, payload: bytes.into() };
+        let sub_packet = SubPacket { kind: SubPacketKind::Data, length: 0, payload: bytes.into() };
         let packet = Packet {
             host_session_number: 0,
             tper_session_number: 0,
             payload: vec![sub_packet].into(),
             ..Default::default()
         };
-        ComPacket { com_id: 2048, com_id_ext: 0, outstanding_data: 0, min_transfer: 0, payload: vec![packet].into() }
+        ComPacket {
+            com_id: 2048,
+            com_id_ext: 0,
+            outstanding_data: 0,
+            min_transfer: 0,
+            length: 0,
+            payload: vec![packet].into(),
+        }
     }
 
     fn make_channel() -> (Sender, oneshot::Receiver<Result<PackagedMethod, Error>>) {

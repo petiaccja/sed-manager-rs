@@ -26,7 +26,7 @@ pub fn serialize_method(input: &mut dyn SourcePipe<Input>, output: &mut dyn Sink
                 return Err(Error::TokenTooLarge);
             }
             let bytes = VecWithoutLen::from(tokens).to_bytes()?;
-            let sub_packet = SubPacket { payload: bytes.into(), kind: SubPacketKind::Data };
+            let sub_packet = SubPacket { payload: bytes.into(), length: 0, kind: SubPacketKind::Data };
             Ok(sub_packet)
         });
         if let Some(message) = message {

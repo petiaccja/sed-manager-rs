@@ -14,8 +14,6 @@ use crate::messaging::com_id::{
 };
 use crate::messaging::packet::ComPacket;
 use crate::messaging::value::Bytes;
-use crate::serialization::vec_with_len::VecWithLen;
-use crate::serialization::{DeserializeBinary, SerializeBinary};
 use crate::virtual_device::dispatch::dispatch;
 use crate::virtual_device::tper::TPer;
 
@@ -99,13 +97,8 @@ impl ComIDSession {
     }
 
     fn process_com_packet(&mut self, firmware: &mut TPer, com_packet: ComPacket) -> Vec<ComPacket> {
-        let responses: Vec<_> = com_packet
-            .payload
-            .into_vec()
-            .into_iter()
-            .map(|packet| dispatch(firmware, packet))
-            .flatten()
-            .collect();
+        let responses: Vec<_> =
+            com_packet.payload.into_iter().map(|packet| dispatch(firmware, packet)).flatten().collect();
         let com_packets = responses
             .into_iter()
             .map(|packet| ComPacket {
@@ -113,6 +106,7 @@ impl ComIDSession {
                 com_id_ext: self.com_id_ext,
                 min_transfer: 0,
                 outstanding_data: 0,
+                length: 0,
                 payload: vec![packet].into(),
             })
             .collect();
@@ -168,5 +162,5 @@ fn no_com_id_response(com_id: u16, com_id_ext: u16) -> HandleComIdResponse {
 }
 
 fn no_packet_response(com_id: u16, com_id_ext: u16) -> ComPacket {
-    ComPacket { com_id, com_id_ext, min_transfer: 0, outstanding_data: 0, payload: VecWithLen::new() }
+    ComPacket { com_id, com_id_ext, ..Default::default() }
 }
