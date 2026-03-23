@@ -3,8 +3,6 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-//use sorbit::{Deserialize, Serialize};
-
 use sorbit::{Deserialize, Serialize};
 
 /// The transfer length for IF-RECV for HANDLE_COM_ID_REQUESTs that fits the
