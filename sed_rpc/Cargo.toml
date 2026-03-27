@@ -1,0 +1,7 @@
+[package]
+name = "sed_rpc"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+sed_packet.workspace = true

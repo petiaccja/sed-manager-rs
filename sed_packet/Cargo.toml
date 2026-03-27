@@ -1,0 +1,10 @@
+[package]
+name = "sed_packet"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+sorbit.workspace = true
+
+[dev-dependencies]
+rstest.workspace = true

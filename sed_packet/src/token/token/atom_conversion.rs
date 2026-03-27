@@ -254,7 +254,7 @@ impl_try_into_bytes!(LongAtom);
 mod tests {
     use std::marker::PhantomData;
 
-    use crate::messaging::token_2::token::{MediumAtom, ShortAtom, TinyAtom};
+    use super::*;
 
     #[test]
     fn tiny_atom_from_int() {
