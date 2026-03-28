@@ -1,5 +1,5 @@
 use proc_macro2::TokenStream;
-use quote::{ToTokens, format_ident, quote};
+use quote::{format_ident, quote};
 use syn::{Error, ItemStruct, Member, Meta, parse_quote, spanned::Spanned};
 
 pub fn object(attribute: Meta, item: ItemStruct) -> Result<TokenStream, Error> {
@@ -36,7 +36,7 @@ fn impl_field_ref_getters(item: &ItemStruct) -> TokenStream {
         let numeric_ident = format_ident!("field_{index}");
         let ident = field.ident.as_ref().unwrap_or(&numeric_ident);
         quote! {
-            const fn #ident(object: #ref_ty) -> ::sed_packet::FieldRef<Self, #index> {
+            const fn #ident(object: #ref_ty) -> ::sed_packet::FieldRef<Self, {<Self as ::sed_packet::Object>::TABLE.to_u64()}, #index> {
                 ::sed_packet::FieldRef::new(object)
             }
         }
@@ -65,6 +65,7 @@ fn impl_fields(item: &ItemStruct) -> TokenStream {
 }
 
 fn impl_tokenize(item: &ItemStruct) -> TokenStream {
+    let self_ty = &item.ident;
     let fields = item.fields.iter().enumerate().map(|(index, field)| {
         let member: Member = field.ident.clone().map(|ident| ident.into()).unwrap_or_else(|| index.into());
         let index = index as u16;
@@ -76,7 +77,7 @@ fn impl_tokenize(item: &ItemStruct) -> TokenStream {
         }
     });
     quote! {
-        impl ::sed_packet::token::Tokenize for Sp {
+        impl ::sed_packet::token::Tokenize for #self_ty {
             fn tokenize<T: ::sed_packet::token::Tokenizer>(&self, tokenizer: &mut T) -> ::core::result::Result<(), T::Error> {
                 tokenizer.tokenize_list(|tokenizer| {
                     #(#fields;)*
@@ -88,6 +89,7 @@ fn impl_tokenize(item: &ItemStruct) -> TokenStream {
 }
 
 fn impl_detokenize(item: &ItemStruct) -> TokenStream {
+    let self_ty = &item.ident;
     let fields = item.fields.iter().enumerate().map(|(index, field)| {
         let member: Member = field.ident.clone().map(|ident| ident.into()).unwrap_or_else(|| index.into());
         let ty = &field.ty;
@@ -100,7 +102,7 @@ fn impl_detokenize(item: &ItemStruct) -> TokenStream {
         }
     });
     quote! {
-        impl ::sed_packet::token::Detokenize for Sp {
+        impl ::sed_packet::token::Detokenize for #self_ty {
             fn detokenize<D: ::sed_packet::token::Detokenizer>(detokenizer: &mut D) -> ::core::result::Result<Self, D::Error> {
                 let mut result = Self::default();
                 detokenizer.detokenize_list(|de| {
@@ -238,7 +240,7 @@ mod tests {
     fn impl_tokenize_() {
         let result = impl_tokenize(&example());
         let expected = quote! {
-            impl ::sed_packet::token::Tokenize for Sp {
+            impl ::sed_packet::token::Tokenize for Test {
                 fn tokenize<T: ::sed_packet::token::Tokenizer>(&self, tokenizer: &mut T) -> ::core::result::Result<(), T::Error> {
                     tokenizer.tokenize_list(|tokenizer| {
                         self.foo
@@ -261,7 +263,7 @@ mod tests {
     fn impl_detokenize_() {
         let result = impl_detokenize(&example());
         let expected = quote! {
-            impl ::sed_packet::token::Detokenize for Sp {
+            impl ::sed_packet::token::Detokenize for Test {
                 fn detokenize<D: ::sed_packet::token::Detokenizer>(detokenizer: &mut D) -> ::core::result::Result<Self, D::Error> {
                     let mut result = Self::default();
                     detokenizer.detokenize_list(|de| {

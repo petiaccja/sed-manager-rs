@@ -23,22 +23,14 @@ pub trait Field<const INDEX: u16> {
 // Object reference
 //------------------------------------------------------------------------------
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct ObjectRef<O: Object>(Uid, PhantomData<O>);
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ObjectRef<const TABLE: u64>(Uid);
 
-impl<O: Object> Clone for ObjectRef<O> {
-    fn clone(&self) -> Self {
-        Self(self.0.clone(), PhantomData)
-    }
-}
-
-impl<O: Object> Copy for ObjectRef<O> {}
-
-impl<O: Object> ObjectRef<O> {
+impl<const TABLE: u64> ObjectRef<TABLE> {
     pub const fn new(value: u64) -> Option<Self> {
         let uid = Uid::new(value);
         match uid.containing_table() {
-            Some(table) if table.to_u64() == O::TABLE.to_u64() => Some(Self(uid, PhantomData)),
+            Some(table) if table.to_u64() == TABLE => Some(Self(uid)),
             _ => None,
         }
     }
@@ -56,15 +48,7 @@ impl<O: Object> ObjectRef<O> {
     }
 }
 
-impl<O, const INDEX: u16> Field<INDEX> for ObjectRef<O>
-where
-    O: Object,
-    O: Field<INDEX>,
-{
-    type Type = <O as Field<INDEX>>::Type;
-}
-
-impl<O: Object> TryFrom<u64> for ObjectRef<O> {
+impl<const TABLE: u64> TryFrom<u64> for ObjectRef<TABLE> {
     type Error = u64;
 
     fn try_from(value: u64) -> Result<Self, Self::Error> {
@@ -72,7 +56,7 @@ impl<O: Object> TryFrom<u64> for ObjectRef<O> {
     }
 }
 
-impl<O: Object> TryFrom<Uid> for ObjectRef<O> {
+impl<const TABLE: u64> TryFrom<Uid> for ObjectRef<TABLE> {
     type Error = Uid;
 
     fn try_from(value: Uid) -> Result<Self, Self::Error> {
@@ -80,25 +64,25 @@ impl<O: Object> TryFrom<Uid> for ObjectRef<O> {
     }
 }
 
-impl<O: Object> From<ObjectRef<O>> for u64 {
-    fn from(value: ObjectRef<O>) -> Self {
+impl<const TABLE: u64> From<ObjectRef<TABLE>> for u64 {
+    fn from(value: ObjectRef<TABLE>) -> Self {
         value.to_u64()
     }
 }
 
-impl<O: Object> From<ObjectRef<O>> for Uid {
-    fn from(value: ObjectRef<O>) -> Self {
+impl<const TABLE: u64> From<ObjectRef<TABLE>> for Uid {
+    fn from(value: ObjectRef<TABLE>) -> Self {
         value.to_uid()
     }
 }
 
-impl<O: Object> Tokenize for ObjectRef<O> {
+impl<const TABLE: u64> Tokenize for ObjectRef<TABLE> {
     fn tokenize<T: Tokenizer>(&self, tokenizer: &mut T) -> Result<(), T::Error> {
         self.0.tokenize(tokenizer)
     }
 }
 
-impl<O: Object> Detokenize for ObjectRef<O> {
+impl<const TABLE: u64> Detokenize for ObjectRef<TABLE> {
     fn detokenize<D: Detokenizer>(detokenizer: &mut D) -> Result<Self, D::Error> {
         Self::try_from(Uid::detokenize(detokenizer)?).map_err(|_| D::Error::message("the UID must refer to a table"))
     }
@@ -109,19 +93,19 @@ impl<O: Object> Detokenize for ObjectRef<O> {
 //------------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct FieldRef<O, const FIELD: u16>(ObjectRef<O>)
+pub struct FieldRef<O, const TABLE: u64, const FIELD: u16>(ObjectRef<TABLE>, PhantomData<O>)
 where
     O: Object + Field<FIELD>;
 
-impl<O, const FIELD: u16> FieldRef<O, FIELD>
+impl<O, const TABLE: u64, const FIELD: u16> FieldRef<O, TABLE, FIELD>
 where
     O: Object + Field<FIELD>,
 {
-    pub const fn new(object: ObjectRef<O>) -> Self {
-        Self(object)
+    pub const fn new(object: ObjectRef<TABLE>) -> Self {
+        Self(object, PhantomData)
     }
 
-    pub fn object(&self) -> ObjectRef<O> {
+    pub fn object(&self) -> ObjectRef<TABLE> {
         self.0
     }
 
@@ -130,7 +114,7 @@ where
     }
 }
 
-impl<O, const FIELD: u16> Field<FIELD> for FieldRef<O, FIELD>
+impl<O, const TABLE: u64, const FIELD: u16> Field<FIELD> for FieldRef<O, TABLE, FIELD>
 where
     O: Object + Field<FIELD>,
 {
