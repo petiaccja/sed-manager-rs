@@ -8,10 +8,12 @@ members = [
     "sed_manager_unlock",
     "as_array",
     "as_array_macros",
-    "sed_packet", "sed_rpc",
+    "sed_packet",
+    "sed_spec",
 ]
 
 [workspace.dependencies]
 sed_packet = { version = "0.1.0", path = "sed_packet" }
 sorbit = { version = "0.1.0", git = "https://github.com/petiaccja/sorbit", rev = "78d0004b321b1abbff6c7d683ff14f83b7bff19f" }
-rstest = { version = "0.26.1"}
+rstest = { version = "0.26.1" }
+smallvec = { version = "1.15.1", features = ["const_generics"] }

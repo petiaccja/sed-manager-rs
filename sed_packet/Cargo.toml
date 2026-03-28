@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 sorbit.workspace = true
+smallvec.workspace = true
 
 [dev-dependencies]
 rstest.workspace = true
