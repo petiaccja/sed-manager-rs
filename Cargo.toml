@@ -10,10 +10,16 @@ members = [
     "as_array_macros",
     "sed_packet",
     "sed_spec",
+    "sed_spec_macros",
 ]
 
 [workspace.dependencies]
 sed_packet = { version = "0.1.0", path = "sed_packet" }
+sed_spec = { version = "0.1.0", path = "sed_spec" }
+sed_spec_macros = { version = "0.1.0", path = "sed_spec_macros" }
 sorbit = { version = "0.1.0", git = "https://github.com/petiaccja/sorbit", rev = "78d0004b321b1abbff6c7d683ff14f83b7bff19f" }
 rstest = { version = "0.26.1" }
 smallvec = { version = "1.15.1", features = ["const_generics"] }
+quote = { version = "1.0.45" }
+syn = { version = "2.0.117", features = ["full", "extra-traits"] }
+proc-macro2 = { version = "1.0.106" }

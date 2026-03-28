@@ -5,3 +5,4 @@ edition = "2024"
 
 [dependencies]
 sed_packet.workspace = true
+sed_spec_macros.workspace = true

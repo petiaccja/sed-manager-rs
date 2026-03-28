@@ -10,6 +10,9 @@ use crate::token::{Detokenize, Detokenizer, MessageError, Tokenize, Tokenizer};
 
 pub trait Object {
     const TABLE: TableRef;
+
+    fn active_fields(&self) -> Vec<u16>;
+    fn update(&mut self, other: Self);
 }
 
 pub trait Field<const INDEX: u16> {
