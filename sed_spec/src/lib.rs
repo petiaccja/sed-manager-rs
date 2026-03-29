@@ -1,1 +1,2 @@
-mod objects;
+pub mod objects;
+pub mod preconfig;

@@ -58,6 +58,30 @@ impl Uid {
             None
         }
     }
+
+    pub const fn next_object(&self, offset: u32) -> Option<Self> {
+        if self.is_object() {
+            let object = match self.object + offset {
+                x @ 0 => x + 1, // Behave the same way as an addition.
+                x => x,
+            };
+            Some(Self { table: self.table, object })
+        } else {
+            None
+        }
+    }
+
+    pub const fn previous_object(&self, offset: u32) -> Option<Self> {
+        if self.is_object() {
+            let object = match self.object - offset {
+                x @ 0 => x - 1, // Behave the same way as an underflow.
+                x => x,
+            };
+            Some(Self { table: self.table, object })
+        } else {
+            None
+        }
+    }
 }
 
 impl Tokenize for Uid {
@@ -104,6 +128,8 @@ impl core::fmt::Debug for Uid {
 
 #[cfg(test)]
 mod tests {
+    use rstest::rstest;
+
     use super::*;
 
     const TABLE: Uid = Uid::new(0x0000_0001_0000_0000);
@@ -157,5 +183,19 @@ mod tests {
         assert_eq!(DESCRIPTOR.containing_table(), Some(TABLE));
         assert_eq!(OBJECT.containing_table(), Some(SOME_TABLE));
         assert_eq!(SM_METHOD.containing_table(), None);
+    }
+
+    #[rstest]
+    #[case(Uid::new(0x0000_0001_0000_0001), 1, Some(Uid::new(0x0000_0001_0000_0002)))]
+    #[case(Uid::new(0x0000_0001_0000_0000), 1, None)]
+    fn next_object(#[case] lhs: Uid, #[case] rhs: u32, #[case] expected: Option<Uid>) {
+        assert_eq!(lhs.next_object(rhs), expected);
+    }
+
+    #[rstest]
+    #[case(Uid::new(0x0000_0001_0000_0003), 1, Some(Uid::new(0x0000_0001_0000_0002)))]
+    #[case(Uid::new(0x0000_0001_0000_0000), 1, None)]
+    fn previous_object(#[case] lhs: Uid, #[case] rhs: u32, #[case] expected: Option<Uid>) {
+        assert_eq!(lhs.previous_object(rhs), expected);
     }
 }

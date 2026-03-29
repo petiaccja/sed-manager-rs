@@ -3,23 +3,31 @@ resolver = "2"
 members = [
     "sed_manager",
     "sed_manager_macros",
-    "sed_manager_config",
-    "sed_manager_config_ui",
-    "sed_manager_unlock",
+    #"sed_manager_config",
+    #"sed_manager_config_ui",
+    #"sed_manager_unlock",
     "as_array",
     "as_array_macros",
     "sed_packet",
     "sed_spec",
     "sed_spec_macros",
+    "sed_spec_codegen",
 ]
 
 [workspace.dependencies]
+# Workspace packages.
 sed_packet = { version = "0.1.0", path = "sed_packet" }
 sed_spec = { version = "0.1.0", path = "sed_spec" }
+sed_spec_codegen = { version = "0.1.0", path = "sed_spec_codegen" }
 sed_spec_macros = { version = "0.1.0", path = "sed_spec_macros" }
+# Maintained by Peter.
 sorbit = { version = "0.1.0", git = "https://github.com/petiaccja/sorbit", rev = "78d0004b321b1abbff6c7d683ff14f83b7bff19f" }
+# Third-party packages.
 rstest = { version = "0.26.1" }
 smallvec = { version = "1.15.1", features = ["const_generics"] }
 quote = { version = "1.0.45" }
 syn = { version = "2.0.117", features = ["full", "extra-traits"] }
 proc-macro2 = { version = "1.0.106" }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = { version = "1.0.149" }
+prettyplease = { version = "0.2.37" }

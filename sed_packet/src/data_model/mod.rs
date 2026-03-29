@@ -3,6 +3,7 @@ mod integer;
 mod list;
 mod max_bytes;
 pub mod named;
+pub mod object_range;
 pub mod object_ref;
 mod set;
 mod string;

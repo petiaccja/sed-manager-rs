@@ -266,8 +266,16 @@
         },
         "Locking": {
             "ACE": {
-                "DataStore{n}_Get_All": "000000080003FC00-2048-2",
-                "DataStore{n}_Set_All": "000000080003FC01-2048-2"
+                "DataStore{n}_Get_All": {
+                    "base": "000000080003FC00",
+                    "count": 0,
+                    "step": 2048
+                },
+                "DataStore{n}_Set_All": {
+                    "base": "000000080003FC01",
+                    "count": 1,
+                    "step": 2048
+                }
             }
         }
     },
@@ -299,9 +307,18 @@
         "Locking": {
             "ACE": {
                 "Anybody": "0000000800000001",
-                "BandMaster{n}": "0000000800008001-1024",
-                "BandMaster{n}_SetSelf": "0000000800008401-1024",
-                "BandMaster{n}_SetBand": "0000000800008801-1024",
+                "BandMaster{n}": {
+                    "base": "0000000800008001",
+                    "count": 1
+                },
+                "BandMaster{n}_SetSelf": {
+                    "base": "0000000800008401",
+                    "count": 1
+                },
+                "BandMaster{n}_SetBand": {
+                    "base": "0000000800008801",
+                    "count": 1
+                },
                 "EraseMaster": "0000000800008C01",
                 "EraseMaster_SetSelf": "0000000800008C02",
                 "AnyMaster": "0000000800008C05",
@@ -311,25 +328,40 @@
             },
             "Authority": {
                 "Anybody": "0000000900000001",
-                "BandMaster{n}": "0000000900008001-1024",
+                "BandMaster{n}": {
+                    "base": "0000000900008001",
+                    "count": 1
+                },
                 "EraseMaster": "0000000900008401",
                 "BandMasters": "0000000900008403"
             },
             "C_PIN": {
-                "BandMaster{n}": "0000000B00008001-1024",
+                "BandMaster{n}": {
+                    "base": "0000000B00008001",
+                    "count": 1
+                },
                 "EraseMaster": "0000000B00008401"
             },
             "Locking": {
                 "GlobalRange": "0000080200000001",
-                "Band{n}": "0000080200000002-2048"
+                "Band{n}": {
+                    "base": "0000080200000002",
+                    "count": 2
+                }
             },
             "K_AES_128": {
                 "GlobalRange_Key": "0000080500000001",
-                "Band{n}_Key": "0000080500000002-2048"
+                "Band{n}_Key": {
+                    "base": "0000080500000002",
+                    "count": 2
+                }
             },
             "K_AES_256": {
                 "GlobalRange_Key": "0000080600000001",
-                "Band{n}_Key": "0000080600000002-2048"
+                "Band{n}_Key": {
+                    "base": "0000080600000002",
+                    "count": 2
+                }
             }
         }
     },
@@ -352,12 +384,18 @@
                 "Admins": "0000000900000002",
                 "Makers": "0000000900000003",
                 "SID": "0000000900000006",
-                "Admin{n}": "0000000900000200-256"
+                "Admin{n}": {
+                    "base": "0000000900000200",
+                    "count": 0
+                }
             },
             "C_PIN": {
                 "SID": "0000000B00000001",
                 "MSID": "0000000B00008402",
-                "Admin{n}": "0000000B00000200-256"
+                "Admin{n}": {
+                    "base": "0000000B00000200",
+                    "count": 0
+                }
             },
             "SP": {
                 "Admin": "0000020500000001",
@@ -388,10 +426,16 @@
             "Authority": {
                 "Anybody": "0000000900000001",
                 "Admins": "0000000900000002",
-                "Admin{n}": "0000000900010000-2048"
+                "Admin{n}": {
+                    "base": "0000000900010000",
+                    "count": 0
+                }
             },
             "C_PIN": {
-                "Admin{n}": "0000000B00010000-2048"
+                "Admin{n}": {
+                    "base": "0000000B00010000",
+                    "count": 0
+                }
             }
         }
     },
@@ -486,12 +530,18 @@
                 "Admins": "0000000900000002",
                 "Makers": "0000000900000003",
                 "SID": "0000000900000006",
-                "Admin{n}": "0000000900000200-256"
+                "Admin{n}": {
+                    "base": "0000000900000200",
+                    "count": 0
+                }
             },
             "C_PIN": {
                 "SID": "0000000B00000001",
                 "MSID": "0000000B00008402",
-                "Admin{n}": "0000000B00000200-256"
+                "Admin{n}": {
+                    "base": "0000000B00000200",
+                    "count": 0
+                }
             },
             "SP": {
                 "Admin": "0000020500000001",
@@ -508,21 +558,42 @@
                 "ACE_Set_BooleanExpression": "0000000800038001",
                 "Authority_Get_All": "0000000800039000",
                 "Authority_Set_Enabled": "0000000800039001",
-                "User{n}_Set_CommonName": "0000000800044000-256",
+                "User{n}_Set_CommonName": {
+                    "base": "0000000800044000",
+                    "count": 0
+                },
                 "C_PIN_Admins_Get_All_NOPIN": "000000080003A000",
                 "C_PIN_Admins_Set_PIN": "000000080003A001",
-                "C_PIN_User{n}_Set_PIN": "000000080003A800-256",
+                "C_PIN_User{n}_Set_PIN": {
+                    "base": "000000080003A800",
+                    "count": 0
+                },
                 "K_AES_Mode": "000000080003BFFF",
                 "K_AES_128_GlobalRange_GenKey": "000000080003B000",
-                "K_AES_128_Range{n}_GenKey": "000000080003B000-256",
+                "K_AES_128_Range{n}_GenKey": {
+                    "base": "000000080003B000",
+                    "count": 0
+                },
                 "K_AES_256_GlobalRange_GenKey": "000000080003B800",
-                "K_AES_256_Range{n}_GenKey": "000000080003B800-256",
+                "K_AES_256_Range{n}_GenKey": {
+                    "base": "000000080003B800",
+                    "count": 0
+                },
                 "Locking_GlobalRange_Get_RangeStartToActiveKey": "000000080003D000",
-                "Locking_Range{n}_Get_RangeStartToActiveKey": "000000080003D000-256",
+                "Locking_Range{n}_Get_RangeStartToActiveKey": {
+                    "base": "000000080003D000",
+                    "count": 0
+                },
                 "Locking_GlobalRange_Set_RdLocked": "000000080003E000",
-                "Locking_Range{n}_Set_RdLocked": "000000080003E000-256",
+                "Locking_Range{n}_Set_RdLocked": {
+                    "base": "000000080003E000",
+                    "count": 0
+                },
                 "Locking_GlobalRange_Set_WrLocked": "000000080003E800",
-                "Locking_Range{n}_Set_WrLocked": "000000080003E800-256",
+                "Locking_Range{n}_Set_WrLocked": {
+                    "base": "000000080003E800",
+                    "count": 0
+                },
                 "Locking_GlblRng_Admins_Set": "000000080003F000",
                 "Locking_Admins_RangeStartToLOR": "000000080003F001",
                 "MBRControl_Admins_Set": "000000080003F800",
@@ -533,25 +604,46 @@
             "Authority": {
                 "Anybody": "0000000900000001",
                 "Admins": "0000000900000002",
-                "Admin{n}": "0000000900010000-2048",
+                "Admin{n}": {
+                    "base": "0000000900010000",
+                    "count": 0
+                },
                 "Users": "0000000900030000",
-                "User{n}": "0000000900030000-2048"
+                "User{n}": {
+                    "base": "0000000900030000",
+                    "count": 0
+                }
             },
             "C_PIN": {
-                "Admin{n}": "0000000B00010000-2048",
-                "User{n}": "0000000B00030000-2048"
+                "Admin{n}": {
+                    "base": "0000000B00010000",
+                    "count": 0
+                },
+                "User{n}": {
+                    "base": "0000000B00030000",
+                    "count": 0
+                }
             },
             "Locking": {
                 "GlobalRange": "0000080200000001",
-                "Range{n}": "0000080200030000-2048"
+                "Range{n}": {
+                    "base": "0000080200030000",
+                    "count": 0
+                }
             },
             "K_AES_128": {
                 "GlobalRange_Key": "0000080500000001",
-                "Range{n}_Key": "0000080500030000-2048"
+                "Range{n}_Key": {
+                    "base": "0000080500030000",
+                    "count": 0
+                }
             },
             "K_AES_256": {
                 "GlobalRange_Key": "0000080600000001",
-                "Range{n}_Key": "0000080600030000-2048"
+                "Range{n}_Key": {
+                    "base": "0000080600030000",
+                    "count": 0
+                }
             }
         }
     },
@@ -591,12 +683,18 @@
                 "Anybody": "0000000900000001",
                 "Admins": "0000000900000002",
                 "SID": "0000000900000006",
-                "Admin{n}": "0000000900000200-256"
+                "Admin{n}": {
+                    "base": "0000000900000200",
+                    "count": 0
+                }
             },
             "C_PIN": {
                 "SID": "0000000B00000001",
                 "MSID": "0000000B00008402",
-                "Admin{n}": "0000000B00000200-256"
+                "Admin{n}": {
+                    "base": "0000000B00000200",
+                    "count": 0
+                }
             },
             "SP": {
                 "Admin": "0000020500000001",
@@ -627,13 +725,19 @@
             "Authority": {
                 "Anybody": "0000000900000001",
                 "Admins": "0000000900000002",
-                "Admin{n}": "0000000900010000-2048",
+                "Admin{n}": {
+                    "base": "0000000900010000",
+                    "count": 0
+                },
                 "Users": "0000000900030000",
                 "User1": "0000000900030001",
                 "User2": "0000000900030002"
             },
             "C_PIN": {
-                "Admin{n}": "0000000B00010000-2048",
+                "Admin{n}": {
+                    "base": "0000000B00010000",
+                    "count": 0
+                },
                 "User1": "0000000B00030001",
                 "User2": "0000000B00030002"
             },
@@ -660,12 +764,18 @@
                 "Admins": "0000000900000002",
                 "Makers": "0000000900000003",
                 "SID": "0000000900000006",
-                "Admin{n}": "0000000900000200-256"
+                "Admin{n}": {
+                    "base": "0000000900000200",
+                    "count": 0
+                }
             },
             "C_PIN": {
                 "SID": "0000000B00000001",
                 "MSID": "0000000B00008402",
-                "Admin{n}": "0000000B00000200-256"
+                "Admin{n}": {
+                    "base": "0000000B00000200",
+                    "count": 0
+                }
             },
             "SP": {
                 "Admin": "0000020500000001",
@@ -682,21 +792,42 @@
                 "ACE_Set_BooleanExpression": "0000000800038001",
                 "Authority_Get_All": "0000000800039000",
                 "Authority_Set_Enabled": "0000000800039001",
-                "User{n}_Set_CommonName": "0000000800044000-256",
+                "User{n}_Set_CommonName": {
+                    "base": "0000000800044000",
+                    "count": 0
+                },
                 "C_PIN_Admins_Get_All_NOPIN": "000000080003A000",
                 "C_PIN_Admins_Set_PIN": "000000080003A001",
-                "C_PIN_User{n}_Set_PIN": "000000080003A800-256",
+                "C_PIN_User{n}_Set_PIN": {
+                    "base": "000000080003A800",
+                    "count": 0
+                },
                 "K_AES_Mode": "000000080003BFFF",
                 "K_AES_128_GlobalRange_GenKey": "000000080003B000",
-                "K_AES_128_Range{n}_GenKey": "000000080003B000-256",
+                "K_AES_128_Range{n}_GenKey": {
+                    "base": "000000080003B000",
+                    "count": 0
+                },
                 "K_AES_256_GlobalRange_GenKey": "000000080003B800",
-                "K_AES_256_Range{n}_GenKey": "000000080003B800-256",
+                "K_AES_256_Range{n}_GenKey": {
+                    "base": "000000080003B800",
+                    "count": 0
+                },
                 "Locking_GlobalRange_Get_RangeStartToActiveKey": "000000080003D000",
-                "Locking_Range{n}_Get_RangeStartToActiveKey": "000000080003D000-256",
+                "Locking_Range{n}_Get_RangeStartToActiveKey": {
+                    "base": "000000080003D000",
+                    "count": 0
+                },
                 "Locking_GlobalRange_Set_RdLocked": "000000080003E000",
-                "Locking_Range{n}_Set_RdLocked": "000000080003E000-256",
+                "Locking_Range{n}_Set_RdLocked": {
+                    "base": "000000080003E000",
+                    "count": 0
+                },
                 "Locking_GlobalRange_Set_WrLocked": "000000080003E800",
-                "Locking_Range{n}_Set_WrLocked": "000000080003E800-256",
+                "Locking_Range{n}_Set_WrLocked": {
+                    "base": "000000080003E800",
+                    "count": 0
+                },
                 "Locking_GlblRng_Admins_Set": "000000080003F000",
                 "Locking_Admins_RangeStartToLOR": "000000080003F001",
                 "MBRControl_Admins_Set": "000000080003F800",
@@ -707,25 +838,46 @@
             "Authority": {
                 "Anybody": "0000000900000001",
                 "Admins": "0000000900000002",
-                "Admin{n}": "0000000900010000-2048",
+                "Admin{n}": {
+                    "base": "0000000900010000",
+                    "count": 0
+                },
                 "Users": "0000000900030000",
-                "User{n}": "0000000900030000-2048"
+                "User{n}": {
+                    "base": "0000000900030000",
+                    "count": 0
+                }
             },
             "C_PIN": {
-                "Admin{n}": "0000000B00010000-2048",
-                "User{n}": "0000000B00030000-2048"
+                "Admin{n}": {
+                    "base": "0000000B00010000",
+                    "count": 0
+                },
+                "User{n}": {
+                    "base": "0000000B00030000",
+                    "count": 0
+                }
             },
             "Locking": {
                 "GlobalRange": "0000080200000001",
-                "Range{n}": "0000080200030000-2048"
+                "Range{n}": {
+                    "base": "0000080200030000",
+                    "count": 0
+                }
             },
             "K_AES_128": {
                 "GlobalRange_Key": "0000080500000001",
-                "Range{n}_Key": "0000080500030000-2048"
+                "Range{n}_Key": {
+                    "base": "0000080500030000",
+                    "count": 0
+                }
             },
             "K_AES_256": {
                 "GlobalRange_Key": "0000080600000001",
-                "Range{n}_Key": "0000080600030000-2048"
+                "Range{n}_Key": {
+                    "base": "0000080600030000",
+                    "count": 0
+                }
             }
         }
     }

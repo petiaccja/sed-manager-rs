@@ -1,4 +1,5 @@
 use core::marker::PhantomData;
+use std::ops::{Add, AddAssign, Sub, SubAssign};
 
 use crate::data_model::table_ref::TableRef;
 use crate::data_model::uid::Uid;
@@ -85,6 +86,81 @@ impl<const TABLE: u64> Tokenize for ObjectRef<TABLE> {
 impl<const TABLE: u64> Detokenize for ObjectRef<TABLE> {
     fn detokenize<D: Detokenizer>(detokenizer: &mut D) -> Result<Self, D::Error> {
         Self::try_from(Uid::detokenize(detokenizer)?).map_err(|_| D::Error::message("the UID must refer to a table"))
+    }
+}
+impl<const TABLE: u64> Add<u32> for ObjectRef<TABLE> {
+    type Output = Self;
+
+    fn add(self, rhs: u32) -> Self::Output {
+        Self(self.0.next_object(rhs).expect("this must be an object"))
+    }
+}
+
+impl<const TABLE: u64> Add<u32> for &ObjectRef<TABLE> {
+    type Output = ObjectRef<TABLE>;
+
+    fn add(self, rhs: u32) -> Self::Output {
+        (*self).add(rhs)
+    }
+}
+
+impl<const TABLE: u64> Add<u32> for &mut ObjectRef<TABLE> {
+    type Output = ObjectRef<TABLE>;
+
+    fn add(self, rhs: u32) -> Self::Output {
+        (*self).add(rhs)
+    }
+}
+
+impl<const TABLE: u64> AddAssign<u32> for ObjectRef<TABLE> {
+    fn add_assign(&mut self, rhs: u32) {
+        *self = self.add(rhs);
+    }
+}
+
+impl<const TABLE: u64> Sub<u32> for ObjectRef<TABLE> {
+    type Output = Self;
+
+    fn sub(self, rhs: u32) -> Self::Output {
+        Self(self.0.previous_object(rhs).expect("this must be an object"))
+    }
+}
+
+impl<const TABLE: u64> Sub<u32> for &ObjectRef<TABLE> {
+    type Output = ObjectRef<TABLE>;
+
+    fn sub(self, rhs: u32) -> Self::Output {
+        (*self).sub(rhs)
+    }
+}
+
+impl<const TABLE: u64> Sub<u32> for &mut ObjectRef<TABLE> {
+    type Output = ObjectRef<TABLE>;
+
+    fn sub(self, rhs: u32) -> Self::Output {
+        (*self).sub(rhs)
+    }
+}
+
+impl<const TABLE: u64> SubAssign<u32> for ObjectRef<TABLE> {
+    fn sub_assign(&mut self, rhs: u32) {
+        *self = self.sub(rhs);
+    }
+}
+
+impl<const TABLE: u64> Sub for ObjectRef<TABLE> {
+    type Output = i64;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        (self.to_u64() & 0xFFFF_FFFF) as i64 - (rhs.to_u64() & 0xFFFF_FFFF) as i64
+    }
+}
+
+impl<const TABLE: u64> Sub for &ObjectRef<TABLE> {
+    type Output = i64;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        *self - *rhs
     }
 }
 
