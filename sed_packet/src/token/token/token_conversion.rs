@@ -49,7 +49,8 @@ macro_rules! impl_try_into_int {
                     Token::MediumAtom(atom) => Self::try_from(atom).map_err(|_| ()),
                     Token::LongAtom(atom) => Self::try_from(atom).map_err(|_| ()),
                     _ => Err(()),
-                }.map_err(|_| value)
+                }
+                .map_err(|_| value)
             }
         }
     };

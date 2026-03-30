@@ -1,6 +1,6 @@
 {
     "Core": {
-        "*": {
+        "Shared": {
             "Authority": {
                 "Anybody": "0000000900000001",
                 "Admins": "0000000900000002",
@@ -196,6 +196,9 @@
                 "K_AES_256": "0000000100000806"
             },
             "TableID": {
+                "General": "FFFFFFFF00000000",
+                "InvokingID": "FFFFFFFF00000000",
+                "SMMethodID": "FFFFFFFF00000000",
                 "Table": "0000000100000000",
                 "SPInfo": "0000000200000000",
                 "SPTemplates": "0000000300000000",
@@ -663,7 +666,8 @@
                 "Admin": "0000020500000001",
                 "Locking": "0000020500000002"
             }
-        }
+        },
+        "Locking": {}
     },
     "Pyrite_2": {
         "Admin": {
