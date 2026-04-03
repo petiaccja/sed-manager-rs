@@ -1,16 +1,23 @@
-use sed_packet::token::MessageError;
-use sed_packet::{ObjectRef, TableRef};
+use smallvec::SmallVec;
 
-const SP_TABLE: TableRef = TableRef::new_unchecked(0x0000_0205_0000_0000);
+use sed_packet::token::MessageError;
+
+use crate::objects::{AuthorityRef, SpRef};
+use crate::preconfig::core::shared::table_id;
+use crate::types::{Date, LifeCycleState};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-#[sed_spec_macros::object(table=SP_TABLE)]
+#[sed_spec_macros::object(table=table_id::SP)]
 pub struct SecurityProvider {
-    uid: SecurityProviderRef,
-    name: String,
+    pub uid: SpRef,
+    pub name: String,
+    pub org: AuthorityRef,
+    pub effective_auth: SmallVec<[u8; 32]>,
+    pub date_of_issue: Date,
+    pub bytes: u64,
+    pub life_cycle_state: LifeCycleState,
+    pub frozen: bool,
 }
-
-pub type SecurityProviderRef = ObjectRef<{ SP_TABLE.to_u64() }>;
 
 #[cfg(test)]
 mod tests {
@@ -18,7 +25,7 @@ mod tests {
 
     use super::*;
 
-    const ADMIN_SP: SecurityProviderRef = SecurityProviderRef::new_unchecked(0x0000_0205_0000_0001);
+    const ADMIN_SP: SpRef = SpRef::new_unchecked(0x0000_0205_0000_0001);
 
     fn get<O: Object + Field<FIELD>, const TABLE: u64, const FIELD: u16>(
         _field: FieldRef<O, TABLE, FIELD>,

@@ -31,3 +31,4 @@ proc-macro2 = { version = "1.0.106" }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = { version = "1.0.149" }
 prettyplease = { version = "0.2.37" }
+num_enum = { version = "0.7.6" }

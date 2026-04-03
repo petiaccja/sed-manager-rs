@@ -9,6 +9,27 @@ pub struct ObjectRange<const TABLE: u64> {
     pub step: u32,
 }
 
+impl<const TABLE: u64> ObjectRange<TABLE> {
+    pub const fn get(&self, index: usize) -> Option<ObjectRef<TABLE>> {
+        if index < self.len() {
+            Some(self.start.add(index as u32 * self.step))
+        } else {
+            None
+        }
+    }
+
+    pub const fn get_unwrap(&self, index: usize) -> ObjectRef<TABLE> {
+        self.get(index).unwrap()
+    }
+
+    pub const fn len(&self) -> usize {
+        match self.end.diff(self.start) {
+            diff @ 0.. => diff as usize / self.step as usize,
+            _ => 0,
+        }
+    }
+}
+
 impl<const TABLE: u64> RangeBounds<ObjectRef<TABLE>> for ObjectRange<TABLE> {
     fn start_bound(&self) -> Bound<&ObjectRef<TABLE>> {
         Bound::Included(&self.start)
@@ -57,7 +78,7 @@ impl<const TABLE: u64> Iterator for ObjectRange<TABLE> {
 
 impl<const TABLE: u64> ExactSizeIterator for ObjectRange<TABLE> {
     fn len(&self) -> usize {
-        (self.end - self.start) as usize / self.step as usize
+        self.len()
     }
 }
 

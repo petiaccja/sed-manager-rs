@@ -9,3 +9,4 @@ mod set;
 mod string;
 pub mod table_ref;
 pub mod uid;
+mod r#bool;

@@ -6,6 +6,8 @@ edition = "2024"
 [dependencies]
 sed_packet.workspace = true
 sed_spec_macros.workspace = true
+smallvec.workspace = true
+num_enum.workspace = true
 
 [dev-dependencies]
 rstest.workspace = true

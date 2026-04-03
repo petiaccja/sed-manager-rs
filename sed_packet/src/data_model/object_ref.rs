@@ -47,6 +47,22 @@ impl<const TABLE: u64> ObjectRef<TABLE> {
     pub const fn to_uid(&self) -> Uid {
         self.0
     }
+
+    pub const fn to_half_uid(&self) -> u32 {
+        self.0.to_half_uid()
+    }
+
+    pub const fn add(&self, offset: u32) -> Self {
+        Self(self.0.next_object(offset).expect("this UID is always an object"))
+    }
+
+    pub const fn sub(&self, offset: u32) -> Self {
+        Self(self.0.previous_object(offset).expect("this UID is always an object"))
+    }
+
+    pub const fn diff(&self, rhs: Self) -> i64 {
+        (self.to_u64() & 0xFFFF_FFFF) as i64 - (rhs.to_u64() & 0xFFFF_FFFF) as i64
+    }
 }
 
 impl<const TABLE: u64> TryFrom<u64> for ObjectRef<TABLE> {
@@ -152,7 +168,7 @@ impl<const TABLE: u64> Sub for ObjectRef<TABLE> {
     type Output = i64;
 
     fn sub(self, rhs: Self) -> Self::Output {
-        (self.to_u64() & 0xFFFF_FFFF) as i64 - (rhs.to_u64() & 0xFFFF_FFFF) as i64
+        Self::diff(&self, rhs)
     }
 }
 

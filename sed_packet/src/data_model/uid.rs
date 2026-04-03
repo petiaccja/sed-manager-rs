@@ -19,6 +19,10 @@ impl Uid {
         ((self.table as u64) << 32) | (self.object as u64)
     }
 
+    pub const fn to_half_uid(&self) -> u32 {
+        self.object
+    }
+
     pub const fn is_table(&self) -> bool {
         self.table != 0 && self.object == 0
     }

@@ -3,7 +3,7 @@ use quote::{format_ident, quote};
 use syn::{Error, ItemStruct, Member, Meta, parse_quote, spanned::Spanned};
 
 pub fn object(attribute: Meta, item: ItemStruct) -> Result<TokenStream, Error> {
-    let field_ref_getters = impl_field_ref_getters(&item);
+    let field_ref_getters = impl_field_ref_getters(&item)?;
     let fields = impl_fields(&item);
     let tokenize = impl_tokenize(&item);
     let detokenize = impl_detokenize(&item);
@@ -28,9 +28,14 @@ fn make_fields_optional(mut item: ItemStruct) -> ItemStruct {
     item
 }
 
-fn impl_field_ref_getters(item: &ItemStruct) -> TokenStream {
+fn impl_field_ref_getters(item: &ItemStruct) -> Result<TokenStream, Error> {
     let self_ty = &item.ident;
-    let ref_ty = format_ident!("{}Ref", item.ident);
+    let ref_ty = &item
+        .fields
+        .iter()
+        .next()
+        .ok_or_else(|| Error::new(item.span(), "the first field of the struct must be present and be the UID"))?
+        .ty;
     let getters = item.fields.iter().enumerate().map(|(index, field)| {
         let index = index as u16;
         let numeric_ident = format_ident!("field_{index}");
@@ -41,11 +46,11 @@ fn impl_field_ref_getters(item: &ItemStruct) -> TokenStream {
             }
         }
     });
-    quote! {
+    Ok(quote! {
         impl #self_ty {
             #(#getters)*
         }
-    }
+    })
 }
 
 fn impl_fields(item: &ItemStruct) -> TokenStream {
@@ -96,7 +101,7 @@ fn impl_detokenize(item: &ItemStruct) -> TokenStream {
         let index = index as u16;
         quote! {
             #index => {
-                result.#member = Some(#ty::detokenize(de)?);
+                result.#member = Some(<#ty>::detokenize(de)?);
                 Ok(())
             }
         }
@@ -186,7 +191,7 @@ mod tests {
     fn example() -> ItemStruct {
         parse_quote! {
             struct Test {
-                foo: u64,
+                foo: TestRef,
                 bar: String,
             }
         }
@@ -197,7 +202,7 @@ mod tests {
         let result = make_fields_optional(example());
         let expected = parse_quote! {
             struct Test {
-                foo: ::core::option::Option<u64>,
+                foo: ::core::option::Option<TestRef>,
                 bar: ::core::option::Option<String>,
             }
         };
@@ -206,14 +211,14 @@ mod tests {
 
     #[test]
     fn impl_field_ref_getters_() {
-        let result = impl_field_ref_getters(&example());
+        let result = impl_field_ref_getters(&example()).unwrap();
         let expected = quote! {
             impl Test {
-                const fn foo(object: TestRef) -> ::sed_packet::FieldRef<Self, 0u16> {
+                const fn foo(object: TestRef) -> ::sed_packet::FieldRef<Self, { <Self as ::sed_packet::Object>::TABLE.to_u64 () }, 0u16> {
                     ::sed_packet::FieldRef::new(object)
                 }
 
-                const fn bar(object: TestRef) -> ::sed_packet::FieldRef<Self, 1u16> {
+                const fn bar(object: TestRef) -> ::sed_packet::FieldRef<Self, { <Self as ::sed_packet::Object>::TABLE.to_u64 () }, 1u16> {
                     ::sed_packet::FieldRef::new(object)
                 }
             }
@@ -226,7 +231,7 @@ mod tests {
         let result = impl_fields(&example());
         let expected = quote! {
             impl ::sed_packet::Field<0u16> for Test {
-                type Type = u64;
+                type Type = TestRef;
             }
 
             impl ::sed_packet::Field<1u16> for Test {
@@ -271,7 +276,7 @@ mod tests {
                             |de| u16::detokenize(de),
                             |de, field| match field {
                                 0u16 => {
-                                    result.foo = Some(u64::detokenize(de)?);
+                                    result.foo = Some(TestRef::detokenize(de)?);
                                     Ok(())
                                 }
                                 1u16 => {
