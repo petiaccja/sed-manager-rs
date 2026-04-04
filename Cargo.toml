@@ -11,7 +11,7 @@ members = [
     "sed_packet",
     "sed_spec",
     "sed_spec_macros",
-    "sed_spec_codegen",
+    "sed_spec_codegen", "sed_device", "sed_tper",
 ]
 
 [workspace.dependencies]
