@@ -9,6 +9,9 @@ pub type AceRef = ObjectRef<{ table_id::ACE.to_u64() }>;
 pub type AuthorityRef = ObjectRef<{ table_id::AUTHORITY.to_u64() }>;
 
 /// The UID of an object in the CPIN table.
+pub type ColumnRef = ObjectRef<{ table_id::COLUMN.to_u64() }>;
+
+/// The UID of an object in the CPIN table.
 pub type CPinRef = ObjectRef<{ table_id::C_PIN.to_u64() }>;
 
 /// The UID of an object in the K_AES_256 table.
@@ -27,7 +30,10 @@ pub type MbrControlRef = ObjectRef<{ table_id::MBR_CONTROL.to_u64() }>;
 pub type SpRef = ObjectRef<{ table_id::SP.to_u64() }>;
 
 /// The UID of an object in the Table table.
-pub type TableRef = ObjectRef<{ table_id::TABLE.to_u64() }>;
+pub type TableDescRef = ObjectRef<{ table_id::TABLE.to_u64() }>;
+
+/// The UID of an object in the Template table.
+pub type TemplateRef = ObjectRef<{ table_id::TEMPLATE.to_u64() }>;
 
 /// The UID of an object in the Table table.
 pub type TypeRef = ObjectRef<{ table_id::TYPE.to_u64() }>;

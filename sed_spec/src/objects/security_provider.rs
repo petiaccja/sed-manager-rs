@@ -1,7 +1,5 @@
 use smallvec::SmallVec;
 
-use sed_packet::token::MessageError;
-
 use crate::objects::{AuthorityRef, SpRef};
 use crate::preconfig::core::shared::table_id;
 use crate::types::{Date, LifeCycleState};

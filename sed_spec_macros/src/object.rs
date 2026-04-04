@@ -115,7 +115,7 @@ fn impl_detokenize(item: &ItemStruct) -> TokenStream {
                         |de| u16::detokenize(de),
                         |de, field| match field {
                             #(#fields)*
-                            _ => Err(D::Error::message("invalid field")),
+                            _ => Err(<D::Error as ::sed_packet::token::MessageError>::message("invalid field")),
                         },
                     )?;
                     Ok(())

@@ -3,29 +3,28 @@ use sed_packet::token::{Detokenize, Detokenizer, Tokenize, Tokenizer};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive, IntoPrimitive)]
 #[repr(u8)]
-pub enum LifeCycleState {
-    Issued = 0,
-    IssuedDisabled = 1,
-    IssuedFrozen = 2,
-    IssuedDisabledFrozen = 3,
-    IssuedFailed = 4,
-    ManufacturedInactive = 8,
-    Manufactured = 9,
-    ManufacturedDisabled = 10,
-    ManufacturedFrozen = 11,
-    ManufacturedDisabledFrozen = 12,
-    ManufacturedFailed = 13,
+pub enum GeneralStatus {
+    None = 0,
+    PendingTPerError = 1,
+    ActiveTPerError = 2,
+    ActivePauseRequest = 3,
+    PendingPauseRequested = 4,
+    PendingResetStopDetected = 5,
+    KeyError = 6,
+    WaitAvailableKeys = 32,
+    WaitForTPerResources = 33,
+    ActiveResetStopDetected = 34,
     #[num_enum(catch_all)]
-    Unknown(u8),
+    Unknown(u8) = 63,
 }
 
-impl Tokenize for LifeCycleState {
+impl Tokenize for GeneralStatus {
     fn tokenize<T: Tokenizer>(&self, tokenizer: &mut T) -> Result<(), T::Error> {
         u8::from(*self).tokenize(tokenizer)
     }
 }
 
-impl Detokenize for LifeCycleState {
+impl Detokenize for GeneralStatus {
     fn detokenize<D: Detokenizer>(detokenizer: &mut D) -> Result<Self, D::Error> {
         Ok(Self::from(u8::detokenize(detokenizer)?))
     }

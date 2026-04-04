@@ -1,7 +1,5 @@
 use std::collections::HashSet;
 
-use sed_packet::token::MessageError;
-
 use crate::objects::{AceRef, AuthorityRef};
 use crate::preconfig::core::shared::table_id;
 use crate::types::{AceOperand, BooleanOp};

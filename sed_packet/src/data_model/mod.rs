@@ -1,3 +1,4 @@
+mod r#bool;
 mod fixed_bytes;
 mod integer;
 mod list;
@@ -9,4 +10,3 @@ mod set;
 mod string;
 pub mod table_ref;
 pub mod uid;
-mod r#bool;

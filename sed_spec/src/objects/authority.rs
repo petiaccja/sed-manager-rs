@@ -1,5 +1,4 @@
 use sed_packet::Uid;
-use sed_packet::token::MessageError;
 
 use crate::objects::{AuthorityRef, LogListRef};
 use crate::preconfig::core::shared::table_id;
