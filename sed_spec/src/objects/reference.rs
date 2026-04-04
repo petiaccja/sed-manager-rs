@@ -17,6 +17,9 @@ pub type KAes256Ref = ObjectRef<{ table_id::K_AES_256.to_u64() }>;
 /// The UID of an object in the Locking table.
 pub type LockingRangeRef = ObjectRef<{ table_id::LOCKING.to_u64() }>;
 
+/// The UID of an object in the Locking table.
+pub type LogListRef = ObjectRef<{ table_id::LOG_LIST.to_u64() }>;
+
 /// The UID of an object in the MBRControl table.
 pub type MbrControlRef = ObjectRef<{ table_id::MBR_CONTROL.to_u64() }>;
 
