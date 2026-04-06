@@ -10,12 +10,12 @@ use winapi::shared::ntddscsi::{
     IOCTL_SCSI_PASS_THROUGH_DIRECT, SCSI_IOCTL_DATA_IN, SCSI_IOCTL_DATA_OUT, SCSI_PASS_THROUGH_DIRECT,
 };
 
-use crate::device::shared::aligned_array::AlignedArray;
-use crate::device::shared::scsi::{
+use crate::shared::aligned_array::AlignedArray;
+use crate::shared::scsi::{
     Command, DescriptorSenseData, FixedSenseData, SCSIError, SenseKey, SenseResponseCode,
 };
-use crate::device::windows::utility::{file_handle::FileHandle, ioctl::ioctl_in_out};
-use crate::device::{Device, Error as DeviceError, Interface};
+use crate::windows::utility::{file_handle::FileHandle, ioctl::ioctl_in_out};
+use crate::{Device, Error as DeviceError, Interface};
 
 use super::GenericDevice;
 

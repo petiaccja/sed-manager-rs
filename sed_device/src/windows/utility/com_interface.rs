@@ -3,7 +3,7 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use crate::device::windows::error::{Error, check_hresult};
+use crate::windows::error::{Error, check_hresult};
 use core::ptr::null_mut;
 use std::cell::OnceCell;
 use std::sync::OnceLock;

@@ -3,15 +3,15 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use super::shared::ata;
-use super::shared::nvme;
+use crate::shared::ata;
+use crate::shared::nvme;
 
-use super::shared::scsi;
+use crate::shared::scsi;
 #[cfg(target_os = "windows")]
-use super::windows::Error as PlatformError;
+use crate::windows::Error as PlatformError;
 
 #[cfg(target_os = "linux")]
-use super::linux::Error as PlatformError;
+use crate::linux::Error as PlatformError;
 
 #[derive(Debug, PartialEq, Eq, Clone, thiserror::Error)]
 pub enum Error {

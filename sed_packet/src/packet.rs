@@ -4,6 +4,7 @@
 //L-----------------------------------------------------------------------------
 
 use core::ops::Deref;
+use std::marker::PhantomData;
 
 use sorbit::{Deserialize, Serialize};
 
@@ -37,7 +38,7 @@ pub struct SubPacket {
     #[sorbit(offset = 6)]
     pub kind: SubPacketKind,
     #[sorbit(offset = 8, value = len(payload))] // Use len instead of byte_count as `Item=u8`.
-    pub length: u32,
+    pub length: PhantomData<u32>,
     pub payload: Vec<u8>,
 }
 
@@ -51,7 +52,7 @@ pub struct Packet {
     pub ack_type: AckType,
     pub acknowledgement: u32,
     #[sorbit(value = byte_count(payload))]
-    pub length: u32,
+    pub length: PhantomData<u32>,
     pub payload: Vec<SubPacket>,
 }
 
@@ -64,7 +65,7 @@ pub struct ComPacket {
     pub outstanding_data: u32,
     pub min_transfer: u32,
     #[sorbit(value = byte_count(payload))]
-    pub length: u32,
+    pub length: PhantomData<u32>,
     #[sorbit(multi_pass)]
     pub payload: Vec<Packet>,
 }
@@ -77,7 +78,7 @@ impl Default for Packet {
             sequence_number: 0,
             ack_type: AckType::None,
             acknowledgement: 0,
-            length: 0,
+            length: PhantomData,
             payload: Vec::new(),
         }
     }
@@ -85,7 +86,7 @@ impl Default for Packet {
 
 impl Default for ComPacket {
     fn default() -> Self {
-        Self { com_id: 0, com_id_ext: 0, outstanding_data: 0, min_transfer: 0, length: 0, payload: Vec::new() }
+        Self { com_id: 0, com_id_ext: 0, outstanding_data: 0, min_transfer: 0, length: PhantomData, payload: Vec::new() }
     }
 }
 
@@ -149,7 +150,7 @@ mod tests {
             0x00, 0x00, // Padding.
         ];
         let value =
-            SubPacket { kind: SubPacketKind::Data, length: 0x06, payload: vec![0xCC, 0xCC, 0x0CC, 0xCC, 0xCC, 0xCC] };
+            SubPacket { kind: SubPacketKind::Data, length: PhantomData, payload: vec![0xCC, 0xCC, 0x0CC, 0xCC, 0xCC, 0xCC] };
         assert_eq!(value.to_bytes().unwrap(), &bytes);
         assert_eq!(SubPacket::from_bytes(&bytes).unwrap(), value);
     }
@@ -178,10 +179,10 @@ mod tests {
             sequence_number: 0x090A0B0C,
             ack_type: AckType::ACK,
             acknowledgement: 0x0D0E0F01,
-            length: 0x14,
+            length: PhantomData,
             payload: vec![SubPacket {
                 kind: SubPacketKind::Data,
-                length: 0x06,
+                length: PhantomData,
                 payload: vec![0xCC, 0xCC, 0x0CC, 0xCC, 0xCC, 0xCC],
             }],
         };
@@ -220,17 +221,17 @@ mod tests {
             com_id_ext: 0x0034,
             outstanding_data: 0x10,
             min_transfer: 0x10,
-            length: 0x2C,
+            length: PhantomData,
             payload: vec![Packet {
                 tper_session_number: 0x01020304,
                 host_session_number: 0x05060708,
                 sequence_number: 0x090A0B0C,
                 ack_type: AckType::ACK,
                 acknowledgement: 0x0D0E0F01,
-                length: 0x14,
+                length: PhantomData,
                 payload: vec![SubPacket {
                     kind: SubPacketKind::Data,
-                    length: 0x06,
+                    length: PhantomData,
                     payload: vec![0xCC, 0xCC, 0x0CC, 0xCC, 0xCC, 0xCC],
                 }],
             }],

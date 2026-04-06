@@ -4,7 +4,6 @@
 //L-----------------------------------------------------------------------------
 
 use super::super::shared::string::FromNullTerminated;
-use crate::device;
 
 use core::fmt::Display;
 use core::ptr::null_mut;
@@ -43,27 +42,27 @@ impl Display for Error {
     }
 }
 
-impl From<Error> for device::Error {
-    fn from(value: Error) -> device::Error {
+impl From<Error> for crate::Error {
+    fn from(value: Error) -> crate::Error {
         let common_error = match value {
             Error::Win32(code) => match code {
-                ERROR_FILE_NOT_FOUND => Some(device::Error::DeviceNotFound),
-                ERROR_PATH_NOT_FOUND => Some(device::Error::DeviceNotFound),
-                ERROR_ACCESS_DENIED => Some(device::Error::PermissionDenied),
-                ERROR_INVALID_DATA => Some(device::Error::InvalidArgument),
-                ERROR_NOT_SUPPORTED => Some(device::Error::NotSupported),
-                ERROR_INVALID_PARAMETER => Some(device::Error::InvalidArgument),
+                ERROR_FILE_NOT_FOUND => Some(crate::Error::DeviceNotFound),
+                ERROR_PATH_NOT_FOUND => Some(crate::Error::DeviceNotFound),
+                ERROR_ACCESS_DENIED => Some(crate::Error::PermissionDenied),
+                ERROR_INVALID_DATA => Some(crate::Error::InvalidArgument),
+                ERROR_NOT_SUPPORTED => Some(crate::Error::NotSupported),
+                ERROR_INVALID_PARAMETER => Some(crate::Error::InvalidArgument),
                 _ => None,
             },
             Error::COM(hr) => match hr {
-                E_ACCESSDENIED => Some(device::Error::PermissionDenied),
-                E_INVALIDARG => Some(device::Error::InvalidArgument),
+                E_ACCESSDENIED => Some(crate::Error::PermissionDenied),
+                E_INVALIDARG => Some(crate::Error::InvalidArgument),
                 _ => None,
             },
         };
         match common_error {
             Some(error) => error,
-            None => device::Error::PlatformError(value),
+            None => crate::Error::PlatformError(value),
         }
     }
 }

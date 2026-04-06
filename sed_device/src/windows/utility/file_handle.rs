@@ -14,9 +14,9 @@ use winapi::{
     },
 };
 
-use crate::device::{Error, shared::string::ToNullTerminated};
+use crate::{Error, shared::string::ToNullTerminated};
 
-use crate::device::windows::error::get_last_error;
+use crate::windows::error::get_last_error;
 
 pub struct FileHandle {
     handle: HANDLE,

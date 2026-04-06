@@ -1,8 +1,10 @@
-use sorbit::error::Error as SorbitError;
-use sorbit::ser_de::{Deserialize as _, Deserializer, Serialize as _, Serializer};
+use sorbit::io::{FixedMemoryStream, GrowingMemoryStream};
+use sorbit::stream_ser_de::{StreamDeserializer, StreamSerializer};
+
+use crate::token::MessageError;
 
 use super::command::Command;
-use super::token::Token;
+use super::error::Error;
 
 pub trait Tokenize {
     fn tokenize<T: Tokenizer>(&self, tokenizer: &mut T) -> Result<(), T::Error>;
@@ -10,6 +12,43 @@ pub trait Tokenize {
 
 pub trait Detokenize: Sized {
     fn detokenize<D: Detokenizer>(detokenizer: &mut D) -> Result<Self, D::Error>;
+}
+
+pub trait ToTokens {
+    fn to_tokens(&self) -> Result<Vec<u8>, Error>;
+}
+
+pub trait FromTokens: Sized {
+    fn from_tokens(tokens: &[u8]) -> Result<Self, Error>;
+}
+
+impl<T> ToTokens for T
+where
+    T: Tokenize,
+{
+    fn to_tokens(&self) -> Result<Vec<u8>, Error> {
+        use super::SorbitTokenizer;
+
+        let stream = GrowingMemoryStream::new();
+        let serializer = StreamSerializer::new(stream);
+        let mut tokenizer = SorbitTokenizer::new(serializer);
+        self.tokenize(&mut tokenizer)?;
+        Ok(tokenizer.take().take().take())
+    }
+}
+
+impl<T> FromTokens for T
+where
+    T: Detokenize,
+{
+    fn from_tokens(tokens: &[u8]) -> Result<Self, Error> {
+        use super::SorbitDetokenizer;
+
+        let stream = FixedMemoryStream::new(tokens);
+        let serializer = StreamDeserializer::new(stream);
+        let mut tokenizer = SorbitDetokenizer::new(serializer);
+        T::detokenize(&mut tokenizer)
+    }
 }
 
 pub trait Tokenizer {
@@ -32,6 +71,7 @@ pub trait Tokenizer {
 pub trait Detokenizer {
     type Error: MessageError;
 
+    fn ignore(&mut self, max_recursion: usize) -> Result<(), Self::Error>;
     fn detokenize_i8(&mut self) -> Result<i8, Self::Error>;
     fn detokenize_i16(&mut self) -> Result<i16, Self::Error>;
     fn detokenize_i32(&mut self) -> Result<i32, Self::Error>;
@@ -48,212 +88,6 @@ pub trait Detokenizer {
     ) -> Result<(Name, Value), Self::Error>;
     fn detokenize_list(&mut self, item: impl FnMut(&mut Self) -> Result<(), Self::Error>) -> Result<(), Self::Error>;
     fn detokenize_bytes(&mut self) -> Result<Vec<u8>, Self::Error>;
-}
-
-pub trait MessageError {
-    fn message(message: impl Into<String>) -> Self;
-}
-
-pub enum Error {
-    SerializationFailed(SorbitError),
-    OversizedPayload,
-    InvalidDataType,
-    InvalidNamedDelimiter,
-    InvalidListDelimiter,
-    Custom(String),
-}
-
-impl From<SorbitError> for Error {
-    fn from(value: SorbitError) -> Self {
-        Self::SerializationFailed(value)
-    }
-}
-
-impl MessageError for Error {
-    fn message(message: impl Into<String>) -> Self {
-        Self::Custom(message.into())
-    }
-}
-
-pub struct SorbitTokenizer<S>
-where
-    S: Serializer<Error = SorbitError>,
-{
-    serializer: S,
-}
-
-impl<S> SorbitTokenizer<S>
-where
-    S: Serializer<Error = SorbitError>,
-{
-    pub fn new(serializer: S) -> Self {
-        Self { serializer }
-    }
-}
-
-impl<S> Tokenizer for SorbitTokenizer<S>
-where
-    S: Serializer<Error = SorbitError>,
-{
-    type Error = Error;
-
-    fn tokenize_i8(&mut self, value: i8) -> Result<(), Error> {
-        Token::from(value).serialize(&mut self.serializer)?;
-        Ok(())
-    }
-
-    fn tokenize_i16(&mut self, value: i16) -> Result<(), Error> {
-        Token::from(value).serialize(&mut self.serializer)?;
-        Ok(())
-    }
-
-    fn tokenize_i32(&mut self, value: i32) -> Result<(), Error> {
-        Token::from(value).serialize(&mut self.serializer)?;
-        Ok(())
-    }
-
-    fn tokenize_i64(&mut self, value: i64) -> Result<(), Error> {
-        Token::from(value).serialize(&mut self.serializer)?;
-        Ok(())
-    }
-
-    fn tokenize_u8(&mut self, value: u8) -> Result<(), Error> {
-        Token::from(value).serialize(&mut self.serializer)?;
-        Ok(())
-    }
-
-    fn tokenize_u16(&mut self, value: u16) -> Result<(), Error> {
-        Token::from(value).serialize(&mut self.serializer)?;
-        Ok(())
-    }
-
-    fn tokenize_u32(&mut self, value: u32) -> Result<(), Error> {
-        Token::from(value).serialize(&mut self.serializer)?;
-        Ok(())
-    }
-
-    fn tokenize_u64(&mut self, value: u64) -> Result<(), Error> {
-        Token::from(value).serialize(&mut self.serializer)?;
-        Ok(())
-    }
-
-    fn tokenize_command(&mut self, value: Command) -> Result<(), Error> {
-        Token::from(value).serialize(&mut self.serializer)?;
-        Ok(())
-    }
-
-    fn tokenize_named(&mut self, name: impl Tokenize, value: impl Tokenize) -> Result<(), Error> {
-        Token::StartName.serialize(&mut self.serializer)?;
-        name.tokenize(self)?;
-        value.tokenize(self)?;
-        Token::StartName.serialize(&mut self.serializer)?;
-        Ok(())
-    }
-
-    fn tokenize_list(&mut self, items: impl FnOnce(&mut Self) -> Result<(), Error>) -> Result<(), Error> {
-        Token::StartList.serialize(&mut self.serializer)?;
-        items(self)?;
-        Token::EndList.serialize(&mut self.serializer)?;
-        Ok(())
-    }
-
-    fn tokenize_bytes(&mut self, bytes: &[u8]) -> Result<(), Error> {
-        Token::try_from(bytes).map_err(|_| Error::OversizedPayload)?.serialize(&mut self.serializer)?;
-        Ok(())
-    }
-}
-
-pub struct SorbitDetokenizer<D>
-where
-    D: Deserializer<Error = SorbitError>,
-{
-    deserializer: D,
-}
-
-impl<D> SorbitDetokenizer<D>
-where
-    D: Deserializer<Error = SorbitError>,
-{
-    pub fn new(deserializer: D) -> Self {
-        Self { deserializer }
-    }
-
-    fn next_token(&mut self) -> Result<Token, Error> {
-        Token::deserialize(&mut self.deserializer).map_err(|e| Error::SerializationFailed(e))
-    }
-}
-
-impl<D> Detokenizer for SorbitDetokenizer<D>
-where
-    D: Deserializer<Error = SorbitError>,
-{
-    type Error = Error;
-
-    fn detokenize_i8(&mut self) -> Result<i8, Error> {
-        self.next_token()?.try_into().map_err(|_| Error::InvalidDataType)
-    }
-
-    fn detokenize_i16(&mut self) -> Result<i16, Error> {
-        self.next_token()?.try_into().map_err(|_| Error::InvalidDataType)
-    }
-
-    fn detokenize_i32(&mut self) -> Result<i32, Error> {
-        self.next_token()?.try_into().map_err(|_| Error::InvalidDataType)
-    }
-
-    fn detokenize_i64(&mut self) -> Result<i64, Error> {
-        self.next_token()?.try_into().map_err(|_| Error::InvalidDataType)
-    }
-
-    fn detokenize_u8(&mut self) -> Result<u8, Error> {
-        self.next_token()?.try_into().map_err(|_| Error::InvalidDataType)
-    }
-
-    fn detokenize_u16(&mut self) -> Result<u16, Error> {
-        self.next_token()?.try_into().map_err(|_| Error::InvalidDataType)
-    }
-
-    fn detokenize_u32(&mut self) -> Result<u32, Error> {
-        self.next_token()?.try_into().map_err(|_| Error::InvalidDataType)
-    }
-
-    fn detokenize_u64(&mut self) -> Result<u64, Error> {
-        self.next_token()?.try_into().map_err(|_| Error::InvalidDataType)
-    }
-
-    fn detokenize_command(&mut self) -> Result<Command, Error> {
-        self.next_token()?.try_into().map_err(|_| Error::InvalidDataType)
-    }
-
-    fn detokenize_named<Name, Value>(
-        &mut self,
-        name: impl FnOnce(&mut Self) -> Result<Name, Error>,
-        value: impl FnOnce(&mut Self, &Name) -> Result<Value, Error>,
-    ) -> Result<(Name, Value), Error> {
-        if self.next_token()? != Token::StartName {
-            return Err(Error::InvalidNamedDelimiter);
-        };
-        let name = name(self)?;
-        let value = value(self, &name)?;
-        if self.next_token()? != Token::EndName {
-            return Err(Error::InvalidNamedDelimiter);
-        };
-        Ok((name, value))
-    }
-
-    fn detokenize_list(&mut self, mut item: impl FnMut(&mut Self) -> Result<(), Error>) -> Result<(), Error> {
-        if self.next_token()? != Token::StartName {
-            return Err(Error::InvalidListDelimiter);
-        };
-        while self.next_token()? != Token::EndName {
-            item(self)?;
-        }
-        Ok(())
-    }
-
-    fn detokenize_bytes(&mut self) -> Result<Vec<u8>, Error> {
-        self.next_token()?.try_into().map_err(|_| Error::InvalidDataType)
-    }
 }
 
 impl<V: Tokenize> Tokenize for &V {

@@ -8,9 +8,9 @@ mod generic;
 mod nvme;
 mod scsi;
 
-use crate::device::Device;
-use crate::device::Error;
-use crate::device::Interface;
+use crate::Device;
+use crate::Error;
+use crate::Interface;
 
 pub use ata::ATADevice;
 pub use generic::GenericDevice;

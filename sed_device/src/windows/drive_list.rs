@@ -25,8 +25,8 @@ use winapi::{
     },
 };
 
-use crate::device::Error as DeviceError;
-use crate::device::shared::string::{FromNullTerminated, ToNullTerminated};
+use crate::Error as DeviceError;
+use crate::shared::string::{FromNullTerminated, ToNullTerminated};
 
 use super::error::{Error as WindowsError, check_hresult};
 use super::utility::{com_interface::COM_INTERFACE, com_ptr::ComPtr};

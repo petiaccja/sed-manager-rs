@@ -4,3 +4,15 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+sed_packet.workspace = true
+sed_device.workspace = true
+sed_spec.workspace = true
+sed_tper_macros.workspace = true
+sorbit.workspace = true
+oneshot.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+num_enum.workspace = true
+
+[dev-dependencies]
+rstest.workspace = true

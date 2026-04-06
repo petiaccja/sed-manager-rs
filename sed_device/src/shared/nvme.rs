@@ -6,8 +6,7 @@
 //! Implements parts of the NVMe specification that is relevant for drive encryption.
 //! The official specification is accessible on [NVMe's website](https://nvmexpress.org/specifications/).
 
-use crate::device::Error as DeviceError;
-use crate::serialization::DeserializeBinary;
+use crate::Error as DeviceError;
 use num_enum::{FromPrimitive, IntoPrimitive};
 use sorbit::{Deserialize, PackInto, UnpackFrom, ser_de::FromBytes as _, ser_de::ToBytes as _};
 

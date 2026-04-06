@@ -11,17 +11,23 @@ members = [
     "sed_packet",
     "sed_spec",
     "sed_spec_macros",
-    "sed_spec_codegen", "sed_device", "sed_tper",
+    "sed_spec_codegen",
+    "sed_device",
+    "sed_tper",
+    "sed_tper_macros",
 ]
 
 [workspace.dependencies]
 # Workspace packages.
+sed_device = { version = "0.1.0", path = "sed_device" }
 sed_packet = { version = "0.1.0", path = "sed_packet" }
 sed_spec = { version = "0.1.0", path = "sed_spec" }
 sed_spec_codegen = { version = "0.1.0", path = "sed_spec_codegen" }
 sed_spec_macros = { version = "0.1.0", path = "sed_spec_macros" }
+sed_tper = { version = "0.1.0", path = "sed_tper" }
+sed_tper_macros = { version = "0.1.0", path = "sed_tper_macros" }
 # Maintained by Peter.
-sorbit = { version = "0.1.0", git = "https://github.com/petiaccja/sorbit", rev = "78d0004b321b1abbff6c7d683ff14f83b7bff19f" }
+sorbit = { version = "0.1.2", git = "https://github.com/petiaccja/sorbit", rev = "aac49c446c7c362b5f38a837c0dfd083c0cdacb0" }
 # Third-party packages.
 rstest = { version = "0.26.1" }
 smallvec = { version = "1.15.1", features = ["const_generics"] }
@@ -32,3 +38,21 @@ serde = { version = "1.0.228", features = ["derive"] }
 serde_json = { version = "1.0.149" }
 prettyplease = { version = "0.2.37" }
 num_enum = { version = "0.7.6" }
+oneshot = { version = "0.2.1" }
+thiserror = { version = "2.0.18" }
+winapi = { version = "0.3.9", default-features = false, features = [
+    "std",
+    "ioapiset",
+    "errhandlingapi",
+    "fileapi",
+    "winnt",
+    "handleapi",
+    "winioctl",
+    "wbemcli",
+    "combaseapi",
+    "oleauto",
+    "winbase",
+    "ntddscsi",
+] }
+nix = { version = "0.29", default-features = false, features = ["fs", "ioctl"] }
+tracing = { version = "0.1.44" }

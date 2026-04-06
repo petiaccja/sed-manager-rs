@@ -16,10 +16,10 @@ use winapi::{
     },
 };
 
-use crate::device::windows::error::get_last_error;
-use crate::device::windows::utility::file_handle::FileHandle;
-use crate::device::windows::utility::ioctl::{STORAGE_BUS_TYPE, STORAGE_DEVICE_DESCRIPTOR};
-use crate::device::{Device, Error, Interface, shared::string::FromNullTerminated};
+use crate::windows::error::get_last_error;
+use crate::windows::utility::file_handle::FileHandle;
+use crate::windows::utility::ioctl::{STORAGE_BUS_TYPE, STORAGE_DEVICE_DESCRIPTOR};
+use crate::{Device, Error, Interface, shared::string::FromNullTerminated};
 
 pub struct GenericDevice {
     file: FileHandle,

@@ -5,16 +5,16 @@
 
 use core::ffi::c_void;
 
+use sorbit::ser_de::FromBytes;
 use winapi::shared::ntddscsi::{
     ATA_FLAGS_DATA_IN, ATA_FLAGS_DATA_OUT, ATA_FLAGS_USE_DMA, ATA_PASS_THROUGH_DIRECT, IOCTL_ATA_PASS_THROUGH_DIRECT,
 };
 
-use crate::device::shared::aligned_array::AlignedArray;
-use crate::device::shared::ata::{ATAError, IdentifyDevice, Input};
-use crate::device::windows::utility::file_handle::FileHandle;
-use crate::device::windows::utility::ioctl::ioctl_in_out;
-use crate::device::{Device, Error as DeviceError, Interface};
-use crate::serialization::DeserializeBinary as _;
+use crate::shared::aligned_array::AlignedArray;
+use crate::shared::ata::{ATAError, IdentifyDevice, Input};
+use crate::windows::utility::file_handle::FileHandle;
+use crate::windows::utility::ioctl::ioctl_in_out;
+use crate::{Device, Error as DeviceError, Interface};
 
 use super::GenericDevice;
 
@@ -120,7 +120,7 @@ fn identify_device(file_handle: &FileHandle) -> Result<IdentifyDevice, DeviceErr
 
     let _ = ioctl_in_out(file_handle.handle(), IOCTL_ATA_PASS_THROUGH_DIRECT, command_buffer)?;
     check_ata_status(&command.CurrentTaskFile)?;
-    IdentifyDevice::from_bytes(data_out).map_err(|_| DeviceError::ATAError(ATAError::with_error_bit()))
+    IdentifyDevice::from_bytes(&data_out).map_err(|_| DeviceError::ATAError(ATAError::with_error_bit()))
 }
 
 fn trusted_send(

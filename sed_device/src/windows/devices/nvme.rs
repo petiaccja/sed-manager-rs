@@ -3,14 +3,14 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use crate::device::Error as DeviceError;
-use crate::device::device::{Device, Interface};
-use crate::device::shared::aligned_array::AlignedArray;
-use crate::device::shared::memory::write_nonoverlapping;
-use crate::device::shared::nvme::IdentifyController;
-use crate::device::windows::Error as WindowsError;
-use crate::device::windows::utility::file_handle::FileHandle;
-use crate::device::windows::utility::ioctl::{STORAGE_PROTOCOL_SPECIFIC_DATA, STORAGE_PROTOCOL_TYPE, ioctl_in_out};
+use crate::Error as DeviceError;
+use crate::device::{Device, Interface};
+use crate::shared::aligned_array::AlignedArray;
+use crate::shared::memory::write_nonoverlapping;
+use crate::shared::nvme::IdentifyController;
+use crate::windows::Error as WindowsError;
+use crate::windows::utility::file_handle::FileHandle;
+use crate::windows::utility::ioctl::{STORAGE_PROTOCOL_SPECIFIC_DATA, STORAGE_PROTOCOL_TYPE, ioctl_in_out};
 
 use core::mem::offset_of;
 use sorbit::ser_de::FromBytes as _;
@@ -152,7 +152,7 @@ const SCSI_TRANSLATION_INC_512: bool = false;
 mod test {
     use super::*;
 
-    use crate::device::windows::drive_list::list_physical_drives;
+    use crate::windows::drive_list::list_physical_drives;
 
     fn get_nvme_drives() -> Vec<NVMeDevice> {
         let drives_paths = list_physical_drives().ok().unwrap_or(vec![]);

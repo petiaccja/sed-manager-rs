@@ -3,12 +3,9 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use sed_manager_macros::Deserialize;
+use sorbit::{Deserialize, ser_de::FromBytes as _};
 
-use crate::{
-    device::{Error as DeviceError, Interface},
-    serialization::DeserializeBinary,
-};
+use crate::{Error as DeviceError, Interface};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
@@ -19,18 +16,19 @@ pub enum Command {
 }
 
 #[derive(Deserialize, Debug, Clone)]
+#[sorbit(byte_order=big_endian)]
 pub struct IdentifyDevice {
-    #[layout(offset = 0, bit_field(u16, 15))]
+    #[sorbit(offset = 0, bit_field=_b0, repr=u16, bits=15, bit_numbering=LSB0)]
     pub not_ata_device: bool,
-    #[layout(offset = 20)]
+    #[sorbit(offset = 20)]
     pub serial_number: [u8; 20],
-    #[layout(offset = 46)]
+    #[sorbit(offset = 46)]
     pub firmware_revision: [u8; 8],
-    #[layout(offset = 54)]
+    #[sorbit(offset = 54)]
     pub model_number: [u8; 40],
-    #[layout(offset = 96, bit_field(u16, 0))]
+    #[sorbit(offset = 96, bit_field=_b1, repr=u16, bits=0, bit_numbering=LSB0)]
     pub trusted_computing_supported: bool,
-    #[layout(offset = 152)]
+    #[sorbit(offset = 152)]
     pub serial_ata_capabilities: u16, // This is a bit field, but we only care if it's ATA or SATA.
 }
 
@@ -43,37 +41,37 @@ pub struct Input {
 
 #[derive(Debug, Clone, Deserialize, Default, PartialEq, Eq)]
 pub struct StatusField {
-    #[layout(offset = 0, bit_field(u8, 7))]
+    #[sorbit(bit_field=_b0, repr=u8, bits=7, bit_numbering=LSB0)]
     busy: bool,
-    #[layout(offset = 0, bit_field(u8, 6))]
+    #[sorbit(bit_field=_b0, bits=6)]
     device_ready: bool,
-    #[layout(offset = 0, bit_field(u8, 5))]
+    #[sorbit(bit_field=_b0, bits=5)]
     stream_or_device_fault: bool,
-    #[layout(offset = 0, bit_field(u8, 4))]
+    #[sorbit(bit_field=_b0, bits=4)]
     deferred_write_error: bool,
-    #[layout(offset = 0, bit_field(u8, 3))]
+    #[sorbit(bit_field=_b0, bits=3)]
     data_request: bool,
-    #[layout(offset = 0, bit_field(u8, 2))]
+    #[sorbit(bit_field=_b0, bits=2)]
     alignment_error: bool,
-    #[layout(offset = 0, bit_field(u8, 1))]
+    #[sorbit(bit_field=_b0, bits=1)]
     sense_data_available: bool,
-    #[layout(offset = 0, bit_field(u8, 0))]
+    #[sorbit(bit_field=_b0, bits=0)]
     error_or_check: bool,
 }
 
 #[derive(Debug, Clone, Deserialize, Default, PartialEq, Eq)]
 pub struct ErrorField {
-    #[layout(offset = 0, bit_field(u8, 7))]
+    #[sorbit(bit_field=_b0, repr=u8, bits=7, bit_numbering=LSB0)]
     interface_crc: bool,
-    #[layout(offset = 0, bit_field(u8, 6))]
+    #[sorbit(bit_field=_b0, bits=6)]
     uncorrectable_error: bool,
-    #[layout(offset = 0, bit_field(u8, 4))]
+    #[sorbit(bit_field=_b0, bits=4)]
     id_not_found: bool,
-    #[layout(offset = 0, bit_field(u8, 2))]
+    #[sorbit(bit_field=_b0, bits=2)]
     abort: bool,
-    #[layout(offset = 0, bit_field(u8, 1))]
+    #[sorbit(bit_field=_b0, bits=1)]
     end_of_media: bool,
-    #[layout(offset = 0, bit_field(u8, 0))]
+    #[sorbit(bit_field=_b0, bits=0)]
     length_or_timeout_or_cfa: bool,
 }
 
@@ -153,8 +151,8 @@ impl ATAError {
     pub fn from_task_file(task_file: [u8; 8]) -> Self {
         let error_reg = task_file[0];
         let status_reg = task_file[6];
-        let error = ErrorField::from_bytes([error_reg].into()).unwrap_or(ErrorField::default());
-        let status = StatusField::from_bytes([status_reg].into())
+        let error = ErrorField::from_bytes(&[error_reg]).unwrap_or(ErrorField::default());
+        let status = StatusField::from_bytes(&[status_reg])
             .unwrap_or(StatusField { error_or_check: true, ..Default::default() });
         Self { status, error }
     }

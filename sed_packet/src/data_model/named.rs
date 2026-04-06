@@ -1,5 +1,6 @@
 use crate::token::{Detokenize, Detokenizer, Tokenize, Tokenizer};
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Named<Name, Value> {
     pub name: Name,
     pub value: Value,

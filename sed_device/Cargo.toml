@@ -4,3 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+sorbit.workspace = true
+thiserror.workspace = true
+num_enum.workspace = true
+winapi.workspace = true
+nix.workspace = true

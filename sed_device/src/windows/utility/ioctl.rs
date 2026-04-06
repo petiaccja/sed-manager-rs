@@ -14,7 +14,7 @@ use winapi::{
     um::ioapiset::DeviceIoControl,
 };
 
-use crate::device::windows::error::{Error, get_last_error};
+use crate::windows::error::{Error, get_last_error};
 
 pub fn ioctl_in_out(device: HANDLE, ioctl: DWORD, buffer: &mut [u8]) -> Result<u32, Error> {
     let mut bytes_returned: u32 = 0;

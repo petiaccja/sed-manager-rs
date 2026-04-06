@@ -1,0 +1,167 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
+use core::time::Duration;
+
+use sed_packet::{
+    Named,
+    token::{Detokenize, Detokenizer, Tokenize, Tokenizer},
+};
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct Properties {
+    pub max_methods: usize,
+    pub max_subpackets: usize,
+    pub max_gross_packet_size: usize,
+    pub max_packets: usize,
+    pub max_gross_compacket_size: usize,
+    pub max_gross_compacket_response_size: usize,
+    pub max_ind_token_size: usize,
+    pub max_agg_token_size: usize,
+    pub continued_tokens: bool,
+    pub seq_numbers: bool,
+    pub ack_nak: bool,
+    pub asynchronous: bool,
+    pub buffer_mgmt: bool,
+    pub max_retries: u32,
+    pub trans_timeout: Duration,
+    pub def_trans_timeout: Duration,
+}
+
+impl Properties {
+    pub const ASSUMED: Properties = Properties {
+        max_methods: 1,
+        max_subpackets: 1,
+        max_gross_packet_size: 1004,
+        max_packets: 1,
+        max_gross_compacket_size: 1024,
+        max_gross_compacket_response_size: 1024,
+        max_ind_token_size: 968,
+        max_agg_token_size: 968,
+        continued_tokens: false,
+        seq_numbers: false,
+        ack_nak: false,
+        asynchronous: false,
+        buffer_mgmt: false,
+        max_retries: 3,
+        trans_timeout: Duration::from_secs(10),
+        def_trans_timeout: Duration::from_secs(10),
+    };
+
+    pub fn to_list(&self) -> Vec<Named<String, u32>> {
+        let list = vec![
+            ("MaxMethods", inf_to_zero(self.max_methods) as u32),
+            ("MaxSubpackets", inf_to_zero(self.max_subpackets) as u32),
+            ("MaxPacketSize", inf_to_zero(self.max_gross_packet_size) as u32),
+            ("MaxPackets", inf_to_zero(self.max_packets) as u32),
+            ("MaxComPacketSize", inf_to_zero(self.max_gross_compacket_size) as u32),
+            ("MaxResponseComPacketSize", inf_to_zero(self.max_gross_compacket_response_size) as u32),
+            ("MaxIndTokenSize", inf_to_zero(self.max_ind_token_size) as u32),
+            ("MaxAggTokenSize", inf_to_zero(self.max_agg_token_size) as u32),
+            ("ContinuedTokens", self.continued_tokens as u32),
+            ("SequenceNumbers", self.seq_numbers as u32),
+            ("AckNak", self.ack_nak as u32),
+            ("Asynchronous", self.asynchronous as u32),
+            ("DefTransTimeout", self.def_trans_timeout.as_millis() as u32),
+        ];
+        list.into_iter()
+            .map(|(name, value)| Named { name: name.into(), value: value })
+            .collect::<Vec<_>>()
+            .into()
+    }
+
+    pub fn from_list(properties: &[Named<String, u32>]) -> Self {
+        let mut parsed = Properties::ASSUMED;
+        for named_value in properties {
+            let name = named_value.name.as_str();
+            let value = named_value.value;
+            if name == "MaxMethods" {
+                parsed.max_methods = zero_to_inf(value as usize);
+            } else if name == "MaxSubpackets" {
+                parsed.max_subpackets = zero_to_inf(value as usize);
+            } else if name == "MaxPacketSize" {
+                parsed.max_gross_packet_size = zero_to_inf(value as usize);
+            } else if name == "MaxPackets" {
+                parsed.max_packets = zero_to_inf(value as usize);
+            } else if name == "MaxComPacketSize" {
+                parsed.max_gross_compacket_size = zero_to_inf(value as usize);
+            } else if name == "MaxResponseComPacketSize" {
+                parsed.max_gross_compacket_response_size = zero_to_inf(value as usize);
+            } else if name == "MaxIndTokenSize" {
+                parsed.max_ind_token_size = zero_to_inf(value as usize);
+            } else if name == "MaxAggTokenSize" {
+                parsed.max_agg_token_size = zero_to_inf(value as usize);
+            } else if name == "ContinuedTokens" {
+                parsed.continued_tokens = value != 0;
+            } else if name == "SequenceNumbers" {
+                parsed.seq_numbers = value != 0;
+            } else if name == "AckNak" {
+                parsed.ack_nak = value != 0;
+            } else if name == "Asynchronous" {
+                parsed.asynchronous = value != 0;
+            } else if name == "DefTransTimeout" {
+                parsed.trans_timeout = Duration::from_millis(value as u64);
+                parsed.def_trans_timeout = Duration::from_millis(value as u64);
+            };
+        }
+        parsed
+    }
+
+    pub fn common(lhs: &Properties, rhs: &Properties) -> Properties {
+        Properties {
+            max_methods: core::cmp::min(lhs.max_methods, rhs.max_methods),
+            max_subpackets: core::cmp::min(lhs.max_subpackets, rhs.max_subpackets),
+            max_gross_packet_size: core::cmp::min(lhs.max_gross_packet_size, rhs.max_gross_packet_size),
+            max_packets: core::cmp::min(lhs.max_packets, rhs.max_packets),
+            max_gross_compacket_size: core::cmp::min(lhs.max_gross_compacket_size, rhs.max_gross_compacket_size),
+            max_gross_compacket_response_size: core::cmp::min(
+                lhs.max_gross_compacket_response_size,
+                rhs.max_gross_compacket_response_size,
+            ),
+            max_ind_token_size: core::cmp::min(lhs.max_ind_token_size, rhs.max_ind_token_size),
+            max_agg_token_size: core::cmp::min(lhs.max_agg_token_size, rhs.max_agg_token_size),
+            continued_tokens: lhs.continued_tokens && rhs.continued_tokens,
+            seq_numbers: lhs.seq_numbers && rhs.seq_numbers,
+            ack_nak: lhs.ack_nak && rhs.ack_nak,
+            asynchronous: lhs.asynchronous && rhs.asynchronous,
+            buffer_mgmt: lhs.buffer_mgmt && rhs.buffer_mgmt,
+            max_retries: core::cmp::min(lhs.max_retries, rhs.max_retries),
+            trans_timeout: core::cmp::min(lhs.def_trans_timeout, rhs.def_trans_timeout), // Not a typo.
+            def_trans_timeout: core::cmp::min(lhs.def_trans_timeout, rhs.def_trans_timeout),
+        }
+    }
+}
+
+fn zero_to_inf(value: usize) -> usize {
+    match value {
+        0 => usize::MAX,
+        _ => value,
+    }
+}
+
+fn inf_to_zero(value: usize) -> usize {
+    match value {
+        usize::MAX => 0,
+        _ => value,
+    }
+}
+
+impl Default for Properties {
+    fn default() -> Self {
+        Properties::ASSUMED
+    }
+}
+
+impl Tokenize for Properties {
+    fn tokenize<T: Tokenizer>(&self, tokenizer: &mut T) -> Result<(), T::Error> {
+        self.to_list().tokenize(tokenizer)
+    }
+}
+
+impl Detokenize for Properties {
+    fn detokenize<D: Detokenizer>(detokenizer: &mut D) -> Result<Self, D::Error> {
+        Vec::<Named<String, u32>>::detokenize(detokenizer).map(|list| Self::from_list(&list))
+    }
+}
