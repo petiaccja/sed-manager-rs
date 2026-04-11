@@ -1,11 +1,17 @@
+use sorbit::error::Error as SorbitError;
+
 use sed_device::Error as DeviceError;
 use sed_packet::token::Error as TokenError;
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum Error {
     // Encoding-related.
     #[error("Tokenization failure: {}", .0)]
     TokenError(TokenError),
+    #[error("Invalid ComID response received from device: {}", .0)]
+    InvalidComIdResponse(SorbitError),
+    #[error("Invalid ComPacket received from device: {}", .0)]
+    InvalidComPacket(SorbitError),
 
     // Protocol-related.
     #[error("Security command failure: {}", .0)]
@@ -31,9 +37,9 @@ pub enum Error {
     #[error("The returned values are not of the requested type/format")]
     ResultTypeMismatch,
     #[error("The reveived ComID response refers to an unexpected ComID")]
-    ComIDResponseComIDMismatch,
+    ComIdResponseComIdMismatch,
     #[error("The reveived ComID response contains results of a different request")]
-    ComIDResponseCodeMismatch,
+    ComIdResponseCodeMismatch,
 
     // General
     #[error("Operation not supported by the TPer")]
@@ -42,4 +48,10 @@ pub enum Error {
     NotImplemented,
     #[error("Unspecified error (cause could not be determined)")]
     Unspecified,
+}
+
+impl From<DeviceError> for Error {
+    fn from(value: DeviceError) -> Self {
+        Self::SecurityCommandFailed(value)
+    }
 }

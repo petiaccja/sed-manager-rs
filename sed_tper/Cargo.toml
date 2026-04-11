@@ -7,12 +7,14 @@ edition = "2024"
 sed_packet.workspace = true
 sed_device.workspace = true
 sed_spec.workspace = true
-sed_tper_macros.workspace = true
+sed_async_runtime.workspace = true
 sorbit.workspace = true
 oneshot.workspace = true
+async-channel.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 num_enum.workspace = true
+
 
 [dev-dependencies]
 rstest.workspace = true

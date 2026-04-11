@@ -1,9 +1,11 @@
 mod com_session;
 mod device_session;
 mod management_session;
-mod messages;
-mod method_structure;
+mod message;
+mod method;
 mod protocol;
+mod retry;
 mod session;
+mod session_id;
 
 pub use protocol::Protocol;

@@ -22,8 +22,8 @@ pub trait Device: Send + Sync {
     fn model_number(&self) -> String;
     fn serial_number(&self) -> String;
     fn firmware_revision(&self) -> String;
-
     fn is_security_supported(&self) -> bool;
+
     fn security_send(&self, security_protocol: u8, protocol_specific: [u8; 2], data: &[u8]) -> Result<(), Error>;
     fn security_recv(&self, security_protocol: u8, protocol_specific: [u8; 2], len: usize) -> Result<Vec<u8>, Error>;
 }

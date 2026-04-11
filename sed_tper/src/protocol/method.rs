@@ -1,10 +1,17 @@
+use std::collections::VecDeque;
+use std::time::Instant;
+
 use sed_packet::token::{Command, Detokenize, Detokenizer, MessageError};
 use sed_packet::{Ignore, Uid};
 use sed_spec::preconfig::core::shared::invoking_id::SESSION_MANAGER;
 use sed_spec::preconfig::core::shared::sm_method_id::{CLOSE_SESSION, PROPERTIES, START_SESSION, SYNC_SESSION};
+use tracing::Span;
 
+use crate::error::Error;
 use crate::method_status::MethodStatus;
+use crate::protocol::message::MethodResult;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MethodResultPlaceholder;
 
 impl Detokenize for MethodResultPlaceholder {
@@ -20,6 +27,7 @@ impl Detokenize for MethodResultPlaceholder {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MethodCallPlaceholder {
     StartSession { hsn: u32 },
     SyncSession { hsn: u32 },
@@ -102,6 +110,32 @@ impl Detokenize for MethodCallPlaceholder {
 
         Ok(method_call)
     }
+}
+
+#[derive(Debug)]
+pub struct PendingMethod {
+    pub channel: oneshot::Sender<MethodResult>,
+    pub span: Span,
+    pub deadline: Instant,
+}
+
+/// Retains the pending methods that haven't timed out yet.
+///
+/// A timeout error is sent as a reply to those that timed out.
+///
+/// # Returns
+///
+/// The number of methods that have timed out.
+pub fn retain_alive(time: Instant, queue: &mut VecDeque<PendingMethod>) -> usize {
+    let mut count = 0;
+    while let Some(PendingMethod { deadline, .. }) = queue.front()
+        && deadline <= &time
+    {
+        count += 1;
+        let PendingMethod { channel, span, .. } = queue.pop_front().unwrap();
+        let _ = channel.send((Err(Error::TimedOut), span));
+    }
+    count
 }
 
 fn fetch_add(value: &mut usize, rhs: usize) -> usize {

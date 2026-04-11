@@ -1,47 +1,59 @@
 use std::collections::VecDeque;
 use std::marker::PhantomData;
+use std::time::Instant;
 
 use sed_packet::packet::{PACKET_HEADER_LEN, Packet, SUB_PACKET_HEADER_LEN, SubPacket, SubPacketKind};
-use sed_packet::token::{Command, Detokenize, Detokenizer, Error as TokenError, SorbitDetokenizer, ToTokens as _};
+use sed_packet::token::{Command, Detokenize, Error as TokenError, SorbitDetokenizer, ToTokens as _};
 use sorbit::error::ErrorKind;
 use sorbit::io::{FixedMemoryStream, Seek};
 use sorbit::stream_ser_de::StreamDeserializer;
-use tracing::{Span, trace};
+use tracing::trace;
 
 use crate::error::Error;
 use crate::properties::Properties;
-use crate::protocol::messages::{
-    AbortSession, AssemblePacket, MethodResult, PacketSent, PacketReceived, RemoveSession, SendMethod, SendPacket,
-};
-use crate::protocol::method_structure::{MethodCallPlaceholder, MethodResultPlaceholder};
-use crate::protocol::protocol::{Context, Topic};
+use crate::protocol::message::{CommitBatch, Delete, Message, PacketReceived, SendMethod, SendPacket, SendPacketDone};
+use crate::protocol::method::{MethodCallPlaceholder, MethodResultPlaceholder, PendingMethod, retain_alive};
+use crate::protocol::protocol::{Address, Context};
+use crate::protocol::session_id::SessionId;
 
+#[derive(Debug)]
 pub struct Session {
-    tsn: u32,
-    hsn: u32,
+    session_id: SessionId,
     properties: Properties,
     state: State,
 }
 
 impl Session {
-    fn topic(&self) -> Topic {
-        Topic::SessionLayer { tsn: self.tsn, hsn: self.hsn }
+    pub fn new(session_id: SessionId, properties: Properties) -> Self {
+        Self {
+            session_id,
+            properties,
+            state: State::Active {
+                send_method_queue: VecDeque::new(),
+                receive_buffer: VecDeque::new(),
+                channel_queue: VecDeque::new(),
+            },
+        }
     }
 
-    fn on_send_method(&mut self, context: &mut Context, SendMethod { method, channel, span }: SendMethod) {
-        let topic = self.topic();
+    fn address(&self) -> Address {
+        Address::Session(self.session_id)
+    }
+
+    pub fn send_method(&mut self, context: Context, SendMethod { method, channel, span }: SendMethod) {
+        let address = self.address();
         self.state = match core::mem::replace(&mut self.state, State::Closed) {
             State::Active { mut send_method_queue, receive_buffer, channel_queue } => {
                 trace!(parent: &span, "token to send received");
                 let is_end_of_session = Self::is_end_of_session(&method);
 
                 if send_method_queue.is_empty() {
-                    context.send(topic, AssemblePacket);
+                    context.send(address, Message::CommitBatch(CommitBatch));
                 }
                 send_method_queue.push_back(SendMethod { method, channel, span });
 
                 if !is_end_of_session {
-                    self.on_assemble_packet(context, AssemblePacket);
+                    self.commit_batch(context);
                     State::Closing { receive_buffer, channel_queue }
                 } else {
                     State::Active { send_method_queue, receive_buffer, channel_queue }
@@ -58,8 +70,8 @@ impl Session {
         }
     }
 
-    fn on_assemble_packet(&mut self, context: &mut Context, _event: AssemblePacket) {
-        let topic = self.topic();
+    pub fn commit_batch(&mut self, context: Context) {
+        let topic = self.address();
         match &mut self.state {
             State::Active { send_method_queue, .. } => {
                 let max_method_size =
@@ -70,19 +82,19 @@ impl Session {
                     if method.len() <= max_method_size {
                         let sub_packet = SubPacket { kind: SubPacketKind::Data, length: PhantomData, payload: method };
                         let packet = Packet {
-                            tper_session_number: self.tsn,
-                            host_session_number: self.hsn,
+                            tper_session_number: self.session_id.tsn,
+                            host_session_number: self.session_id.hsn,
                             payload: vec![sub_packet],
                             ..Default::default()
                         };
                         trace!(parent: &span, "wrapped in packet");
                         context.send(
                             topic.clone(),
-                            SendPacket {
-                                source: topic.clone(),
+                            Message::SendPacket(SendPacket {
+                                sender: topic.clone(),
                                 packet,
                                 methods: vec![(channel, span, MethodCallPlaceholder::Session)],
-                            },
+                            }),
                         );
                     } else {
                         let _ = channel.send((Err(Error::MethodTooLarge), span));
@@ -94,11 +106,14 @@ impl Session {
         }
     }
 
-    fn on_interface_complete(&mut self, _context: &mut Context, event: PacketSent) {
+    pub fn send_packet_done(&mut self, context: Context, event: SendPacketDone) {
+        let address = self.address();
         match &mut self.state {
             State::Active { channel_queue, .. } | State::Closing { channel_queue, .. } => {
+                let deadline = Instant::now() + self.properties.trans_timeout;
+                context.send_timeout(address.clone(), deadline);
                 for (channel, span, _) in event.methods {
-                    channel_queue.push_back((channel, span));
+                    channel_queue.push_back(PendingMethod { channel, span, deadline });
                 }
             }
             State::Closed => {
@@ -109,12 +124,22 @@ impl Session {
         }
     }
 
-    fn on_receive_packet(&mut self, context: &mut Context, PacketReceived { packet }: PacketReceived) {
+    pub fn timeout(&mut self, context: Context, time: Instant) {
+        match &mut self.state {
+            State::Active { channel_queue, .. } | State::Closing { channel_queue, .. } => {
+                if retain_alive(time, channel_queue) > 0 {
+                    self.abort(context);
+                }
+            }
+            State::Closed => todo!(),
+        }
+    }
+
+    pub fn packet_reveived(&mut self, context: Context, PacketReceived { packet }: PacketReceived) {
         match &mut self.state {
             State::Active { receive_buffer, channel_queue, .. }
             | State::Closing { receive_buffer, channel_queue, .. } => {
-                assert_eq!(packet.tper_session_number, self.tsn, "the packet was sent to the wrong session");
-                assert_eq!(packet.host_session_number, self.hsn, "the packet was sent to the wrong session");
+                assert_eq!(SessionId::of(&packet), self.session_id, "received packet with incorrect HSN/TSN");
 
                 for SubPacket { kind, payload, .. } in packet.payload {
                     if kind == SubPacketKind::Data {
@@ -122,7 +147,7 @@ impl Session {
                     }
                 }
                 if Self::is_end_of_session(receive_buffer.make_contiguous()) {
-                    self.finalize(context);
+                    self.shutdown(context);
                 } else {
                     let mut detokenizer = Self::make_detokenizer(receive_buffer);
                     match MethodResultPlaceholder::detokenize(&mut detokenizer) {
@@ -133,15 +158,15 @@ impl Session {
                                 .stream_position()
                                 .expect("stream position always succeeds for FixedMemoryStream");
                             let result_tokens: Vec<_> = receive_buffer.drain(..stream_pos as usize).collect();
-                            if let Some((channel, span)) = channel_queue.pop_front() {
+                            if let Some(PendingMethod { channel, span, .. }) = channel_queue.pop_front() {
                                 let _ = channel.send((Ok(result_tokens), span));
                             } else {
                                 // Either the device sent too much stuff, or there is a packet distribution bug.
-                                self.finalize(context);
+                                self.shutdown(context);
                             }
                         }
                         Err(TokenError::SerializationFailed(err)) if err.kind() == ErrorKind::UnexpectedEof => (),
-                        Err(_) => self.finalize(context),
+                        Err(_) => self.shutdown(context),
                     }
                 }
             }
@@ -149,41 +174,50 @@ impl Session {
         }
     }
 
-    pub fn on_abort(&mut self, context: &mut Context, _message: AbortSession) {
-        self.finalize(context);
-    }
-
-    fn finalize(&mut self, context: &mut Context) {
-        match core::mem::replace(&mut self.state, State::Closed) {
-            State::Active { send_method_queue, channel_queue, .. } => {
+    pub fn abort(&mut self, context: Context) {
+        match &self.state {
+            State::Active { .. } => {
                 // Send an END_OF_SESSION to the TPer.
-                let packet = Packet {
-                    tper_session_number: self.tsn,
-                    host_session_number: self.hsn,
+                let packet = self.session_id.assign(Packet {
                     payload: vec![SubPacket {
                         kind: SubPacketKind::Data,
                         length: PhantomData,
                         payload: Command::EndOfSession.to_tokens().expect("serializing a command should never fail"),
                     }],
                     ..Default::default()
-                };
-                context.send(self.topic(), SendPacket { source: self.topic(), packet, methods: vec![] });
+                });
+                context.send(
+                    self.address(),
+                    Message::SendPacket(SendPacket { sender: self.address(), packet, methods: vec![] }),
+                );
+            }
+            _ => (),
+        };
+        self.shutdown(context);
+    }
 
+    fn shutdown(&mut self, context: Context) {
+        self.abort_pending_methods();
+        context.send(Address::Control, Message::Delete(Delete(self.session_id)));
+    }
+
+    fn abort_pending_methods(&mut self) {
+        match core::mem::replace(&mut self.state, State::Closed) {
+            State::Active { send_method_queue, channel_queue, .. } => {
                 for SendMethod { channel, span, .. } in send_method_queue {
                     let _ = channel.send((Err(Error::Aborted), span));
                 }
-                for (channel, span) in channel_queue {
+                for PendingMethod { channel, span, .. } in channel_queue {
                     let _ = channel.send((Err(Error::Aborted), span));
                 }
             }
             State::Closing { channel_queue, .. } => {
-                for (channel, span) in channel_queue {
+                for PendingMethod { channel, span, .. } in channel_queue {
                     let _ = channel.send((Err(Error::Aborted), span));
                 }
             }
             State::Closed => (),
         };
-        context.send(Topic::Stack, RemoveSession { tsn: self.tsn, hsn: self.hsn });
     }
 
     fn make_detokenizer(buffer: &mut VecDeque<u8>) -> SorbitDetokenizer<StreamDeserializer<FixedMemoryStream<&[u8]>>> {
@@ -197,15 +231,16 @@ impl Session {
     }
 }
 
+#[derive(Debug)]
 enum State {
     Active {
         send_method_queue: VecDeque<SendMethod>,
         receive_buffer: VecDeque<u8>,
-        channel_queue: VecDeque<(oneshot::Sender<MethodResult>, Span)>,
+        channel_queue: VecDeque<PendingMethod>,
     },
     Closing {
         receive_buffer: VecDeque<u8>,
-        channel_queue: VecDeque<(oneshot::Sender<MethodResult>, Span)>,
+        channel_queue: VecDeque<PendingMethod>,
     },
     Closed,
 }
