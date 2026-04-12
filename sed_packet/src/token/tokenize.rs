@@ -2,6 +2,7 @@ use sorbit::io::{FixedMemoryStream, GrowingMemoryStream};
 use sorbit::stream_ser_de::{StreamDeserializer, StreamSerializer};
 
 use crate::token::MessageError;
+use crate::token::token::Token;
 
 use super::command::Command;
 use super::error::Error;
@@ -51,6 +52,45 @@ where
     }
 }
 
+pub enum ValueKind {
+    Integer { signed: bool },
+    Bytes,
+    Command,
+    Named,
+    List,
+    Control,
+}
+
+impl ValueKind {
+    fn from_atom(bytes: bool, signed: bool) -> Self {
+        match bytes {
+            true => Self::Bytes,
+            false => Self::Integer { signed },
+        }
+    }
+}
+
+impl From<&Token> for ValueKind {
+    fn from(token: &Token) -> Self {
+        match token {
+            Token::TinyAtom(atom) => Self::from_atom(false, atom.signed),
+            Token::ShortAtom(atom) => Self::from_atom(atom.byte, atom.signed),
+            Token::MediumAtom(atom) => Self::from_atom(atom.byte, atom.signed),
+            Token::LongAtom(atom) => Self::from_atom(atom.byte, atom.signed),
+            Token::StartList => Self::List,
+            Token::EndList => Self::Control,
+            Token::StartName => Self::Named,
+            Token::EndName => Self::Control,
+            Token::Call => Self::Command,
+            Token::EndOfData => Self::Command,
+            Token::EndOfSession => Self::Command,
+            Token::StartTransaction => Self::Control,
+            Token::EndTransaction => Self::Control,
+            Token::Empty => Self::Control,
+        }
+    }
+}
+
 pub trait Tokenizer {
     type Error: MessageError;
 
@@ -72,6 +112,7 @@ pub trait Detokenizer {
     type Error: MessageError;
 
     fn ignore(&mut self, max_recursion: usize) -> Result<(), Self::Error>;
+    fn peek_kind(&mut self) -> Result<ValueKind, Self::Error>;
     fn detokenize_i8(&mut self) -> Result<i8, Self::Error>;
     fn detokenize_i16(&mut self) -> Result<i16, Self::Error>;
     fn detokenize_i32(&mut self) -> Result<i32, Self::Error>;

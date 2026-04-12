@@ -2,6 +2,8 @@ use smallvec::SmallVec;
 
 use crate::token::{Detokenize, Detokenizer, MessageError, Tokenize, Tokenizer};
 
+pub type MaxBytes<const N: usize> = SmallVec<[u8; N]>;
+
 impl<const N: usize> Tokenize for SmallVec<[u8; N]> {
     fn tokenize<T: Tokenizer>(&self, tokenizer: &mut T) -> Result<(), T::Error> {
         tokenizer.tokenize_bytes(self.as_slice())

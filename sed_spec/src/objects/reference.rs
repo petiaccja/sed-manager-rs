@@ -26,6 +26,9 @@ pub type LogListRef = ObjectRef<{ table_id::LOG_LIST.to_u64() }>;
 /// The UID of an object in the MBRControl table.
 pub type MbrControlRef = ObjectRef<{ table_id::MBR_CONTROL.to_u64() }>;
 
+/// The UID of an object in the MethodID table.
+pub type MethodRef = ObjectRef<{ table_id::METHOD_ID.to_u64() }>;
+
 /// The UID of an object in the SP table.
 pub type SpRef = ObjectRef<{ table_id::SP.to_u64() }>;
 

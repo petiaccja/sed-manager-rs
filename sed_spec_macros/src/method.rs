@@ -23,10 +23,11 @@ pub fn tokenize_method_args(input: DeriveInput) -> Result<TokenStream, Error> {
     });
 
     let ident = input.ident;
+    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
 
     Ok(quote! {
         #[automatically_derived]
-        impl ::sed_packet::token::Tokenize for #ident {
+        impl #impl_generics ::sed_packet::token::Tokenize for #ident #ty_generics #where_clause {
             fn tokenize<T: ::sed_packet::token::Tokenizer>(&self, tokenizer: &mut T)
                 -> ::core::result::Result<(), T::Error>
             {
@@ -50,8 +51,6 @@ pub fn detokenize_method_args(input: DeriveInput) -> Result<TokenStream, Error> 
         let ident = member_to_ident(member.clone());
         quote! { let mut #ident = ::core::option::Option::None; }
     });
-
-    let ident = &input.ident;
 
     let mandatory_fields = fields.iter().enumerate().filter_map(|(index, field)| {
         let ident = member_to_ident(field.member.clone());
@@ -87,9 +86,12 @@ pub fn detokenize_method_args(input: DeriveInput) -> Result<TokenStream, Error> 
         }
     });
 
+    let ident = &input.ident;
+    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
+
     Ok(quote! {
         #[automatically_derived]
-        impl ::sed_packet::token::Detokenize for #ident {
+        impl #impl_generics ::sed_packet::token::Detokenize  for #ident  #ty_generics #where_clause {
             fn detokenize<D: ::sed_packet::token::Detokenizer>(detokenizer: &mut D)
                 -> ::core::result::Result<Self, D::Error>
             {
@@ -107,7 +109,7 @@ pub fn detokenize_method_args(input: DeriveInput) -> Result<TokenStream, Error> 
                                 |detokenizer, name| {
                                     match name {
                                         #(#optional_fields)*
-                                        _ => Err(<D::Error as ::sed_packet::token::MessageError>::message("unknown optional field"))
+                                        _ => ::core::result::Result::<(), D::Error>::Err(<D::Error as ::sed_packet::token::MessageError>::message("unknown optional field"))
                                     }
                                 }
                             )?;

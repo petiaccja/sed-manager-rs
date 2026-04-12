@@ -19,8 +19,8 @@ pub fn object(attribute: TokenStream, item: TokenStream) -> TokenStream {
     }
 }
 
-#[proc_macro_derive(TokenizeMethodArguments)]
-pub fn tokenize_method_args(tokens: TokenStream) -> TokenStream {
+#[proc_macro_derive(TokenizeStruct)]
+pub fn tokenize_struct(tokens: TokenStream) -> TokenStream {
     let input = match syn::parse(tokens) {
         Ok(item) => item,
         Err(err) => return err.into_compile_error().into(),
@@ -31,8 +31,8 @@ pub fn tokenize_method_args(tokens: TokenStream) -> TokenStream {
     }
 }
 
-#[proc_macro_derive(DetokenizeMethodArguments)]
-pub fn detokenize_method_args(tokens: TokenStream) -> TokenStream {
+#[proc_macro_derive(DetokenizeStruct)]
+pub fn detokenize_struct(tokens: TokenStream) -> TokenStream {
     let input = match syn::parse(tokens) {
         Ok(item) => item,
         Err(err) => return err.into_compile_error().into(),

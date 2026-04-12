@@ -1,9 +1,9 @@
 use rstest::rstest;
 
 use sed_packet::token::{FromTokens, ToTokens};
-use sed_spec_macros::{DetokenizeMethodArguments, TokenizeMethodArguments};
+use sed_spec_macros::{DetokenizeStruct, TokenizeStruct};
 
-#[derive(Debug, Clone, PartialEq, Eq, DetokenizeMethodArguments, TokenizeMethodArguments)]
+#[derive(Debug, Clone, PartialEq, Eq, DetokenizeStruct, TokenizeStruct)]
 struct TestArgs {
     a: u8,
     b: u16,

@@ -4,13 +4,13 @@ use std::time::Instant;
 
 use sed_packet::packet::{PACKET_HEADER_LEN, Packet, SUB_PACKET_HEADER_LEN, SubPacket, SubPacketKind};
 use sed_packet::token::{Command, Detokenize, Error as TokenError, SorbitDetokenizer, ToTokens as _};
+use sed_spec::methods::Properties;
 use sorbit::error::ErrorKind;
 use sorbit::io::{FixedMemoryStream, Seek};
 use sorbit::stream_ser_de::StreamDeserializer;
 use tracing::trace;
 
 use crate::error::Error;
-use crate::properties::Properties;
 use crate::protocol::message::{CommitBatch, Delete, Message, PacketReceived, SendMethod, SendPacket, SendPacketDone};
 use crate::protocol::method::{MethodCallPlaceholder, MethodResultPlaceholder, PendingMethod, retain_alive};
 use crate::protocol::protocol::{Address, Context};

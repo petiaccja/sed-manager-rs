@@ -4,7 +4,9 @@ pub mod discovery;
 pub mod packet;
 pub mod token;
 
+pub use data_model::bytes::Bytes;
 pub use data_model::ignore::Ignore;
+pub use data_model::max_bytes::MaxBytes;
 pub use data_model::named::Named;
 pub use data_model::object_range::ObjectRange;
 pub use data_model::object_ref::{Field, FieldRef, Object, ObjectRef};

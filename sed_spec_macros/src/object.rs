@@ -178,6 +178,7 @@ fn impl_object_trait(attribute: &Meta, item: &ItemStruct) -> Result<TokenStream,
     Ok(quote! {
         impl ::sed_packet::Object for #self_ty {
             #table
+            type Ref = ::sed_packet::ObjectRef<{Self::TABLE.to_u64()}>;
             #active_fields
             #update
         }

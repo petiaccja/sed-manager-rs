@@ -3,11 +3,11 @@ use std::{
     time::{Duration, Instant},
 };
 
+use sed_spec::methods::Properties;
 use tracing::{Span, trace};
 
 use crate::{
     error::Error,
-    properties::Properties,
     protocol::{
         message::{ComResponseReceived, ComResult, Message, SendComRequest, SendComRequestDone},
         protocol::{Address, Context},

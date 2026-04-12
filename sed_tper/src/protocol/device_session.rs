@@ -6,11 +6,11 @@ use std::{collections::VecDeque, sync::Arc};
 use sed_device::Device;
 use sed_packet::com_id::{HANDLE_COM_ID_RESPONSE_LEN, HandleComIdResponseParams};
 use sed_packet::{com_id::HandleComIdResponse, packet::ComPacket};
+use sed_spec::methods::Properties;
 use sorbit::ser_de::{FromBytes, ToBytes};
 use tracing::Span;
 
 use crate::error::Error;
-use crate::properties::Properties;
 use crate::protocol::message::{
     ComResponseReceived, ComResult, CommitBatch, Message, MethodResult, PacketReceived, SecuritySendDone,
     SendComRequest, SendComRequestDone, SendPacket, SendPacketDone,

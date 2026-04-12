@@ -54,9 +54,9 @@ trait Atom {
 #[sorbit(byte_order=big_endian)]
 pub struct TinyAtom {
     #[sorbit(bit_field=_0, repr=u8, bits=6)]
-    signed: bool,
+    pub signed: bool,
     #[sorbit(bit_field=_0, bits=0..6)]
-    data: u8,
+    pub data: u8,
 }
 
 impl Atom for TinyAtom {
@@ -68,14 +68,14 @@ impl Atom for TinyAtom {
 #[sorbit(byte_order=big_endian)]
 pub struct ShortAtom {
     #[sorbit(bit_field=_0, repr=u8, bits=6..8, value=constant(Tag::ShortAtom as u8 >> 6))]
-    tag: PhantomData<u8>,
+    pub tag: PhantomData<u8>,
     #[sorbit(bit_field=_0, bits=5)]
-    byte: bool,
+    pub byte: bool,
     #[sorbit(bit_field=_0, bits=4)]
-    signed: bool,
+    pub signed: bool,
     #[sorbit(bit_field=_0, bits=0..4, value=len(data))]
-    length: PhantomData<u8>,
-    data: Vec<u8>,
+    pub length: PhantomData<u8>,
+    pub data: Vec<u8>,
 }
 
 impl Atom for ShortAtom {
@@ -87,14 +87,14 @@ impl Atom for ShortAtom {
 #[sorbit(byte_order=big_endian)]
 pub struct MediumAtom {
     #[sorbit(bit_field=_0, repr=u16, bits=13..16, value=constant(Tag::MediumAtom as u8 >> 5))]
-    tag: PhantomData<u8>,
+    pub tag: PhantomData<u8>,
     #[sorbit(bit_field=_0, bits=12)]
-    byte: bool,
+    pub byte: bool,
     #[sorbit(bit_field=_0, bits=11)]
-    signed: bool,
+    pub signed: bool,
     #[sorbit(bit_field=_0, bits=0..11, value=len(data))]
-    length: PhantomData<u16>,
-    data: Vec<u8>,
+    pub length: PhantomData<u16>,
+    pub data: Vec<u8>,
 }
 
 impl Atom for MediumAtom {
@@ -106,14 +106,14 @@ impl Atom for MediumAtom {
 #[sorbit(byte_order=big_endian)]
 pub struct LongAtom {
     #[sorbit(bit_field=_0, repr=u32, bits=28..32, value=constant(Tag::LongAtom as u8 >> 4))]
-    tag: PhantomData<u8>,
+    pub tag: PhantomData<u8>,
     #[sorbit(bit_field=_0, bits=25)]
-    byte: bool,
+    pub byte: bool,
     #[sorbit(bit_field=_0, bits=24)]
-    signed: bool,
+    pub signed: bool,
     #[sorbit(bit_field=_0, bits=0..24, value=len(data))]
-    length: PhantomData<u32>,
-    data: Vec<u8>,
+    pub length: PhantomData<u32>,
+    pub data: Vec<u8>,
 }
 
 impl Atom for LongAtom {

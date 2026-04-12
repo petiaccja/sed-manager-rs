@@ -11,6 +11,7 @@ use crate::token::{Detokenize, Detokenizer, MessageError, Tokenize, Tokenizer};
 
 pub trait Object {
     const TABLE: TableRef;
+    type Ref;
 
     fn active_fields(&self) -> Vec<u16>;
     fn update(&mut self, other: Self);

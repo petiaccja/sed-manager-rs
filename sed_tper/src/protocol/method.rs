@@ -3,12 +3,12 @@ use std::time::Instant;
 
 use sed_packet::token::{Command, Detokenize, Detokenizer, MessageError};
 use sed_packet::{Ignore, Uid};
+use sed_spec::methods::MethodStatus;
 use sed_spec::preconfig::core::shared::invoking_id::SESSION_MANAGER;
 use sed_spec::preconfig::core::shared::sm_method_id::{CLOSE_SESSION, PROPERTIES, START_SESSION, SYNC_SESSION};
 use tracing::Span;
 
 use crate::error::Error;
-use crate::method_status::MethodStatus;
 use crate::protocol::message::MethodResult;
 
 #[derive(Debug, Clone, PartialEq, Eq)]

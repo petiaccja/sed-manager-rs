@@ -5,6 +5,7 @@ use crate::token::{Detokenizer, Tokenize, Tokenizer};
 use super::command::Command;
 use super::error::Error;
 use super::token::Token;
+use super::tokenize::ValueKind;
 
 pub struct SorbitTokenizer<S>
 where
@@ -168,6 +169,11 @@ where
             Token::EndTransaction => self.read_token().map(|_| ()),
             Token::Empty => self.read_token().map(|_| ()),
         }
+    }
+
+    fn peek_kind(&mut self) -> Result<ValueKind, Self::Error> {
+        let next = self.peek_token()?;
+        Ok(ValueKind::from(next))
     }
 
     fn detokenize_i8(&mut self) -> Result<i8, Error> {
