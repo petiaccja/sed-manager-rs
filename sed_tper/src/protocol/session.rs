@@ -12,7 +12,7 @@ use tracing::trace;
 
 use crate::error::Error;
 use crate::protocol::message::{CommitBatch, Delete, Message, PacketReceived, SendMethod, SendPacket, SendPacketDone};
-use crate::protocol::method::{MethodCallPlaceholder, MethodResultPlaceholder, PendingMethod, retain_alive};
+use crate::protocol::method::{AnyMethodResult, RecvQueuedMethod, WriteQueuedMethod, retain_alive};
 use crate::protocol::protocol::{Address, Context};
 use crate::protocol::session_id::SessionId;
 
@@ -93,7 +93,7 @@ impl Session {
                             Message::SendPacket(SendPacket {
                                 sender: topic.clone(),
                                 packet,
-                                methods: vec![(channel, span, MethodCallPlaceholder::Session)],
+                                methods: vec![WriteQueuedMethod { channel, span, mgmt_session_meta: None }],
                             }),
                         );
                     } else {
@@ -112,12 +112,12 @@ impl Session {
             State::Active { channel_queue, .. } | State::Closing { channel_queue, .. } => {
                 let deadline = Instant::now() + self.properties.trans_timeout;
                 context.send_timeout(address.clone(), deadline);
-                for (channel, span, _) in event.methods {
-                    channel_queue.push_back(PendingMethod { channel, span, deadline });
+                for WriteQueuedMethod { channel, span, .. } in event.methods {
+                    channel_queue.push_back(RecvQueuedMethod { channel, span, deadline, mgmt_session_meta: None });
                 }
             }
             State::Closed => {
-                for (channel, span, _) in event.methods {
+                for WriteQueuedMethod { channel, span, .. } in event.methods {
                     let _ = channel.send((Err(Error::Closed), span));
                 }
             }
@@ -150,7 +150,7 @@ impl Session {
                     self.shutdown(context);
                 } else {
                     let mut detokenizer = Self::make_detokenizer(receive_buffer);
-                    match MethodResultPlaceholder::detokenize(&mut detokenizer) {
+                    match AnyMethodResult::detokenize(&mut detokenizer) {
                         Ok(_) => {
                             let stream_pos = detokenizer
                                 .take()
@@ -158,7 +158,7 @@ impl Session {
                                 .stream_position()
                                 .expect("stream position always succeeds for FixedMemoryStream");
                             let result_tokens: Vec<_> = receive_buffer.drain(..stream_pos as usize).collect();
-                            if let Some(PendingMethod { channel, span, .. }) = channel_queue.pop_front() {
+                            if let Some(RecvQueuedMethod { channel, span, .. }) = channel_queue.pop_front() {
                                 let _ = channel.send((Ok(result_tokens), span));
                             } else {
                                 // Either the device sent too much stuff, or there is a packet distribution bug.
@@ -207,12 +207,12 @@ impl Session {
                 for SendMethod { channel, span, .. } in send_method_queue {
                     let _ = channel.send((Err(Error::Aborted), span));
                 }
-                for PendingMethod { channel, span, .. } in channel_queue {
+                for RecvQueuedMethod { channel, span, .. } in channel_queue {
                     let _ = channel.send((Err(Error::Aborted), span));
                 }
             }
             State::Closing { channel_queue, .. } => {
-                for PendingMethod { channel, span, .. } in channel_queue {
+                for RecvQueuedMethod { channel, span, .. } in channel_queue {
                     let _ = channel.send((Err(Error::Aborted), span));
                 }
             }
@@ -236,11 +236,11 @@ enum State {
     Active {
         send_method_queue: VecDeque<SendMethod>,
         receive_buffer: VecDeque<u8>,
-        channel_queue: VecDeque<PendingMethod>,
+        channel_queue: VecDeque<RecvQueuedMethod>,
     },
     Closing {
         receive_buffer: VecDeque<u8>,
-        channel_queue: VecDeque<PendingMethod>,
+        channel_queue: VecDeque<RecvQueuedMethod>,
     },
     Closed,
 }

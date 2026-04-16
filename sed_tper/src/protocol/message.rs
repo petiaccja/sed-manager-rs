@@ -3,15 +3,16 @@ use std::time::Instant;
 use sed_device::Error as DeviceError;
 use sed_packet::com_id::{HandleComIdRequest, HandleComIdResponse};
 use sed_packet::packet::{ComPacket, Packet};
+use sed_spec::methods::Properties;
 use tracing::Span;
 
 use crate::error::Error;
-use crate::protocol::method::MethodCallPlaceholder;
+use crate::protocol::method::WriteQueuedMethod;
 use crate::protocol::protocol::Address;
 use crate::protocol::session_id::SessionId;
 
-pub type MethodResult = (Result<Vec<u8>, Error>, Span);
-pub type ComResult = (Result<HandleComIdResponse, Error>, Span);
+pub type MethodResponse = (Result<Vec<u8>, Error>, Span);
+pub type ComResponse = (Result<HandleComIdResponse, Error>, Span);
 
 #[non_exhaustive]
 #[derive(Debug)]
@@ -37,7 +38,7 @@ pub enum Message {
 #[derive(Debug)]
 pub struct SendMethod {
     pub method: Vec<u8>,
-    pub channel: oneshot::Sender<MethodResult>,
+    pub channel: oneshot::Sender<MethodResponse>,
     pub span: Span,
 }
 
@@ -45,7 +46,7 @@ pub struct SendMethod {
 #[derive(Debug)]
 pub struct SendComRequest {
     pub request: HandleComIdRequest,
-    pub channel: oneshot::Sender<ComResult>,
+    pub channel: oneshot::Sender<ComResponse>,
     pub span: Span,
 }
 
@@ -66,7 +67,10 @@ pub struct Abort;
 
 /// Spawn a new session by creating its data structure.
 #[derive(Debug)]
-pub struct Spawn(pub SessionId);
+pub struct Spawn {
+    pub id: SessionId,
+    pub properties: Properties,
+}
 
 /// Delete the data structures associated with the session.
 ///
@@ -82,21 +86,21 @@ pub struct Delete(pub SessionId);
 pub struct SendPacket {
     pub sender: Address,
     pub packet: Packet,
-    pub methods: Vec<(oneshot::Sender<MethodResult>, Span, MethodCallPlaceholder)>,
+    pub methods: Vec<WriteQueuedMethod>,
 }
 
 /// An event that is emitted when sending a packet to the device is done.
 #[derive(Debug)]
 pub struct SendPacketDone {
     pub status: Result<(), Error>,
-    pub methods: Vec<(oneshot::Sender<MethodResult>, Span, MethodCallPlaceholder)>,
+    pub methods: Vec<WriteQueuedMethod>,
 }
 
 /// An event that is emitted when sending a ComID request to the device is done.
 #[derive(Debug)]
 pub struct SendComRequestDone {
     pub status: Result<(), Error>,
-    pub channel: oneshot::Sender<ComResult>,
+    pub channel: oneshot::Sender<ComResponse>,
     pub span: Span,
 }
 
@@ -110,13 +114,6 @@ pub struct PacketReceived {
 #[derive(Debug)]
 pub struct ComResponseReceived {
     pub response: HandleComIdResponse,
-}
-
-/// The timeout event is sent when the instant has passed.
-#[derive(Debug)]
-pub struct Timeout {
-    pub address: Address,
-    pub time: Instant,
 }
 
 #[derive(Debug)]

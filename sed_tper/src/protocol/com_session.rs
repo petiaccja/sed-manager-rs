@@ -9,7 +9,7 @@ use tracing::{Span, trace};
 use crate::{
     error::Error,
     protocol::{
-        message::{ComResponseReceived, ComResult, Message, SendComRequest, SendComRequestDone},
+        message::{ComResponseReceived, ComResponse, Message, SendComRequest, SendComRequestDone},
         protocol::{Address, Context},
     },
 };
@@ -26,7 +26,7 @@ pub struct ComSession {
 enum State {
     Idle,
     AwaitingSend,
-    AwaitingReceipt { channel: oneshot::Sender<ComResult>, span: Span, deadline: Instant },
+    AwaitingReceipt { channel: oneshot::Sender<ComResponse>, span: Span, deadline: Instant },
 }
 
 impl ComSession {

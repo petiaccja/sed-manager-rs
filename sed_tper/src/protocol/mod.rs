@@ -8,4 +8,4 @@ mod retry;
 mod session;
 mod session_id;
 
-pub use protocol::Protocol;
+pub use protocol::{Controller, Protocol};

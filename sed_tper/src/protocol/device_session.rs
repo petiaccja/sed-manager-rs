@@ -12,10 +12,10 @@ use tracing::Span;
 
 use crate::error::Error;
 use crate::protocol::message::{
-    ComResponseReceived, ComResult, CommitBatch, Message, MethodResult, PacketReceived, SecuritySendDone,
-    SendComRequest, SendComRequestDone, SendPacket, SendPacketDone,
+    ComResponseReceived, ComResponse, CommitBatch, Message, PacketReceived, SecuritySendDone, SendComRequest,
+    SendComRequestDone, SendPacket, SendPacketDone,
 };
-use crate::protocol::method::MethodCallPlaceholder;
+use crate::protocol::method::WriteQueuedMethod;
 use crate::protocol::protocol::{Address, Context};
 use crate::protocol::retry::Retry;
 use crate::protocol::session_id::SessionId;
@@ -191,7 +191,7 @@ impl core::fmt::Debug for DeviceSession {
 enum PacketProtocolState {
     Processing,
     Ready,
-    Sending { sender: Address, methods: Vec<(oneshot::Sender<MethodResult>, Span, MethodCallPlaceholder)> },
+    Sending { sender: Address, methods: Vec<WriteQueuedMethod> },
     Receiving,
 }
 
@@ -199,7 +199,7 @@ enum PacketProtocolState {
 enum ComIdProtocolState {
     Processing,
     Ready,
-    Sending { channel: oneshot::Sender<ComResult>, span: Span },
+    Sending { channel: oneshot::Sender<ComResponse>, span: Span },
     Receiving,
 }
 

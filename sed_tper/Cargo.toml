@@ -18,3 +18,4 @@ num_enum.workspace = true
 
 [dev-dependencies]
 rstest.workspace = true
+tokio.workspace = true

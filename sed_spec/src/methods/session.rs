@@ -9,13 +9,13 @@ use crate::{
     objects::{AceRef, AuthorityRef, MethodRef},
 };
 
-#[derive(Debug, DetokenizeStruct, TokenizeStruct)]
+#[derive(Debug, Clone, PartialEq, Eq, DetokenizeStruct, TokenizeStruct)]
 pub struct Authenticate {
     authority: AuthorityRef,
     proof: Option<MaxBytes<32>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AuthenticateResult {
     Success(bool),
     Challenge(Bytes),
@@ -40,29 +40,29 @@ impl Detokenize for AuthenticateResult {
     }
 }
 
-#[derive(Debug, DetokenizeStruct, TokenizeStruct)]
+#[derive(Debug, Clone, PartialEq, Eq, DetokenizeStruct, TokenizeStruct)]
 pub struct Next<const TABLE: u64> {
-    where_: Option<ObjectRef<TABLE>>,
-    count: Option<u64>,
+    pub where_: Option<ObjectRef<TABLE>>,
+    pub count: Option<u64>,
 }
 
-#[derive(Debug, DetokenizeStruct, TokenizeStruct)]
+#[derive(Debug, Clone, PartialEq, Eq, DetokenizeStruct, TokenizeStruct)]
 pub struct NextResult<const TABLE: u64> {
-    result: Vec<ObjectRef<TABLE>>,
+    pub result: Vec<ObjectRef<TABLE>>,
 }
 
-#[derive(Debug, DetokenizeStruct, TokenizeStruct)]
+#[derive(Debug, Clone, PartialEq, Eq, DetokenizeStruct, TokenizeStruct)]
 pub struct GetAcl {
-    invoking_id: Uid,
-    method_id: MethodRef,
+    pub invoking_id: Uid,
+    pub method_id: MethodRef,
 }
 
 // This is tokenized in a weird way. The fact that the "access control list" is
 // a list itself is ignored, and the ACE references are tokenized directly into
 // the method argument list.
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GetAclResult {
-    acl: Vec<AceRef>,
+    pub acl: Vec<AceRef>,
 }
 
 impl Tokenize for GetAclResult {
@@ -77,76 +77,76 @@ impl Detokenize for GetAclResult {
     }
 }
 
-#[derive(Debug, DetokenizeStruct, TokenizeStruct)]
+#[derive(Debug, Clone, PartialEq, Eq, DetokenizeStruct, TokenizeStruct)]
 pub struct GenKey {
-    public_exponent: Option<u64>,
-    pin_length: Option<u8>,
+    pub public_exponent: Option<u64>,
+    pub pin_length: Option<u8>,
 }
 
-#[derive(Debug, DetokenizeStruct, TokenizeStruct)]
+#[derive(Debug, Clone, PartialEq, Eq, DetokenizeStruct, TokenizeStruct)]
 pub struct GenKeyResult;
 
-#[derive(Debug, DetokenizeStruct, TokenizeStruct)]
+#[derive(Debug, Clone, PartialEq, Eq, DetokenizeStruct, TokenizeStruct)]
 pub struct Revert;
 
-#[derive(Debug, DetokenizeStruct, TokenizeStruct)]
+#[derive(Debug, Clone, PartialEq, Eq, DetokenizeStruct, TokenizeStruct)]
 pub struct RevertResult;
 
-#[derive(Debug, DetokenizeStruct, TokenizeStruct)]
+#[derive(Debug, Clone, PartialEq, Eq, DetokenizeStruct, TokenizeStruct)]
 pub struct RevertSp {
-    keep_global_range_key: Option<bool>,
+    pub keep_global_range_key: Option<bool>,
 }
 
-#[derive(Debug, DetokenizeStruct, TokenizeStruct)]
+#[derive(Debug, Clone, PartialEq, Eq, DetokenizeStruct, TokenizeStruct)]
 pub struct RevertSpResult;
 
-#[derive(Debug, DetokenizeStruct, TokenizeStruct)]
+#[derive(Debug, Clone, PartialEq, Eq, DetokenizeStruct, TokenizeStruct)]
 pub struct Activate;
 
-#[derive(Debug, DetokenizeStruct, TokenizeStruct)]
+#[derive(Debug, Clone, PartialEq, Eq, DetokenizeStruct, TokenizeStruct)]
 pub struct ActivateResult;
 
-#[derive(Debug, DetokenizeStruct, TokenizeStruct)]
+#[derive(Debug, Clone, PartialEq, Eq, DetokenizeStruct, TokenizeStruct)]
 pub struct Random {
-    count: u64,
-    buffer_out: Option<CellBlock>,
+    pub count: u64,
+    pub buffer_out: Option<CellBlock>,
 }
 
-#[derive(Debug, DetokenizeStruct, TokenizeStruct)]
+#[derive(Debug, Clone, PartialEq, Eq, DetokenizeStruct, TokenizeStruct)]
 pub struct RandomResult {
-    result: Bytes,
+    pub result: Bytes,
 }
 
-#[derive(Debug, DetokenizeStruct, TokenizeStruct)]
+#[derive(Debug, Clone, PartialEq, Eq, DetokenizeStruct, TokenizeStruct)]
 pub struct Get {
-    cell_block: CellBlock,
+    pub cell_block: CellBlock,
 }
 
-#[derive(Debug, DetokenizeStruct, TokenizeStruct)]
+#[derive(Debug, Clone, PartialEq, Eq, DetokenizeStruct, TokenizeStruct)]
 pub struct GetBytesResult {
-    result: Bytes,
+    pub result: Bytes,
 }
 
-#[derive(Debug, DetokenizeStruct, TokenizeStruct)]
+#[derive(Debug, Clone, PartialEq, Eq, DetokenizeStruct, TokenizeStruct)]
 pub struct GetObjectResult<O: Tokenize + Detokenize> {
-    result: O,
+    pub result: O,
 }
 
-#[derive(Debug, DetokenizeStruct, TokenizeStruct)]
+#[derive(Debug, Clone, PartialEq, Eq, DetokenizeStruct, TokenizeStruct)]
 pub struct SetObject<O>
 where
     O: Object + Tokenize + Detokenize,
     O::Ref: Tokenize + Detokenize,
 {
-    where_: Option<O::Ref>,
-    values: Option<O>,
+    pub where_: Option<O::Ref>,
+    pub values: Option<O>,
 }
 
-#[derive(Debug, DetokenizeStruct, TokenizeStruct)]
+#[derive(Debug, Clone, PartialEq, Eq, DetokenizeStruct, TokenizeStruct)]
 pub struct SetBytes {
-    where_: Option<u64>,
-    values: Option<Bytes>,
+    pub where_: Option<u64>,
+    pub values: Option<Bytes>,
 }
 
-#[derive(Debug, DetokenizeStruct, TokenizeStruct)]
+#[derive(Debug, Clone, PartialEq, Eq, DetokenizeStruct, TokenizeStruct)]
 pub struct SetResult;
