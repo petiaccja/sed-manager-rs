@@ -9,7 +9,7 @@ use tracing::{Span, trace};
 use crate::{
     error::Error,
     protocol::{
-        message::{ComResponseReceived, ComResponse, Message, SendComRequest, SendComRequestDone},
+        message::{ComResponse, ComResponseReceived, Message, SendComRequest, SendComRequestDone},
         protocol::{Address, Context},
     },
 };
@@ -86,5 +86,52 @@ impl ComSession {
                 let _ = channel.send((Ok(response), span));
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use sed_packet::com_id::HandleComIdRequest;
+    use tracing::{Span, instrument};
+
+    use crate::protocol::{
+        com_session::ComSession,
+        message::{Message, SendComRequest},
+        protocol::{Address, Context},
+    };
+
+    use googletest::matchers::*;
+    use googletest::prelude::*;
+
+    #[test]
+    #[instrument]
+    fn send_com_request() {
+        let mut com_session = ComSession::new();
+        let (context, queue) = Context::mock();
+        let (tx, _rx) = oneshot::channel();
+        let request = HandleComIdRequest::stack_reset(0x12, 0x00);
+        com_session
+            .send_com_request(context, SendComRequest { request: request.clone(), channel: tx, span: Span::current() });
+
+        let (address, content) = queue.try_recv().unwrap();
+        assert_that!(address, eq(&Address::DeviceSession));
+        assert_that!(content, field!(&Message::SendComRequest.0, ref field!(SendComRequest.request, eq(&request))));
+        assert!(queue.is_empty());
+    }
+
+    #[test]
+    #[instrument]
+    fn send_com_request_done_error() {
+        let mut com_session = ComSession::new();
+        let (context, queue) = Context::mock();
+        let (tx, _rx) = oneshot::channel();
+        let request = HandleComIdRequest::stack_reset(0x12, 0x00);
+        com_session
+            .send_com_request(context, SendComRequest { request: request.clone(), channel: tx, span: Span::current() });
+
+        let (address, content) = queue.try_recv().unwrap();
+        assert_that!(address, eq(&Address::DeviceSession));
+        assert_that!(content, field!(&Message::SendComRequest.0, ref field!(SendComRequest.request, eq(&request))));
+        assert!(queue.is_empty());
     }
 }

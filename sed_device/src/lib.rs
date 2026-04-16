@@ -5,6 +5,8 @@
 
 mod device;
 mod error;
+#[cfg(feature = "test-utils")]
+pub mod mock_device;
 mod shared;
 
 #[cfg(target_os = "windows")]

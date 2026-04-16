@@ -19,3 +19,5 @@ num_enum.workspace = true
 [dev-dependencies]
 rstest.workspace = true
 tokio.workspace = true
+sed_device = { workspace = true, features = ["test-utils"] }
+googletest.workspace = true

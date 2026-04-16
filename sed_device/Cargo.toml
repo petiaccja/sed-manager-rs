@@ -3,9 +3,15 @@ name = "sed_device"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+test-utils = []
+
 [dependencies]
 sorbit.workspace = true
 thiserror.workspace = true
 num_enum.workspace = true
 winapi.workspace = true
 nix.workspace = true
+
+[dev-dependencies]
+sed_device = { path = ".", features = ["test-utils"] }

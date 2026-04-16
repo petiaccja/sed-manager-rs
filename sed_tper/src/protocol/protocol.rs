@@ -262,6 +262,12 @@ impl Context {
             .instrument(span),
         );
     }
+
+    #[cfg(test)]
+    pub fn mock() -> (Self, async_channel::Receiver<(Address, Message)>) {
+        let (tx, rx) = async_channel::unbounded();
+        (Self { message_queue: tx }, rx)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
