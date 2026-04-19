@@ -11,6 +11,19 @@ impl MockDevice {
         Self { scenario: Mutex::new(scenario.enumerate().collect()) }
     }
 
+    pub fn check(&self) {
+        let expected_event = {
+            let mut scenario = self.scenario.lock().unwrap();
+            scenario.pop_front()
+        };
+
+        if let Some((index, expected_event)) = expected_event {
+            let display_name = expected_event.name().to_owned();
+            let display_index = index + 1;
+            panic!("event `{}. {}` is expected, but didn't happen", display_index, display_name)
+        }
+    }
+
     fn next_event(&self, security_protocol: u8, protocol_specific: [u8; 2], len: usize) -> (usize, MockEvent) {
         let expected_event = {
             let mut scenario = self.scenario.lock().unwrap();
@@ -106,6 +119,14 @@ impl Device for MockDevice {
                 }
                 result
             }
+        }
+    }
+}
+
+impl Drop for MockDevice {
+    fn drop(&mut self) {
+        if !std::thread::panicking() {
+            self.check();
         }
     }
 }

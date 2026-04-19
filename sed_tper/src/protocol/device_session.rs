@@ -8,11 +8,11 @@ use sed_packet::com_id::{HANDLE_COM_ID_RESPONSE_LEN, HandleComIdResponseParams};
 use sed_packet::{com_id::HandleComIdResponse, packet::ComPacket};
 use sed_spec::methods::Properties;
 use sorbit::ser_de::{FromBytes, ToBytes};
-use tracing::Span;
+use tracing::{Instrument, Span, debug, debug_span, instrument};
 
 use crate::error::Error;
 use crate::protocol::message::{
-    ComResponseReceived, ComResponse, CommitBatch, Message, PacketReceived, SecuritySendDone, SendComRequest,
+    ComResponse, ComResponseReceived, CommitBatch, Message, PacketReceived, SecuritySendDone, SendComRequest,
     SendComRequestDone, SendPacket, SendPacketDone,
 };
 use crate::protocol::method::WriteQueuedMethod;
@@ -87,13 +87,13 @@ impl DeviceSession {
     }
 
     pub fn security_recv_com_id_request_done(&mut self, context: Context, result: Result<HandleComIdResponse, Error>) {
-        self.packet_state = match replace(&mut self.packet_state, PacketProtocolState::Processing) {
-            PacketProtocolState::Receiving => match result {
+        self.com_id_state = match replace(&mut self.com_id_state, ComIdProtocolState::Processing) {
+            ComIdProtocolState::Receiving => match result {
                 Ok(response) => {
                     context.send(Address::ComSession, Message::ComResponseReceived(ComResponseReceived { response }));
-                    PacketProtocolState::Ready
+                    ComIdProtocolState::Ready
                 }
-                Err(_) => PacketProtocolState::Ready,
+                Err(_) => ComIdProtocolState::Ready,
             },
             state => state,
         }
@@ -125,7 +125,7 @@ impl DeviceSession {
             ComIdProtocolState::Ready => {
                 if let Some(SendComRequest { request, channel, span }) = self.com_id_queue.pop_front() {
                     let data = request.to_bytes().expect("should not normally fail, but replace it with a check");
-                    context.send_future(Self::ADDRESS, security_send(self.device.clone(), 0x01, self.com_id, data));
+                    context.send_future(Self::ADDRESS, security_send(self.device.clone(), 0x02, self.com_id, data));
                     ComIdProtocolState::Sending { channel, span }
                 } else {
                     ComIdProtocolState::Ready
@@ -209,6 +209,7 @@ async fn security_send(device: Arc<dyn Device>, protocol: u8, com_id: u16, data:
 }
 
 async fn security_recv_com_packet(device: Arc<dyn Device>, com_id: u16) -> Message {
+    #[instrument(level = "debug", skip(device))]
     async fn _security_recv_com_packet(device: Arc<dyn Device>, com_id: u16) -> Result<ComPacket, Error> {
         let mut retry = Retry::new(Instant::now() + Properties::ASSUMED.def_trans_timeout);
         let mut transfer_len = 1024;
@@ -216,13 +217,14 @@ async fn security_recv_com_packet(device: Arc<dyn Device>, com_id: u16) -> Messa
         loop {
             let bytes = device.security_recv(0x01, com_id.to_be_bytes(), transfer_len)?;
             let response = ComPacket::from_bytes(&bytes).map_err(|err| Error::InvalidComIdResponse(err))?;
+            debug!(response = debug(&response));
             let outstanding_data = response.outstanding_data;
             transfer_len = min(max(response.min_transfer, outstanding_data), 256 * 1024) as usize;
             merged.append(response);
             if outstanding_data == 0 {
                 break Ok(merged);
             } else if outstanding_data == 1 {
-                retry.sleep().await?;
+                retry.sleep().instrument(debug_span!("sleep")).await?;
             }
         }
     }
@@ -243,4 +245,355 @@ async fn security_recv_com_id_request(device: Arc<dyn Device>, com_id: u16) -> M
         }
     }
     Message::SecurityRecvDoneComIdRequest(_security_recv_com_id_request(device, com_id).await)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use std::marker::PhantomData;
+
+    use crate::protocol::message::{PacketReceived, SendPacket};
+    use crate::protocol::session_id::SessionId;
+
+    use sed_device::Error as DeviceError;
+    use sed_device::mock_device::{MockDevice, MockEvent};
+    use sed_packet::com_id::{HandleComIdRequest, StackResetStatus};
+    use sed_packet::packet::{Packet, SubPacket, SubPacketKind};
+
+    fn create_request_com_packet() -> ComPacket {
+        ComPacket {
+            com_id: 0x0001,
+            com_id_ext: 0x0000,
+            payload: vec![Packet {
+                tper_session_number: 1,
+                host_session_number: 2,
+                payload: vec![SubPacket { kind: SubPacketKind::Data, length: PhantomData, payload: vec![0x01] }],
+                ..Default::default()
+            }],
+            ..Default::default()
+        }
+    }
+
+    fn create_reply_com_packet() -> ComPacket {
+        ComPacket {
+            com_id: 0x0001,
+            com_id_ext: 0x0000,
+            payload: vec![Packet {
+                tper_session_number: 1,
+                host_session_number: 2,
+                payload: vec![SubPacket { kind: SubPacketKind::Data, length: PhantomData, payload: vec![0x02] }],
+                ..Default::default()
+            }],
+            ..Default::default()
+        }
+    }
+
+    #[tokio::test]
+    async fn send_packet_sequence() {
+        // This is a rather lengthy test, but it probably makes more sense to
+        // test the entire process than to manually set the state machine
+
+        let request_com_packet = create_request_com_packet();
+        let reply_com_packet = create_reply_com_packet();
+
+        let events = [
+            MockEvent::Send {
+                name: Some("send method call".into()),
+                security_protocol: 0x01,
+                protocol_specific: 0x0001_u16.to_be_bytes(),
+                expected: request_com_packet.to_bytes().unwrap(),
+                result: Ok(()),
+            },
+            MockEvent::Recv {
+                name: Some("recv method result".into()),
+                security_protocol: 0x01,
+                protocol_specific: 0x0001_u16.to_be_bytes(),
+                result: Ok(reply_com_packet.to_bytes().unwrap()),
+            },
+        ];
+
+        let device = Arc::new(MockDevice::new(events.into_iter()));
+        let mut device_session = DeviceSession::new(0x0001, 0x0000, device.clone());
+        let (context, queue) = Context::mock();
+
+        // Issue SendPacket message.
+        let session_id = SessionId { hsn: 2, tsn: 1 };
+        let sender_address = Address::from(session_id);
+        device_session.send_packet(
+            context.clone(),
+            SendPacket {
+                sender: sender_address.clone(),
+                packet: request_com_packet.payload[0].clone(),
+                methods: vec![],
+            },
+        );
+
+        // Loop back CommitBatch message.
+        assert!(matches!(queue.try_recv(), Ok((Address::DeviceSession, Message::CommitBatch(_)))));
+        device_session.commit_batch(context.clone());
+
+        // Loop back SecuritySendDone message.
+        // - Let the IF-SEND task run.
+        tokio::task::yield_now().await;
+        assert!(matches!(queue.try_recv(), Ok((Address::DeviceSession, Message::SecuritySendDone(_)))));
+        device_session.security_send_done(context.clone(), SecuritySendDone { protocol: 0x01, result: Ok(()) });
+
+        // Make sure the original session got informed via a SendPacketDone message.
+        assert!(matches!(
+            queue.try_recv(),
+            Ok((Address::Session(SessionId { hsn: 2, tsn: 1 }), Message::SendPacketDone(_)))
+        ));
+
+        // Loop back SecurityRecvComPacketDone message.
+        // - Let the IF-RECV task run.
+        tokio::task::yield_now().await;
+        assert!(matches!(queue.try_recv(), Ok((Address::DeviceSession, Message::SecurityRecvDoneComPacket(_)))));
+        device_session.security_recv_com_packet_done(context.clone(), Ok(reply_com_packet));
+
+        // Verify state is back to Ready.
+        assert!(matches!(device_session.packet_state, PacketProtocolState::Ready));
+
+        // Make sure the original session got the packet via PacketReceived.
+        let (received_address, received_message) = queue.try_recv().expect("should have received PacketReceived");
+        assert_eq!(received_address, Address::Session(session_id));
+        match received_message {
+            Message::PacketReceived(PacketReceived { packet }) => {
+                assert_eq!(packet.tper_session_number, session_id.tsn);
+                assert_eq!(packet.host_session_number, session_id.hsn);
+            }
+            _ => panic!("expected PacketReceived message but got: {:?}", received_message),
+        }
+
+        device.check();
+    }
+
+    #[tokio::test]
+    async fn send_packet_interface_send_failure() {
+        let request_com_packet = create_request_com_packet();
+
+        let events = [MockEvent::Send {
+            name: Some("send method call".into()),
+            security_protocol: 0x01,
+            protocol_specific: 0x0001_u16.to_be_bytes(),
+            expected: request_com_packet.to_bytes().unwrap(),
+            result: Err(DeviceError::NotSupported),
+        }];
+
+        let device = Arc::new(MockDevice::new(events.into_iter()));
+        let mut device_session = DeviceSession::new(0x0001, 0x0000, device.clone());
+        let (context, queue) = Context::mock();
+
+        // Enqueue a packet for sending.
+        let session_id = SessionId { hsn: 2, tsn: 1 };
+        let sender_address = Address::from(session_id);
+        device_session.packet_queue.push_back(SendPacket {
+            sender: sender_address.clone(),
+            packet: request_com_packet.payload[0].clone(),
+            methods: vec![],
+        });
+
+        // Initiate IF-SEND by committing the packets.
+        device_session.commit_batch(context.clone());
+
+        // Loop back SecuritySendDone message.
+        // - Let the IF-SEND task run.
+        tokio::task::yield_now().await;
+        assert!(matches!(
+            queue.try_recv(),
+            Ok((Address::DeviceSession, Message::SecuritySendDone(SecuritySendDone { result: Err(_), .. })))
+        ));
+        device_session.security_send_done(
+            context.clone(),
+            SecuritySendDone { protocol: 0x01, result: Err(DeviceError::NotSupported) },
+        );
+
+        // Make sure the original session got informed via a SendPacketDone message.
+        assert!(matches!(
+            queue.try_recv(),
+            Ok((
+                Address::Session(SessionId { hsn: 2, tsn: 1 }),
+                Message::SendPacketDone(SendPacketDone { status: Err(_), .. })
+            ))
+        ));
+
+        device.check();
+    }
+
+    #[tokio::test]
+    async fn send_packet_recv_failure() {
+        let events = [];
+        let device = Arc::new(MockDevice::new(events.into_iter()));
+        let mut device_session = DeviceSession::new(0x0001, 0x0000, device.clone());
+        let (context, queue) = Context::mock();
+
+        // Set up state for the test.
+        device_session.packet_state = PacketProtocolState::Receiving;
+
+        // Simulate a SecurityRecvComPacketDone message.
+        device_session.security_recv_com_packet_done(
+            context.clone(),
+            Err(Error::SecurityCommandFailed(DeviceError::NotSupported)),
+        );
+
+        // Verify state is back to Ready.
+        assert!(matches!(device_session.packet_state, PacketProtocolState::Ready));
+
+        // Make sure the original session got the packet via PacketReceived.
+        assert!(queue.is_empty());
+
+        device.check();
+    }
+
+    #[tokio::test]
+    async fn send_com_id_sequence() {
+        // This is a rather lengthy test, but it probably makes more sense to
+        // test the entire process than to manually set the state machine
+
+        let request = HandleComIdRequest::stack_reset(1, 0);
+        let reply = HandleComIdResponse {
+            com_id: 1,
+            com_id_ext: 0,
+            params: HandleComIdResponseParams::StackReset {
+                available_data_length: 0,
+                status: StackResetStatus::Success,
+            },
+        };
+
+        let events = [
+            MockEvent::Send {
+                name: Some("send method call".into()),
+                security_protocol: 0x02,
+                protocol_specific: 0x0001_u16.to_be_bytes(),
+                expected: request.to_bytes().unwrap(),
+                result: Ok(()),
+            },
+            MockEvent::Recv {
+                name: Some("recv method result".into()),
+                security_protocol: 0x02,
+                protocol_specific: 0x0001_u16.to_be_bytes(),
+                result: Ok(reply.to_bytes().unwrap()),
+            },
+        ];
+
+        let device = Arc::new(MockDevice::new(events.into_iter()));
+        let mut device_session = DeviceSession::new(0x0001, 0x0000, device.clone());
+        let (channel, _) = oneshot::channel();
+        let (context, queue) = Context::mock();
+
+        // Issue SendComRequest message.
+        device_session.send_com_request(context.clone(), SendComRequest { request, channel, span: Span::current() });
+
+        // Loop back CommitBatch message.
+        assert!(matches!(queue.try_recv(), Ok((Address::DeviceSession, Message::CommitBatch(_)))));
+        device_session.commit_batch(context.clone());
+
+        // Loop back SecuritySendDone message.
+        // - Let the IF-SEND task run.
+        tokio::task::yield_now().await;
+        let message = queue.try_recv();
+        assert!(matches!(message, Ok((Address::DeviceSession, Message::SecuritySendDone(_)))), "{message:?}");
+        device_session.security_send_done(context.clone(), SecuritySendDone { protocol: 0x02, result: Ok(()) });
+
+        // Make sure the original session got informed via a SendComRequestDone message.
+        let message = queue.try_recv();
+        assert!(matches!(message, Ok((Address::ComSession, Message::SendComRequestDone(_)))), "{message:?}");
+
+        // Loop back SecurityRecvDoneComIdRequest message.
+        // - Let the IF-RECV task run.
+        tokio::task::yield_now().await;
+        assert!(matches!(queue.try_recv(), Ok((Address::DeviceSession, Message::SecurityRecvDoneComIdRequest(_)))));
+        device_session.security_recv_com_id_request_done(context.clone(), Ok(reply.clone()));
+
+        // Verify state is back to Ready.
+        assert!(
+            matches!(device_session.com_id_state, ComIdProtocolState::Ready),
+            "{:?}",
+            device_session.com_id_state
+        );
+
+        // Make sure the original session got the packet via PacketReceived.
+        let (received_address, received_message) = queue.try_recv().expect("should have received ComResponseReceived");
+        assert_eq!(received_address, Address::ComSession);
+        match received_message {
+            Message::ComResponseReceived(ComResponseReceived { response: response_ }) => {
+                assert_eq!(response_, reply);
+            }
+            _ => panic!("expected ComResponseReceived message but got: {:?}", received_message),
+        }
+
+        device.check();
+    }
+
+    #[tokio::test]
+    async fn send_com_id_interface_send_failure() {
+        let request = HandleComIdRequest::stack_reset(1, 0);
+
+        let events = [MockEvent::Send {
+            name: Some("send method call".into()),
+            security_protocol: 0x02,
+            protocol_specific: 0x0001_u16.to_be_bytes(),
+            expected: request.to_bytes().unwrap(),
+            result: Err(DeviceError::NotSupported),
+        }];
+
+        let device = Arc::new(MockDevice::new(events.into_iter()));
+        let mut device_session = DeviceSession::new(0x0001, 0x0000, device.clone());
+        let (channel, _) = oneshot::channel();
+        let (context, queue) = Context::mock();
+
+        // Issue SendComRequest message.
+        device_session.send_com_request(context.clone(), SendComRequest { request, channel, span: Span::current() });
+
+        // Loop back CommitBatch message.
+        assert!(matches!(queue.try_recv(), Ok((Address::DeviceSession, Message::CommitBatch(_)))));
+        device_session.commit_batch(context.clone());
+
+        // Loop back SecuritySendDone message.
+        // - Let the IF-SEND task run.
+        tokio::task::yield_now().await;
+        let message = queue.try_recv();
+        assert!(matches!(message, Ok((Address::DeviceSession, Message::SecuritySendDone(_)))), "{message:?}");
+        device_session.security_send_done(
+            context.clone(),
+            SecuritySendDone { protocol: 0x02, result: Err(DeviceError::NotSupported) },
+        );
+
+        // Make sure the original session got informed via a SendComRequestDone message.
+        let message = queue.try_recv();
+        assert!(
+            matches!(
+                message,
+                Ok((Address::ComSession, Message::SendComRequestDone(SendComRequestDone { status: Err(_), .. })))
+            ),
+            "{message:?}"
+        );
+
+        device.check();
+    }
+
+    #[tokio::test]
+    async fn send_com_id_recv_failure() {
+        let events = [];
+        let device = Arc::new(MockDevice::new(events.into_iter()));
+        let mut device_session = DeviceSession::new(0x0001, 0x0000, device.clone());
+        let (context, queue) = Context::mock();
+
+        // Set up state for the test.
+        device_session.com_id_state = ComIdProtocolState::Receiving;
+
+        // Simulate a SecurityRecvComIdRequestDone message.
+        device_session.security_recv_com_id_request_done(
+            context.clone(),
+            Err(Error::SecurityCommandFailed(DeviceError::NotSupported)),
+        );
+
+        // Verify state is back to Ready.
+        assert!(matches!(device_session.com_id_state, ComIdProtocolState::Ready));
+
+        // Make sure the original session got the packet via PacketReceived.
+        assert!(queue.is_empty());
+
+        device.check();
+    }
 }

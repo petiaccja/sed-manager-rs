@@ -10,7 +10,7 @@ use sed_packet::com_id::HandleComIdRequest;
 use sed_packet::packet::{COM_PACKET_HEADER_LEN, PACKET_HEADER_LEN, SUB_PACKET_HEADER_LEN};
 use sed_spec::methods::Properties;
 use tracing::field::Empty;
-use tracing::{Instrument, Span, instrument, trace_span};
+use tracing::{Instrument, Span, debug, debug_span, instrument, trace_span};
 
 use crate::protocol::device_session::DeviceSession;
 use crate::protocol::message::{ComResponse, Message, MethodResponse, SendComRequest, SendMethod};
@@ -66,16 +66,20 @@ impl Protocol {
     ///
     /// This initializes the protocol stack, but no messages will be delivered
     /// until you call [`run`](Self::run).
-    pub fn new(com_id: u16, com_id_ext: u16, device: Arc<dyn Device>) -> Self {
+    pub fn new(com_id: u16, com_id_ext: u16, device: Arc<dyn Device>) -> (Self, Controller) {
         let (tx, rx) = async_channel::unbounded();
-        Self {
-            device_session: DeviceSession::new(com_id, com_id_ext, device),
-            com_session: ComSession::new(),
-            management_session: ManagementSession::new(CAPABILITIES),
-            sessions: HashMap::new(),
-            message_queue: rx,
-            context: Context { message_queue: tx },
-        }
+        let context = Context { message_queue: tx };
+        (
+            Self {
+                device_session: DeviceSession::new(com_id, com_id_ext, device),
+                com_session: ComSession::new(CAPABILITIES.def_trans_timeout),
+                management_session: ManagementSession::new(CAPABILITIES),
+                sessions: HashMap::new(),
+                message_queue: rx,
+                context: context.clone(),
+            },
+            Controller { context },
+        )
     }
 
     /// Send and receive messages until the protocol stack is shut down.
@@ -90,7 +94,9 @@ impl Protocol {
     /// timeouts to ensure a graceful shutdown. This will leave the protocol
     /// stack on the device's side ready for a subsequent session, but might
     /// take a little time.
+    #[instrument(level = "debug", fields(num_contexts))]
     pub async fn run(mut self) {
+        Span::current().record("num_contexts", self.message_queue.sender_count());
         while let Ok((address, message)) = self.message_queue.recv().await {
             self.dispatch(address, message);
 
@@ -99,14 +105,17 @@ impl Protocol {
             // sessions would hold a context while waiting for an IF command
             // from the device, and external clients would hold a context to
             // issue commands.
-            if self.message_queue.sender_count() == 1 {
+            let sender_count = self.message_queue.sender_count();
+            debug!(sender_count = sender_count);
+            if sender_count == 1 {
                 break;
             }
         }
     }
 
-    #[instrument]
+    #[instrument(level = "debug")]
     fn dispatch(&mut self, address: Address, message: Message) {
+        Span::current().record("message", tracing::field::debug(&message));
         match address {
             Address::Control => self.dispatch_control(message),
             Address::DeviceSession => self.dispatch_device_session(message),
@@ -116,7 +125,7 @@ impl Protocol {
         }
     }
 
-    #[instrument(fields(dropped = Empty, missing_session = Empty, duplicate_session = Empty))]
+    #[instrument(level = "debug", fields(dropped = Empty, missing_session = Empty, duplicate_session = Empty))]
     fn dispatch_control(&mut self, message: Message) {
         match message {
             Message::Spawn(message) => match self.sessions.entry(message.id) {
@@ -134,7 +143,7 @@ impl Protocol {
         }
     }
 
-    #[instrument(fields(dropped = Empty))]
+    #[instrument(level = "debug", fields(dropped = Empty))]
     fn dispatch_device_session(&mut self, message: Message) {
         let context = self.context.clone();
         let unit = &mut self.device_session;
@@ -149,7 +158,7 @@ impl Protocol {
         }
     }
 
-    #[instrument(fields(dropped = Empty))]
+    #[instrument(level = "debug", fields(dropped = Empty))]
     fn dispatch_com_session(&mut self, message: Message) {
         let context = self.context.clone();
         let unit = &mut self.com_session;
@@ -162,7 +171,7 @@ impl Protocol {
         }
     }
 
-    #[instrument(fields(dropped = Empty))]
+    #[instrument(level = "debug", fields(dropped = Empty))]
     fn dispatch_management_session(&mut self, message: Message) {
         let context = self.context.clone();
         let unit = &mut self.management_session;
@@ -175,7 +184,7 @@ impl Protocol {
         }
     }
 
-    #[instrument(fields(dropped = Empty, missing_session = Empty))]
+    #[instrument(level = "debug", fields(dropped = Empty, missing_session = Empty))]
     fn dispatch_session(&mut self, session_id: SessionId, message: Message) {
         let context = self.context.clone();
         if let Some(unit) = self.sessions.get_mut(&session_id) {
@@ -202,27 +211,27 @@ pub struct Controller {
 
 impl Controller {
     /// Perform an remote procedure call using tokenized methods.
-    pub fn call(
-        &self,
-        session_id: Option<SessionId>,
-        method_tokens: Vec<u8>,
-        span: Span,
-    ) -> oneshot::Receiver<MethodResponse> {
+    #[instrument(level = "debug")]
+    pub fn call(&self, session_id: Option<SessionId>, method_tokens: Vec<u8>) -> oneshot::Receiver<MethodResponse> {
         let address = match session_id {
             Some(session_id) => Address::from(session_id),
             None => Address::ManagementSession,
         };
         let (tx, rx) = oneshot::channel();
-        self.context
-            .send(address, Message::SendMethod(SendMethod { method: method_tokens, channel: tx, span }));
+        self.context.send(
+            address,
+            Message::SendMethod(SendMethod { method: method_tokens, channel: tx, span: Span::current() }),
+        );
         rx
     }
 
     /// Send a ComID request to the device.
-    pub fn com_id_request(&self, request: HandleComIdRequest, span: Span) -> oneshot::Receiver<ComResponse> {
+    #[instrument(level = "debug")]
+    pub fn com_id_request(&self, request: HandleComIdRequest) -> oneshot::Receiver<ComResponse> {
         let address = Address::ComSession;
         let (tx, rx) = oneshot::channel();
-        self.context.send(address, Message::SendComRequest(SendComRequest { request, channel: tx, span }));
+        self.context
+            .send(address, Message::SendComRequest(SendComRequest { request, channel: tx, span: Span::current() }));
         rx
     }
 }
@@ -233,33 +242,37 @@ pub struct Context {
 }
 
 impl Context {
+    #[instrument(level = "debug")]
     pub fn send(&self, address: Address, message: Message) {
         self.message_queue
             .try_send((address, message))
             .expect("bug: not using on unbounded channel or the channel got closed too early");
     }
 
+    #[instrument(level = "debug")]
     pub fn send_timeout(&self, address: Address, time: Instant) {
         self.send_future(address, async move {
-            sleep_until(time.clone()).instrument(trace_span!("timeout")).await;
+            // This check is only necessary for testing with zero timeouts.
+            if Instant::now() < time {
+                sleep_until(time.clone()).instrument(trace_span!("timeout")).await;
+            }
             Message::Timeout(time)
         });
     }
 
+    #[instrument(level = "debug", skip(future))]
     pub fn send_future<F>(&self, address: Address, future: F)
     where
         F: Future<Output = Message> + Send + 'static,
     {
         let message_queue = self.message_queue.clone();
-        let span = trace_span!("send_future");
-        span.follows_from(Span::current());
         spawn(
             async move {
                 let message = future.await;
                 // The protocol has already been shut down, but that's okay.
                 let _ = message_queue.try_send((address, message));
             }
-            .instrument(span),
+            .in_current_span(),
         );
     }
 
@@ -267,6 +280,22 @@ impl Context {
     pub fn mock() -> (Self, async_channel::Receiver<(Address, Message)>) {
         let (tx, rx) = async_channel::unbounded();
         (Self { message_queue: tx }, rx)
+    }
+}
+
+impl Drop for Context {
+    fn drop(&mut self) {
+        // When the last outside context is dropped, we need to wake up the run
+        // task or otherwise it would be waiting for a message forever. It would
+        // be better to send a notification unconditionally, but contexts are
+        // created and dropped a lot, so it may not be the best for performance.
+        let _span = debug_span!("context_drop").entered();
+        if self.message_queue.sender_count() <= 2 {
+            let _span = debug_span!("notify").entered();
+            if self.message_queue.try_send((Address::Control, Message::ContextDropped)).is_ok() {
+                let _span = debug_span!("notify_done").entered();
+            }
+        }
     }
 }
 

@@ -15,9 +15,9 @@ thiserror.workspace = true
 tracing.workspace = true
 num_enum.workspace = true
 
-
 [dev-dependencies]
-rstest.workspace = true
-tokio.workspace = true
+sed_telemetry = { workspace = true, features = ["test-utils"] }
 sed_device = { workspace = true, features = ["test-utils"] }
+rstest.workspace = true
+tokio = { workspace = true, features = ["macros"] }
 googletest.workspace = true

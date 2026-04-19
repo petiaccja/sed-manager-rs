@@ -11,8 +11,8 @@ use crate::protocol::method::WriteQueuedMethod;
 use crate::protocol::protocol::Address;
 use crate::protocol::session_id::SessionId;
 
-pub type MethodResponse = (Result<Vec<u8>, Error>, Span);
-pub type ComResponse = (Result<HandleComIdResponse, Error>, Span);
+pub type MethodResponse = Result<Vec<u8>, Error>;
+pub type ComResponse = Result<HandleComIdResponse, Error>;
 
 #[non_exhaustive]
 #[derive(Debug)]
@@ -32,6 +32,7 @@ pub enum Message {
     SecuritySendDone(SecuritySendDone),
     SecurityRecvDoneComPacket(Result<ComPacket, Error>),
     SecurityRecvDoneComIdRequest(Result<HandleComIdResponse, Error>),
+    ContextDropped,
 }
 
 /// Initiate an RPC method call to the device.
@@ -66,7 +67,7 @@ pub struct CommitBatch;
 pub struct Abort;
 
 /// Spawn a new session by creating its data structure.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Spawn {
     pub id: SessionId,
     pub properties: Properties,

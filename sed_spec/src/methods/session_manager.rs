@@ -88,6 +88,25 @@ pub struct StartSession {
     pub signed_hash: Option<Bytes>,
 }
 
+impl StartSession {
+    pub fn new(host_session_id: u32, spid: SpRef) -> Self {
+        Self {
+            host_session_id,
+            spid,
+            write: true,
+            host_challenge: None,
+            host_exchange_authority: None,
+            host_exchange_cert: None,
+            host_signing_authority: None,
+            host_signing_cert: None,
+            session_timeout: None,
+            trans_timeout: None,
+            initial_credit: None,
+            signed_hash: None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, DetokenizeStruct, TokenizeStruct)]
 pub struct SyncSession {
     pub host_session_id: u32,
@@ -98,6 +117,21 @@ pub struct SyncSession {
     pub trans_timeout: Option<u32>,
     pub initial_credit: Option<u32>,
     pub signed_hash: Option<Bytes>,
+}
+
+impl SyncSession {
+    pub fn new(host_session_id: u32, sp_session_id: u32) -> Self {
+        Self {
+            host_session_id,
+            sp_session_id,
+            sp_challenge: None,
+            sp_exchange_cert: None,
+            sp_signing_cert: None,
+            trans_timeout: None,
+            initial_credit: None,
+            signed_hash: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, DetokenizeStruct, TokenizeStruct)]

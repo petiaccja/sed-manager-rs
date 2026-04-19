@@ -1,6 +1,10 @@
+mod cancellation_token;
+
 use std::pin::Pin;
 use std::task::Poll;
 use std::time::{Duration, Instant};
+
+pub use cancellation_token::{CancellationSender, CancellationToken, cancellation_channel};
 
 pub struct JoinHandle<T> {
     inner: tokio::task::JoinHandle<T>,

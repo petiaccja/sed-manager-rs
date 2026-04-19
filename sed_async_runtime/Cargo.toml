@@ -5,3 +5,5 @@ edition = "2024"
 
 [dependencies]
 tokio = { workspace = true, features = ["rt", "time"] }
+oneshot.workspace = true
+pin-project.workspace = true

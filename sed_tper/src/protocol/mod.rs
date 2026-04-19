@@ -9,3 +9,4 @@ mod session;
 mod session_id;
 
 pub use protocol::{Controller, Protocol};
+pub use session_id::SessionId;

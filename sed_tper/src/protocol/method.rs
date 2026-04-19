@@ -71,8 +71,36 @@ pub fn retain_alive(time: Instant, queue: &mut VecDeque<RecvQueuedMethod>) -> us
         && deadline <= &time
     {
         count += 1;
-        let RecvQueuedMethod { channel, span, .. } = queue.pop_front().unwrap();
-        let _ = channel.send((Err(Error::TimedOut), span));
+        let RecvQueuedMethod { channel, .. } = queue.pop_front().unwrap();
+        let _ = channel.send(Err(Error::TimedOut));
     }
     count
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use super::*;
+
+    #[test]
+    fn retain_alive_() {
+        let now = Instant::now();
+        let mut queue = VecDeque::from([
+            RecvQueuedMethod {
+                channel: oneshot::channel().0,
+                span: Span::current(),
+                deadline: now + Duration::from_millis(0),
+                mgmt_session_meta: None,
+            },
+            RecvQueuedMethod {
+                channel: oneshot::channel().0,
+                span: Span::current(),
+                deadline: now + Duration::from_millis(1000),
+                mgmt_session_meta: None,
+            },
+        ]);
+        assert_eq!(retain_alive(now + Duration::from_millis(500), &mut queue), 1);
+        assert_eq!(queue[0].deadline, now + Duration::from_millis(1000));
+    }
 }
