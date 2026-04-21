@@ -4,7 +4,7 @@ use std::pin::Pin;
 use std::task::Poll;
 use std::time::{Duration, Instant};
 
-pub use cancellation_token::{CancellationSender, CancellationToken, cancellation_channel};
+pub use cancellation_token::{CancelSender, CancelToken, cancel_channel};
 
 pub struct JoinHandle<T> {
     inner: tokio::task::JoinHandle<T>,
@@ -46,4 +46,18 @@ pub fn sleep(duration: Duration) -> impl Future<Output = ()> {
 
 pub fn sleep_until(time: Instant) -> impl Future<Output = ()> {
     tokio::time::sleep_until(time.into())
+}
+
+pub async fn timeout<F>(duration: Duration, future: F) -> Result<F::Output, ()>
+where
+    F: Future,
+{
+    tokio::time::timeout(duration, future).await.map_err(|_| ())
+}
+
+pub async fn timeout_at<F>(time: Instant, future: F) -> Result<F::Output, ()>
+where
+    F: Future,
+{
+    tokio::time::timeout_at(time.into(), future).await.map_err(|_| ())
 }

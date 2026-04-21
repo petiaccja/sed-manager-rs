@@ -45,21 +45,30 @@ impl DeviceSession {
         }
     }
 
+    #[instrument(level = "debug")]
     pub fn send_packet(&mut self, context: Context, message: SendPacket) {
+        for WriteQueuedMethod { span, .. } in &message.methods {
+            Span::current().follows_from(span);
+        }
         self.packet_queue.push_back(message);
-        context.send(Self::ADDRESS, Message::CommitBatch(CommitBatch));
+        context.send(Self::ADDRESS, Message::CommitBatch(CommitBatch(Span::current())));
     }
 
+    #[instrument(level = "debug")]
     pub fn send_com_request(&mut self, context: Context, message: SendComRequest) {
+        Span::current().follows_from(&message.span);
         self.com_id_queue.push_back(message);
-        context.send(Self::ADDRESS, Message::CommitBatch(CommitBatch));
+        context.send(Self::ADDRESS, Message::CommitBatch(CommitBatch(Span::current())));
     }
 
-    pub fn commit_batch(&mut self, context: Context) {
+    #[instrument(level = "debug")]
+    pub fn commit_batch(&mut self, context: Context, message: CommitBatch) {
+        Span::current().follows_from(message.0);
         self.commit_batch_com_packet(context.clone());
         self.commit_batch_com_id_request(context);
     }
 
+    #[instrument(level = "debug")]
     pub fn security_send_done(&mut self, context: Context, SecuritySendDone { protocol, result }: SecuritySendDone) {
         match protocol {
             0x01 => self.security_send_done_com_packet(context, result),
@@ -69,6 +78,7 @@ impl DeviceSession {
         }
     }
 
+    #[instrument(level = "debug")]
     pub fn security_recv_com_packet_done(&mut self, context: Context, result: Result<ComPacket, Error>) {
         self.packet_state = match replace(&mut self.packet_state, PacketProtocolState::Processing) {
             PacketProtocolState::Receiving => match result {
@@ -86,6 +96,7 @@ impl DeviceSession {
         }
     }
 
+    #[instrument(level = "debug")]
     pub fn security_recv_com_id_request_done(&mut self, context: Context, result: Result<HandleComIdResponse, Error>) {
         self.com_id_state = match replace(&mut self.com_id_state, ComIdProtocolState::Processing) {
             ComIdProtocolState::Receiving => match result {
@@ -99,6 +110,7 @@ impl DeviceSession {
         }
     }
 
+    #[instrument(level = "debug")]
     fn commit_batch_com_packet(&mut self, context: Context) {
         self.packet_state = match replace(&mut self.packet_state, PacketProtocolState::Processing) {
             PacketProtocolState::Ready => {
@@ -120,6 +132,7 @@ impl DeviceSession {
         }
     }
 
+    #[instrument(level = "debug")]
     fn commit_batch_com_id_request(&mut self, context: Context) {
         self.com_id_state = match replace(&mut self.com_id_state, ComIdProtocolState::Processing) {
             ComIdProtocolState::Ready => {
@@ -135,6 +148,7 @@ impl DeviceSession {
         }
     }
 
+    #[instrument(level = "debug")]
     fn security_send_done_com_packet(&mut self, context: Context, result: Result<(), sed_device::Error>) {
         self.packet_state = match replace(&mut self.packet_state, PacketProtocolState::Processing) {
             PacketProtocolState::Sending { sender, methods } => match result {
@@ -152,6 +166,7 @@ impl DeviceSession {
         }
     }
 
+    #[instrument(level = "debug")]
     fn security_send_done_com_id_request(&mut self, context: Context, result: Result<(), sed_device::Error>) {
         let sender = Address::ComSession;
         self.com_id_state = match replace(&mut self.com_id_state, ComIdProtocolState::Processing) {
@@ -232,6 +247,7 @@ async fn security_recv_com_packet(device: Arc<dyn Device>, com_id: u16) -> Messa
 }
 
 async fn security_recv_com_id_request(device: Arc<dyn Device>, com_id: u16) -> Message {
+    #[instrument(level = "debug", skip(device))]
     async fn _security_recv_com_id_request(device: Arc<dyn Device>, com_id: u16) -> Result<HandleComIdResponse, Error> {
         let mut retry = Retry::new(Instant::now() + Properties::ASSUMED.def_trans_timeout);
         loop {
@@ -331,7 +347,7 @@ mod tests {
 
         // Loop back CommitBatch message.
         assert!(matches!(queue.try_recv(), Ok((Address::DeviceSession, Message::CommitBatch(_)))));
-        device_session.commit_batch(context.clone());
+        device_session.commit_batch(context.clone(), CommitBatch(Span::current()));
 
         // Loop back SecuritySendDone message.
         // - Let the IF-SEND task run.
@@ -394,7 +410,7 @@ mod tests {
         });
 
         // Initiate IF-SEND by committing the packets.
-        device_session.commit_batch(context.clone());
+        device_session.commit_batch(context.clone(), CommitBatch(Span::current()));
 
         // Loop back SecuritySendDone message.
         // - Let the IF-SEND task run.
@@ -486,7 +502,7 @@ mod tests {
 
         // Loop back CommitBatch message.
         assert!(matches!(queue.try_recv(), Ok((Address::DeviceSession, Message::CommitBatch(_)))));
-        device_session.commit_batch(context.clone());
+        device_session.commit_batch(context.clone(), CommitBatch(Span::current()));
 
         // Loop back SecuritySendDone message.
         // - Let the IF-SEND task run.
@@ -547,7 +563,7 @@ mod tests {
 
         // Loop back CommitBatch message.
         assert!(matches!(queue.try_recv(), Ok((Address::DeviceSession, Message::CommitBatch(_)))));
-        device_session.commit_batch(context.clone());
+        device_session.commit_batch(context.clone(), CommitBatch(Span::current()));
 
         // Loop back SecuritySendDone message.
         // - Let the IF-SEND task run.

@@ -2,6 +2,7 @@ use std::collections::{HashMap, VecDeque};
 use std::marker::PhantomData;
 use std::time::Instant;
 
+use sed_async_runtime::{CancelSender, cancel_channel};
 use sed_packet::packet::{PACKET_HEADER_LEN, Packet, SUB_PACKET_HEADER_LEN, SubPacket, SubPacketKind};
 
 use sed_packet::token::{Detokenize as _, Error as TokenError, FromTokens as _, SorbitDetokenizer};
@@ -11,7 +12,7 @@ use sed_spec::methods::{
 use sorbit::error::ErrorKind;
 use sorbit::io::{FixedMemoryStream, Seek as _};
 use sorbit::stream_ser_de::StreamDeserializer;
-use tracing::trace;
+use tracing::{debug_span, instrument, trace};
 
 use crate::error::Error;
 use crate::protocol::message::{Abort, Message, PacketReceived, SendMethod, SendPacket, SendPacketDone, Spawn};
@@ -41,6 +42,7 @@ impl ManagementSession {
         }
     }
 
+    #[instrument(level = "debug")]
     pub fn send_method(&mut self, context: Context, SendMethod { method, channel, span }: SendMethod) {
         trace!(parent: &span, "token to send received");
         let Ok(call) = MgmtMethodCallSend::from_tokens(&method) else {
@@ -68,6 +70,7 @@ impl ManagementSession {
         }
     }
 
+    #[instrument(level = "debug")]
     pub fn send_packet_done(&mut self, context: Context, SendPacketDone { status, methods }: SendPacketDone) {
         for WriteQueuedMethod { channel, span, mgmt_session_meta } in methods {
             match &status {
@@ -78,11 +81,13 @@ impl ManagementSession {
                     match mgmt_session_meta.0 {
                         MgmtMethodCallSend::StartSession { hsn } => {
                             let deadline = Instant::now() + self.capabilities.def_trans_timeout;
-                            context.send_timeout(Self::ADDRESS, deadline);
+                            let (cancel_token, cancel_sender) = cancel_channel();
+                            context.send_timeout(Self::ADDRESS, deadline, Some(cancel_token));
                             self.sync_session_queue.entry(hsn).or_default().push_back(RecvQueuedMethod {
                                 channel,
                                 span,
                                 deadline,
+                                cancel_sender: Some(cancel_sender),
                                 mgmt_session_meta: Some(mgmt_session_meta.1.into()),
                             });
                         }
@@ -96,6 +101,7 @@ impl ManagementSession {
         }
     }
 
+    #[instrument(level = "debug")]
     pub fn timeout(&mut self, time: Instant) {
         for (_, queue) in &mut self.sync_session_queue {
             retain_alive(time, queue);
@@ -103,6 +109,7 @@ impl ManagementSession {
         self.sync_session_queue.retain(|_, queue| !queue.is_empty());
     }
 
+    #[instrument(level = "debug")]
     pub fn packet_received(&mut self, context: Context, PacketReceived { packet }: PacketReceived) {
         assert_eq!(packet.tper_session_number, 0, "the packet was sent to the wrong session");
         assert_eq!(packet.host_session_number, 0, "the packet was sent to the wrong session");
@@ -127,11 +134,13 @@ impl ManagementSession {
                 match &response.params {
                     MgmtMethodCallParams::SyncSession(SyncSession { host_session_id, sp_session_id, .. }) => {
                         if let Some(pending) = self.sync_session_queue.get_mut(&host_session_id) {
-                            if let Some(RecvQueuedMethod { channel, span, mgmt_session_meta, .. }) = pending.pop_front()
+                            if let Some(RecvQueuedMethod { channel, span, cancel_sender, mgmt_session_meta, .. }) =
+                                pending.pop_front()
                             {
+                                let _span = debug_span!("packet_received").entered().follows_from(span);
                                 let properties =
                                     *mgmt_session_meta.expect("SM methods must always have meta data, wrong address?");
-                                trace!(parent: &span, "sent to response channel");
+                                cancel_sender.map(CancelSender::cancel);
                                 let _ = channel.send(Ok(method_tokens));
                                 if response.status == MethodStatus::Success {
                                     context.send(
@@ -174,7 +183,8 @@ impl ManagementSession {
     fn reset(&mut self) {
         self.receive_buffer.clear();
         for pending in core::mem::replace(&mut self.sync_session_queue, HashMap::new()).into_values() {
-            for RecvQueuedMethod { channel, .. } in pending {
+            for RecvQueuedMethod { channel, cancel_sender, .. } in pending {
+                cancel_sender.map(CancelSender::cancel);
                 let _ = channel.send(Err(Error::Aborted));
             }
         }
@@ -324,11 +334,13 @@ mod tests {
             ..Properties::ASSUMED
         });
         let (tx, rx) = oneshot::channel();
+        let (_cancel_token, cancel_sender) = cancel_channel();
 
         mgmt_session.sync_session_queue.entry(1).or_default().push_back(RecvQueuedMethod {
             channel: tx,
             span: Span::current(),
             deadline: Instant::now(),
+            cancel_sender: Some(cancel_sender),
             mgmt_session_meta: Some(Properties::ASSUMED.into()),
         });
 
@@ -347,6 +359,7 @@ mod tests {
         });
         let (context, queue) = Context::mock();
         let (tx, rx) = oneshot::channel();
+        let (_cancel_token, cancel_sender) = cancel_channel();
 
         let reply = create_response();
         let packet = SessionId { hsn: 0, tsn: 0 }.assign(Packet {
@@ -362,6 +375,7 @@ mod tests {
             channel: tx,
             span: Span::current(),
             deadline: Instant::now(),
+            cancel_sender: Some(cancel_sender),
             mgmt_session_meta: Some(Properties::ASSUMED.into()),
         });
 

@@ -1,6 +1,7 @@
 use std::collections::VecDeque;
 use std::time::Instant;
 
+use sed_async_runtime::CancelSender;
 use sed_packet::Ignore;
 use sed_packet::token::{Detokenize, Detokenizer, MessageError};
 use sed_spec::methods::{MethodResult, MgmtMethodCall, MgmtMethodCallParams, Properties};
@@ -54,6 +55,7 @@ pub struct RecvQueuedMethod {
     pub channel: oneshot::Sender<MethodResponse>,
     pub span: Span,
     pub deadline: Instant,
+    pub cancel_sender: Option<CancelSender>,
     /// This is information is required by the management session.
     pub mgmt_session_meta: Option<Box<Properties>>,
 }
@@ -81,6 +83,8 @@ pub fn retain_alive(time: Instant, queue: &mut VecDeque<RecvQueuedMethod>) -> us
 mod tests {
     use std::time::Duration;
 
+    use sed_async_runtime::cancel_channel;
+
     use super::*;
 
     #[test]
@@ -91,12 +95,14 @@ mod tests {
                 channel: oneshot::channel().0,
                 span: Span::current(),
                 deadline: now + Duration::from_millis(0),
+                cancel_sender: Some(cancel_channel().1),
                 mgmt_session_meta: None,
             },
             RecvQueuedMethod {
                 channel: oneshot::channel().0,
                 span: Span::current(),
                 deadline: now + Duration::from_millis(1000),
+                cancel_sender: Some(cancel_channel().1),
                 mgmt_session_meta: None,
             },
         ]);

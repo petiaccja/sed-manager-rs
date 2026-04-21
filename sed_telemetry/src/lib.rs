@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::path::Path;
 use std::str::FromStr;
+use std::sync::Mutex;
 use std::time::Duration;
 
 use opentelemetry::KeyValue;
@@ -13,13 +14,21 @@ use tracing_subscriber::layer::{Context, SubscriberExt as _};
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{Layer, Registry};
 
+static GLOBAL_SUBSCRIBER_SET: Mutex<bool> = Mutex::new(false);
+
 #[cfg(feature = "test-utils")]
 mod test_utils {
     #[rstest::fixture]
     pub fn with_tracing() -> WithTracing {
-        match super::create_otlp_provider() {
-            Ok(provider) => WithTracing { _guard: super::init_otlp_subscriber(provider) },
-            Err(_) => WithTracing { _guard: super::init_stdout_subscriber() },
+        let mut global_subscriber_set = super::GLOBAL_SUBSCRIBER_SET.lock().unwrap();
+        if *global_subscriber_set {
+            WithTracing { _guard: super::TracingGuard { provider: None } }
+        } else {
+            *global_subscriber_set = true;
+            match super::create_otlp_provider() {
+                Ok(provider) => WithTracing { _guard: super::init_otlp_subscriber(provider) },
+                Err(_) => WithTracing { _guard: super::init_stdout_subscriber() },
+            }
         }
     }
 
@@ -76,7 +85,7 @@ pub fn create_otlp_provider() -> Result<SdkTracerProvider, Box<dyn std::error::E
 
     // Build the tracer provider
     let provider = SdkTracerProvider::builder()
-        .with_batch_exporter(exporter)
+        .with_simple_exporter(exporter)
         .with_resource(
             Resource::builder()
                 .with_attributes(vec![

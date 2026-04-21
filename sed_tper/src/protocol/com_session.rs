@@ -3,6 +3,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+use sed_async_runtime::{CancelSender, cancel_channel};
 use tracing::{Span, instrument};
 
 use crate::{
@@ -24,7 +25,12 @@ pub struct ComSession {
 enum State {
     Idle,
     AwaitingSend,
-    AwaitingReceipt { channel: oneshot::Sender<ComResponse>, deadline: Instant },
+    AwaitingReceipt {
+        channel: oneshot::Sender<ComResponse>,
+        deadline: Instant,
+        span: Span,
+        cancel_sender: CancelSender,
+    },
 }
 
 impl ComSession {
@@ -63,16 +69,19 @@ impl ComSession {
             self.state = State::Idle;
         } else {
             let deadline = Instant::now() + self.timeout;
-            context.send_timeout(Self::ADDRESS, deadline);
-            self.state = State::AwaitingReceipt { channel, deadline };
+            let (cancel_token, cancel_sender) = cancel_channel();
+            context.send_timeout(Self::ADDRESS, deadline, Some(cancel_token));
+            self.state = State::AwaitingReceipt { channel, deadline, span: Span::current(), cancel_sender };
         }
     }
 
+    #[instrument(level = "debug")]
     pub fn timeout(&mut self, time: Instant) {
         self.state = match core::mem::replace(&mut self.state, State::Idle) {
             State::Idle => State::Idle,
             State::AwaitingSend => State::AwaitingSend,
-            State::AwaitingReceipt { channel, deadline, .. } => {
+            State::AwaitingReceipt { channel, deadline, span, .. } => {
+                Span::current().follows_from(span);
                 if deadline <= time {
                     let _ = channel.send(Err(Error::TimedOut));
                 }
@@ -81,11 +90,14 @@ impl ComSession {
         }
     }
 
+    #[instrument(level = "debug")]
     pub fn com_response_received(&mut self, ComResponseReceived { response }: ComResponseReceived) {
         match core::mem::replace(&mut self.state, State::Idle) {
             State::Idle => (),
             State::AwaitingSend => (),
-            State::AwaitingReceipt { channel, .. } => {
+            State::AwaitingReceipt { channel, cancel_sender, span, .. } => {
+                Span::current().follows_from(span);
+                cancel_sender.cancel();
                 let _ = channel.send(Ok(response));
             }
         }

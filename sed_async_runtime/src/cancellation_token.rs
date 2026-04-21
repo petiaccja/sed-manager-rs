@@ -2,18 +2,19 @@ use std::task::Poll;
 
 use pin_project::pin_project;
 
-pub fn cancellation_channel() -> (CancellationToken, CancellationSender) {
+pub fn cancel_channel() -> (CancelToken, CancelSender) {
     let (tx, rx) = oneshot::async_channel();
-    (CancellationToken { rx }, CancellationSender { tx })
+    (CancelToken { rx }, CancelSender { tx })
 }
 
+#[derive(Debug)]
 #[pin_project]
-pub struct CancellationToken {
+pub struct CancelToken {
     #[pin]
     rx: oneshot::AsyncReceiver<()>,
 }
 
-impl Future for CancellationToken {
+impl Future for CancelToken {
     type Output = ();
 
     fn poll(self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
@@ -26,19 +27,20 @@ impl Future for CancellationToken {
             // The channel should not register the waker in this case, and this future
             // should thus never be polled again.
             Poll::Ready(Err(_)) => Poll::Pending,
-            // THe channel has not been signaled => pending.
+            // The channel has not been signaled => pending.
             Poll::Pending => Poll::Pending,
         }
     }
 }
 
+#[derive(Debug)]
 #[pin_project]
-pub struct CancellationSender {
+pub struct CancelSender {
     #[pin]
     tx: oneshot::Sender<()>,
 }
 
-impl CancellationSender {
+impl CancelSender {
     pub fn cancel(self) {
         let _ = self.tx.send(());
     }

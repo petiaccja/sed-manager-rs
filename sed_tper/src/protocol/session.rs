@@ -2,13 +2,14 @@ use std::collections::VecDeque;
 use std::marker::PhantomData;
 use std::time::Instant;
 
+use sed_async_runtime::cancel_channel;
 use sed_packet::packet::{PACKET_HEADER_LEN, Packet, SUB_PACKET_HEADER_LEN, SubPacket, SubPacketKind};
 use sed_packet::token::{Command, Detokenize, Error as TokenError, SorbitDetokenizer, ToTokens as _};
 use sed_spec::methods::Properties;
 use sorbit::error::ErrorKind;
 use sorbit::io::{FixedMemoryStream, Seek};
 use sorbit::stream_ser_de::StreamDeserializer;
-use tracing::trace;
+use tracing::{Span, instrument, trace};
 
 use crate::error::Error;
 use crate::protocol::message::{CommitBatch, Delete, Message, PacketReceived, SendMethod, SendPacket, SendPacketDone};
@@ -40,6 +41,7 @@ impl Session {
         Address::Session(self.session_id)
     }
 
+    #[instrument(level = "debug")]
     pub fn send_method(&mut self, context: Context, SendMethod { method, channel, span }: SendMethod) {
         let address = self.address();
         self.state = match core::mem::replace(&mut self.state, State::Closed) {
@@ -48,12 +50,12 @@ impl Session {
                 let is_end_of_session = is_end_of_session(&method);
 
                 if send_method_queue.is_empty() {
-                    context.send(address, Message::CommitBatch(CommitBatch));
+                    context.send(address, Message::CommitBatch(CommitBatch(Span::current())));
                 }
                 send_method_queue.push_back(SendMethod { method, channel, span });
 
                 if !is_end_of_session {
-                    self.commit_batch(context);
+                    self.commit_batch(context, CommitBatch(Span::current()));
                     State::Active { send_method_queue, receive_buffer, channel_queue }
                 } else {
                     State::Closing { receive_buffer, channel_queue }
@@ -70,7 +72,9 @@ impl Session {
         }
     }
 
-    pub fn commit_batch(&mut self, context: Context) {
+    #[instrument(level = "debug")]
+    pub fn commit_batch(&mut self, context: Context, message: CommitBatch) {
+        Span::current().follows_from(message.0);
         let topic = self.address();
         match &mut self.state {
             State::Active { send_method_queue, .. } => {
@@ -101,16 +105,30 @@ impl Session {
         }
     }
 
+    #[instrument(level = "debug")]
     pub fn send_packet_done(&mut self, context: Context, SendPacketDone { status, methods }: SendPacketDone) {
         let address = self.address();
         match &mut self.state {
             State::Active { channel_queue, .. } | State::Closing { channel_queue, .. } => match &status {
                 Ok(_) => {
                     let deadline = Instant::now() + self.properties.trans_timeout;
-                    context.send_timeout(address.clone(), deadline);
+                    let (cancel_token, cancel_sender) = cancel_channel();
+                    context.send_timeout(address.clone(), deadline, Some(cancel_token));
                     for WriteQueuedMethod { channel, span, .. } in methods {
-                        channel_queue.push_back(RecvQueuedMethod { channel, span, deadline, mgmt_session_meta: None });
+                        channel_queue.push_back(RecvQueuedMethod {
+                            channel,
+                            span,
+                            deadline,
+                            cancel_sender: None,
+                            mgmt_session_meta: None,
+                        });
                     }
+                    // The cancel sender must be added to the last method in this batch.
+                    // Otherwise, the first method could complete, cancel the timeout, and
+                    // leave the last method to wait forever.
+                    channel_queue.back_mut().map(|recv_queued_method| {
+                        recv_queued_method.cancel_sender = Some(cancel_sender);
+                    });
                 }
                 Err(err) => {
                     for WriteQueuedMethod { channel, .. } in methods {
@@ -126,6 +144,7 @@ impl Session {
         }
     }
 
+    #[instrument(level = "debug")]
     pub fn timeout(&mut self, context: Context, time: Instant) {
         match &mut self.state {
             State::Active { channel_queue, .. } | State::Closing { channel_queue, .. } => {
@@ -137,6 +156,7 @@ impl Session {
         }
     }
 
+    #[instrument(level = "debug")]
     pub fn packet_reveived(&mut self, context: Context, PacketReceived { packet }: PacketReceived) {
         match &mut self.state {
             State::Active { receive_buffer, channel_queue, .. }
@@ -176,6 +196,7 @@ impl Session {
         }
     }
 
+    #[instrument(level = "debug")]
     pub fn abort(&mut self, context: Context) {
         match &self.state {
             State::Active { .. } => {
@@ -309,7 +330,7 @@ mod tests {
             _ => panic!("session started in the wrong state: {:?}", session.state),
         }
 
-        session.commit_batch(context);
+        session.commit_batch(context, CommitBatch(Span::current()));
 
         let (address, content) = queue.try_recv().unwrap();
         assert_that!(address, eq(&Address::DeviceSession));
@@ -383,12 +404,14 @@ mod tests {
         );
         let (context, _queue) = Context::mock();
         let (tx, rx) = oneshot::channel();
+        let (_cancel_token, cancel_sender) = cancel_channel();
 
         match &mut session.state {
             State::Active { channel_queue, .. } => channel_queue.push_back(RecvQueuedMethod {
                 channel: tx,
                 span: Span::current(),
                 deadline: Instant::now(),
+                cancel_sender: Some(cancel_sender),
                 mgmt_session_meta: None,
             }),
             _ => panic!("session started in the wrong state: {:?}", session.state),
@@ -409,6 +432,7 @@ mod tests {
         );
         let (context, queue) = Context::mock();
         let (tx, rx) = oneshot::channel();
+        let (_cancel_token, cancel_sender) = cancel_channel();
 
         let reply = create_response();
         let packet = session_id.assign(Packet {
@@ -425,6 +449,7 @@ mod tests {
                 channel: tx,
                 span: Span::current(),
                 deadline: Instant::now(),
+                cancel_sender: Some(cancel_sender),
                 mgmt_session_meta: None,
             }),
             _ => panic!("session started in the wrong state: {:?}", session.state),

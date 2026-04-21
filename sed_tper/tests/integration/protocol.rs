@@ -23,15 +23,17 @@ use sed_device::mock_device::{MockDevice, MockEvent};
 use sed_telemetry::{WithTracing, with_tracing};
 use sed_tper::protocol::Protocol;
 
-const TIMEOUT: Duration = Duration::from_secs(20);
+const TIMEOUT: Duration = Duration::from_secs(5);
 
 #[instrument]
 #[rstest::rstest]
 #[tokio::test(flavor = "multi_thread")]
 async fn shutdown(_with_tracing: WithTracing) {
+    println!("bitch");
     let device = Arc::new(MockDevice::new([].into_iter()));
-    let (protocol, _) = Protocol::new(1, 0, device);
+    let (protocol, controller) = Protocol::new(1, 0, device);
     let handle = tokio::spawn(protocol.run().in_current_span());
+    assert!(controller.shutdown(TIMEOUT).await.is_ok());
     assert_that!(tokio::time::timeout(Duration::from_secs(5), handle).await, ok(anything()));
 }
 
@@ -64,11 +66,11 @@ async fn send_management_method(_with_tracing: WithTracing) {
     let (protocol, controller) = Protocol::new(com_id, 0, device.clone());
     let handle = tokio::spawn(protocol.run().in_current_span());
     let result = tokio::time::timeout(TIMEOUT, controller.call(None, start_session.to_tokens().unwrap())).await;
-    drop(controller);
-    let handle_result = tokio::time::timeout(TIMEOUT, handle).await;
+    let shutdown_result = controller.shutdown(TIMEOUT).await;
+    let _ = handle.await;
 
-    assert_that!(handle_result, ok(ok(anything())));
     assert_that!(result, ok(ok(ok(eq(&sync_session.to_tokens().unwrap())))));
+    assert_that!(shutdown_result, ok(anything()));
     device.check();
 }
 

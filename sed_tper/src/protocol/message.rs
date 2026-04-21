@@ -33,6 +33,7 @@ pub enum Message {
     SecurityRecvDoneComPacket(Result<ComPacket, Error>),
     SecurityRecvDoneComIdRequest(Result<HandleComIdResponse, Error>),
     ContextDropped,
+    Shutdown(oneshot::Sender<Result<(), Error>>, Instant),
 }
 
 /// Initiate an RPC method call to the device.
@@ -57,7 +58,7 @@ pub struct SendComRequest {
 /// This requires fewer IOCTL calls and reduces overhead. However, at some point
 /// the data has to eventually be sent, which is requested by this message.
 #[derive(Debug)]
-pub struct CommitBatch;
+pub struct CommitBatch(pub Span);
 
 /// The session receiving this should abort itself.
 ///
