@@ -306,7 +306,7 @@ mod tests {
             SendMethod { method: method.to_tokens().unwrap(), channel: tx, span: Span::current() },
         );
 
-        let (address, content) = queue.try_recv().unwrap();
+        let (_, address, content) = queue.try_recv().unwrap();
         assert_that!(address, eq(&Address::Session(session_id)));
         assert_that!(content, matches_pattern!(Message::CommitBatch(_)));
         assert!(queue.is_empty());
@@ -332,7 +332,7 @@ mod tests {
 
         session.commit_batch(context, CommitBatch(Span::current()));
 
-        let (address, content) = queue.try_recv().unwrap();
+        let (_, address, content) = queue.try_recv().unwrap();
         assert_that!(address, eq(&Address::DeviceSession));
         assert_that!(content, matches_pattern!(Message::SendPacket(_)));
         assert!(queue.is_empty());
@@ -361,7 +361,7 @@ mod tests {
         // Let the timeout task run.
         tokio::task::yield_now().await;
 
-        let (address, content) = queue.try_recv().unwrap();
+        let (_, address, content) = queue.try_recv().unwrap();
         assert_that!(address, eq(&Address::Session(session_id)));
         assert_that!(content, matches_pattern!(Message::Timeout(_)));
         assert!(queue.is_empty());

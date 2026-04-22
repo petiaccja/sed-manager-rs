@@ -126,7 +126,7 @@ mod tests {
         com_session
             .send_com_request(context, SendComRequest { request: request.clone(), channel: tx, span: Span::current() });
 
-        let (address, content) = queue.try_recv().unwrap();
+        let (_, address, content) = queue.try_recv().unwrap();
         assert_that!(address, eq(&Address::DeviceSession));
         assert_that!(content, field!(&Message::SendComRequest.0, ref field!(SendComRequest.request, eq(&request))));
         assert!(queue.is_empty());
@@ -158,7 +158,7 @@ mod tests {
         tokio::task::yield_now().await; // Let the timeout task run.
 
         let item = queue.try_recv();
-        assert!(matches!(item, Ok((Address::ComSession, Message::Timeout(_)))), "{item:?}");
+        assert!(matches!(item, Ok((_, Address::ComSession, Message::Timeout(_)))), "{item:?}");
         assert_eq!(rx.has_message(), false);
     }
 

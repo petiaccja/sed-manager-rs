@@ -12,7 +12,7 @@ use sed_spec::methods::{
 use sorbit::error::ErrorKind;
 use sorbit::io::{FixedMemoryStream, Seek as _};
 use sorbit::stream_ser_de::StreamDeserializer;
-use tracing::{debug_span, instrument, trace};
+use tracing::{Span, debug_span, instrument};
 
 use crate::error::Error;
 use crate::protocol::message::{Abort, Message, PacketReceived, SendMethod, SendPacket, SendPacketDone, Spawn};
@@ -44,7 +44,7 @@ impl ManagementSession {
 
     #[instrument(level = "debug")]
     pub fn send_method(&mut self, context: Context, SendMethod { method, channel, span }: SendMethod) {
-        trace!(parent: &span, "token to send received");
+        Span::current().follows_from(span);
         let Ok(call) = MgmtMethodCallSend::from_tokens(&method) else {
             let _ = channel.send(Err(Error::MethodCallExpected));
             return;
@@ -52,7 +52,6 @@ impl ManagementSession {
         if method.len() < MAX_METHOD_SIZE {
             let sub_packet = SubPacket { kind: SubPacketKind::Data, length: PhantomData, payload: method };
             let packet = Packet { payload: vec![sub_packet], ..Default::default() };
-            trace!(parent: &span, "wrapped in packet");
             context.send(
                 Address::DeviceSession,
                 Message::SendPacket(SendPacket {
@@ -60,7 +59,7 @@ impl ManagementSession {
                     packet,
                     methods: vec![WriteQueuedMethod {
                         channel,
-                        span,
+                        span: Span::current(),
                         mgmt_session_meta: Some((call, self.properties.clone()).into()),
                     }],
                 }),
@@ -73,9 +72,10 @@ impl ManagementSession {
     #[instrument(level = "debug")]
     pub fn send_packet_done(&mut self, context: Context, SendPacketDone { status, methods }: SendPacketDone) {
         for WriteQueuedMethod { channel, span, mgmt_session_meta } in methods {
+            Span::current().follows_from(span);
+            let _span = debug_span!("method sent").entered();
             match &status {
                 Ok(_) => {
-                    trace!(parent: &span, "containing packet sent to the device succesfully");
                     let mgmt_session_meta =
                         mgmt_session_meta.expect("SM methods must always have meta data, wrong address?");
                     match mgmt_session_meta.0 {
@@ -85,7 +85,7 @@ impl ManagementSession {
                             context.send_timeout(Self::ADDRESS, deadline, Some(cancel_token));
                             self.sync_session_queue.entry(hsn).or_default().push_back(RecvQueuedMethod {
                                 channel,
-                                span,
+                                span: Span::current(),
                                 deadline,
                                 cancel_sender: Some(cancel_sender),
                                 mgmt_session_meta: Some(mgmt_session_meta.1.into()),
@@ -137,7 +137,7 @@ impl ManagementSession {
                             if let Some(RecvQueuedMethod { channel, span, cancel_sender, mgmt_session_meta, .. }) =
                                 pending.pop_front()
                             {
-                                let _span = debug_span!("packet_received").entered().follows_from(span);
+                                Span::current().follows_from(span);
                                 let properties =
                                     *mgmt_session_meta.expect("SM methods must always have meta data, wrong address?");
                                 cancel_sender.map(CancelSender::cancel);
@@ -256,7 +256,7 @@ mod tests {
             SendMethod { method: method.to_tokens().unwrap(), channel: tx, span: Span::current() },
         );
 
-        let (address, content) = queue.try_recv().unwrap();
+        let (_, address, content) = queue.try_recv().unwrap();
         assert_that!(address, eq(&Address::DeviceSession));
         assert_that!(content, matches_pattern!(Message::SendPacket(_)));
         assert!(queue.is_empty());
@@ -288,7 +288,7 @@ mod tests {
         // Let the timeout task run.
         tokio::task::yield_now().await;
 
-        let (address, content) = queue.try_recv().unwrap();
+        let (_, address, content) = queue.try_recv().unwrap();
         assert_that!(address, eq(&Address::ManagementSession));
         assert_that!(content, matches_pattern!(Message::Timeout(_)));
         assert!(queue.is_empty());
@@ -384,7 +384,7 @@ mod tests {
         assert_that!(rx.try_recv(), eq(&Ok(Ok(reply.to_tokens().unwrap()))));
         assert_that!(&mgmt_session.sync_session_queue, is_empty());
 
-        let (address, content) = queue.try_recv().unwrap();
+        let (_, address, content) = queue.try_recv().unwrap();
         assert_that!(address, eq(&Address::Control));
         assert_that!(content, matches_pattern!(Message::Spawn(_)));
         assert!(queue.is_empty());

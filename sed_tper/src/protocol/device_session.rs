@@ -346,32 +346,32 @@ mod tests {
         );
 
         // Loop back CommitBatch message.
-        assert!(matches!(queue.try_recv(), Ok((Address::DeviceSession, Message::CommitBatch(_)))));
+        assert!(matches!(queue.try_recv(), Ok((_, Address::DeviceSession, Message::CommitBatch(_)))));
         device_session.commit_batch(context.clone(), CommitBatch(Span::current()));
 
         // Loop back SecuritySendDone message.
         // - Let the IF-SEND task run.
         tokio::task::yield_now().await;
-        assert!(matches!(queue.try_recv(), Ok((Address::DeviceSession, Message::SecuritySendDone(_)))));
+        assert!(matches!(queue.try_recv(), Ok((_, Address::DeviceSession, Message::SecuritySendDone(_)))));
         device_session.security_send_done(context.clone(), SecuritySendDone { protocol: 0x01, result: Ok(()) });
 
         // Make sure the original session got informed via a SendPacketDone message.
         assert!(matches!(
             queue.try_recv(),
-            Ok((Address::Session(SessionId { hsn: 2, tsn: 1 }), Message::SendPacketDone(_)))
+            Ok((_, Address::Session(SessionId { hsn: 2, tsn: 1 }), Message::SendPacketDone(_)))
         ));
 
         // Loop back SecurityRecvComPacketDone message.
         // - Let the IF-RECV task run.
         tokio::task::yield_now().await;
-        assert!(matches!(queue.try_recv(), Ok((Address::DeviceSession, Message::SecurityRecvDoneComPacket(_)))));
+        assert!(matches!(queue.try_recv(), Ok((_, Address::DeviceSession, Message::SecurityRecvDoneComPacket(_)))));
         device_session.security_recv_com_packet_done(context.clone(), Ok(reply_com_packet));
 
         // Verify state is back to Ready.
         assert!(matches!(device_session.packet_state, PacketProtocolState::Ready));
 
         // Make sure the original session got the packet via PacketReceived.
-        let (received_address, received_message) = queue.try_recv().expect("should have received PacketReceived");
+        let (_, received_address, received_message) = queue.try_recv().expect("should have received PacketReceived");
         assert_eq!(received_address, Address::Session(session_id));
         match received_message {
             Message::PacketReceived(PacketReceived { packet }) => {
@@ -417,7 +417,7 @@ mod tests {
         tokio::task::yield_now().await;
         assert!(matches!(
             queue.try_recv(),
-            Ok((Address::DeviceSession, Message::SecuritySendDone(SecuritySendDone { result: Err(_), .. })))
+            Ok((_, Address::DeviceSession, Message::SecuritySendDone(SecuritySendDone { result: Err(_), .. })))
         ));
         device_session.security_send_done(
             context.clone(),
@@ -428,6 +428,7 @@ mod tests {
         assert!(matches!(
             queue.try_recv(),
             Ok((
+                _,
                 Address::Session(SessionId { hsn: 2, tsn: 1 }),
                 Message::SendPacketDone(SendPacketDone { status: Err(_), .. })
             ))
@@ -501,24 +502,27 @@ mod tests {
         device_session.send_com_request(context.clone(), SendComRequest { request, channel, span: Span::current() });
 
         // Loop back CommitBatch message.
-        assert!(matches!(queue.try_recv(), Ok((Address::DeviceSession, Message::CommitBatch(_)))));
+        assert!(matches!(queue.try_recv(), Ok((_, Address::DeviceSession, Message::CommitBatch(_)))));
         device_session.commit_batch(context.clone(), CommitBatch(Span::current()));
 
         // Loop back SecuritySendDone message.
         // - Let the IF-SEND task run.
         tokio::task::yield_now().await;
         let message = queue.try_recv();
-        assert!(matches!(message, Ok((Address::DeviceSession, Message::SecuritySendDone(_)))), "{message:?}");
+        assert!(matches!(message, Ok((_, Address::DeviceSession, Message::SecuritySendDone(_)))), "{message:?}");
         device_session.security_send_done(context.clone(), SecuritySendDone { protocol: 0x02, result: Ok(()) });
 
         // Make sure the original session got informed via a SendComRequestDone message.
         let message = queue.try_recv();
-        assert!(matches!(message, Ok((Address::ComSession, Message::SendComRequestDone(_)))), "{message:?}");
+        assert!(matches!(message, Ok((_, Address::ComSession, Message::SendComRequestDone(_)))), "{message:?}");
 
         // Loop back SecurityRecvDoneComIdRequest message.
         // - Let the IF-RECV task run.
         tokio::task::yield_now().await;
-        assert!(matches!(queue.try_recv(), Ok((Address::DeviceSession, Message::SecurityRecvDoneComIdRequest(_)))));
+        assert!(matches!(
+            queue.try_recv(),
+            Ok((_, Address::DeviceSession, Message::SecurityRecvDoneComIdRequest(_)))
+        ));
         device_session.security_recv_com_id_request_done(context.clone(), Ok(reply.clone()));
 
         // Verify state is back to Ready.
@@ -529,7 +533,8 @@ mod tests {
         );
 
         // Make sure the original session got the packet via PacketReceived.
-        let (received_address, received_message) = queue.try_recv().expect("should have received ComResponseReceived");
+        let (_, received_address, received_message) =
+            queue.try_recv().expect("should have received ComResponseReceived");
         assert_eq!(received_address, Address::ComSession);
         match received_message {
             Message::ComResponseReceived(ComResponseReceived { response: response_ }) => {
@@ -562,14 +567,14 @@ mod tests {
         device_session.send_com_request(context.clone(), SendComRequest { request, channel, span: Span::current() });
 
         // Loop back CommitBatch message.
-        assert!(matches!(queue.try_recv(), Ok((Address::DeviceSession, Message::CommitBatch(_)))));
+        assert!(matches!(queue.try_recv(), Ok((_, Address::DeviceSession, Message::CommitBatch(_)))));
         device_session.commit_batch(context.clone(), CommitBatch(Span::current()));
 
         // Loop back SecuritySendDone message.
         // - Let the IF-SEND task run.
         tokio::task::yield_now().await;
         let message = queue.try_recv();
-        assert!(matches!(message, Ok((Address::DeviceSession, Message::SecuritySendDone(_)))), "{message:?}");
+        assert!(matches!(message, Ok((_, Address::DeviceSession, Message::SecuritySendDone(_)))), "{message:?}");
         device_session.security_send_done(
             context.clone(),
             SecuritySendDone { protocol: 0x02, result: Err(DeviceError::NotSupported) },
@@ -580,7 +585,7 @@ mod tests {
         assert!(
             matches!(
                 message,
-                Ok((Address::ComSession, Message::SendComRequestDone(SendComRequestDone { status: Err(_), .. })))
+                Ok((_, Address::ComSession, Message::SendComRequestDone(SendComRequestDone { status: Err(_), .. })))
             ),
             "{message:?}"
         );

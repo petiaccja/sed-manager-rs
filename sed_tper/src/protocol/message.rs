@@ -32,8 +32,6 @@ pub enum Message {
     SecuritySendDone(SecuritySendDone),
     SecurityRecvDoneComPacket(Result<ComPacket, Error>),
     SecurityRecvDoneComIdRequest(Result<HandleComIdResponse, Error>),
-    ContextDropped,
-    Shutdown(oneshot::Sender<Result<(), Error>>, Instant),
 }
 
 /// Initiate an RPC method call to the device.

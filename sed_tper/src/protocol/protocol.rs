@@ -9,9 +9,8 @@ use sed_device::Device;
 use sed_packet::com_id::HandleComIdRequest;
 use sed_packet::packet::{COM_PACKET_HEADER_LEN, PACKET_HEADER_LEN, SUB_PACKET_HEADER_LEN};
 use sed_spec::methods::Properties;
-use tracing::{Instrument, Span, debug, debug_span, instrument, trace_span, warn};
+use tracing::{Instrument, Span, debug_span, instrument, warn};
 
-use crate::error::Error;
 use crate::protocol::device_session::DeviceSession;
 use crate::protocol::message::{ComResponse, Message, MethodResponse, SendComRequest, SendMethod};
 use crate::protocol::{
@@ -60,9 +59,7 @@ pub struct Protocol {
     com_session: ComSession,
     management_session: ManagementSession,
     sessions: HashMap<SessionId, Session>,
-    message_receiver: async_channel::Receiver<(Address, Message)>,
-    message_sender: async_channel::WeakSender<(Address, Message)>,
-    shutdown: Option<(oneshot::Sender<Result<(), Error>>, Instant)>,
+    message_receiver: async_channel::Receiver<(Context, Address, Message)>,
 }
 
 impl Protocol {
@@ -73,7 +70,6 @@ impl Protocol {
     /// until you call [`run`](Self::run).
     pub fn new(com_id: u16, com_id_ext: u16, device: Arc<dyn Device>) -> (Self, Controller) {
         let (tx, rx) = async_channel::unbounded();
-        let message_sender = tx.clone().downgrade();
         let controller = Controller { context: Context::new(tx) };
         (
             Self {
@@ -82,8 +78,6 @@ impl Protocol {
                 management_session: ManagementSession::new(CAPABILITIES),
                 sessions: HashMap::new(),
                 message_receiver: rx,
-                message_sender,
-                shutdown: None,
             },
             controller,
         )
@@ -103,65 +97,22 @@ impl Protocol {
     /// take a little time.
     #[instrument(level = "debug")]
     pub async fn run(mut self) {
-        loop {
-            match self.recv_message().await {
-                Ok((address, message)) => self.dispatch(address, message),
-                Err(RecvError::Empty) => break,
-                Err(RecvError::TimedOut) => {
-                    println!("timed out");
-                    if let Some((sender, _)) = self.shutdown.take() {
-                        let _ = sender.send(Err(Error::TimedOut));
-                    }
-                    break;
-                }
-            }
-
-            panic!("THIS THING IS RACY!");
-            // With a WeakSender:
-            // Someone might drop the last Sender between recv and dispatch,
-            // causing the channel to close too early.
-            //
-            // With ref counting:
-            // We might receive the notify sooner than the ref count is decreased.
-            // This will get the protocol stuck in the next recv forever.
-
-            // When the sender count is one, `self` is holding the one and only
-            // context, meaning no more messages can be received. Internal
-            // sessions would hold a context while waiting for an IF command
-            // from the device, and external clients would hold a context to
-            // issue commands.
-            let sender_count = self.message_receiver.sender_count();
-            println!("Sender count: {sender_count}");
-            if sender_count == 1 {
-                break;
-            }
-            debug!(sender_count = sender_count);
+        while let Ok((context, address, message)) = self.message_receiver.recv().await {
+            self.dispatch(context, address, message);
         }
     }
 
-    async fn recv_message(&mut self) -> Result<(Address, Message), RecvError> {
-        // if let Some((_, deadline)) = self.shutdown {
-        //     timeout_at(deadline, self.message_queue.recv())
-        //         .await
-        //         .map_err(|_| RecvError::TimedOut)?
-        //         .map_err(|_| RecvError::Empty)
-        // } else {
-        self.message_receiver.recv().await.map_err(|_| RecvError::Empty)
-        //}
-    }
-
-    fn dispatch(&mut self, address: Address, message: Message) {
-        println!("Message: {message:?} -> {address:?}");
+    fn dispatch(&mut self, context: Context, address: Address, message: Message) {
         match address {
-            Address::Control => self.dispatch_control(message),
-            Address::DeviceSession => self.dispatch_device_session(message),
-            Address::ComSession => self.dispatch_com_session(message),
-            Address::ManagementSession => self.dispatch_management_session(message),
-            Address::Session(session_id) => self.dispatch_session(session_id, message),
+            Address::Control => self.dispatch_control(context, message),
+            Address::DeviceSession => self.dispatch_device_session(context, message),
+            Address::ComSession => self.dispatch_com_session(context, message),
+            Address::ManagementSession => self.dispatch_management_session(context, message),
+            Address::Session(session_id) => self.dispatch_session(context, session_id, message),
         }
     }
 
-    fn dispatch_control(&mut self, message: Message) {
+    fn dispatch_control(&mut self, _context: Context, message: Message) {
         match message {
             Message::Spawn(message) => match self.sessions.entry(message.id) {
                 Entry::Occupied(_) => warn!(message = debug(message), "message dropped"),
@@ -174,15 +125,11 @@ impl Protocol {
                     warn!(session_id = debug(&message.0), "session not found")
                 }
             }
-            Message::Shutdown(sender, deadline) => {
-                self.shutdown = Some((sender, deadline));
-            }
             _ => warn!(message = debug(message), "message dropped"),
         }
     }
 
-    fn dispatch_device_session(&mut self, message: Message) {
-        let context = self.context.clone();
+    fn dispatch_device_session(&mut self, context: Context, message: Message) {
         let unit = &mut self.device_session;
         match message {
             Message::SendComRequest(message) => unit.send_com_request(context, message),
@@ -195,8 +142,7 @@ impl Protocol {
         }
     }
 
-    fn dispatch_com_session(&mut self, message: Message) {
-        let context = self.context.clone();
+    fn dispatch_com_session(&mut self, context: Context, message: Message) {
         let unit = &mut self.com_session;
         match message {
             Message::SendComRequest(message) => unit.send_com_request(context, message),
@@ -207,8 +153,7 @@ impl Protocol {
         }
     }
 
-    fn dispatch_management_session(&mut self, message: Message) {
-        let context = self.context.clone();
+    fn dispatch_management_session(&mut self, context: Context, message: Message) {
         let unit = &mut self.management_session;
         match message {
             Message::SendMethod(message) => unit.send_method(context, message),
@@ -219,8 +164,7 @@ impl Protocol {
         }
     }
 
-    fn dispatch_session(&mut self, session_id: SessionId, message: Message) {
-        let context = self.context.clone();
+    fn dispatch_session(&mut self, context: Context, session_id: SessionId, message: Message) {
         if let Some(unit) = self.sessions.get_mut(&session_id) {
             match message {
                 Message::SendMethod(message) => unit.send_method(context, message),
@@ -235,11 +179,6 @@ impl Protocol {
             warn!(session_id = debug(session_id), "session not found");
         }
     }
-}
-
-enum RecvError {
-    Empty,
-    TimedOut,
 }
 
 /// The interface to interact with a running [`Protocol`] stack.
@@ -273,57 +212,47 @@ impl Controller {
             .send(address, Message::SendComRequest(SendComRequest { request, channel: tx, span: Span::current() }));
         rx
     }
-
-    #[instrument(level = "debug")]
-    pub async fn shutdown(self, timeout: Duration) -> Result<(), Error> {
-        let (tx, rx) = oneshot::channel();
-        let deadline = Instant::now() + timeout;
-        self.context.send(Address::Control, Message::Shutdown(tx, deadline));
-        drop(self);
-        rx.await.unwrap_or(Ok(()))
-    }
 }
 
 #[derive(Debug, Clone)]
 pub struct Context {
-    message_queue: async_channel::Sender<(Address, Message)>,
-    notify_drop: bool,
+    message_queue: async_channel::Sender<(Context, Address, Message)>,
 }
 
 impl Context {
-    pub fn new(message_queue: async_channel::Sender<(Address, Message)>) -> Self {
-        Self { message_queue, notify_drop: true }
+    pub fn new(message_queue: async_channel::Sender<(Context, Address, Message)>) -> Self {
+        Self { message_queue }
     }
 
     #[instrument(level = "debug")]
     pub fn send(&self, address: Address, message: Message) {
         self.message_queue
-            .try_send((address, message))
+            .try_send((self.clone(), address, message))
             .expect("bug: not using on unbounded channel or the channel got closed too early");
     }
 
     #[instrument(level = "debug", skip(cancel))]
     pub fn send_timeout(&self, address: Address, time: Instant, cancel: Option<CancelToken>) {
         let message_queue = self.message_queue.clone();
-        spawn(
-            async move {
-                // This check is only necessary for testing with zero timeouts.
-                let cancelled = if Instant::now() < time {
-                    if let Some(cancel) = cancel {
-                        timeout_at(time.clone(), cancel).instrument(trace_span!("timeout")).await.is_ok()
-                    } else {
-                        sleep_until(time.clone()).await;
-                        false
-                    }
+        let context = self.clone();
+        let timeout_span = debug_span!("timeout");
+        timeout_span.follows_from(Span::current());
+        spawn(async move {
+            // This check is only necessary for testing with zero timeouts.
+            let cancelled = if Instant::now() < time {
+                if let Some(cancel) = cancel {
+                    timeout_at(time.clone(), cancel).instrument(timeout_span).await.is_ok()
                 } else {
+                    sleep_until(time.clone()).instrument(timeout_span).await;
                     false
-                };
-                if !cancelled {
-                    let _ = message_queue.try_send((address, Message::Timeout(time)));
                 }
+            } else {
+                false
+            };
+            if !cancelled {
+                let _ = message_queue.try_send((context, address, Message::Timeout(time)));
             }
-            .in_current_span(),
-        );
+        });
     }
 
     #[instrument(level = "debug", skip(future))]
@@ -332,38 +261,21 @@ impl Context {
         F: Future<Output = Message> + Send + 'static,
     {
         let message_queue = self.message_queue.clone();
+        let context = self.clone();
         spawn(
             async move {
                 let message = future.await;
                 // The protocol has already been shut down, but that's okay.
-                let _ = message_queue.try_send((address, message));
+                let _ = message_queue.try_send((context, address, message));
             }
             .in_current_span(),
         );
     }
 
     #[cfg(test)]
-    pub fn mock() -> (Self, async_channel::Receiver<(Address, Message)>) {
+    pub fn mock() -> (Self, async_channel::Receiver<(Context, Address, Message)>) {
         let (tx, rx) = async_channel::unbounded();
-        (Self { message_queue: tx, notify_drop: false }, rx)
-    }
-}
-
-impl Drop for Context {
-    fn drop(&mut self) {
-        // When the last outside context is dropped, we need to wake up the run
-        // task or otherwise it would be waiting for a message forever. It would
-        // be better to send a notification unconditionally, but contexts are
-        // created and dropped a lot, so it may not be the best for performance.
-        if self.notify_drop {
-            let _span = debug_span!("context_drop").entered();
-            if self.message_queue.sender_count() <= 2 {
-                let _span = debug_span!("notify").entered();
-                if self.message_queue.try_send((Address::Control, Message::ContextDropped)).is_ok() {
-                    let _span = debug_span!("notify_done").entered();
-                }
-            }
-        }
+        (Self { message_queue: tx }, rx)
     }
 }
 
