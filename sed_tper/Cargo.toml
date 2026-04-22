@@ -3,6 +3,9 @@ name = "sed_tper"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+test-utils = []
+
 [dependencies]
 sed_packet.workspace = true
 sed_device.workspace = true
@@ -21,3 +24,4 @@ sed_device = { workspace = true, features = ["test-utils"] }
 rstest.workspace = true
 tokio = { workspace = true, features = ["macros"] }
 googletest.workspace = true
+sed_tper = { workspace = true, features = ["test-utils"] }

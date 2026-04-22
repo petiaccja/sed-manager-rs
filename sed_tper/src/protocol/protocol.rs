@@ -210,6 +210,26 @@ impl Controller {
         self.context.send(address, Message::SendComRequest(SendComRequest { request, channel: tx }));
         rx
     }
+
+    /// Spawn a new session with the given ID and properties.
+    #[cfg(feature = "test-utils")]
+    #[instrument(level = "debug")]
+    pub fn spawn(&self, session_id: SessionId, properties: Properties) {
+        use crate::protocol::message::Spawn;
+
+        let address = Address::Control;
+        self.context.send(address, Message::Spawn(Spawn { id: session_id, properties }));
+    }
+
+    /// Delete the session with the given ID.
+    #[cfg(feature = "test-utils")]
+    #[instrument(level = "debug")]
+    pub fn delete(&self, session_id: SessionId) {
+        use crate::protocol::message::Delete;
+
+        let address = Address::Control;
+        self.context.send(address, Message::Delete(Delete(session_id)));
+    }
 }
 
 #[derive(Debug, Clone)]

@@ -176,7 +176,8 @@ impl Session {
                                 .stream_position()
                                 .expect("stream position always succeeds for FixedMemoryStream");
                             let result_tokens: Vec<_> = receive_buffer.drain(..stream_pos as usize).collect();
-                            if let Some(RecvQueuedMethod { channel, .. }) = channel_queue.pop_front() {
+                            if let Some(RecvQueuedMethod { channel, cancel_sender, .. }) = channel_queue.pop_front() {
+                                cancel_sender.map(|cancel_sender| cancel_sender.cancel());
                                 let _ = channel.send(Ok(result_tokens));
                             } else {
                                 // Either the device sent too much stuff, or there is a packet distribution bug.
