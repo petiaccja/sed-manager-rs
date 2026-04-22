@@ -59,7 +59,7 @@ pub struct Protocol {
     com_session: ComSession,
     management_session: ManagementSession,
     sessions: HashMap<SessionId, Session>,
-    message_receiver: async_channel::Receiver<(Context, Address, Message)>,
+    message_receiver: async_channel::Receiver<DispatchMessage>,
 }
 
 impl Protocol {
@@ -97,18 +97,20 @@ impl Protocol {
     /// take a little time.
     #[instrument(level = "debug")]
     pub async fn run(mut self) {
-        while let Ok((context, address, message)) = self.message_receiver.recv().await {
-            self.dispatch(context, address, message);
+        while let Ok(dispatch_message) = self.message_receiver.recv().await {
+            self.dispatch(dispatch_message);
         }
     }
 
-    fn dispatch(&mut self, context: Context, address: Address, message: Message) {
+    fn dispatch(&mut self, DispatchMessage { address, context, message, source }: DispatchMessage) {
+        let span = debug_span!("dispatch").entered();
+        span.follows_from(source);
         match address {
             Address::Control => self.dispatch_control(context, message),
             Address::DeviceSession => self.dispatch_device_session(context, message),
             Address::ComSession => self.dispatch_com_session(context, message),
             Address::ManagementSession => self.dispatch_management_session(context, message),
-            Address::Session(session_id) => self.dispatch_session(context, session_id, message),
+            Address::Session(session_id) => self.dispatch_session(session_id, context, message),
         }
     }
 
@@ -164,7 +166,7 @@ impl Protocol {
         }
     }
 
-    fn dispatch_session(&mut self, context: Context, session_id: SessionId, message: Message) {
+    fn dispatch_session(&mut self, session_id: SessionId, context: Context, message: Message) {
         if let Some(unit) = self.sessions.get_mut(&session_id) {
             match message {
                 Message::SendMethod(message) => unit.send_method(context, message),
@@ -196,10 +198,7 @@ impl Controller {
             None => Address::ManagementSession,
         };
         let (tx, rx) = oneshot::channel();
-        self.context.send(
-            address,
-            Message::SendMethod(SendMethod { method: method_tokens, channel: tx, span: Span::current() }),
-        );
+        self.context.send(address, Message::SendMethod(SendMethod { method: method_tokens, channel: tx }));
         rx
     }
 
@@ -208,54 +207,56 @@ impl Controller {
     pub fn com_id_request(&self, request: HandleComIdRequest) -> oneshot::Receiver<ComResponse> {
         let address = Address::ComSession;
         let (tx, rx) = oneshot::channel();
-        self.context
-            .send(address, Message::SendComRequest(SendComRequest { request, channel: tx, span: Span::current() }));
+        self.context.send(address, Message::SendComRequest(SendComRequest { request, channel: tx }));
         rx
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct Context {
-    message_queue: async_channel::Sender<(Context, Address, Message)>,
+    message_queue: async_channel::Sender<DispatchMessage>,
 }
 
 impl Context {
-    pub fn new(message_queue: async_channel::Sender<(Context, Address, Message)>) -> Self {
+    pub fn new(message_queue: async_channel::Sender<DispatchMessage>) -> Self {
         Self { message_queue }
     }
 
-    #[instrument(level = "debug")]
     pub fn send(&self, address: Address, message: Message) {
         self.message_queue
-            .try_send((self.clone(), address, message))
+            .try_send(DispatchMessage { address, context: self.clone(), message, source: Span::current() })
             .expect("bug: not using on unbounded channel or the channel got closed too early");
     }
 
-    #[instrument(level = "debug", skip(cancel))]
     pub fn send_timeout(&self, address: Address, time: Instant, cancel: Option<CancelToken>) {
         let message_queue = self.message_queue.clone();
         let context = self.clone();
-        let timeout_span = debug_span!("timeout");
-        timeout_span.follows_from(Span::current());
-        spawn(async move {
-            // This check is only necessary for testing with zero timeouts.
-            let cancelled = if Instant::now() < time {
-                if let Some(cancel) = cancel {
-                    timeout_at(time.clone(), cancel).instrument(timeout_span).await.is_ok()
+        spawn(
+            async move {
+                // This check is only necessary for testing with zero timeouts.
+                let cancelled = if Instant::now() < time {
+                    if let Some(cancel) = cancel {
+                        timeout_at(time.clone(), cancel).await.is_ok()
+                    } else {
+                        sleep_until(time.clone()).await;
+                        false
+                    }
                 } else {
-                    sleep_until(time.clone()).instrument(timeout_span).await;
                     false
+                };
+                if !cancelled {
+                    let _ = message_queue.try_send(DispatchMessage {
+                        address,
+                        context,
+                        message: Message::Timeout(time),
+                        source: Span::current(),
+                    });
                 }
-            } else {
-                false
-            };
-            if !cancelled {
-                let _ = message_queue.try_send((context, address, Message::Timeout(time)));
             }
-        });
+            .instrument(debug_span!(parent: Span::none(), "timeout").follows_from(Span::current()).clone()),
+        );
     }
 
-    #[instrument(level = "debug", skip(future))]
     pub fn send_future<F>(&self, address: Address, future: F)
     where
         F: Future<Output = Message> + Send + 'static,
@@ -266,17 +267,25 @@ impl Context {
             async move {
                 let message = future.await;
                 // The protocol has already been shut down, but that's okay.
-                let _ = message_queue.try_send((context, address, message));
+                let _ = message_queue.try_send(DispatchMessage { address, context, message, source: Span::current() });
             }
-            .in_current_span(),
+            .instrument(debug_span!(parent: Span::none(), "background task").follows_from(Span::current()).clone()),
         );
     }
 
     #[cfg(test)]
-    pub fn mock() -> (Self, async_channel::Receiver<(Context, Address, Message)>) {
+    pub fn mock() -> (Self, async_channel::Receiver<DispatchMessage>) {
         let (tx, rx) = async_channel::unbounded();
         (Self { message_queue: tx }, rx)
     }
+}
+
+#[derive(Debug)]
+pub struct DispatchMessage {
+    pub address: Address,
+    pub context: Context,
+    pub message: Message,
+    pub source: Span,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]

@@ -4,7 +4,6 @@ use sed_device::Error as DeviceError;
 use sed_packet::com_id::{HandleComIdRequest, HandleComIdResponse};
 use sed_packet::packet::{ComPacket, Packet};
 use sed_spec::methods::Properties;
-use tracing::Span;
 
 use crate::error::Error;
 use crate::protocol::method::WriteQueuedMethod;
@@ -39,7 +38,6 @@ pub enum Message {
 pub struct SendMethod {
     pub method: Vec<u8>,
     pub channel: oneshot::Sender<MethodResponse>,
-    pub span: Span,
 }
 
 /// Initiate a ComID request to the device.
@@ -47,7 +45,6 @@ pub struct SendMethod {
 pub struct SendComRequest {
     pub request: HandleComIdRequest,
     pub channel: oneshot::Sender<ComResponse>,
-    pub span: Span,
 }
 
 /// Send buffered content to the device immediately.
@@ -56,7 +53,7 @@ pub struct SendComRequest {
 /// This requires fewer IOCTL calls and reduces overhead. However, at some point
 /// the data has to eventually be sent, which is requested by this message.
 #[derive(Debug)]
-pub struct CommitBatch(pub Span);
+pub struct CommitBatch;
 
 /// The session receiving this should abort itself.
 ///
@@ -101,7 +98,6 @@ pub struct SendPacketDone {
 pub struct SendComRequestDone {
     pub status: Result<(), Error>,
     pub channel: oneshot::Sender<ComResponse>,
-    pub span: Span,
 }
 
 /// An event that is emitted when a packet is received from the device.

@@ -4,7 +4,7 @@ use std::{
 };
 
 use sed_async_runtime::{CancelSender, cancel_channel};
-use tracing::{Span, instrument};
+use tracing::instrument;
 
 use crate::{
     error::Error,
@@ -25,12 +25,7 @@ pub struct ComSession {
 enum State {
     Idle,
     AwaitingSend,
-    AwaitingReceipt {
-        channel: oneshot::Sender<ComResponse>,
-        deadline: Instant,
-        span: Span,
-        cancel_sender: CancelSender,
-    },
+    AwaitingReceipt { channel: oneshot::Sender<ComResponse>, deadline: Instant, cancel_sender: CancelSender },
 }
 
 impl ComSession {
@@ -41,18 +36,14 @@ impl ComSession {
     }
 
     #[instrument(level = "debug")]
-    pub fn send_com_request(&mut self, context: Context, SendComRequest { request, channel, span }: SendComRequest) {
-        Span::current().follows_from(span);
+    pub fn send_com_request(&mut self, context: Context, SendComRequest { request, channel }: SendComRequest) {
         match &self.state {
             State::Idle => {
-                context.send(
-                    Address::DeviceSession,
-                    Message::SendComRequest(SendComRequest { request, channel, span: Span::current() }),
-                );
+                context.send(Address::DeviceSession, Message::SendComRequest(SendComRequest { request, channel }));
                 self.state = State::AwaitingSend;
             }
             _ => {
-                self.send_queue.push_back(SendComRequest { request, channel, span: Span::current() });
+                self.send_queue.push_back(SendComRequest { request, channel });
             }
         };
     }
@@ -61,9 +52,8 @@ impl ComSession {
     pub fn send_com_request_done(
         &mut self,
         context: Context,
-        SendComRequestDone { status, channel, span }: SendComRequestDone,
+        SendComRequestDone { status, channel }: SendComRequestDone,
     ) {
-        Span::current().follows_from(span);
         if let Err(error) = status {
             let _ = channel.send(Err(error));
             self.state = State::Idle;
@@ -71,7 +61,7 @@ impl ComSession {
             let deadline = Instant::now() + self.timeout;
             let (cancel_token, cancel_sender) = cancel_channel();
             context.send_timeout(Self::ADDRESS, deadline, Some(cancel_token));
-            self.state = State::AwaitingReceipt { channel, deadline, span: Span::current(), cancel_sender };
+            self.state = State::AwaitingReceipt { channel, deadline, cancel_sender };
         }
     }
 
@@ -80,8 +70,7 @@ impl ComSession {
         self.state = match core::mem::replace(&mut self.state, State::Idle) {
             State::Idle => State::Idle,
             State::AwaitingSend => State::AwaitingSend,
-            State::AwaitingReceipt { channel, deadline, span, .. } => {
-                Span::current().follows_from(span);
+            State::AwaitingReceipt { channel, deadline, .. } => {
                 if deadline <= time {
                     let _ = channel.send(Err(Error::TimedOut));
                 }
@@ -95,8 +84,7 @@ impl ComSession {
         match core::mem::replace(&mut self.state, State::Idle) {
             State::Idle => (),
             State::AwaitingSend => (),
-            State::AwaitingReceipt { channel, cancel_sender, span, .. } => {
-                Span::current().follows_from(span);
+            State::AwaitingReceipt { channel, cancel_sender, .. } => {
                 cancel_sender.cancel();
                 let _ = channel.send(Ok(response));
             }
@@ -106,13 +94,14 @@ impl ComSession {
 
 #[cfg(test)]
 mod tests {
+    use crate::protocol::protocol::DispatchMessage;
+
     use super::*;
 
     use sed_packet::com_id::HandleComIdRequest;
     use sed_packet::com_id::HandleComIdResponse;
     use sed_packet::com_id::HandleComIdResponseParams;
     use sed_packet::com_id::StackResetStatus;
-    use tracing::Span;
 
     use googletest::matchers::*;
     use googletest::prelude::*;
@@ -123,12 +112,11 @@ mod tests {
         let (context, queue) = Context::mock();
         let (tx, rx) = oneshot::channel();
         let request = HandleComIdRequest::stack_reset(0x12, 0x00);
-        com_session
-            .send_com_request(context, SendComRequest { request: request.clone(), channel: tx, span: Span::current() });
+        com_session.send_com_request(context, SendComRequest { request: request.clone(), channel: tx });
 
-        let (_, address, content) = queue.try_recv().unwrap();
+        let DispatchMessage { address, message, .. } = queue.try_recv().unwrap();
         assert_that!(address, eq(&Address::DeviceSession));
-        assert_that!(content, field!(&Message::SendComRequest.0, ref field!(SendComRequest.request, eq(&request))));
+        assert_that!(message, field!(&Message::SendComRequest.0, ref field!(SendComRequest.request, eq(&request))));
         assert!(queue.is_empty());
         assert_eq!(rx.has_message(), false);
     }
@@ -138,10 +126,8 @@ mod tests {
         let mut com_session = ComSession::new(Duration::from_millis(1000));
         let (context, queue) = Context::mock();
         let (tx, rx) = oneshot::channel();
-        com_session.send_com_request_done(
-            context,
-            SendComRequestDone { status: Err(Error::NotSupported), channel: tx, span: Span::current() },
-        );
+        com_session
+            .send_com_request_done(context, SendComRequestDone { status: Err(Error::NotSupported), channel: tx });
 
         assert!(queue.is_empty());
         assert_eq!(rx.try_recv(), Ok(Err(Error::NotSupported)));
@@ -152,13 +138,18 @@ mod tests {
         let mut com_session = ComSession::new(Duration::from_millis(0));
         let (context, queue) = Context::mock();
         let (tx, rx) = oneshot::channel();
-        com_session
-            .send_com_request_done(context, SendComRequestDone { status: Ok(()), channel: tx, span: Span::current() });
+        com_session.send_com_request_done(context, SendComRequestDone { status: Ok(()), channel: tx });
 
         tokio::task::yield_now().await; // Let the timeout task run.
 
-        let item = queue.try_recv();
-        assert!(matches!(item, Ok((_, Address::ComSession, Message::Timeout(_)))), "{item:?}");
+        let dispatch_message = queue.try_recv();
+        assert!(
+            matches!(
+                dispatch_message,
+                Ok(DispatchMessage { address: Address::ComSession, message: Message::Timeout(_), .. })
+            ),
+            "{dispatch_message:?}"
+        );
         assert_eq!(rx.has_message(), false);
     }
 
@@ -167,8 +158,7 @@ mod tests {
         let mut com_session = ComSession::new(Duration::from_millis(u64::MAX));
         let (context, queue) = Context::mock();
         let (tx, rx) = oneshot::channel();
-        com_session
-            .send_com_request_done(context, SendComRequestDone { status: Ok(()), channel: tx, span: Span::current() });
+        com_session.send_com_request_done(context, SendComRequestDone { status: Ok(()), channel: tx });
 
         let response = HandleComIdResponse {
             com_id: 0,

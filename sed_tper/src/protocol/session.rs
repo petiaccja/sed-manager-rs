@@ -9,7 +9,7 @@ use sed_spec::methods::Properties;
 use sorbit::error::ErrorKind;
 use sorbit::io::{FixedMemoryStream, Seek};
 use sorbit::stream_ser_de::StreamDeserializer;
-use tracing::{Span, instrument, trace};
+use tracing::instrument;
 
 use crate::error::Error;
 use crate::protocol::message::{CommitBatch, Delete, Message, PacketReceived, SendMethod, SendPacket, SendPacketDone};
@@ -42,20 +42,19 @@ impl Session {
     }
 
     #[instrument(level = "debug")]
-    pub fn send_method(&mut self, context: Context, SendMethod { method, channel, span }: SendMethod) {
+    pub fn send_method(&mut self, context: Context, SendMethod { method, channel }: SendMethod) {
         let address = self.address();
         self.state = match core::mem::replace(&mut self.state, State::Closed) {
             State::Active { mut send_method_queue, receive_buffer, channel_queue } => {
-                trace!(parent: &span, "token to send received");
                 let is_end_of_session = is_end_of_session(&method);
 
                 if send_method_queue.is_empty() {
-                    context.send(address, Message::CommitBatch(CommitBatch(Span::current())));
+                    context.send(address, Message::CommitBatch(CommitBatch));
                 }
-                send_method_queue.push_back(SendMethod { method, channel, span });
+                send_method_queue.push_back(SendMethod { method, channel });
 
                 if !is_end_of_session {
-                    self.commit_batch(context, CommitBatch(Span::current()));
+                    self.commit_batch(context, CommitBatch);
                     State::Active { send_method_queue, receive_buffer, channel_queue }
                 } else {
                     State::Closing { receive_buffer, channel_queue }
@@ -74,7 +73,6 @@ impl Session {
 
     #[instrument(level = "debug")]
     pub fn commit_batch(&mut self, context: Context, message: CommitBatch) {
-        Span::current().follows_from(message.0);
         let topic = self.address();
         match &mut self.state {
             State::Active { send_method_queue, .. } => {
@@ -82,17 +80,16 @@ impl Session {
                     std::cmp::max(PACKET_HEADER_LEN + SUB_PACKET_HEADER_LEN, self.properties.max_gross_packet_size)
                         - PACKET_HEADER_LEN
                         + SUB_PACKET_HEADER_LEN;
-                while let Some(SendMethod { method, channel, span }) = send_method_queue.pop_front() {
+                while let Some(SendMethod { method, channel }) = send_method_queue.pop_front() {
                     if method.len() <= max_method_size {
                         let sub_packet = SubPacket { kind: SubPacketKind::Data, length: PhantomData, payload: method };
                         let packet = self.session_id.assign(Packet { payload: vec![sub_packet], ..Default::default() });
-                        trace!(parent: &span, "wrapped in packet");
                         context.send(
                             Address::DeviceSession,
                             Message::SendPacket(SendPacket {
                                 sender: topic.clone(),
                                 packet,
-                                methods: vec![WriteQueuedMethod { channel, span, mgmt_session_meta: None }],
+                                methods: vec![WriteQueuedMethod { channel, mgmt_session_meta: None }],
                             }),
                         );
                     } else {
@@ -114,10 +111,9 @@ impl Session {
                     let deadline = Instant::now() + self.properties.trans_timeout;
                     let (cancel_token, cancel_sender) = cancel_channel();
                     context.send_timeout(address.clone(), deadline, Some(cancel_token));
-                    for WriteQueuedMethod { channel, span, .. } in methods {
+                    for WriteQueuedMethod { channel, .. } in methods {
                         channel_queue.push_back(RecvQueuedMethod {
                             channel,
-                            span,
                             deadline,
                             cancel_sender: None,
                             mgmt_session_meta: None,
@@ -272,6 +268,8 @@ fn is_end_of_session(bytes: &[u8]) -> bool {
 mod tests {
     use std::time::Duration;
 
+    use crate::protocol::protocol::DispatchMessage;
+
     use super::*;
 
     use googletest::{assert_that, prelude::*};
@@ -279,7 +277,6 @@ mod tests {
     use sed_spec::methods::{Activate, ActivateResult, MethodCall, MethodResult, MethodStatus};
     use sed_spec::preconfig::core::shared::method_id::ACTIVATE;
     use sed_spec::preconfig::opal_2::admin::sp;
-    use tracing::Span;
 
     fn create_request() -> MethodCall<Activate> {
         MethodCall {
@@ -301,14 +298,11 @@ mod tests {
         let (context, queue) = Context::mock();
         let (tx, rx) = oneshot::channel();
         let method = create_request();
-        session.send_method(
-            context,
-            SendMethod { method: method.to_tokens().unwrap(), channel: tx, span: Span::current() },
-        );
+        session.send_method(context, SendMethod { method: method.to_tokens().unwrap(), channel: tx });
 
-        let (_, address, content) = queue.try_recv().unwrap();
+        let DispatchMessage { address, message, .. } = queue.try_recv().unwrap();
         assert_that!(address, eq(&Address::Session(session_id)));
-        assert_that!(content, matches_pattern!(Message::CommitBatch(_)));
+        assert_that!(message, matches_pattern!(Message::CommitBatch(_)));
         assert!(queue.is_empty());
         assert_that!(session.state, field!(State::Active.send_method_queue, len(eq(1))));
         assert_that!(rx.has_message(), eq(false));
@@ -322,19 +316,17 @@ mod tests {
         let (tx, rx) = oneshot::channel();
         let method = create_request();
         match &mut session.state {
-            State::Active { send_method_queue, .. } => send_method_queue.push_back(SendMethod {
-                method: method.to_tokens().unwrap(),
-                channel: tx,
-                span: Span::current(),
-            }),
+            State::Active { send_method_queue, .. } => {
+                send_method_queue.push_back(SendMethod { method: method.to_tokens().unwrap(), channel: tx })
+            }
             _ => panic!("session started in the wrong state: {:?}", session.state),
         }
 
-        session.commit_batch(context, CommitBatch(Span::current()));
+        session.commit_batch(context, CommitBatch);
 
-        let (_, address, content) = queue.try_recv().unwrap();
+        let DispatchMessage { address, message, .. } = queue.try_recv().unwrap();
         assert_that!(address, eq(&Address::DeviceSession));
-        assert_that!(content, matches_pattern!(Message::SendPacket(_)));
+        assert_that!(message, matches_pattern!(Message::SendPacket(_)));
         assert!(queue.is_empty());
         assert_that!(session.state, field!(State::Active.send_method_queue, is_empty()));
         assert_that!(rx.has_message(), eq(false));
@@ -354,16 +346,16 @@ mod tests {
             context,
             SendPacketDone {
                 status: Ok(()),
-                methods: vec![WriteQueuedMethod { channel: tx, span: Span::current(), mgmt_session_meta: None }],
+                methods: vec![WriteQueuedMethod { channel: tx, mgmt_session_meta: None }],
             },
         );
 
         // Let the timeout task run.
         tokio::task::yield_now().await;
 
-        let (_, address, content) = queue.try_recv().unwrap();
+        let DispatchMessage { address, message, .. } = queue.try_recv().unwrap();
         assert_that!(address, eq(&Address::Session(session_id)));
-        assert_that!(content, matches_pattern!(Message::Timeout(_)));
+        assert_that!(message, matches_pattern!(Message::Timeout(_)));
         assert!(queue.is_empty());
         assert_that!(session.state, field!(State::Active.channel_queue, len(eq(1))));
         assert_that!(rx.has_message(), eq(false));
@@ -383,7 +375,7 @@ mod tests {
             context,
             SendPacketDone {
                 status: Err(Error::NotSupported),
-                methods: vec![WriteQueuedMethod { channel: tx, span: Span::current(), mgmt_session_meta: None }],
+                methods: vec![WriteQueuedMethod { channel: tx, mgmt_session_meta: None }],
             },
         );
 
@@ -409,7 +401,6 @@ mod tests {
         match &mut session.state {
             State::Active { channel_queue, .. } => channel_queue.push_back(RecvQueuedMethod {
                 channel: tx,
-                span: Span::current(),
                 deadline: Instant::now(),
                 cancel_sender: Some(cancel_sender),
                 mgmt_session_meta: None,
@@ -447,7 +438,6 @@ mod tests {
         match &mut session.state {
             State::Active { channel_queue, .. } => channel_queue.push_back(RecvQueuedMethod {
                 channel: tx,
-                span: Span::current(),
                 deadline: Instant::now(),
                 cancel_sender: Some(cancel_sender),
                 mgmt_session_meta: None,

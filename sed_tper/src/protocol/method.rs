@@ -5,7 +5,6 @@ use sed_async_runtime::CancelSender;
 use sed_packet::Ignore;
 use sed_packet::token::{Detokenize, Detokenizer, MessageError};
 use sed_spec::methods::{MethodResult, MgmtMethodCall, MgmtMethodCallParams, Properties};
-use tracing::Span;
 
 use crate::error::Error;
 use crate::protocol::message::MethodResponse;
@@ -44,7 +43,6 @@ impl Detokenize for MgmtMethodCallSend {
 #[derive(Debug)]
 pub struct WriteQueuedMethod {
     pub channel: oneshot::Sender<MethodResponse>,
-    pub span: Span,
     /// This is information is required by the management session.
     pub mgmt_session_meta: Option<Box<(MgmtMethodCallSend, Properties)>>,
 }
@@ -53,7 +51,6 @@ pub struct WriteQueuedMethod {
 #[derive(Debug)]
 pub struct RecvQueuedMethod {
     pub channel: oneshot::Sender<MethodResponse>,
-    pub span: Span,
     pub deadline: Instant,
     pub cancel_sender: Option<CancelSender>,
     /// This is information is required by the management session.
@@ -93,14 +90,12 @@ mod tests {
         let mut queue = VecDeque::from([
             RecvQueuedMethod {
                 channel: oneshot::channel().0,
-                span: Span::current(),
                 deadline: now + Duration::from_millis(0),
                 cancel_sender: Some(cancel_channel().1),
                 mgmt_session_meta: None,
             },
             RecvQueuedMethod {
                 channel: oneshot::channel().0,
-                span: Span::current(),
                 deadline: now + Duration::from_millis(1000),
                 cancel_sender: Some(cancel_channel().1),
                 mgmt_session_meta: None,

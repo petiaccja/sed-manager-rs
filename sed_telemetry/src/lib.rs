@@ -81,11 +81,12 @@ pub fn create_otlp_provider() -> Result<SdkTracerProvider, Box<dyn std::error::E
         .with_metadata(metadata)
         .with_tls_config(tonic::transport::ClientTlsConfig::new().with_native_roots())
         .with_endpoint(endpoint)
+        .with_timeout(Duration::from_millis(500))
         .build()?;
 
     // Build the tracer provider
     let provider = SdkTracerProvider::builder()
-        .with_simple_exporter(exporter)
+        .with_batch_exporter(exporter)
         .with_resource(
             Resource::builder()
                 .with_attributes(vec![

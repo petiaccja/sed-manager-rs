@@ -8,7 +8,7 @@ use sed_packet::com_id::{HANDLE_COM_ID_RESPONSE_LEN, HandleComIdResponseParams};
 use sed_packet::{com_id::HandleComIdResponse, packet::ComPacket};
 use sed_spec::methods::Properties;
 use sorbit::ser_de::{FromBytes, ToBytes};
-use tracing::{Instrument, Span, debug, debug_span, instrument};
+use tracing::{Instrument as _, debug, debug_span, instrument};
 
 use crate::error::Error;
 use crate::protocol::message::{
@@ -47,23 +47,18 @@ impl DeviceSession {
 
     #[instrument(level = "debug")]
     pub fn send_packet(&mut self, context: Context, message: SendPacket) {
-        for WriteQueuedMethod { span, .. } in &message.methods {
-            Span::current().follows_from(span);
-        }
         self.packet_queue.push_back(message);
-        context.send(Self::ADDRESS, Message::CommitBatch(CommitBatch(Span::current())));
+        context.send(Self::ADDRESS, Message::CommitBatch(CommitBatch));
     }
 
     #[instrument(level = "debug")]
     pub fn send_com_request(&mut self, context: Context, message: SendComRequest) {
-        Span::current().follows_from(&message.span);
         self.com_id_queue.push_back(message);
-        context.send(Self::ADDRESS, Message::CommitBatch(CommitBatch(Span::current())));
+        context.send(Self::ADDRESS, Message::CommitBatch(CommitBatch));
     }
 
     #[instrument(level = "debug")]
     pub fn commit_batch(&mut self, context: Context, message: CommitBatch) {
-        Span::current().follows_from(message.0);
         self.commit_batch_com_packet(context.clone());
         self.commit_batch_com_id_request(context);
     }
@@ -136,10 +131,10 @@ impl DeviceSession {
     fn commit_batch_com_id_request(&mut self, context: Context) {
         self.com_id_state = match replace(&mut self.com_id_state, ComIdProtocolState::Processing) {
             ComIdProtocolState::Ready => {
-                if let Some(SendComRequest { request, channel, span }) = self.com_id_queue.pop_front() {
+                if let Some(SendComRequest { request, channel }) = self.com_id_queue.pop_front() {
                     let data = request.to_bytes().expect("should not normally fail, but replace it with a check");
                     context.send_future(Self::ADDRESS, security_send(self.device.clone(), 0x02, self.com_id, data));
-                    ComIdProtocolState::Sending { channel, span }
+                    ComIdProtocolState::Sending { channel }
                 } else {
                     ComIdProtocolState::Ready
                 }
@@ -170,16 +165,16 @@ impl DeviceSession {
     fn security_send_done_com_id_request(&mut self, context: Context, result: Result<(), sed_device::Error>) {
         let sender = Address::ComSession;
         self.com_id_state = match replace(&mut self.com_id_state, ComIdProtocolState::Processing) {
-            ComIdProtocolState::Sending { channel, span } => match result {
+            ComIdProtocolState::Sending { channel } => match result {
                 Ok(_) => {
                     let status = Ok(());
-                    context.send(sender, Message::SendComRequestDone(SendComRequestDone { status, channel, span }));
+                    context.send(sender, Message::SendComRequestDone(SendComRequestDone { status, channel }));
                     context.send_future(Self::ADDRESS, security_recv_com_id_request(self.device.clone(), self.com_id));
                     ComIdProtocolState::Receiving
                 }
                 Err(err) => {
                     let status = Err(err.into());
-                    context.send(sender, Message::SendComRequestDone(SendComRequestDone { status, channel, span }));
+                    context.send(sender, Message::SendComRequestDone(SendComRequestDone { status, channel }));
                     ComIdProtocolState::Ready
                 }
             },
@@ -214,7 +209,7 @@ enum PacketProtocolState {
 enum ComIdProtocolState {
     Processing,
     Ready,
-    Sending { channel: oneshot::Sender<ComResponse>, span: Span },
+    Sending { channel: oneshot::Sender<ComResponse> },
     Receiving,
 }
 
@@ -270,6 +265,7 @@ mod tests {
     use std::marker::PhantomData;
 
     use crate::protocol::message::{PacketReceived, SendPacket};
+    use crate::protocol::protocol::DispatchMessage;
     use crate::protocol::session_id::SessionId;
 
     use sed_device::Error as DeviceError;
@@ -346,39 +342,52 @@ mod tests {
         );
 
         // Loop back CommitBatch message.
-        assert!(matches!(queue.try_recv(), Ok((_, Address::DeviceSession, Message::CommitBatch(_)))));
-        device_session.commit_batch(context.clone(), CommitBatch(Span::current()));
+        assert!(matches!(
+            queue.try_recv(),
+            Ok(DispatchMessage { address: Address::DeviceSession, message: Message::CommitBatch(_), .. },)
+        ));
+        device_session.commit_batch(context.clone(), CommitBatch);
 
         // Loop back SecuritySendDone message.
         // - Let the IF-SEND task run.
         tokio::task::yield_now().await;
-        assert!(matches!(queue.try_recv(), Ok((_, Address::DeviceSession, Message::SecuritySendDone(_)))));
+        assert!(matches!(
+            queue.try_recv(),
+            Ok(DispatchMessage { address: Address::DeviceSession, message: Message::SecuritySendDone(_), .. })
+        ));
         device_session.security_send_done(context.clone(), SecuritySendDone { protocol: 0x01, result: Ok(()) });
 
         // Make sure the original session got informed via a SendPacketDone message.
         assert!(matches!(
             queue.try_recv(),
-            Ok((_, Address::Session(SessionId { hsn: 2, tsn: 1 }), Message::SendPacketDone(_)))
+            Ok(DispatchMessage {
+                address: Address::Session(SessionId { hsn: 2, tsn: 1 }),
+                message: Message::SendPacketDone(_),
+                ..
+            })
         ));
 
         // Loop back SecurityRecvComPacketDone message.
         // - Let the IF-RECV task run.
         tokio::task::yield_now().await;
-        assert!(matches!(queue.try_recv(), Ok((_, Address::DeviceSession, Message::SecurityRecvDoneComPacket(_)))));
+        assert!(matches!(
+            queue.try_recv(),
+            Ok(DispatchMessage { address: Address::DeviceSession, message: Message::SecurityRecvDoneComPacket(_), .. })
+        ));
         device_session.security_recv_com_packet_done(context.clone(), Ok(reply_com_packet));
 
         // Verify state is back to Ready.
         assert!(matches!(device_session.packet_state, PacketProtocolState::Ready));
 
         // Make sure the original session got the packet via PacketReceived.
-        let (_, received_address, received_message) = queue.try_recv().expect("should have received PacketReceived");
-        assert_eq!(received_address, Address::Session(session_id));
-        match received_message {
+        let DispatchMessage { address, message, .. } = queue.try_recv().expect("should have received PacketReceived");
+        assert_eq!(address, Address::Session(session_id));
+        match message {
             Message::PacketReceived(PacketReceived { packet }) => {
                 assert_eq!(packet.tper_session_number, session_id.tsn);
                 assert_eq!(packet.host_session_number, session_id.hsn);
             }
-            _ => panic!("expected PacketReceived message but got: {:?}", received_message),
+            _ => panic!("expected PacketReceived message but got: {:?}", message),
         }
 
         device.check();
@@ -410,14 +419,18 @@ mod tests {
         });
 
         // Initiate IF-SEND by committing the packets.
-        device_session.commit_batch(context.clone(), CommitBatch(Span::current()));
+        device_session.commit_batch(context.clone(), CommitBatch);
 
         // Loop back SecuritySendDone message.
         // - Let the IF-SEND task run.
         tokio::task::yield_now().await;
         assert!(matches!(
             queue.try_recv(),
-            Ok((_, Address::DeviceSession, Message::SecuritySendDone(SecuritySendDone { result: Err(_), .. })))
+            Ok(DispatchMessage {
+                address: Address::DeviceSession,
+                message: Message::SecuritySendDone(SecuritySendDone { result: Err(_), .. }),
+                ..
+            })
         ));
         device_session.security_send_done(
             context.clone(),
@@ -427,11 +440,11 @@ mod tests {
         // Make sure the original session got informed via a SendPacketDone message.
         assert!(matches!(
             queue.try_recv(),
-            Ok((
-                _,
-                Address::Session(SessionId { hsn: 2, tsn: 1 }),
-                Message::SendPacketDone(SendPacketDone { status: Err(_), .. })
-            ))
+            Ok(DispatchMessage {
+                address: Address::Session(SessionId { hsn: 2, tsn: 1 }),
+                message: Message::SendPacketDone(SendPacketDone { status: Err(_), .. }),
+                ..
+            })
         ));
 
         device.check();
@@ -499,29 +512,48 @@ mod tests {
         let (context, queue) = Context::mock();
 
         // Issue SendComRequest message.
-        device_session.send_com_request(context.clone(), SendComRequest { request, channel, span: Span::current() });
+        device_session.send_com_request(context.clone(), SendComRequest { request, channel });
 
         // Loop back CommitBatch message.
-        assert!(matches!(queue.try_recv(), Ok((_, Address::DeviceSession, Message::CommitBatch(_)))));
-        device_session.commit_batch(context.clone(), CommitBatch(Span::current()));
+        assert!(matches!(
+            queue.try_recv(),
+            Ok(DispatchMessage { address: Address::DeviceSession, message: Message::CommitBatch(_), .. })
+        ));
+        device_session.commit_batch(context.clone(), CommitBatch);
 
         // Loop back SecuritySendDone message.
         // - Let the IF-SEND task run.
         tokio::task::yield_now().await;
         let message = queue.try_recv();
-        assert!(matches!(message, Ok((_, Address::DeviceSession, Message::SecuritySendDone(_)))), "{message:?}");
+        assert!(
+            matches!(
+                message,
+                Ok(DispatchMessage { address: Address::DeviceSession, message: Message::SecuritySendDone(_), .. })
+            ),
+            "{message:?}"
+        );
         device_session.security_send_done(context.clone(), SecuritySendDone { protocol: 0x02, result: Ok(()) });
 
         // Make sure the original session got informed via a SendComRequestDone message.
         let message = queue.try_recv();
-        assert!(matches!(message, Ok((_, Address::ComSession, Message::SendComRequestDone(_)))), "{message:?}");
+        assert!(
+            matches!(
+                message,
+                Ok(DispatchMessage { address: Address::ComSession, message: Message::SendComRequestDone(_), .. })
+            ),
+            "{message:?}"
+        );
 
         // Loop back SecurityRecvDoneComIdRequest message.
         // - Let the IF-RECV task run.
         tokio::task::yield_now().await;
         assert!(matches!(
             queue.try_recv(),
-            Ok((_, Address::DeviceSession, Message::SecurityRecvDoneComIdRequest(_)))
+            Ok(DispatchMessage {
+                address: Address::DeviceSession,
+                message: Message::SecurityRecvDoneComIdRequest(_),
+                ..
+            })
         ));
         device_session.security_recv_com_id_request_done(context.clone(), Ok(reply.clone()));
 
@@ -533,14 +565,14 @@ mod tests {
         );
 
         // Make sure the original session got the packet via PacketReceived.
-        let (_, received_address, received_message) =
+        let DispatchMessage { address, message, .. } =
             queue.try_recv().expect("should have received ComResponseReceived");
-        assert_eq!(received_address, Address::ComSession);
-        match received_message {
+        assert_eq!(address, Address::ComSession);
+        match message {
             Message::ComResponseReceived(ComResponseReceived { response: response_ }) => {
                 assert_eq!(response_, reply);
             }
-            _ => panic!("expected ComResponseReceived message but got: {:?}", received_message),
+            _ => panic!("expected ComResponseReceived message but got: {:?}", message),
         }
 
         device.check();
@@ -564,17 +596,26 @@ mod tests {
         let (context, queue) = Context::mock();
 
         // Issue SendComRequest message.
-        device_session.send_com_request(context.clone(), SendComRequest { request, channel, span: Span::current() });
+        device_session.send_com_request(context.clone(), SendComRequest { request, channel });
 
         // Loop back CommitBatch message.
-        assert!(matches!(queue.try_recv(), Ok((_, Address::DeviceSession, Message::CommitBatch(_)))));
-        device_session.commit_batch(context.clone(), CommitBatch(Span::current()));
+        assert!(matches!(
+            queue.try_recv(),
+            Ok(DispatchMessage { address: Address::DeviceSession, message: Message::CommitBatch(_), .. })
+        ));
+        device_session.commit_batch(context.clone(), CommitBatch);
 
         // Loop back SecuritySendDone message.
         // - Let the IF-SEND task run.
         tokio::task::yield_now().await;
         let message = queue.try_recv();
-        assert!(matches!(message, Ok((_, Address::DeviceSession, Message::SecuritySendDone(_)))), "{message:?}");
+        assert!(
+            matches!(
+                message,
+                Ok(DispatchMessage { address: Address::DeviceSession, message: Message::SecuritySendDone(_), .. })
+            ),
+            "{message:?}"
+        );
         device_session.security_send_done(
             context.clone(),
             SecuritySendDone { protocol: 0x02, result: Err(DeviceError::NotSupported) },
@@ -585,7 +626,11 @@ mod tests {
         assert!(
             matches!(
                 message,
-                Ok((_, Address::ComSession, Message::SendComRequestDone(SendComRequestDone { status: Err(_), .. })))
+                Ok(DispatchMessage {
+                    address: Address::ComSession,
+                    message: Message::SendComRequestDone(SendComRequestDone { status: Err(_), .. }),
+                    ..
+                })
             ),
             "{message:?}"
         );
