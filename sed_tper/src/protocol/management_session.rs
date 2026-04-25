@@ -4,7 +4,7 @@ use std::time::Instant;
 
 use sed_async_runtime::{CancelSender, cancel_channel};
 use sed_packet::packet::{PACKET_HEADER_LEN, Packet, SUB_PACKET_HEADER_LEN, SubPacket, SubPacketKind};
-
+use sed_packet::session_id::SessionId;
 use sed_packet::token::{Detokenize as _, Error as TokenError, FromTokens as _, SorbitDetokenizer};
 use sed_spec::methods::{
     CloseSession, MethodStatus, MgmtMethodCall, MgmtMethodCallParams, Properties, PropertiesMethod, SyncSession,
@@ -18,7 +18,6 @@ use crate::error::Error;
 use crate::protocol::message::{Abort, Message, PacketReceived, SendMethod, SendPacket, SendPacketDone, Spawn};
 use crate::protocol::method::{MgmtMethodCallSend, RecvQueuedMethod, WriteQueuedMethod, retain_alive};
 use crate::protocol::protocol::{Address, Context};
-use crate::protocol::session_id::SessionId;
 
 const MAX_METHOD_SIZE: usize = Properties::ASSUMED.max_gross_packet_size - PACKET_HEADER_LEN + SUB_PACKET_HEADER_LEN;
 

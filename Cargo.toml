@@ -15,21 +15,22 @@ members = [
     "sed_device",
     "sed_tper",
     "sed_async_runtime",
-    "sed_telemetry",
+    "sed_telemetry", "sed_virtual_device",
 ]
 
 [workspace.dependencies]
 
 # Workspace packages.
+sed_async_runtime = { version = "0.1.0", path = "sed_async_runtime" }
 sed_device = { version = "0.1.0", path = "sed_device" }
 sed_packet = { version = "0.1.0", path = "sed_packet" }
 sed_spec = { version = "0.1.0", path = "sed_spec" }
 sed_spec_codegen = { version = "0.1.0", path = "sed_spec_codegen" }
 sed_spec_macros = { version = "0.1.0", path = "sed_spec_macros" }
+sed_telemetry = { version = "0.1.0", path = "sed_telemetry" }
 sed_tper = { version = "0.1.0", path = "sed_tper" }
 sed_tper_macros = { version = "0.1.0", path = "sed_tper_macros" }
-sed_telemetry = { version = "0.1.0", path = "sed_telemetry" }
-sed_async_runtime = { version = "0.1.0", path = "sed_async_runtime" }
+sed_virtual_device = { version = "0.1.0", path = "sed_virtual_device" }
 
 # Maintained by Peter.
 sorbit = { version = "0.1.2", git = "https://github.com/petiaccja/sorbit", rev = "837a33d37ca6cdaed88f897e3db780707a4508f1" }

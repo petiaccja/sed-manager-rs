@@ -5,6 +5,7 @@ use std::sync::{
 
 use sed_async_runtime::spawn;
 use sed_device::Device;
+use sed_packet::session_id::SessionId;
 use sed_packet::{
     MaxBytes,
     com_id::{ComIdState, HandleComIdRequest, HandleComIdResponseParams, StackResetStatus},
@@ -20,7 +21,7 @@ use tracing::instrument;
 use crate::{
     Session,
     error::Error,
-    protocol::{Controller, Protocol, SessionId},
+    protocol::{Controller, Protocol},
 };
 
 #[derive(Debug)]

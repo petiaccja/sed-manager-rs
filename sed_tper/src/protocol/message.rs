@@ -3,12 +3,12 @@ use std::time::Instant;
 use sed_device::Error as DeviceError;
 use sed_packet::com_id::{HandleComIdRequest, HandleComIdResponse};
 use sed_packet::packet::{ComPacket, Packet};
+use sed_packet::session_id::SessionId;
 use sed_spec::methods::Properties;
 
 use crate::error::Error;
 use crate::protocol::method::WriteQueuedMethod;
 use crate::protocol::protocol::Address;
-use crate::protocol::session_id::SessionId;
 
 pub type MethodResponse = Result<Vec<u8>, Error>;
 pub type ComResponse = Result<HandleComIdResponse, Error>;

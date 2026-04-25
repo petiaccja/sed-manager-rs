@@ -10,6 +10,7 @@ use tracing::{Instrument, instrument};
 use sed_device::Error as DeviceError;
 use sed_device::mock_device::MockDevice;
 use sed_packet::Bytes;
+use sed_packet::session_id::SessionId;
 use sed_packet::token::ToTokens;
 use sed_spec::methods::{
     MethodCall, MethodResult, MethodStatus, Properties, Random, RandomResult, StartSession, SyncSession,
@@ -20,7 +21,7 @@ use sed_spec::preconfig::core::shared::sm_method_id::{START_SESSION, SYNC_SESSIO
 use sed_spec::preconfig::opal_2::admin::sp;
 use sed_telemetry::{WithTracing, with_tracing};
 use sed_tper::error::Error;
-use sed_tper::protocol::{Protocol, SessionId};
+use sed_tper::protocol::Protocol;
 
 use crate::utility::{
     com_id_request_event, com_id_request_fail_event, com_id_response_event, com_id_response_fail_event,

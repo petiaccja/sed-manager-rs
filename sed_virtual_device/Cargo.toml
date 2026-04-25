@@ -1,0 +1,9 @@
+[package]
+name = "sed_virtual_device"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+sed_device.workspace = true
+sed_packet.workspace = true
+sorbit.workspace = true

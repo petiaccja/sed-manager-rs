@@ -1,4 +1,4 @@
-use sed_packet::packet::Packet;
+use crate::packet::Packet;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SessionId {

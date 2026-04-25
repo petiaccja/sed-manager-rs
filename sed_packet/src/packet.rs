@@ -86,7 +86,14 @@ impl Default for Packet {
 
 impl Default for ComPacket {
     fn default() -> Self {
-        Self { com_id: 0, com_id_ext: 0, outstanding_data: 0, min_transfer: 0, length: PhantomData, payload: Vec::new() }
+        Self {
+            com_id: 0,
+            com_id_ext: 0,
+            outstanding_data: 0,
+            min_transfer: 0,
+            length: PhantomData,
+            payload: Vec::new(),
+        }
     }
 }
 
@@ -115,7 +122,7 @@ impl Packet {
 }
 
 impl ComPacket {
-    pub fn get_transfer_len(&self) -> u32 {
+    pub fn transfer_len(&self) -> u32 {
         let mut transfer_len = COM_PACKET_HEADER_LEN;
         for packet in self.payload.deref() {
             transfer_len += PACKET_HEADER_LEN;
@@ -149,8 +156,11 @@ mod tests {
             0xCC, 0xCC, 0x0CC, 0xCC, 0xCC, 0xCC, // Payload.
             0x00, 0x00, // Padding.
         ];
-        let value =
-            SubPacket { kind: SubPacketKind::Data, length: PhantomData, payload: vec![0xCC, 0xCC, 0x0CC, 0xCC, 0xCC, 0xCC] };
+        let value = SubPacket {
+            kind: SubPacketKind::Data,
+            length: PhantomData,
+            payload: vec![0xCC, 0xCC, 0x0CC, 0xCC, 0xCC, 0xCC],
+        };
         assert_eq!(value.to_bytes().unwrap(), &bytes);
         assert_eq!(SubPacket::from_bytes(&bytes).unwrap(), value);
     }
@@ -237,6 +247,7 @@ mod tests {
             }],
         };
 
+        assert_eq!(value.transfer_len() as usize, bytes.len());
         assert_eq!(value.to_bytes().unwrap(), &bytes);
         assert_eq!(ComPacket::from_bytes(&bytes).unwrap(), value);
     }

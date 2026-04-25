@@ -2,6 +2,7 @@ pub mod com_id;
 mod data_model;
 pub mod discovery;
 pub mod packet;
+pub mod session_id;
 pub mod token;
 
 pub use data_model::bytes::Bytes;

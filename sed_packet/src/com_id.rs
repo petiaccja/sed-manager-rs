@@ -86,7 +86,7 @@ pub enum HandleComIdResponseParams {
     },
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[sorbit(byte_order=big_endian, len=10)]
 pub struct Date {
     year: u16,

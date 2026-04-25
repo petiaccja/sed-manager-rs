@@ -4,8 +4,9 @@ use std::time::Instant;
 use std::{collections::VecDeque, sync::Arc};
 
 use sed_device::Device;
-use sed_packet::com_id::{HANDLE_COM_ID_RESPONSE_LEN, HandleComIdResponseParams};
-use sed_packet::{com_id::HandleComIdResponse, packet::ComPacket};
+use sed_packet::com_id::{HANDLE_COM_ID_RESPONSE_LEN, HandleComIdResponse, HandleComIdResponseParams};
+use sed_packet::packet::ComPacket;
+use sed_packet::session_id::SessionId;
 use sed_spec::methods::Properties;
 use sorbit::ser_de::{FromBytes, ToBytes};
 use tracing::{Instrument as _, debug, debug_span, instrument};
@@ -18,7 +19,6 @@ use crate::protocol::message::{
 use crate::protocol::method::WriteQueuedMethod;
 use crate::protocol::protocol::{Address, Context};
 use crate::protocol::retry::Retry;
-use crate::protocol::session_id::SessionId;
 
 pub struct DeviceSession {
     com_id: u16,
@@ -266,7 +266,6 @@ mod tests {
 
     use crate::protocol::message::{PacketReceived, SendPacket};
     use crate::protocol::protocol::DispatchMessage;
-    use crate::protocol::session_id::SessionId;
 
     use sed_device::Error as DeviceError;
     use sed_device::mock_device::{MockDevice, MockEvent};

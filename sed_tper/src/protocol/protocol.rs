@@ -7,6 +7,7 @@ use std::time::{Duration, Instant};
 use sed_async_runtime::{CancelToken, sleep_until, spawn, timeout_at};
 use sed_device::Device;
 use sed_packet::com_id::HandleComIdRequest;
+use sed_packet::session_id::SessionId;
 use sed_packet::packet::{COM_PACKET_HEADER_LEN, PACKET_HEADER_LEN, SUB_PACKET_HEADER_LEN};
 use sed_spec::methods::Properties;
 use tracing::{Instrument, Span, debug_span, instrument, warn};
@@ -14,7 +15,7 @@ use tracing::{Instrument, Span, debug_span, instrument, warn};
 use crate::protocol::device_session::DeviceSession;
 use crate::protocol::message::{ComResponse, Message, MethodResponse, SendComRequest, SendMethod};
 use crate::protocol::{
-    com_session::ComSession, management_session::ManagementSession, session::Session, session_id::SessionId,
+    com_session::ComSession, management_session::ManagementSession, session::Session,
 };
 
 const MAX_BUFFER_SIZE: usize = 1048576;

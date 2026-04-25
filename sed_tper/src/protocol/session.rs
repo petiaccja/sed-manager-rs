@@ -5,6 +5,7 @@ use std::time::Instant;
 use sed_async_runtime::cancel_channel;
 use sed_packet::packet::{PACKET_HEADER_LEN, Packet, SUB_PACKET_HEADER_LEN, SubPacket, SubPacketKind};
 use sed_packet::token::{Command, Detokenize, Error as TokenError, SorbitDetokenizer, ToTokens as _};
+use sed_packet::session_id::SessionId;
 use sed_spec::methods::Properties;
 use sorbit::error::ErrorKind;
 use sorbit::io::{FixedMemoryStream, Seek};
@@ -15,7 +16,6 @@ use crate::error::Error;
 use crate::protocol::message::{CommitBatch, Delete, Message, PacketReceived, SendMethod, SendPacket, SendPacketDone};
 use crate::protocol::method::{AnyMethodResult, RecvQueuedMethod, WriteQueuedMethod, retain_alive};
 use crate::protocol::protocol::{Address, Context};
-use crate::protocol::session_id::SessionId;
 
 #[derive(Debug)]
 pub struct Session {
