@@ -14,11 +14,11 @@ pub fn tokenize_struct(input: DeriveInput) -> Result<TokenStream, Error> {
     let field_values = fields.iter().map(|Field { name, member, .. }| match name {
         Some(_name) => quote! {
             match &self.#member {
-                Some(value) => ::sed_packet::Named{ name: #name, value }.tokenize(tokenizer),
+                Some(value) => ::sed_packet::Named{ name: #name, value }.tokenize(__tokenizer),
                 None => Ok(()),
             }
         },
-        None => quote! { self.#member.tokenize(tokenizer) },
+        None => quote! { self.#member.tokenize(__tokenizer) },
     });
 
     let ident = input.ident;
@@ -27,10 +27,10 @@ pub fn tokenize_struct(input: DeriveInput) -> Result<TokenStream, Error> {
     Ok(quote! {
         #[automatically_derived]
         impl #impl_generics ::sed_packet::token::Tokenize for #ident #ty_generics #where_clause {
-            fn tokenize<T: ::sed_packet::token::Tokenizer>(&self, tokenizer: &mut T)
+            fn tokenize<T: ::sed_packet::token::Tokenizer>(&self, __tokenizer: &mut T)
                 -> ::core::result::Result<(), T::Error>
             {
-                tokenizer.tokenize_list(|tokenizer| {
+                __tokenizer.tokenize_list(|__tokenizer| {
                     #(#field_values?;)*
                     Ok(())
                 })
@@ -55,7 +55,7 @@ pub fn detokenize_struct(input: DeriveInput) -> Result<TokenStream, Error> {
         let ident = member_to_ident(field.member.clone());
         let ty = &field.ty;
         match &field.name {
-            None => Some(quote! { #index => { #ident = Some(<#ty>::detokenize(detokenizer)?) } }),
+            None => Some(quote! { #index => { #ident = Some(<#ty>::detokenize(__detokenizer)?) } }),
             Some(_) => None,
         }
     });
@@ -67,7 +67,7 @@ pub fn detokenize_struct(input: DeriveInput) -> Result<TokenStream, Error> {
             None => None,
             Some(name) => Some(quote! {
                 #name => {
-                    #ident = Some(<#ty>::detokenize(detokenizer)?);
+                    #ident = Some(<#ty>::detokenize(__detokenizer)?);
                     Ok(())
                 }
             }),
@@ -91,22 +91,22 @@ pub fn detokenize_struct(input: DeriveInput) -> Result<TokenStream, Error> {
     Ok(quote! {
         #[automatically_derived]
         impl #impl_generics ::sed_packet::token::Detokenize  for #ident  #ty_generics #where_clause {
-            fn detokenize<D: ::sed_packet::token::Detokenizer>(detokenizer: &mut D)
+            fn detokenize<D: ::sed_packet::token::Detokenizer>(__detokenizer: &mut D)
                 -> ::core::result::Result<Self, D::Error>
             {
                 let mut index = 0usize;
                 #(#initializers)*
 
-                detokenizer.detokenize_list(|detokenizer| {
+                __detokenizer.detokenize_list(|__detokenizer| {
                     match index {
                         #(#mandatory_fields)*
                         _ => {
-                            let _ = detokenizer.detokenize_named(
-                                |detokenizer| {
-                                    u16::detokenize(detokenizer)
+                            let _ = __detokenizer.detokenize_named(
+                                |__detokenizer| {
+                                    u16::detokenize(__detokenizer)
                                 },
-                                |detokenizer, name| {
-                                    match name {
+                                |__detokenizer, __name| {
+                                    match __name {
                                         #(#optional_fields)*
                                         _ => ::core::result::Result::<(), D::Error>::Err(<D::Error as ::sed_packet::token::MessageError>::message("unknown optional field"))
                                     }

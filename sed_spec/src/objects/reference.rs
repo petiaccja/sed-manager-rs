@@ -30,7 +30,7 @@ pub type MbrControlRef = ObjectRef<{ table_id::MBR_CONTROL.to_u64() }>;
 pub type MethodRef = ObjectRef<{ table_id::METHOD_ID.to_u64() }>;
 
 /// The UID of an object in the SP table.
-pub type SpRef = ObjectRef<{ table_id::SP.to_u64() }>;
+pub type SecurityProviderRef = ObjectRef<{ table_id::SP.to_u64() }>;
 
 /// The UID of an object in the Table table.
 pub type TableDescRef = ObjectRef<{ table_id::TABLE.to_u64() }>;

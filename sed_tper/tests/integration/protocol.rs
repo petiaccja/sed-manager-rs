@@ -72,7 +72,7 @@ async fn send_management_method_success(_with_tracing: WithTracing) {
     let device = Arc::new(MockDevice::new(scenario.into_iter()));
     let (protocol, controller) = Protocol::new(com_id, 0, device.clone());
     let handle = spawn(protocol.run().in_current_span());
-    let result = timeout(TIMEOUT, controller.call(None, start_session.to_tokens().unwrap())).await;
+    let result = timeout(TIMEOUT, controller.call(SessionId::MANAGEMENT, start_session.to_tokens().unwrap())).await;
     drop(controller);
     let handle_result = handle.await;
 
@@ -105,7 +105,7 @@ async fn send_management_method_iface_send_fail(_with_tracing: WithTracing) {
     let device = Arc::new(MockDevice::new(scenario.into_iter()));
     let (protocol, controller) = Protocol::new(com_id, 0, device.clone());
     let handle = spawn(protocol.run().in_current_span());
-    let result = timeout(TIMEOUT, controller.call(None, start_session.to_tokens().unwrap())).await;
+    let result = timeout(TIMEOUT, controller.call(SessionId::MANAGEMENT, start_session.to_tokens().unwrap())).await;
     drop(controller);
     let handle_result = handle.await;
 
@@ -135,7 +135,7 @@ async fn send_management_method_iface_recv_failed(_with_tracing: WithTracing) {
     let device = Arc::new(MockDevice::new(scenario.into_iter()));
     let (protocol, controller) = Protocol::new(com_id, 0, device.clone());
     let handle = spawn(protocol.run().in_current_span());
-    let result = timeout(TIMEOUT, controller.call(None, start_session.to_tokens().unwrap())).await;
+    let result = timeout(TIMEOUT, controller.call(SessionId::MANAGEMENT, start_session.to_tokens().unwrap())).await;
     drop(controller);
     let handle_result = handle.await;
 
@@ -170,7 +170,7 @@ async fn send_session_method_success(_with_tracing: WithTracing) {
     let handle = spawn(protocol.run().in_current_span());
 
     controller.spawn(session_id, SHORT_PROPERTIES);
-    let result = timeout(TIMEOUT, controller.call(Some(session_id), random_call.to_tokens().unwrap())).await;
+    let result = timeout(TIMEOUT, controller.call(session_id, random_call.to_tokens().unwrap())).await;
     controller.delete(session_id);
 
     drop(controller);
@@ -208,7 +208,7 @@ async fn send_session_method_iface_send_failed(_with_tracing: WithTracing) {
     let handle = spawn(protocol.run().in_current_span());
 
     controller.spawn(session_id, SHORT_PROPERTIES);
-    let result = timeout(TIMEOUT, controller.call(Some(session_id), random_call.to_tokens().unwrap())).await;
+    let result = timeout(TIMEOUT, controller.call(session_id, random_call.to_tokens().unwrap())).await;
     controller.delete(session_id);
 
     drop(controller);
@@ -243,7 +243,7 @@ async fn send_session_method_iface_recv_failed(_with_tracing: WithTracing) {
     let handle = spawn(protocol.run().in_current_span());
 
     controller.spawn(session_id, SHORT_PROPERTIES);
-    let result = timeout(TIMEOUT, controller.call(Some(session_id), random_call.to_tokens().unwrap())).await;
+    let result = timeout(TIMEOUT, controller.call(session_id, random_call.to_tokens().unwrap())).await;
     controller.delete(session_id);
 
     drop(controller);

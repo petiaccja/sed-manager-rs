@@ -12,7 +12,7 @@ use sed_packet::{
 };
 use sed_spec::{
     methods::{MethodCall, MethodStatus, StartSession, SyncSession},
-    objects::{AuthorityRef, SpRef},
+    objects::{AuthorityRef, SecurityProviderRef},
     preconfig::core::shared::{invoking_id::SESSION_MANAGER, sm_method_id::START_SESSION},
 };
 use tracing::instrument;
@@ -65,7 +65,7 @@ impl TPer {
     #[instrument(level = "debug")]
     pub async fn start_session(
         &self,
-        sp: SpRef,
+        sp: SecurityProviderRef,
         authority: Option<AuthorityRef>,
         password: Option<MaxBytes<32>>,
     ) -> Result<Session, Error> {
@@ -98,7 +98,7 @@ impl TPer {
         if result.status == MethodStatus::Success {
             let tper_session_id = result.parameters.sp_session_id;
             let session_id = SessionId { hsn: host_session_id, tsn: tper_session_id };
-            Ok(Session::new(session_id, self.controller.clone()))
+            Ok(Session::from_started(session_id, self.controller.clone()))
         } else {
             Err(result.status.into())
         }

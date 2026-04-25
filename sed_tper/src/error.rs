@@ -45,6 +45,8 @@ pub enum Error {
     // RPC related.
     #[error("Method call failed: {}", .0)]
     MethodCallFailed(MethodStatus),
+    #[error("The requested field was not returned")]
+    FieldNotReturned,
     #[error("Stack reset failed")]
     StackResetFailed,
 

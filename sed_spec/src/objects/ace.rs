@@ -1,17 +1,45 @@
 use std::collections::HashSet;
 
+use sed_spec_macros::{DetokenizeStruct, FieldList, Object, TokenizeStruct};
+
 use crate::objects::{AceRef, AuthorityRef};
 use crate::preconfig::core::shared::table_id;
 use crate::types::{AceOperand, BooleanOp};
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-#[sed_spec_macros::object(table=table_id::ACE)]
+#[macro_export]
+macro_rules! ace_operand {
+    (||) => {
+        ::sed_spec::types::AceOperand::BooleanOp(::sed_spec::types::BooleanOp::Or)
+    };
+    (&&) => {
+        ::sed_spec::types::AceOperand::BooleanOp(::sed_spec::types::BooleanOp::And)
+    };
+    (!) => {
+        ::sed_spec::types::AceOperand::BooleanOp(::sed_spec::types::BooleanOp::Not)
+    };
+    ($authority:expr) => {
+        ::sed_spec::types::AceOperand::Authority($authority)
+    };
+}
+
+#[macro_export]
+macro_rules! ace_expr {
+    ($($operand:tt)*) => {
+        Vec::<::sed_spec::types::AceOperand>::from(vec![$(::sed_spec::objects::ace::ace_operand!($operand)),*])
+    };
+}
+
+pub use ace_expr;
+pub use ace_operand;
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Object, TokenizeStruct, DetokenizeStruct, FieldList)]
+#[object(table = table_id::ACE)]
 pub struct Ace {
-    pub uid: AceRef,
-    pub name: String,
-    pub common_name: String,
-    pub boolean_expr: Vec<AceOperand>,
-    pub columns: HashSet<u16>,
+    pub uid: Option<AceRef>,
+    pub name: Option<String>,
+    pub common_name: Option<String>,
+    pub boolean_expr: Option<Vec<AceOperand>>,
+    pub columns: Option<HashSet<u16>>,
 }
 
 pub trait AceExpr {
@@ -166,32 +194,6 @@ where
         Some(stack.pop().unwrap_or(vec![]))
     }
 }
-
-#[macro_export]
-macro_rules! ace_operand {
-    (||) => {
-        ::sed_spec::types::AceOperand::BooleanOp(::sed_spec::types::BooleanOp::Or)
-    };
-    (&&) => {
-        ::sed_spec::types::AceOperand::BooleanOp(::sed_spec::types::BooleanOp::And)
-    };
-    (!) => {
-        ::sed_spec::types::AceOperand::BooleanOp(::sed_spec::types::BooleanOp::Not)
-    };
-    ($authority:expr) => {
-        ::sed_spec::types::AceOperand::Authority($authority)
-    };
-}
-
-#[macro_export]
-macro_rules! ace_expr {
-    ($($operand:tt)*) => {
-        Vec::<::sed_spec::types::AceOperand>::from(vec![$(::sed_spec::objects::ace::ace_operand!($operand)),*])
-    };
-}
-
-pub use ace_expr;
-pub use ace_operand;
 
 #[cfg(test)]
 mod tests {

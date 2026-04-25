@@ -12,6 +12,7 @@ use crate::token::{Detokenize, Detokenizer, MessageError, Tokenize, Tokenizer};
 pub trait Object {
     const TABLE: TableRef;
     type Ref;
+    const FIELD_COUNT: u16;
 
     fn active_fields(&self) -> Vec<u16>;
     fn update(&mut self, other: Self);
@@ -181,35 +182,56 @@ impl<const TABLE: u64> Sub for &ObjectRef<TABLE> {
     }
 }
 
+impl<const TABLE: u64> std::fmt::Display for ObjectRef<TABLE> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", &self.0)
+    }
+}
+
 //------------------------------------------------------------------------------
 // Field reference
 //------------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct FieldRef<O, const TABLE: u64, const FIELD: u16>(ObjectRef<TABLE>, PhantomData<O>)
-where
-    O: Object + Field<FIELD>;
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct FieldRef<O, const TABLE: u64, const FIELD: u16>(pub ObjectRef<TABLE>, PhantomData<O>);
 
-impl<O, const TABLE: u64, const FIELD: u16> FieldRef<O, TABLE, FIELD>
-where
-    O: Object + Field<FIELD>,
-{
-    pub const fn new(object: ObjectRef<TABLE>) -> Self {
-        Self(object, PhantomData)
-    }
-
-    pub fn object(&self) -> ObjectRef<TABLE> {
+impl<O, const TABLE: u64, const FIELD: u16> FieldRef<O, TABLE, FIELD> {
+    pub const fn object(&self) -> ObjectRef<TABLE> {
         self.0
     }
 
-    pub fn field(&self) -> u16 {
+    pub const fn field(&self) -> u16 {
         FIELD
+    }
+}
+
+impl<O, const TABLE: u64, const FIELD: u16> From<ObjectRef<TABLE>> for FieldRef<O, TABLE, FIELD> {
+    fn from(value: ObjectRef<TABLE>) -> Self {
+        Self(value, PhantomData)
+    }
+}
+
+impl<O, const TABLE: u64, const FIELD: u16> From<FieldRef<O, TABLE, FIELD>> for ObjectRef<TABLE> {
+    fn from(value: FieldRef<O, TABLE, FIELD>) -> Self {
+        value.0
+    }
+}
+
+impl<O, const TABLE: u64, const FIELD: u16> std::fmt::Debug for FieldRef<O, TABLE, FIELD> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FieldRef").field("object", &self.0).field("field", &FIELD).finish()
+    }
+}
+
+impl<O, const TABLE: u64, const FIELD: u16> std::fmt::Display for FieldRef<O, TABLE, FIELD> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}.{}", &self.0, &FIELD)
     }
 }
 
 impl<O, const TABLE: u64, const FIELD: u16> Field<FIELD> for FieldRef<O, TABLE, FIELD>
 where
-    O: Object + Field<FIELD>,
+    O: Field<FIELD>,
 {
-    type Type = <O as Field<FIELD>>::Type;
+    type Type = O::Type;
 }

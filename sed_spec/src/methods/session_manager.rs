@@ -8,7 +8,7 @@ use sed_spec_macros::{DetokenizeStruct, TokenizeStruct};
 
 use crate::{
     methods::properties::Properties,
-    objects::{AuthorityRef, SpRef},
+    objects::{AuthorityRef, SecurityProviderRef},
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -75,7 +75,7 @@ fn detokenize_host_properties<D: Detokenizer>(
 #[derive(Debug, Clone, PartialEq, Eq, DetokenizeStruct, TokenizeStruct)]
 pub struct StartSession {
     pub host_session_id: u32,
-    pub spid: SpRef,
+    pub spid: SecurityProviderRef,
     pub write: bool,
     pub host_challenge: Option<MaxBytes<32>>,
     pub host_exchange_authority: Option<AuthorityRef>,
@@ -89,7 +89,7 @@ pub struct StartSession {
 }
 
 impl StartSession {
-    pub fn new(host_session_id: u32, spid: SpRef) -> Self {
+    pub fn new(host_session_id: u32, spid: SecurityProviderRef) -> Self {
         Self {
             host_session_id,
             spid,

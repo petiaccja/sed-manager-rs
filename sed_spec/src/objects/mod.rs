@@ -10,11 +10,11 @@ mod security_provider;
 mod table_desc;
 
 pub use ace::{Ace, AceExpr, ace_expr, ace_operand};
-pub use authority::Authority;
-pub use c_pin::CPin;
-pub use k_aes_256::KAes256;
-pub use locking_range::LockingRange;
-pub use mbr_control::MbrControl;
+pub use authority::{Authority, AuthorityRefExt};
+pub use c_pin::{CPin, CPinRefExt};
+pub use k_aes_256::{KAes256, KAes256RefExt};
+pub use locking_range::{LockingRange, LockingRangeRefExt};
+pub use mbr_control::{MbrControl, MbrControlRefExt};
 pub use reference::*;
-pub use security_provider::SecurityProvider;
-pub use table_desc::TableDesc;
+pub use security_provider::{SecurityProvider, SecurityProviderRefExt};
+pub use table_desc::{TableDesc, TableDescRefExt};
