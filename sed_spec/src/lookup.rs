@@ -11,7 +11,7 @@ use crate::path::Path;
 // is not available here.
 pub const SP_TABLE: TableRef = TableRef::new_unchecked(0x00000205_00000000);
 pub const META_TABLE: TableRef = TableRef::new_unchecked(0xFFFFFFFF_00000000);
-pub type SpRef = ObjectRef<{ SP_TABLE.to_u64() }>;
+pub(crate) type SpRef = ObjectRef<{ SP_TABLE.to_u64() }>;
 
 pub struct NameRange {
     pub prefix: &'static str,

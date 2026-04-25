@@ -41,7 +41,7 @@ fn impl_field_ref_getters(item: &ItemStruct) -> Result<TokenStream, Error> {
         let numeric_ident = format_ident!("field_{index}");
         let ident = field.ident.as_ref().unwrap_or(&numeric_ident);
         quote! {
-            const fn #ident(object: #ref_ty) -> ::sed_packet::FieldRef<Self, {<Self as ::sed_packet::Object>::TABLE.to_u64()}, #index> {
+            pub const fn #ident(object: #ref_ty) -> ::sed_packet::FieldRef<Self, {<Self as ::sed_packet::Object>::TABLE.to_u64()}, #index> {
                 ::sed_packet::FieldRef::new(object)
             }
         }

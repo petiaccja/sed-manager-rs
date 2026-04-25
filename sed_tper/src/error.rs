@@ -1,3 +1,4 @@
+use sed_spec::methods::MethodStatus;
 use sorbit::error::Error as SorbitError;
 
 use sed_device::Error as DeviceError;
@@ -33,13 +34,19 @@ pub enum Error {
     #[error("Received another message when a method result was expected")]
     MethodResultExpected,
     #[error("Received another message when an end of session message was expected")]
-    EOSExpected,
+    EndOfSessionExpected,
     #[error("The returned values are not of the requested type/format")]
     ResultTypeMismatch,
     #[error("The reveived ComID response refers to an unexpected ComID")]
     ComIdResponseComIdMismatch,
     #[error("The reveived ComID response contains results of a different request")]
     ComIdResponseCodeMismatch,
+
+    // RPC related.
+    #[error("Method call failed: {}", .0)]
+    MethodCallFailed(MethodStatus),
+    #[error("Stack reset failed")]
+    StackResetFailed,
 
     // General
     #[error("Operation not supported by the TPer")]
@@ -53,5 +60,17 @@ pub enum Error {
 impl From<DeviceError> for Error {
     fn from(value: DeviceError) -> Self {
         Self::SecurityCommandFailed(value)
+    }
+}
+
+impl From<TokenError> for Error {
+    fn from(value: TokenError) -> Self {
+        Self::TokenError(value)
+    }
+}
+
+impl From<MethodStatus> for Error {
+    fn from(value: MethodStatus) -> Self {
+        Self::MethodCallFailed(value)
     }
 }

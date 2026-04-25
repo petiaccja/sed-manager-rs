@@ -192,11 +192,8 @@ pub struct Controller {
 impl Controller {
     /// Perform an remote procedure call using tokenized methods.
     #[instrument(level = "debug")]
-    pub fn call(&self, session_id: Option<SessionId>, method_tokens: Vec<u8>) -> oneshot::Receiver<MethodResponse> {
-        let address = match session_id {
-            Some(session_id) => Address::from(session_id),
-            None => Address::ManagementSession,
-        };
+    pub fn call(&self, session_id: SessionId, method_tokens: Vec<u8>) -> oneshot::Receiver<MethodResponse> {
+        let address = Address::from(session_id);
         let (tx, rx) = oneshot::channel();
         self.context.send(address, Message::SendMethod(SendMethod { method: method_tokens, channel: tx }));
         rx
@@ -319,7 +316,7 @@ pub enum Address {
 
 impl From<SessionId> for Address {
     fn from(value: SessionId) -> Self {
-        if value.hsn == 0 && value.tsn == 0 {
+        if value == SessionId::MANAGEMENT {
             Self::ManagementSession
         } else {
             Self::Session(value)

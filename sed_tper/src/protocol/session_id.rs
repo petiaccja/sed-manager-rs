@@ -7,6 +7,8 @@ pub struct SessionId {
 }
 
 impl SessionId {
+    pub const MANAGEMENT: Self = Self { hsn: 0, tsn: 0 };
+
     pub fn of(packet: &Packet) -> Self {
         Self { hsn: packet.host_session_number, tsn: packet.tper_session_number }
     }
