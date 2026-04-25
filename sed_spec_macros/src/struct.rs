@@ -1,11 +1,10 @@
 use proc_macro2::TokenStream;
 use quote::{ToTokens, format_ident, quote};
-use syn::{
-    Data, DeriveInput, Error, GenericArgument, Ident, Index, Member, PathArguments, PathSegment, Type, TypePath,
-    spanned::Spanned,
-};
+use syn::{Data, DeriveInput, Error, Ident, Index, Member, Type, spanned::Spanned as _};
 
-pub fn tokenize_method_args(input: DeriveInput) -> Result<TokenStream, Error> {
+use crate::type_ext::TypeExt;
+
+pub fn tokenize_struct(input: DeriveInput) -> Result<TokenStream, Error> {
     let Data::Struct(struct_item) = input.data else {
         return Err(Error::new(input.span(), "expected a struct"));
     };
@@ -40,7 +39,7 @@ pub fn tokenize_method_args(input: DeriveInput) -> Result<TokenStream, Error> {
     })
 }
 
-pub fn detokenize_method_args(input: DeriveInput) -> Result<TokenStream, Error> {
+pub fn detokenize_struct(input: DeriveInput) -> Result<TokenStream, Error> {
     let Data::Struct(struct_item) = input.data else {
         return Err(Error::new(input.span(), "expected a struct"));
     };
@@ -143,8 +142,7 @@ fn parse_fields(struct_item: syn::DataStruct) -> Result<Vec<Field>, Error> {
                 Some(ident) => Member::from(ident),
                 None => Member::from(index as usize),
             };
-            let underlying_ty = option_underlying_type(&field.ty).cloned();
-            let is_optional = underlying_ty.is_some();
+            let is_optional = field.ty.is_option();
             if !is_optional && *name_idx != 0 {
                 return Some(Err(Error::new(
                     field.ty.span(),
@@ -153,7 +151,7 @@ fn parse_fields(struct_item: syn::DataStruct) -> Result<Vec<Field>, Error> {
             }
             let name = is_optional.then_some(*name_idx);
             *name_idx += is_optional as u16;
-            Some(Ok(Field { name, ty: underlying_ty.unwrap_or(field.ty), member }))
+            Some(Ok(Field { name, ty: field.ty.remove_option().clone(), member }))
         })
         .collect::<Result<Vec<_>, _>>()
 }
@@ -162,34 +160,5 @@ fn member_to_ident(member: Member) -> Ident {
     match member {
         Member::Named(ident) => ident,
         Member::Unnamed(Index { index, .. }) => format_ident!("m{index}"),
-    }
-}
-
-fn option_underlying_type(ty: &Type) -> Option<&syn::Type> {
-    match ty {
-        syn::Type::Path(TypePath { qself: _, path }) => {
-            let mut rev_segments = path.segments.iter().rev();
-            match rev_segments.next() {
-                Some(segment) if segment.ident == "Option" => (),
-                _ => return None,
-            };
-            match rev_segments.next() {
-                Some(segment) if segment.ident == "option" => (),
-                None if path.leading_colon.is_none() => (),
-                _ => return None,
-            };
-            match rev_segments.next() {
-                Some(segment) if segment.ident == "std" || segment.ident == "core" => (),
-                None if path.leading_colon.is_none() => (),
-                _ => return None,
-            };
-            if let Some(PathSegment { arguments: PathArguments::AngleBracketed(args), .. }) = path.segments.last() {
-                if let (Some(GenericArgument::Type(ty)), 1) = (args.args.first(), args.args.len()) {
-                    return Some(ty);
-                }
-            };
-            None
-        }
-        _ => None,
     }
 }

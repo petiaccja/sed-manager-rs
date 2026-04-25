@@ -1,5 +1,6 @@
-mod method;
 mod object;
+mod r#struct;
+mod type_ext;
 
 use proc_macro::TokenStream;
 
@@ -25,7 +26,7 @@ pub fn tokenize_struct(tokens: TokenStream) -> TokenStream {
         Ok(item) => item,
         Err(err) => return err.into_compile_error().into(),
     };
-    match method::tokenize_method_args(input) {
+    match r#struct::tokenize_struct(input) {
         Ok(tokens) => tokens.into(),
         Err(err) => err.into_compile_error().into(),
     }
@@ -37,7 +38,7 @@ pub fn detokenize_struct(tokens: TokenStream) -> TokenStream {
         Ok(item) => item,
         Err(err) => return err.into_compile_error().into(),
     };
-    match method::detokenize_method_args(input) {
+    match r#struct::detokenize_struct(input) {
         Ok(tokens) => tokens.into(),
         Err(err) => err.into_compile_error().into(),
     }
