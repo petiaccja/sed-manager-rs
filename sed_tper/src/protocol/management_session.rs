@@ -5,13 +5,12 @@ use std::time::Instant;
 use sed_async_runtime::{CancelSender, cancel_channel};
 use sed_packet::packet::{PACKET_HEADER_LEN, Packet, SUB_PACKET_HEADER_LEN, SubPacket, SubPacketKind};
 use sed_packet::session_id::SessionId;
-use sed_packet::token::{Detokenize as _, Error as TokenError, FromTokens as _, SorbitDetokenizer};
+use sed_packet::token::FromTokens as _;
 use sed_spec::methods::{
-    CloseSession, MethodStatus, MgmtMethodCall, MgmtMethodCallParams, Properties, PropertiesMethod, SyncSession,
+    CloseSession, ExtractResult, MethodStatus, MgmtMethodCall, MgmtMethodCallParams, Properties, PropertiesMethod,
+    SyncSession, extract_method,
 };
-use sorbit::error::ErrorKind;
-use sorbit::io::{FixedMemoryStream, Seek as _};
-use sorbit::stream_ser_de::StreamDeserializer;
+
 use tracing::{debug_span, instrument};
 
 use crate::error::Error;
@@ -115,63 +114,50 @@ impl ManagementSession {
             }
         }
 
-        let stream = FixedMemoryStream::new(self.receive_buffer.make_contiguous() as &[u8]);
-        let deserializer = StreamDeserializer::new(stream);
-        let mut detokenizer = SorbitDetokenizer::new(deserializer);
-        match MgmtMethodCall::detokenize(&mut detokenizer) {
-            Ok(response) => {
-                let stream_pos = detokenizer
-                    .take()
-                    .take()
-                    .stream_position()
-                    .expect("stream position always succeeds for FixedMemoryStream");
-                let method_tokens: Vec<_> = self.receive_buffer.drain(..stream_pos as usize).collect();
-                match &response.params {
-                    MgmtMethodCallParams::SyncSession(SyncSession { host_session_id, sp_session_id, .. }) => {
-                        if let Some(pending) = self.sync_session_queue.get_mut(&host_session_id) {
-                            if let Some(RecvQueuedMethod { channel, cancel_sender, mgmt_session_meta, .. }) =
-                                pending.pop_front()
-                            {
-                                let properties =
-                                    *mgmt_session_meta.expect("SM methods must always have meta data, wrong address?");
-                                cancel_sender.map(CancelSender::cancel);
-                                let _ = channel.send(Ok(method_tokens));
-                                if response.status == MethodStatus::Success {
-                                    context.send(
-                                        Address::Control,
-                                        Message::Spawn(Spawn {
-                                            id: SessionId { hsn: *host_session_id, tsn: *sp_session_id },
-                                            properties,
-                                        }),
-                                    );
-                                }
-                            }
-                            if pending.is_empty() {
-                                self.sync_session_queue.remove(&host_session_id);
+        match extract_method::<MgmtMethodCall>(&mut self.receive_buffer) {
+            ExtractResult::Ok { value, tokens } => match &value.params {
+                MgmtMethodCallParams::SyncSession(SyncSession { host_session_id, sp_session_id, .. }) => {
+                    if let Some(pending) = self.sync_session_queue.get_mut(&host_session_id) {
+                        if let Some(RecvQueuedMethod { channel, cancel_sender, mgmt_session_meta, .. }) =
+                            pending.pop_front()
+                        {
+                            let properties =
+                                *mgmt_session_meta.expect("SM methods must always have meta data, wrong address?");
+                            cancel_sender.map(CancelSender::cancel);
+                            let _ = channel.send(Ok(tokens));
+                            if value.status == MethodStatus::Success {
+                                context.send(
+                                    Address::Control,
+                                    Message::Spawn(Spawn {
+                                        id: SessionId { hsn: *host_session_id, tsn: *sp_session_id },
+                                        properties,
+                                    }),
+                                );
                             }
                         }
-                    }
-                    MgmtMethodCallParams::CloseSession(CloseSession {
-                        remote_session_number,
-                        local_session_number,
-                    }) => {
-                        context.send(
-                            Address::Session(SessionId { hsn: *remote_session_number, tsn: *local_session_number }),
-                            Message::Abort(Abort),
-                        );
-                    }
-                    MgmtMethodCallParams::Properties(properties) => match properties {
-                        PropertiesMethod::Host { .. } => (),
-                        PropertiesMethod::TPer { properties, .. } => {
-                            self.properties = Properties::common(&self.capabilities, properties)
+                        if pending.is_empty() {
+                            self.sync_session_queue.remove(&host_session_id);
                         }
-                    },
-                    _ => (),
+                    }
                 }
-            }
-            Err(TokenError::SerializationFailed(err)) if err.kind() == ErrorKind::UnexpectedEof => (),
-            Err(_) => self.reset(),
-        }
+                MgmtMethodCallParams::CloseSession(CloseSession { remote_session_number, local_session_number }) => {
+                    context.send(
+                        Address::Session(SessionId { hsn: *remote_session_number, tsn: *local_session_number }),
+                        Message::Abort(Abort),
+                    );
+                }
+                MgmtMethodCallParams::Properties(properties) => match properties {
+                    PropertiesMethod::Host { .. } => (),
+                    PropertiesMethod::TPer { properties, .. } => {
+                        self.properties = Properties::common(&self.capabilities, properties)
+                    }
+                },
+                _ => (),
+            },
+            ExtractResult::NeedMoreTokens => (),
+            ExtractResult::EndOfStream => self.reset(),
+            ExtractResult::InvalidTokens(_) => self.reset(),
+        };
     }
 
     fn reset(&mut self) {

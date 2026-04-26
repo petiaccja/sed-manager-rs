@@ -4,12 +4,10 @@ use std::time::Instant;
 
 use sed_async_runtime::cancel_channel;
 use sed_packet::packet::{PACKET_HEADER_LEN, Packet, SUB_PACKET_HEADER_LEN, SubPacket, SubPacketKind};
-use sed_packet::token::{Command, Detokenize, Error as TokenError, SorbitDetokenizer, ToTokens as _};
 use sed_packet::session_id::SessionId;
-use sed_spec::methods::Properties;
-use sorbit::error::ErrorKind;
-use sorbit::io::{FixedMemoryStream, Seek};
-use sorbit::stream_ser_de::StreamDeserializer;
+use sed_packet::token::{Command, ToTokens as _};
+use sed_spec::methods::{ExtractResult, Properties, extract_method};
+
 use tracing::instrument;
 
 use crate::error::Error;
@@ -164,30 +162,21 @@ impl Session {
                         receive_buffer.extend(payload);
                     }
                 }
-                if is_end_of_session(receive_buffer.make_contiguous()) {
-                    self.shutdown(context);
-                } else {
-                    let mut detokenizer = make_detokenizer(receive_buffer);
-                    match AnyMethodResult::detokenize(&mut detokenizer) {
-                        Ok(_) => {
-                            let stream_pos = detokenizer
-                                .take()
-                                .take()
-                                .stream_position()
-                                .expect("stream position always succeeds for FixedMemoryStream");
-                            let result_tokens: Vec<_> = receive_buffer.drain(..stream_pos as usize).collect();
-                            if let Some(RecvQueuedMethod { channel, cancel_sender, .. }) = channel_queue.pop_front() {
-                                cancel_sender.map(|cancel_sender| cancel_sender.cancel());
-                                let _ = channel.send(Ok(result_tokens));
-                            } else {
-                                // Either the device sent too much stuff, or there is a packet distribution bug.
-                                self.abort(context);
-                            }
+
+                match extract_method::<AnyMethodResult>(receive_buffer) {
+                    ExtractResult::Ok { value: _, tokens } => {
+                        if let Some(RecvQueuedMethod { channel, cancel_sender, .. }) = channel_queue.pop_front() {
+                            cancel_sender.map(|cancel_sender| cancel_sender.cancel());
+                            let _ = channel.send(Ok(tokens));
+                        } else {
+                            // Either the device sent too much stuff, or there is a packet distribution bug.
+                            self.abort(context);
                         }
-                        Err(TokenError::SerializationFailed(err)) if err.kind() == ErrorKind::UnexpectedEof => (),
-                        Err(_) => self.abort(context),
                     }
-                }
+                    ExtractResult::NeedMoreTokens => (),
+                    ExtractResult::EndOfStream => self.shutdown(context),
+                    ExtractResult::InvalidTokens(_) => self.abort(context),
+                };
             }
             State::Closed => (),
         }
@@ -253,12 +242,6 @@ enum State {
         channel_queue: VecDeque<RecvQueuedMethod>,
     },
     Closed,
-}
-
-fn make_detokenizer(buffer: &mut VecDeque<u8>) -> SorbitDetokenizer<StreamDeserializer<FixedMemoryStream<&[u8]>>> {
-    let stream = FixedMemoryStream::new(buffer.make_contiguous() as &[u8]);
-    let deserializer = StreamDeserializer::new(stream);
-    SorbitDetokenizer::new(deserializer)
 }
 
 fn is_end_of_session(bytes: &[u8]) -> bool {
