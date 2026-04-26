@@ -1,9 +1,17 @@
-use sed_packet::Uid;
 use sed_packet::token::{Command, Detokenize, Detokenizer, MessageError as _, Tokenize, Tokenizer};
+use sed_packet::{TableRef, Uid};
 
-use crate::methods::{CloseSession, MethodStatus, PropertiesMethod, StartSession, SyncSession};
+use crate::methods::{
+    Activate, Authenticate, CloseSession, GenKey, Get, GetAcl, MethodParam, MethodStatus, NextUntyped,
+    PropertiesMethod, Random, Revert, RevertSp, SetBytes, SetObject, StartSession, SyncSession,
+};
+use crate::objects::{Ace, Authority, CPin, KAes256, LockingRange, MbrControl, SecurityProvider, TableDesc};
 use crate::preconfig::core::shared::invoking_id::SESSION_MANAGER;
-use crate::preconfig::core::shared::sm_method_id::{CLOSE_SESSION, PROPERTIES, START_SESSION, SYNC_SESSION};
+use crate::preconfig::core::shared::{method_id, table_id};
+
+//------------------------------------------------------------------------------
+// Generic method call
+//------------------------------------------------------------------------------
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MethodCall<Parameters> {
@@ -54,6 +62,10 @@ where
     }
 }
 
+//------------------------------------------------------------------------------
+// Session manager method call
+//------------------------------------------------------------------------------
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MgmtMethodCall {
     pub params: MgmtMethodCallParams,
@@ -73,17 +85,23 @@ impl Tokenize for MgmtMethodCall {
         Command::Call.tokenize(tokenizer)?;
         SESSION_MANAGER.tokenize(tokenizer)?;
         match &self.params {
-            MgmtMethodCallParams::StartSession(_) => START_SESSION.tokenize(tokenizer)?,
-            MgmtMethodCallParams::SyncSession(_) => SYNC_SESSION.tokenize(tokenizer)?,
-            MgmtMethodCallParams::CloseSession(_) => CLOSE_SESSION.tokenize(tokenizer)?,
-            MgmtMethodCallParams::Properties(_) => PROPERTIES.tokenize(tokenizer)?,
-        }
-        match &self.params {
-            MgmtMethodCallParams::StartSession(params) => params.tokenize(tokenizer)?,
-            MgmtMethodCallParams::SyncSession(params) => params.tokenize(tokenizer)?,
-            MgmtMethodCallParams::CloseSession(params) => params.tokenize(tokenizer)?,
-            MgmtMethodCallParams::Properties(params) => params.tokenize(tokenizer)?,
-        }
+            MgmtMethodCallParams::StartSession(params) => {
+                params.method_id().tokenize(tokenizer)?;
+                params.tokenize(tokenizer)?;
+            }
+            MgmtMethodCallParams::SyncSession(params) => {
+                params.method_id().tokenize(tokenizer)?;
+                params.tokenize(tokenizer)?;
+            }
+            MgmtMethodCallParams::CloseSession(params) => {
+                params.method_id().tokenize(tokenizer)?;
+                params.tokenize(tokenizer)?;
+            }
+            MgmtMethodCallParams::Properties(params) => {
+                params.method_id().tokenize(tokenizer)?;
+                params.tokenize(tokenizer)?;
+            }
+        };
         Command::EndOfData.tokenize(tokenizer)?;
         vec![self.status, MethodStatus::Success, MethodStatus::Success].tokenize(tokenizer)?;
         Ok(())
@@ -103,10 +121,10 @@ impl Detokenize for MgmtMethodCall {
         }
         let method_id = Uid::detokenize(detokenizer)?;
         let params = match method_id {
-            START_SESSION => MgmtMethodCallParams::StartSession(StartSession::detokenize(detokenizer)?),
-            SYNC_SESSION => MgmtMethodCallParams::SyncSession(SyncSession::detokenize(detokenizer)?),
-            CLOSE_SESSION => MgmtMethodCallParams::CloseSession(CloseSession::detokenize(detokenizer)?),
-            PROPERTIES => MgmtMethodCallParams::Properties(PropertiesMethod::detokenize(detokenizer)?),
+            StartSession::METHOD_ID => MgmtMethodCallParams::StartSession(<_>::detokenize(detokenizer)?),
+            SyncSession::METHOD_ID => MgmtMethodCallParams::SyncSession(<_>::detokenize(detokenizer)?),
+            CloseSession::METHOD_ID => MgmtMethodCallParams::CloseSession(<_>::detokenize(detokenizer)?),
+            PropertiesMethod::METHOD_ID => MgmtMethodCallParams::Properties(<_>::detokenize(detokenizer)?),
             _ => return Err(D::Error::message(format!("unrecognized SM method {}", method_id))),
         };
         let eod_command = Command::detokenize(detokenizer)?;
@@ -119,6 +137,173 @@ impl Detokenize for MgmtMethodCall {
             return Err(D::Error::message("received empty method status list"));
         };
         Ok(Self { params, status })
+    }
+}
+
+//------------------------------------------------------------------------------
+// Session method call
+//------------------------------------------------------------------------------
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SessionMethodCall {
+    pub invoking_id: Uid,
+    pub params: SessionMethodCallParams,
+    pub status: MethodStatus,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SessionMethodCallParams {
+    Activate(Activate),
+    Authenticate(Authenticate),
+    Next(NextUntyped),
+    GetAcl(GetAcl),
+    GenKey(GenKey),
+    Revert(Revert),
+    RevertSp(RevertSp),
+    Random(Random),
+    Get(Get),
+    SetAce(SetObject<Ace>),
+    SetAuthority(SetObject<Authority>),
+    SetCPin(SetObject<CPin>),
+    SetKAes256(SetObject<KAes256>),
+    SetLockingRange(SetObject<LockingRange>),
+    SetMbrControl(SetObject<MbrControl>),
+    SetSecurityProvider(SetObject<SecurityProvider>),
+    SetTableDesc(SetObject<TableDesc>),
+    SetBytes(SetBytes),
+}
+
+impl Tokenize for SessionMethodCall {
+    fn tokenize<T: Tokenizer>(&self, tokenizer: &mut T) -> Result<(), T::Error> {
+        Command::Call.tokenize(tokenizer)?;
+        self.invoking_id.tokenize(tokenizer)?;
+        match &self.params {
+            SessionMethodCallParams::Activate(params) => {
+                params.method_id().tokenize(tokenizer)?;
+                params.tokenize(tokenizer)?;
+            }
+            SessionMethodCallParams::Authenticate(params) => {
+                params.method_id().tokenize(tokenizer)?;
+                params.tokenize(tokenizer)?;
+            }
+            SessionMethodCallParams::Next(params) => {
+                params.method_id().tokenize(tokenizer)?;
+                params.tokenize(tokenizer)?;
+            }
+            SessionMethodCallParams::GetAcl(params) => {
+                params.method_id().tokenize(tokenizer)?;
+                params.tokenize(tokenizer)?;
+            }
+            SessionMethodCallParams::GenKey(params) => {
+                params.method_id().tokenize(tokenizer)?;
+                params.tokenize(tokenizer)?;
+            }
+            SessionMethodCallParams::Revert(params) => {
+                params.method_id().tokenize(tokenizer)?;
+                params.tokenize(tokenizer)?;
+            }
+            SessionMethodCallParams::RevertSp(params) => {
+                params.method_id().tokenize(tokenizer)?;
+                params.tokenize(tokenizer)?;
+            }
+            SessionMethodCallParams::Random(params) => {
+                params.method_id().tokenize(tokenizer)?;
+                params.tokenize(tokenizer)?;
+            }
+            SessionMethodCallParams::Get(params) => {
+                params.method_id().tokenize(tokenizer)?;
+                params.tokenize(tokenizer)?;
+            }
+            SessionMethodCallParams::SetAce(params) => {
+                params.method_id().tokenize(tokenizer)?;
+                params.tokenize(tokenizer)?;
+            }
+            SessionMethodCallParams::SetAuthority(params) => {
+                params.method_id().tokenize(tokenizer)?;
+                params.tokenize(tokenizer)?;
+            }
+            SessionMethodCallParams::SetCPin(params) => {
+                params.method_id().tokenize(tokenizer)?;
+                params.tokenize(tokenizer)?;
+            }
+            SessionMethodCallParams::SetKAes256(params) => {
+                params.method_id().tokenize(tokenizer)?;
+                params.tokenize(tokenizer)?;
+            }
+            SessionMethodCallParams::SetLockingRange(params) => {
+                params.method_id().tokenize(tokenizer)?;
+                params.tokenize(tokenizer)?;
+            }
+            SessionMethodCallParams::SetMbrControl(params) => {
+                params.method_id().tokenize(tokenizer)?;
+                params.tokenize(tokenizer)?;
+            }
+            SessionMethodCallParams::SetSecurityProvider(params) => {
+                params.method_id().tokenize(tokenizer)?;
+                params.tokenize(tokenizer)?;
+            }
+            SessionMethodCallParams::SetTableDesc(params) => {
+                params.method_id().tokenize(tokenizer)?;
+                params.tokenize(tokenizer)?;
+            }
+            SessionMethodCallParams::SetBytes(params) => {
+                params.method_id().tokenize(tokenizer)?;
+                params.tokenize(tokenizer)?;
+            }
+        };
+        Command::EndOfData.tokenize(tokenizer)?;
+        vec![self.status, MethodStatus::Success, MethodStatus::Success].tokenize(tokenizer)?;
+        Ok(())
+    }
+}
+
+impl Detokenize for SessionMethodCall {
+    fn detokenize<D: Detokenizer>(detokenizer: &mut D) -> Result<Self, D::Error> {
+        let call_command = Command::detokenize(detokenizer)?;
+        match call_command {
+            Command::Call => (),
+            _ => return Err(D::Error::message("expected a CALL token")),
+        }
+        let invoking_id = Uid::detokenize(detokenizer)?;
+        let method_id = Uid::detokenize(detokenizer)?;
+        let invoking_table = TableRef::containing_table(invoking_id).or(TableRef::try_from(invoking_id).ok());
+        let params = match method_id {
+            Activate::METHOD_ID => SessionMethodCallParams::Activate(<_>::detokenize(detokenizer)?),
+            Authenticate::METHOD_ID => SessionMethodCallParams::Authenticate(<_>::detokenize(detokenizer)?),
+            NextUntyped::METHOD_ID => SessionMethodCallParams::Next(<_>::detokenize(detokenizer)?),
+            GetAcl::METHOD_ID => SessionMethodCallParams::GetAcl(<_>::detokenize(detokenizer)?),
+            GenKey::METHOD_ID => SessionMethodCallParams::GenKey(<_>::detokenize(detokenizer)?),
+            Revert::METHOD_ID => SessionMethodCallParams::Revert(<_>::detokenize(detokenizer)?),
+            RevertSp::METHOD_ID => SessionMethodCallParams::RevertSp(<_>::detokenize(detokenizer)?),
+            Random::METHOD_ID => SessionMethodCallParams::Random(<_>::detokenize(detokenizer)?),
+            Get::METHOD_ID => SessionMethodCallParams::Get(<_>::detokenize(detokenizer)?),
+            method_id if method_id == method_id::SET.to_uid() => match invoking_table {
+                Some(table_id::ACE) => SessionMethodCallParams::SetAce(<_>::detokenize(detokenizer)?),
+                Some(table_id::AUTHORITY) => SessionMethodCallParams::SetAuthority(<_>::detokenize(detokenizer)?),
+                Some(table_id::C_PIN) => SessionMethodCallParams::SetCPin(<_>::detokenize(detokenizer)?),
+                Some(table_id::K_AES_256) => SessionMethodCallParams::SetKAes256(<_>::detokenize(detokenizer)?),
+                Some(table_id::LOCKING) => SessionMethodCallParams::SetLockingRange(<_>::detokenize(detokenizer)?),
+                Some(table_id::MBR_CONTROL) => SessionMethodCallParams::SetMbrControl(<_>::detokenize(detokenizer)?),
+                Some(table_id::SP) => SessionMethodCallParams::SetSecurityProvider(<_>::detokenize(detokenizer)?),
+                Some(table_id::TABLE) => SessionMethodCallParams::SetTableDesc(<_>::detokenize(detokenizer)?),
+                Some(table_id::MBR) => SessionMethodCallParams::SetBytes(<_>::detokenize(detokenizer)?),
+                Some(table) => return Err(D::Error::message(format!("Set method: unrecognized table: {}", table))),
+                None => {
+                    return Err(D::Error::message(format!("Set method: invoking_id ({}) is not a table", invoking_id)));
+                }
+            },
+            _ => return Err(D::Error::message(format!("unrecognized SM method {}", method_id))),
+        };
+        let eod_command = Command::detokenize(detokenizer)?;
+        match eod_command {
+            Command::EndOfData => (),
+            _ => return Err(D::Error::message("expected an END_OF_DATA token")),
+        }
+        let status = Vec::<MethodStatus>::detokenize(detokenizer)?;
+        let Some(status) = status.first().cloned() else {
+            return Err(D::Error::message("received empty method status list"));
+        };
+        Ok(Self { invoking_id, params, status })
     }
 }
 

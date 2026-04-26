@@ -1,20 +1,29 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use sed_packet::{
-    Bytes, MaxBytes, Named,
+    Bytes, MaxBytes, Named, Uid,
     token::{Detokenize, Detokenizer, MessageError as _, Tokenize, Tokenizer, ValueKind},
 };
 use sed_spec_macros::{DetokenizeStruct, TokenizeStruct};
 
 use crate::{
-    methods::properties::Properties,
+    methods::{MethodParam, properties::Properties},
     objects::{AuthorityRef, SecurityProviderRef},
+    preconfig::core::shared::sm_method_id,
 };
+
+//------------------------------------------------------------------------------
+// Properties
+//------------------------------------------------------------------------------
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PropertiesMethod {
     Host { host_properties: Option<Properties> },
     TPer { properties: Properties, host_properties: Option<Properties> },
+}
+
+impl MethodParam for PropertiesMethod {
+    const METHOD_ID: Uid = sm_method_id::PROPERTIES;
 }
 
 impl Tokenize for PropertiesMethod {
@@ -72,6 +81,10 @@ fn detokenize_host_properties<D: Detokenizer>(
     Ok(())
 }
 
+//------------------------------------------------------------------------------
+// StartSession
+//------------------------------------------------------------------------------
+
 #[derive(Debug, Clone, PartialEq, Eq, DetokenizeStruct, TokenizeStruct)]
 pub struct StartSession {
     pub host_session_id: u32,
@@ -107,6 +120,14 @@ impl StartSession {
     }
 }
 
+impl MethodParam for StartSession {
+    const METHOD_ID: Uid = sm_method_id::START_SESSION;
+}
+
+//------------------------------------------------------------------------------
+// SyncSession
+//------------------------------------------------------------------------------
+
 #[derive(Debug, Clone, PartialEq, Eq, DetokenizeStruct, TokenizeStruct)]
 pub struct SyncSession {
     pub host_session_id: u32,
@@ -134,8 +155,20 @@ impl SyncSession {
     }
 }
 
+impl MethodParam for SyncSession {
+    const METHOD_ID: Uid = sm_method_id::SYNC_SESSION;
+}
+
+//------------------------------------------------------------------------------
+// CloseSession
+//------------------------------------------------------------------------------
+
 #[derive(Debug, Clone, PartialEq, Eq, DetokenizeStruct, TokenizeStruct)]
 pub struct CloseSession {
     pub remote_session_number: u32,
     pub local_session_number: u32,
+}
+
+impl MethodParam for CloseSession {
+    const METHOD_ID: Uid = sm_method_id::CLOSE_SESSION;
 }

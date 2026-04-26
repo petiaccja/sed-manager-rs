@@ -10,6 +10,13 @@ impl TableRef {
         if uid.is_table() { Some(Self(uid)) } else { None }
     }
 
+    pub const fn containing_table(uid: Uid) -> Option<Self> {
+        match uid.containing_table() {
+            Some(table_uid) => Some(Self(table_uid)),
+            None => None,
+        }
+    }
+
     pub const fn new_unchecked(value: u64) -> Self {
         Self::new(value).expect("the UID must refer to a table")
     }
@@ -60,5 +67,11 @@ impl Tokenize for TableRef {
 impl Detokenize for TableRef {
     fn detokenize<D: Detokenizer>(detokenizer: &mut D) -> Result<Self, D::Error> {
         Self::try_from(Uid::detokenize(detokenizer)?).map_err(|_| D::Error::message("the UID must refer to a table"))
+    }
+}
+
+impl std::fmt::Display for TableRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, self.0)
     }
 }
