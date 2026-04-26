@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 
+use sed_packet::ObjectUid;
 use sed_spec_macros::{DetokenizeStruct, FieldList, Object, TokenizeStruct};
 
 use crate::objects::{AceRef, AuthorityRef};
@@ -25,7 +26,7 @@ macro_rules! ace_operand {
 #[macro_export]
 macro_rules! ace_expr {
     ($($operand:tt)*) => {
-        Vec::<::sed_spec::types::AceOperand>::from(vec![$(::sed_spec::objects::ace::ace_operand!($operand)),*])
+        Vec::<$crate::types::AceOperand>::from(vec![$($crate::objects::ace_operand!($operand)),*])
     };
 }
 
@@ -40,6 +41,12 @@ pub struct Ace {
     pub common_name: Option<String>,
     pub boolean_expr: Option<Vec<AceOperand>>,
     pub columns: Option<HashSet<u16>>,
+}
+
+impl ObjectUid for Ace {
+    fn uid(&self) -> Option<Self::Ref> {
+        self.uid
+    }
 }
 
 pub trait AceExpr {

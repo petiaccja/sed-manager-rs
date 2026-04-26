@@ -1,13 +1,13 @@
 [workspace]
 resolver = "2"
 members = [
-    "sed_manager",
-    "sed_manager_macros",
+    #"sed_manager",
+    #"sed_manager_macros",
     #"sed_manager_config",
     #"sed_manager_config_ui",
     #"sed_manager_unlock",
-    "as_array",
-    "as_array_macros",
+    #"as_array",
+    #"as_array_macros",
     "sed_packet",
     "sed_spec",
     "sed_spec_macros",
@@ -15,7 +15,8 @@ members = [
     "sed_device",
     "sed_tper",
     "sed_async_runtime",
-    "sed_telemetry", "sed_virtual_device",
+    "sed_telemetry",
+    "sed_virtual_device",
 ]
 
 [workspace.dependencies]
@@ -90,3 +91,6 @@ opentelemetry-otlp = { version = "0.31.1", features = [
     "gzip-http",
 ] }
 tonic = { version = "0.14.5", features = ["tls-native-roots", "gzip"] }
+
+# -- Crypto & random
+rand = "0.10.1"

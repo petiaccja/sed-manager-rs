@@ -72,6 +72,6 @@ impl Detokenize for TableRef {
 
 impl std::fmt::Display for TableRef {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, self.0)
+        write!(f, "{}", self.0)
     }
 }

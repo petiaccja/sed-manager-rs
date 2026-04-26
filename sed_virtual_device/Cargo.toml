@@ -8,3 +8,4 @@ sed_device.workspace = true
 sed_packet.workspace = true
 sed_spec.workspace = true
 sorbit.workspace = true
+rand.workspace = true

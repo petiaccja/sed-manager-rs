@@ -1,5 +1,5 @@
 use proc_macro2::{Span, TokenStream};
-use quote::{ToTokens, quote};
+use quote::{ToTokens, format_ident, quote};
 use syn::{
     Attribute, Data, DataStruct, DeriveInput, Error, Expr, Member, Meta, punctuated::Punctuated, spanned::Spanned,
     token::Comma,
@@ -23,6 +23,14 @@ pub fn object(input: DeriveInput) -> Result<TokenStream, Error> {
     let table = parse_table_expr(&input.attrs, input.span())?;
     let active_fields = active_fields_method(data);
     let update = update_method(data);
+    let field_indices = data.fields.iter().enumerate().filter_map(|(index, field)| match &field.ident {
+        Some(ident) => {
+            let const_ident = format_ident!("{}", ident.to_string().to_uppercase());
+            let index = index as u16;
+            Some(quote! { pub const #const_ident: u16 = #index; })
+        }
+        None => None,
+    });
     let field_count = data.fields.len() as u16;
     Ok(quote! {
         impl #impl_generics ::sed_packet::Object for #name #ty_generics #where_clause {
@@ -31,6 +39,10 @@ pub fn object(input: DeriveInput) -> Result<TokenStream, Error> {
             const FIELD_COUNT : u16 = #field_count;
             #active_fields
             #update
+        }
+
+        impl #name {
+            #(#field_indices)*
         }
     })
 }

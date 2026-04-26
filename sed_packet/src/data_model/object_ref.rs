@@ -22,6 +22,10 @@ pub trait Field<const INDEX: u16> {
     type Type;
 }
 
+pub trait ObjectUid: Object {
+    fn uid(&self) -> Option<Self::Ref>;
+}
+
 //------------------------------------------------------------------------------
 // Object reference
 //------------------------------------------------------------------------------

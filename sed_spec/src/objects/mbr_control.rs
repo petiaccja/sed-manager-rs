@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 
-use sed_spec_macros::{DetokenizeStruct, Object, TokenizeStruct, FieldList};
+use sed_packet::ObjectUid;
+use sed_spec_macros::{DetokenizeStruct, FieldList, Object, TokenizeStruct};
 
 use crate::objects::MbrControlRef;
 use crate::preconfig::core::shared::table_id;
@@ -13,4 +14,10 @@ pub struct MbrControl {
     pub enable: Option<bool>,
     pub done: Option<bool>,
     pub done_on_reset: Option<HashSet<ResetType>>,
+}
+
+impl ObjectUid for MbrControl {
+    fn uid(&self) -> Option<Self::Ref> {
+        self.uid
+    }
 }

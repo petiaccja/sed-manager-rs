@@ -1,3 +1,4 @@
+use sed_packet::ObjectUid;
 use smallvec::SmallVec;
 
 use sed_spec_macros::{DetokenizeStruct, FieldList, Object, TokenizeStruct};
@@ -17,4 +18,10 @@ pub struct SecurityProvider {
     pub bytes: Option<u64>,
     pub life_cycle_state: Option<LifeCycleState>,
     pub frozen: Option<bool>,
+}
+
+impl ObjectUid for SecurityProvider {
+    fn uid(&self) -> Option<Self::Ref> {
+        self.uid
+    }
 }

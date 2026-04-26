@@ -462,7 +462,7 @@ mod tests {
     const TEST_SPEC: &str = r#"
     {
         "Core": {
-            "*": {
+            "Shared": {
                 "TableID": {
                     "Authority": "0000000900000000"
                 }
@@ -489,7 +489,7 @@ mod tests {
             (
                 "Core".into(),
                 Feature(HashMap::from([(
-                    "*".into(),
+                    "Shared".into(),
                     SecurityProvider(HashMap::from([(
                         "TableID".into(),
                         Table(HashMap::from([("Authority".into(), Object::Unique(0x0000000900000000))])),
@@ -515,7 +515,6 @@ mod tests {
 
     #[test]
     fn generate_example() {
-        let spec = generate_spec(TEST_SPEC).unwrap();
-        println!("{spec}")
+        let _spec = generate_spec(TEST_SPEC).unwrap();
     }
 }

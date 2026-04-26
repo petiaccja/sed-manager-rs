@@ -1,5 +1,5 @@
-use sed_packet::Uid;
-use sed_spec_macros::{DetokenizeStruct, Object, TokenizeStruct, FieldList};
+use sed_packet::{ObjectUid, Uid};
+use sed_spec_macros::{DetokenizeStruct, FieldList, Object, TokenizeStruct};
 
 use crate::objects::{AuthorityRef, LogListRef};
 use crate::preconfig::core::shared::table_id;
@@ -27,4 +27,10 @@ pub struct Authority {
     pub uses: Option<u32>,
     pub log: Option<LogSelect>,
     pub log_to: Option<LogListRef>,
+}
+
+impl ObjectUid for Authority {
+    fn uid(&self) -> Option<Self::Ref> {
+        self.uid
+    }
 }

@@ -1,13 +1,13 @@
+use sed_packet::session_id::SessionId;
 use sed_packet::token::{Command, Detokenize, FromTokens, ToTokens};
 use sed_packet::{Bytes, Field, FieldRef, Named, Object, Uid};
-use sed_packet::session_id::SessionId;
 use sed_spec::methods::{CellBlock, Get, MethodCall, MethodResult, MethodStatus, Random, RandomResult};
 use sed_spec::preconfig::core::shared::method_id::GET;
 use sed_spec::preconfig::core::shared::{invoking_id::THIS_SP, method_id::RANDOM};
 use tracing::instrument;
 
 use crate::error::Error;
-use crate::protocol::{Controller};
+use crate::protocol::Controller;
 
 /// A session to one of the TPer's security providers.
 ///

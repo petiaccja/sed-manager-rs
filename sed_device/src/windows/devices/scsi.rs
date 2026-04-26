@@ -11,9 +11,7 @@ use winapi::shared::ntddscsi::{
 };
 
 use crate::shared::aligned_array::AlignedArray;
-use crate::shared::scsi::{
-    Command, DescriptorSenseData, FixedSenseData, SCSIError, SenseKey, SenseResponseCode,
-};
+use crate::shared::scsi::{Command, DescriptorSenseData, FixedSenseData, SCSIError, SenseKey, SenseResponseCode};
 use crate::windows::utility::{file_handle::FileHandle, ioctl::ioctl_in_out};
 use crate::{Device, Error as DeviceError, Interface};
 

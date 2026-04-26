@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 
+use sed_packet::ObjectUid;
 use sed_spec_macros::{DetokenizeStruct, FieldList, Object, TokenizeStruct};
 
 use crate::objects::{KAes256Ref, LockingRangeRef};
@@ -31,4 +32,10 @@ pub struct LockingRange {
     pub last_reencrypt_lba: Option<u64>,
     pub last_reenc_stat: Option<LastReencStatus>,
     pub general_status: Option<GeneralStatus>,
+}
+
+impl ObjectUid for LockingRange {
+    fn uid(&self) -> Option<Self::Ref> {
+        self.uid
+    }
 }

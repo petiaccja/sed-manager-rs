@@ -1,5 +1,6 @@
 mod reference;
 
+mod access_control;
 mod ace;
 mod authority;
 mod c_pin;
@@ -9,6 +10,7 @@ mod mbr_control;
 mod security_provider;
 mod table_desc;
 
+pub use access_control::AccessControl;
 pub use ace::{Ace, AceExpr, ace_expr, ace_operand};
 pub use authority::{Authority, AuthorityRefExt};
 pub use c_pin::{CPin, CPinRefExt};

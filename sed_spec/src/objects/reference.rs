@@ -1,4 +1,4 @@
-use sed_packet::ObjectRef;
+use sed_packet::{ObjectRef, Uid};
 
 use crate::{preconfig::core::shared::table_id, types::Type};
 
@@ -43,4 +43,10 @@ pub type TypeRef = ObjectRef<{ table_id::TYPE.to_u64() }>;
 
 impl Type for AuthorityRef {
     const UID: TypeRef = TypeRef::new_unchecked(0x0000_0005_0000_0C05);
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct AccessControlRef {
+    pub invoking_id: Uid,
+    pub method_id: MethodRef,
 }

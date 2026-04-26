@@ -1,4 +1,5 @@
-use sed_spec_macros::{DetokenizeStruct, Object, TokenizeStruct, FieldList};
+use sed_packet::ObjectUid;
+use sed_spec_macros::{DetokenizeStruct, FieldList, Object, TokenizeStruct};
 
 use crate::objects::KAes256Ref;
 use crate::preconfig::core::shared::table_id;
@@ -12,4 +13,10 @@ pub struct KAes256 {
     pub common_name: Option<String>,
     pub key: Option<[u8; 64]>,
     pub mode: Option<SymmetricModeMedia>,
+}
+
+impl ObjectUid for KAes256 {
+    fn uid(&self) -> Option<Self::Ref> {
+        self.uid
+    }
 }

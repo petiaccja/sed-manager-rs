@@ -8,7 +8,7 @@ mod session_manager;
 mod status;
 mod token_stream;
 
-pub use call::{MethodCall, MgmtMethodCall, MgmtMethodCallParams};
+pub use call::{MethodCall, MgmtMethodCall, MgmtMethodCallParams, SessionMethodCall, SessionMethodCallParams};
 pub use cell_block::CellBlock;
 pub use method_param::MethodParam;
 pub use properties::Properties;

@@ -1,4 +1,4 @@
-use sed_packet::Uid;
+use sed_packet::{ObjectUid, Uid};
 
 use sed_spec_macros::{DetokenizeStruct, FieldList, Object, TokenizeStruct};
 
@@ -22,4 +22,10 @@ pub struct TableDesc {
     pub last_id: Option<Uid>,
     pub min_size: Option<u32>,
     pub max_size: Option<u32>,
+}
+
+impl ObjectUid for TableDesc {
+    fn uid(&self) -> Option<Self::Ref> {
+        self.uid
+    }
 }
