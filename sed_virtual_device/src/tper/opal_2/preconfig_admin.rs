@@ -21,6 +21,7 @@ const ADMINS: Range<usize> = 1..5;
 
 pub fn preconfig() -> Admin {
     Admin {
+        uid: sp::ADMIN,
         access_control: access_control(),
         ace: ace(),
         authority: authority(),

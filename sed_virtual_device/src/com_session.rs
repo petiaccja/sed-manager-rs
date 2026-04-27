@@ -15,6 +15,10 @@ pub struct ComSession {
 }
 
 impl ComSession {
+    pub fn new(com_id: ComId) -> Self {
+        Self { com_id, response_queue: None }
+    }
+
     pub fn push(
         &mut self,
         packet_sessions: &HashMap<ComId, PacketSession>,

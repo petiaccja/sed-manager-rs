@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::ops::DerefMut;
 use std::sync::Mutex;
 
 use sed_device::{Device, Error, Interface};
@@ -6,15 +7,31 @@ use sed_packet::com_id::HandleComIdRequest;
 use sed_packet::packet::ComPacket;
 use sorbit::ser_de::{FromBytes, ToBytes as _};
 
-use crate::com_id::ComId;
+use crate::com_id::{ComId, ComIdExt};
 use crate::com_session::ComSession;
 use crate::packet_session::PacketSession;
-use crate::tper::TPer;
+use crate::tper::{Opal2TPer, TPer};
 
+pub const BASE_COM_ID: ComId = ComId(3072);
+pub const NUM_COM_IDS: u16 = 1;
+
+#[derive(Debug)]
 pub struct VirtualDevice {
     tper: Mutex<TPer>,
-    com_sessions: Mutex<HashMap<ComId, ComSession>>,
-    packet_sessions: Mutex<HashMap<ComId, PacketSession>>,
+    sessions: Mutex<Sessions>,
+}
+
+impl VirtualDevice {
+    pub fn new() -> Self {
+        let static_com_ids = (BASE_COM_ID.0..BASE_COM_ID.0 + NUM_COM_IDS).map(|com_id| ComId(com_id));
+        let com_sessions = static_com_ids.clone().map(|com_id| (com_id, ComSession::new(com_id))).collect();
+        let packet_sessions = static_com_ids.map(|com_id| (com_id, PacketSession::new(com_id, ComIdExt(0)))).collect();
+
+        Self {
+            tper: TPer::Opal2(Opal2TPer::default()).into(),
+            sessions: Sessions { com_sessions, packet_sessions }.into(),
+        }
+    }
 }
 
 impl Device for VirtualDevice {
@@ -44,8 +61,8 @@ impl Device for VirtualDevice {
 
     fn security_send(&self, security_protocol: u8, protocol_specific: [u8; 2], data: &[u8]) -> Result<(), Error> {
         let mut tper = self.tper.lock().expect("the virtual device panicked in another thread");
-        let mut com_sessions = self.com_sessions.lock().expect("the virtual device panicked in another thread");
-        let mut packet_sessions = self.packet_sessions.lock().expect("the virtual device panicked in another thread");
+        let mut sessions = self.sessions.lock().expect("the virtual device panicked in another thread");
+        let Sessions { com_sessions, packet_sessions } = sessions.deref_mut();
 
         let com_id = u16::from_be_bytes(protocol_specific);
         match (security_protocol, com_id) {
@@ -55,7 +72,7 @@ impl Device for VirtualDevice {
             (0x02, com_id) if let Some(session) = com_sessions.get_mut(&ComId(com_id)) => {
                 match HandleComIdRequest::from_bytes(data) {
                     Ok(request) => {
-                        let command = session.push(&*packet_sessions, request);
+                        let command = session.push(packet_sessions, request);
                         if let Some(command) = command {
                             com_sessions.remove(&command.0);
                             packet_sessions.remove(&command.0);
@@ -81,8 +98,8 @@ impl Device for VirtualDevice {
 
     fn security_recv(&self, security_protocol: u8, protocol_specific: [u8; 2], len: usize) -> Result<Vec<u8>, Error> {
         let mut tper = self.tper.lock().expect("the virtual device panicked in another thread");
-        let mut com_sessions = self.com_sessions.lock().expect("the virtual device panicked in another thread");
-        let mut packet_sessions = self.packet_sessions.lock().expect("the virtual device panicked in another thread");
+        let mut sessions = self.sessions.lock().expect("the virtual device panicked in another thread");
+        let Sessions { com_sessions, packet_sessions } = sessions.deref_mut();
 
         let com_id = u16::from_be_bytes(protocol_specific);
         match (security_protocol, com_id) {
@@ -113,4 +130,10 @@ impl Device for VirtualDevice {
             (_, _) => Err(Error::InvalidProtocolOrComID),
         }
     }
+}
+
+#[derive(Debug, Default)]
+struct Sessions {
+    com_sessions: HashMap<ComId, ComSession>,
+    packet_sessions: HashMap<ComId, PacketSession>,
 }

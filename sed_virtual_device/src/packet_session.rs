@@ -5,6 +5,7 @@ use sed_packet::packet::ComPacket;
 use sed_packet::session_id::SessionId;
 
 use crate::com_id::{ComId, ComIdExt};
+use crate::management_session::ManagementSession;
 use crate::session::Session;
 use crate::tper::TPer;
 
@@ -13,11 +14,23 @@ pub struct PacketSession {
     com_id: ComId,
     com_id_ext: ComIdExt,
     is_associated: bool,
+    management_session: ManagementSession,
     sessions: HashMap<SessionId, Session>,
     response_queue: VecDeque<ComPacket>,
 }
 
 impl PacketSession {
+    pub fn new(com_id: ComId, com_id_ext: ComIdExt) -> Self {
+        Self {
+            com_id,
+            com_id_ext,
+            is_associated: false,
+            management_session: ManagementSession::new(),
+            sessions: HashMap::new(),
+            response_queue: VecDeque::new(),
+        }
+    }
+
     pub fn com_id_ext(&self) -> ComIdExt {
         self.com_id_ext
     }
@@ -31,19 +44,33 @@ impl PacketSession {
     pub fn push(&mut self, tper: &mut TPer, com_packet: ComPacket) {
         for packet in com_packet.payload {
             let session_id = SessionId::of(&packet);
-            if let Some(session) = self.sessions.get_mut(&session_id) {
-                session.dispatch(tper, packet);
-            }
+            let packets = if session_id == SessionId::MANAGEMENT {
+                self.management_session.dispatch(tper, &mut self.sessions, packet)
+            } else if let Some(session) = self.sessions.get_mut(&session_id) {
+                session.dispatch(tper, packet)
+            } else {
+                vec![]
+            };
+
+            let com_packets =
+                packets.into_iter().map(|packet| ComPacket { payload: vec![packet], ..Default::default() });
+            self.response_queue.extend(com_packets);
         }
     }
 
     pub fn pop(&mut self, transfer_len: usize) -> Result<ComPacket, Error> {
         let front = self.response_queue.pop_front_if(|com_packet| com_packet.transfer_len() as usize <= transfer_len);
+        let outstanding_data = self.response_queue.iter().map(|com_packet| com_packet.transfer_len()).sum();
+        let min_transfer = self.response_queue.front().iter().map(|com_packet| com_packet.transfer_len()).sum();
         match front {
-            Some(front) => Ok(front),
+            Some(front) => Ok(ComPacket {
+                com_id: self.com_id.0,
+                com_id_ext: self.com_id_ext().0,
+                outstanding_data,
+                min_transfer,
+                ..front
+            }),
             None => {
-                let outstanding_data = self.response_queue.iter().map(|com_packet| com_packet.transfer_len()).sum();
-                let min_transfer = self.response_queue.front().iter().map(|com_packet| com_packet.transfer_len()).sum();
                 let response = ComPacket {
                     com_id: self.com_id.0,
                     com_id_ext: self.com_id_ext().0,

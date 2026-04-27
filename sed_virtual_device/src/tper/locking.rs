@@ -1,8 +1,12 @@
-use sed_spec::objects::{AccessControl, Ace, Authority, CPin, KAes256, LockingRange, MbrControl, TableDesc};
+use sed_spec::objects::{
+    AccessControl, Ace, Authority, CPin, KAes256, LockingRange, MbrControl, SecurityProviderRef, TableDesc,
+};
 
 use crate::tper::security_provider::{SecurityProvider, Table};
 
+#[derive(Debug)]
 pub struct Locking {
+    pub uid: SecurityProviderRef,
     pub access_control: Table<AccessControl>,
     pub ace: Table<Ace>,
     pub authority: Table<Authority>,

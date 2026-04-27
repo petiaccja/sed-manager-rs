@@ -23,6 +23,7 @@ impl Session {
         Self::Open { recv_buffer: VecDeque::new(), session_id }
     }
 
+    #[must_use]
     pub fn dispatch(&mut self, tper: &mut TPer, packet: Packet) -> Vec<Packet> {
         if let Session::Open { recv_buffer, .. } = self {
             let data_sub_packets = packet.payload.iter().filter(|sub_packet| sub_packet.kind == SubPacketKind::Data);

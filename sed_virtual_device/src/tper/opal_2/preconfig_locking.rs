@@ -5,7 +5,10 @@ use sed_spec::{
     objects::{AccessControl, AccessControlRef, Ace, Authority, CPin, LockingRange, MbrControl, TableDesc},
     preconfig::{
         core::shared::{invoking_id::THIS_SP, mbr_control, table},
-        opal_2::locking::{ace, authority, c_pin, k_aes_256, locking},
+        opal_2::{
+            admin::sp,
+            locking::{ace, authority, c_pin, k_aes_256, locking},
+        },
     },
     types::{AuthMethod, TableKind},
 };
@@ -24,6 +27,7 @@ const MBR_SIZE: u32 = 0x08000000;
 
 pub fn preconfig() -> Locking {
     Locking {
+        uid: sp::LOCKING,
         access_control: access_control(),
         ace: ace(),
         authority: authority(),
