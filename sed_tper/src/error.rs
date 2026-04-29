@@ -13,6 +13,8 @@ pub enum Error {
     InvalidComIdResponse(SorbitError),
     #[error("Invalid ComPacket received from device: {}", .0)]
     InvalidComPacket(SorbitError),
+    #[error("Invalid Discovery received from device: {}", .0)]
+    InvalidDiscovery(SorbitError),
 
     // Protocol-related.
     #[error("Security command failure: {}", .0)]

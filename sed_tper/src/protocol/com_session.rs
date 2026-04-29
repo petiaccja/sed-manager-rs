@@ -98,9 +98,9 @@ mod tests {
 
     use super::*;
 
-    use sed_packet::com_id::HandleComIdRequest;
-    use sed_packet::com_id::HandleComIdResponse;
-    use sed_packet::com_id::HandleComIdResponseParams;
+    use sed_packet::com_id::ComIdRequest;
+    use sed_packet::com_id::ComIdResponse;
+    use sed_packet::com_id::ComIdResponsePayload;
     use sed_packet::com_id::StackResetStatus;
 
     use googletest::matchers::*;
@@ -111,7 +111,7 @@ mod tests {
         let mut com_session = ComSession::new(Duration::from_millis(1000));
         let (context, queue) = Context::mock();
         let (tx, rx) = oneshot::channel();
-        let request = HandleComIdRequest::stack_reset(0x12, 0x00);
+        let request = ComIdRequest::stack_reset(0x12, 0x00);
         com_session.send_com_request(context, SendComRequest { request: request.clone(), channel: tx });
 
         let DispatchMessage { address, message, .. } = queue.try_recv().unwrap();
@@ -160,13 +160,10 @@ mod tests {
         let (tx, rx) = oneshot::channel();
         com_session.send_com_request_done(context, SendComRequestDone { status: Ok(()), channel: tx });
 
-        let response = HandleComIdResponse {
+        let response = ComIdResponse {
             com_id: 0,
             com_id_ext: 0,
-            params: HandleComIdResponseParams::StackReset {
-                available_data_length: 0,
-                status: StackResetStatus::Success,
-            },
+            payload: ComIdResponsePayload::StackReset { available_data_length: 0, status: StackResetStatus::Success },
         };
 
         com_session.com_response_received(ComResponseReceived { response: response.clone() });

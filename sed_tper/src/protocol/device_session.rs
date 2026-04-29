@@ -4,7 +4,7 @@ use std::time::Instant;
 use std::{collections::VecDeque, sync::Arc};
 
 use sed_device::Device;
-use sed_packet::com_id::{HANDLE_COM_ID_RESPONSE_LEN, HandleComIdResponse, HandleComIdResponseParams};
+use sed_packet::com_id::{COM_ID_RESPONSE_LEN, ComIdResponse, ComIdResponsePayload};
 use sed_packet::packet::ComPacket;
 use sed_packet::session_id::SessionId;
 use sed_spec::methods::Properties;
@@ -92,7 +92,7 @@ impl DeviceSession {
     }
 
     #[instrument(level = "debug")]
-    pub fn security_recv_com_id_request_done(&mut self, context: Context, result: Result<HandleComIdResponse, Error>) {
+    pub fn security_recv_com_id_request_done(&mut self, context: Context, result: Result<ComIdResponse, Error>) {
         self.com_id_state = match replace(&mut self.com_id_state, ComIdProtocolState::Processing) {
             ComIdProtocolState::Receiving => match result {
                 Ok(response) => {
@@ -243,15 +243,15 @@ async fn security_recv_com_packet(device: Arc<dyn Device>, com_id: u16) -> Messa
 
 async fn security_recv_com_id_request(device: Arc<dyn Device>, com_id: u16) -> Message {
     #[instrument(level = "debug", skip(device))]
-    async fn _security_recv_com_id_request(device: Arc<dyn Device>, com_id: u16) -> Result<HandleComIdResponse, Error> {
+    async fn _security_recv_com_id_request(device: Arc<dyn Device>, com_id: u16) -> Result<ComIdResponse, Error> {
         let mut retry = Retry::new(Instant::now() + Properties::ASSUMED.def_trans_timeout);
         loop {
-            let bytes = device.security_recv(0x02, com_id.to_be_bytes(), HANDLE_COM_ID_RESPONSE_LEN)?;
-            let response = HandleComIdResponse::from_bytes(&bytes).map_err(|err| Error::InvalidComIdResponse(err))?;
-            match &response.params {
-                HandleComIdResponseParams::NoResponseAvailable { .. } => retry.sleep().await?,
-                HandleComIdResponseParams::VerifyComIdValid { .. } => break Ok(response),
-                HandleComIdResponseParams::StackReset { .. } => break Ok(response),
+            let bytes = device.security_recv(0x02, com_id.to_be_bytes(), COM_ID_RESPONSE_LEN)?;
+            let response = ComIdResponse::from_bytes(&bytes).map_err(|err| Error::InvalidComIdResponse(err))?;
+            match &response.payload {
+                ComIdResponsePayload::NoResponseAvailable { .. } => retry.sleep().await?,
+                ComIdResponsePayload::Verify { .. } => break Ok(response),
+                ComIdResponsePayload::StackReset { .. } => break Ok(response),
             }
         }
     }
@@ -269,7 +269,7 @@ mod tests {
 
     use sed_device::Error as DeviceError;
     use sed_device::mock_device::{MockDevice, MockEvent};
-    use sed_packet::com_id::{HandleComIdRequest, StackResetStatus};
+    use sed_packet::com_id::{ComIdRequest, StackResetStatus};
     use sed_packet::packet::{Packet, SubPacket, SubPacketKind};
 
     fn create_request_com_packet() -> ComPacket {
@@ -479,14 +479,11 @@ mod tests {
         // This is a rather lengthy test, but it probably makes more sense to
         // test the entire process than to manually set the state machine
 
-        let request = HandleComIdRequest::stack_reset(1, 0);
-        let reply = HandleComIdResponse {
+        let request = ComIdRequest::stack_reset(1, 0);
+        let reply = ComIdResponse {
             com_id: 1,
             com_id_ext: 0,
-            params: HandleComIdResponseParams::StackReset {
-                available_data_length: 0,
-                status: StackResetStatus::Success,
-            },
+            payload: ComIdResponsePayload::StackReset { available_data_length: 0, status: StackResetStatus::Success },
         };
 
         let events = [
@@ -579,7 +576,7 @@ mod tests {
 
     #[tokio::test]
     async fn send_com_id_interface_send_failure() {
-        let request = HandleComIdRequest::stack_reset(1, 0);
+        let request = ComIdRequest::stack_reset(1, 0);
 
         let events = [MockEvent::Send {
             name: Some("send method call".into()),

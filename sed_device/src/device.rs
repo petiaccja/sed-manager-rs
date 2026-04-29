@@ -41,3 +41,15 @@ impl core::fmt::Display for Interface {
         }
     }
 }
+
+impl<'a> core::fmt::Debug for dyn Device + 'a {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("dyn Device")
+            .field("interface", &self.interface())
+            .field("model_number", &self.model_number())
+            .field("serial_number", &self.serial_number())
+            .field("firmware_revision", &self.firmware_revision())
+            .field("is_security_supported", &self.is_security_supported())
+            .finish()
+    }
+}

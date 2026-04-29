@@ -1,3 +1,4 @@
+use core::mem::replace;
 use std::collections::VecDeque;
 use std::marker::PhantomData;
 use std::time::Instant;
@@ -11,7 +12,9 @@ use sed_spec::methods::{ExtractResult, Properties, extract_method};
 use tracing::instrument;
 
 use crate::error::Error;
-use crate::protocol::message::{CommitBatch, Delete, Message, PacketReceived, SendMethod, SendPacket, SendPacketDone};
+use crate::protocol::message::{
+    CommitBatch, Delete, Message, MethodResponse, PacketReceived, SendMethod, SendPacket, SendPacketDone,
+};
 use crate::protocol::method::{AnyMethodResult, RecvQueuedMethod, WriteQueuedMethod, retain_alive};
 use crate::protocol::protocol::{Address, Context};
 
@@ -42,19 +45,21 @@ impl Session {
     #[instrument(level = "debug")]
     pub fn send_method(&mut self, context: Context, SendMethod { method, channel }: SendMethod) {
         let address = self.address();
-        self.state = match core::mem::replace(&mut self.state, State::Closed) {
+        self.state = match replace(&mut self.state, State::Closed) {
             State::Active { mut send_method_queue, receive_buffer, channel_queue } => {
                 let is_end_of_session = is_end_of_session(&method);
 
-                if send_method_queue.is_empty() {
-                    context.send(address, Message::CommitBatch(CommitBatch));
-                }
+                let send_commit_batch = send_method_queue.is_empty();
                 send_method_queue.push_back(SendMethod { method, channel });
 
                 if !is_end_of_session {
-                    self.commit_batch(context, CommitBatch);
+                    if send_commit_batch {
+                        context.send(address, Message::CommitBatch(CommitBatch));
+                    }
                     State::Active { send_method_queue, receive_buffer, channel_queue }
                 } else {
+                    let packets = packetize_method_queue(&self.properties, send_method_queue);
+                    send_packets(self.session_id, context, packets);
                     State::Closing { receive_buffer, channel_queue }
                 }
             }
@@ -71,29 +76,10 @@ impl Session {
 
     #[instrument(level = "debug")]
     pub fn commit_batch(&mut self, context: Context, message: CommitBatch) {
-        let topic = self.address();
         match &mut self.state {
             State::Active { send_method_queue, .. } => {
-                let max_method_size =
-                    std::cmp::max(PACKET_HEADER_LEN + SUB_PACKET_HEADER_LEN, self.properties.max_gross_packet_size)
-                        - PACKET_HEADER_LEN
-                        + SUB_PACKET_HEADER_LEN;
-                while let Some(SendMethod { method, channel }) = send_method_queue.pop_front() {
-                    if method.len() <= max_method_size {
-                        let sub_packet = SubPacket { kind: SubPacketKind::Data, length: PhantomData, payload: method };
-                        let packet = self.session_id.assign(Packet { payload: vec![sub_packet], ..Default::default() });
-                        context.send(
-                            Address::DeviceSession,
-                            Message::SendPacket(SendPacket {
-                                sender: topic.clone(),
-                                packet,
-                                methods: vec![WriteQueuedMethod { channel, mgmt_session_meta: None }],
-                            }),
-                        );
-                    } else {
-                        let _ = channel.send(Err(Error::MethodTooLarge));
-                    }
-                }
+                let packets = packetize_method_queue(&self.properties, replace(send_method_queue, VecDeque::new()));
+                send_packets(self.session_id, context, packets);
             }
             State::Closing { .. } => (),
             State::Closed => (),
@@ -174,7 +160,13 @@ impl Session {
                         }
                     }
                     ExtractResult::NeedMoreTokens => (),
-                    ExtractResult::EndOfStream => self.shutdown(context),
+                    ExtractResult::EndOfStream => {
+                        if let Some(RecvQueuedMethod { channel, cancel_sender, .. }) = channel_queue.pop_front() {
+                            cancel_sender.map(|cancel_sender| cancel_sender.cancel());
+                            let _ = channel.send(Ok(Command::EndOfSession.to_tokens().unwrap()));
+                        }
+                        self.shutdown(context)
+                    }
                     ExtractResult::InvalidTokens(_) => self.abort(context),
                 };
             }
@@ -211,7 +203,7 @@ impl Session {
     }
 
     fn abort_pending_methods(&mut self) {
-        match core::mem::replace(&mut self.state, State::Closed) {
+        match replace(&mut self.state, State::Closed) {
             State::Active { send_method_queue, channel_queue, .. } => {
                 for SendMethod { channel, .. } in send_method_queue {
                     let _ = channel.send(Err(Error::Aborted));
@@ -248,6 +240,39 @@ fn is_end_of_session(bytes: &[u8]) -> bool {
     bytes.first() == Command::EndOfSession.to_tokens().expect("tokenization of commands should never fail").first()
 }
 
+fn packetize_method_queue(
+    properties: &Properties,
+    mut send_method_queue: VecDeque<SendMethod>,
+) -> Vec<(Packet, oneshot::Sender<MethodResponse>)> {
+    let max_method_size = std::cmp::max(PACKET_HEADER_LEN + SUB_PACKET_HEADER_LEN, properties.max_gross_packet_size)
+        - PACKET_HEADER_LEN
+        + SUB_PACKET_HEADER_LEN;
+    let mut packets = Vec::new();
+    while let Some(SendMethod { method, channel }) = send_method_queue.pop_front() {
+        if method.len() <= max_method_size {
+            let sub_packet = SubPacket { kind: SubPacketKind::Data, length: PhantomData, payload: method };
+            let packet = Packet { payload: vec![sub_packet], ..Default::default() };
+            packets.push((packet, channel));
+        } else {
+            let _ = channel.send(Err(Error::MethodTooLarge));
+        }
+    }
+    packets
+}
+
+fn send_packets(session_id: SessionId, context: Context, packets: Vec<(Packet, oneshot::Sender<MethodResponse>)>) {
+    for (packet, channel) in packets {
+        context.send(
+            Address::DeviceSession,
+            Message::SendPacket(SendPacket {
+                sender: session_id.into(),
+                packet: session_id.assign(packet),
+                methods: vec![WriteQueuedMethod { channel, mgmt_session_meta: None }],
+            }),
+        );
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::time::Duration;
@@ -276,7 +301,7 @@ mod tests {
     }
 
     #[test]
-    fn send_method() {
+    fn send_method_regular() {
         let session_id = SessionId { hsn: 1, tsn: 2 };
         let mut session = Session::new(session_id, Properties::ASSUMED);
         let (context, queue) = Context::mock();
@@ -289,6 +314,23 @@ mod tests {
         assert_that!(message, matches_pattern!(Message::CommitBatch(_)));
         assert!(queue.is_empty());
         assert_that!(session.state, field!(State::Active.send_method_queue, len(eq(1))));
+        assert_that!(rx.has_message(), eq(false));
+    }
+
+    #[test]
+    fn send_method_eos() {
+        let session_id = SessionId { hsn: 1, tsn: 2 };
+        let mut session = Session::new(session_id, Properties::ASSUMED);
+        let (context, queue) = Context::mock();
+        let (tx, rx) = oneshot::channel();
+        let method = Command::EndOfSession;
+        session.send_method(context, SendMethod { method: method.to_tokens().unwrap(), channel: tx });
+
+        let DispatchMessage { address, message, .. } = queue.try_recv().unwrap();
+        assert_that!(address, eq(&Address::DeviceSession));
+        assert_that!(message, matches_pattern!(Message::SendPacket(_)));
+        assert!(queue.is_empty());
+        assert_that!(session.state, matches_pattern!(State::Closing { .. }));
         assert_that!(rx.has_message(), eq(false));
     }
 
@@ -399,7 +441,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn packet_received_receive() {
+    async fn packet_received_receive_regular() {
         let session_id = SessionId { hsn: 1, tsn: 2 };
         let mut session = Session::new(
             session_id,
@@ -434,5 +476,46 @@ mod tests {
         assert_that!(rx.try_recv(), eq(&Ok(Ok(reply.to_tokens().unwrap()))));
         assert_that!(session.state, field!(State::Active.channel_queue, is_empty()));
         assert!(queue.is_empty());
+    }
+
+    #[tokio::test]
+    async fn packet_received_receive_eos() {
+        let session_id = SessionId { hsn: 1, tsn: 2 };
+        let mut session = Session::new(
+            session_id,
+            Properties { trans_timeout: Duration::ZERO, def_trans_timeout: Duration::ZERO, ..Properties::ASSUMED },
+        );
+        let (context, queue) = Context::mock();
+        let (tx, rx) = oneshot::channel();
+        let (_cancel_token, cancel_sender) = cancel_channel();
+
+        let reply = Command::EndOfSession;
+        let packet = session_id.assign(Packet {
+            payload: vec![SubPacket {
+                kind: SubPacketKind::Data,
+                length: PhantomData,
+                payload: reply.to_tokens().unwrap(),
+            }],
+            ..Default::default()
+        });
+
+        match &mut session.state {
+            State::Active { channel_queue, .. } => channel_queue.push_back(RecvQueuedMethod {
+                channel: tx,
+                deadline: Instant::now(),
+                cancel_sender: Some(cancel_sender),
+                mgmt_session_meta: None,
+            }),
+            _ => panic!("session started in the wrong state: {:?}", session.state),
+        }
+
+        session.packet_reveived(context, PacketReceived { packet });
+
+        let DispatchMessage { address, message, .. } = queue.try_recv().unwrap();
+        assert_that!(address, eq(&Address::Control));
+        assert_that!(message, matches_pattern!(&Message::Delete(_)));
+        assert!(queue.is_empty());
+        assert_that!(rx.try_recv(), eq(&Ok(Ok(reply.to_tokens().unwrap()))));
+        assert_that!(session.state, matches_pattern!(State::Closed));
     }
 }

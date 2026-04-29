@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 
 use sed_async_runtime::{CancelToken, sleep_until, spawn, timeout_at};
 use sed_device::Device;
-use sed_packet::com_id::HandleComIdRequest;
+use sed_packet::com_id::ComIdRequest;
 use sed_packet::packet::{COM_PACKET_HEADER_LEN, PACKET_HEADER_LEN, SUB_PACKET_HEADER_LEN};
 use sed_packet::session_id::SessionId;
 use sed_spec::methods::Properties;
@@ -200,7 +200,7 @@ impl Controller {
 
     /// Send a ComID request to the device.
     #[instrument(level = "debug")]
-    pub fn com_id_request(&self, request: HandleComIdRequest) -> oneshot::Receiver<ComResponse> {
+    pub fn com_id_request(&self, request: ComIdRequest) -> oneshot::Receiver<ComResponse> {
         let address = Address::ComSession;
         let (tx, rx) = oneshot::channel();
         self.context.send(address, Message::SendComRequest(SendComRequest { request, channel: tx }));

@@ -7,7 +7,9 @@ use core::time::Duration;
 use std::marker::PhantomData;
 
 use sorbit::{
-    Deserialize, Serialize, collection,
+    Deserialize, Serialize,
+    byte_order::ByteOrder,
+    collection,
     ser_de::{Deserialize, MultiPassSerialize, RevisableSerializer, Serialize, Span},
 };
 
@@ -440,25 +442,16 @@ impl Discovery {
             .find_map(|result| result.ok())
     }
 
-    pub fn remove_empty(self) -> Discovery {
-        let feature_descriptors: Vec<_> = self
-            .feature_descriptors
-            .into_iter()
-            .filter(|desc| desc != &FeatureDescriptor::Unrecognized(0))
-            .collect();
-        Self { feature_descriptors, ..self }
-    }
-
-    pub fn get_common_features(&self) -> impl Iterator<Item = &FeatureDescriptor> {
+    pub fn common_features(&self) -> impl Iterator<Item = &FeatureDescriptor> {
         self.feature_descriptors.iter().filter(|desc| desc.security_subsystem_class().is_none())
     }
 
-    pub fn get_ssc_features(&self) -> impl Iterator<Item = &dyn SecuritySubsystemClass> {
+    pub fn ssc_features(&self) -> impl Iterator<Item = &dyn SecuritySubsystemClass> {
         self.feature_descriptors.iter().filter_map(|desc| desc.security_subsystem_class())
     }
 
-    pub fn get_primary_ssc(&self) -> Option<&dyn SecuritySubsystemClass> {
-        self.get_ssc_features().next()
+    pub fn primary_ssc(&self) -> Option<&dyn SecuritySubsystemClass> {
+        self.ssc_features().next()
     }
 }
 
@@ -495,36 +488,40 @@ impl Default for Discovery {
 
 impl MultiPassSerialize for Discovery {
     fn serialize<S: RevisableSerializer>(&self, serializer: &mut S) -> Result<S::Success, S::Error> {
-        let (span, length_span) = serializer.serialize_composite(|se| {
-            let length: u32 = 0;
-            let length_span = length.serialize(se)?;
-            self.major_version.serialize(se)?;
-            self.minor_version.serialize(se)?;
-            se.pad(16)?;
-            self.vendor_unique.serialize(se)?;
-            collection::items(&self.feature_descriptors).serialize(se)?;
-            Ok(length_span)
-        })?;
-        serializer.revise_span(&length_span, |se| {
-            let length: u32 = span.len() as u32 - 4;
-            length.serialize(se)
-        })?;
-        Ok(span)
+        serializer.with_byte_order(ByteOrder::BigEndian, |se| {
+            let (span, length_span) = se.serialize_composite(|se| {
+                let length: u32 = 0;
+                let length_span = length.serialize(se)?;
+                self.major_version.serialize(se)?;
+                self.minor_version.serialize(se)?;
+                se.pad(16)?;
+                self.vendor_unique.serialize(se)?;
+                collection::items(&self.feature_descriptors).serialize(se)?;
+                Ok(length_span)
+            })?;
+            se.revise_span(&length_span, |se| {
+                let length: u32 = span.len() as u32 - 4;
+                length.serialize(se)
+            })?;
+            Ok(span)
+        })
     }
 }
 
 impl Deserialize for Discovery {
     fn deserialize<D: sorbit::ser_de::Deserializer>(deserializer: &mut D) -> Result<Self, D::Error> {
-        let length = u32::deserialize(deserializer)?;
-        let major_version = u16::deserialize(deserializer)?;
-        let minor_version = u16::deserialize(deserializer)?;
-        deserializer.pad(16)?;
-        let vendor_unique = <[u8; 32]>::deserialize(deserializer)?;
-        let byte_count = length - 44;
-        let feature_descriptors = collection::deserialize_items_by_byte_count(deserializer, &byte_count)?;
-        let mut discovery = Self { major_version, minor_version, vendor_unique, feature_descriptors };
-        discovery.feature_descriptors.retain(|desc| matches!(desc, FeatureDescriptor::Unrecognized(0)));
-        Ok(discovery)
+        deserializer.with_byte_order(ByteOrder::BigEndian, |deserializer| {
+            let length = u32::deserialize(deserializer)?;
+            let major_version = u16::deserialize(deserializer)?;
+            let minor_version = u16::deserialize(deserializer)?;
+            deserializer.pad(16)?;
+            let vendor_unique = <[u8; 32]>::deserialize(deserializer)?;
+            let byte_count = length - 44;
+            let feature_descriptors = collection::deserialize_items_by_byte_count(deserializer, &byte_count)?;
+            let mut discovery = Self { major_version, minor_version, vendor_unique, feature_descriptors };
+            discovery.feature_descriptors.retain(|desc| !matches!(desc, FeatureDescriptor::Unrecognized(0)));
+            Ok(discovery)
+        })
     }
 }
 
@@ -743,52 +740,60 @@ mod tests {
 
     use super::*;
 
+    #[rustfmt::skip]
+    const TPER_DESC_BYTES : [u8; 16] = [
+        0x00, 0x01, // Feature code.
+        0x10, // Version | reserved.
+        0x0C, // Length.
+        0b0101_0101, // Flags,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // Reserved.
+    ];
+
+    const TPER_DESC_VALUE: FeatureDescriptor = FeatureDescriptor::TPer(TPerDescriptor {
+        version: PhantomData,
+        length: PhantomData,
+        com_id_mgmt_supported: true,
+        streaming_supported: true,
+        buffer_mgmt_supported: false,
+        ack_nak_supported: true,
+        async_supported: false,
+        sync_supported: true,
+    });
+
     #[test]
     fn serialize_tper_desc() {
-        #[rustfmt::skip]
-        let bytes = [
-            0x00, 0x01, // Feature code.
-            0x10, // Version | reserved.
-            0x0C, // Length.
-            0b0101_0101, // Flags,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // Reserved.
-        ];
-        let value = FeatureDescriptor::TPer(TPerDescriptor {
-            version: PhantomData,
-            length: PhantomData,
-            com_id_mgmt_supported: true,
-            streaming_supported: true,
-            buffer_mgmt_supported: false,
-            ack_nak_supported: true,
-            async_supported: false,
-            sync_supported: true,
-        });
+        let bytes = TPER_DESC_BYTES;
+        let value = TPER_DESC_VALUE;
         assert_eq!(value.to_bytes().unwrap(), &bytes);
         assert_eq!(FeatureDescriptor::from_bytes(&bytes).unwrap(), value);
     }
 
+    #[rustfmt::skip]
+    const LOCKING_DESC_BYTES : [u8; 16] = [
+        0x00, 0x02, // Feature code.
+        0x10, // Version | reserved.
+        0x0C, // Length.
+        0b0101_0101, // Flags,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // Reserved.
+    ];
+    const LOCKING_DESC_VALUE: FeatureDescriptor = FeatureDescriptor::Locking(LockingDescriptor {
+        version: PhantomData,
+        length: PhantomData,
+        hw_reset_supported: false,
+        mbr_shadowing_not_supported: true,
+        mbr_done: false,
+        mbr_enabled: true,
+        media_encryption: false,
+        locked: true,
+        locking_enabled: false,
+        locking_supported: true,
+    });
+
     #[test]
     fn serialize_locking_desc() {
         #[rustfmt::skip]
-        let bytes = [
-            0x00, 0x02, // Feature code.
-            0x10, // Version | reserved.
-            0x0C, // Length.
-            0b0101_0101, // Flags,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // Reserved.
-        ];
-        let value = FeatureDescriptor::Locking(LockingDescriptor {
-            version: PhantomData,
-            length: PhantomData,
-            hw_reset_supported: false,
-            mbr_shadowing_not_supported: true,
-            mbr_done: false,
-            mbr_enabled: true,
-            media_encryption: false,
-            locked: true,
-            locking_enabled: false,
-            locking_supported: true,
-        });
+        let bytes = LOCKING_DESC_BYTES;
+        let value = LOCKING_DESC_VALUE;
         assert_eq!(value.to_bytes().unwrap(), &bytes);
         assert_eq!(FeatureDescriptor::from_bytes(&bytes).unwrap(), value);
     }
@@ -898,7 +903,7 @@ mod tests {
             0x00, 0x01, // Max num tables
             0x00, 0x00, 0x00, 0x02, // Max total size
             0x00, 0x00, 0x00, 0x03, // Alignment
-            
+
         ];
         let value = FeatureDescriptor::AdditionalDataStoreTables(AdditionalDataStoreTablesDescriptor {
             version: PhantomData,
@@ -922,7 +927,7 @@ mod tests {
             0x00, 0x02, // Base ComID
             0x00, 0x01, // Num ComIDs
             0b0000_0001, // Range crossing
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // Reserved            
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // Reserved
         ];
         let value = FeatureDescriptor::Enterprise(EnterpriseDescriptor {
             version: 1,
@@ -945,7 +950,7 @@ mod tests {
             0x00, 0x02, // Base ComID
             0x00, 0x01, // Num ComIDs
             0b0000_0001, // Range crossing
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // Reserved            
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // Reserved
         ];
         let value = FeatureDescriptor::OpalV1(OpalV1Descriptor {
             version: 1,
@@ -1165,5 +1170,27 @@ mod tests {
         });
         assert_eq!(value.to_bytes().unwrap(), &bytes);
         assert_eq!(FeatureDescriptor::from_bytes(&bytes).unwrap(), value);
+    }
+
+    #[test]
+    pub fn serialize_discovery() {
+        #[rustfmt::skip]
+        let header = [
+            0, 0, 0, 76, // Length
+            0, 0, // Major version
+            0, 1, // Minor version
+        ];
+        let reserved_and_vu = [0u8; 40];
+        let bytes: Vec<_> =
+            header.into_iter().chain(reserved_and_vu).chain(TPER_DESC_BYTES).chain(LOCKING_DESC_BYTES).collect();
+        let value = Discovery {
+            major_version: 0,
+            minor_version: 1,
+            vendor_unique: Default::default(),
+            feature_descriptors: vec![TPER_DESC_VALUE, LOCKING_DESC_VALUE],
+        };
+
+        assert_eq!(value.to_bytes().unwrap(), bytes);
+        assert_eq!(Discovery::from_bytes(&bytes).unwrap(), value);
     }
 }

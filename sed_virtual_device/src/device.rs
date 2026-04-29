@@ -1,10 +1,11 @@
-use std::collections::HashMap;
-use std::ops::DerefMut;
+use std::collections::{HashMap, HashSet};
+use std::ops::{Deref as _, DerefMut as _};
 use std::sync::Mutex;
 
 use sed_device::{Device, Error, Interface};
-use sed_packet::com_id::HandleComIdRequest;
+use sed_packet::com_id::ComIdRequest;
 use sed_packet::packet::ComPacket;
+use sed_packet::session_id::SessionId;
 use sorbit::ser_de::{FromBytes, ToBytes as _};
 
 use crate::com_id::{ComId, ComIdExt};
@@ -30,6 +31,15 @@ impl VirtualDevice {
         Self {
             tper: TPer::Opal2(Opal2TPer::default()).into(),
             sessions: Sessions { com_sessions, packet_sessions }.into(),
+        }
+    }
+
+    pub fn sessions(&self, com_id: u16, com_id_ext: u16) -> Result<HashSet<SessionId>, Error> {
+        let sessions = self.sessions.lock().expect("the virtual device panicked in another thread");
+        let Sessions { packet_sessions, .. } = sessions.deref();
+        match packet_sessions.get(&ComId(com_id)) {
+            Some(packet_session) if packet_session.com_id_ext().0 == com_id_ext => Ok(packet_session.sessions()),
+            _ => Err(Error::InvalidProtocolOrComID),
         }
     }
 }
@@ -70,15 +80,8 @@ impl Device for VirtualDevice {
             (0x01, 0x0001) => Ok(()),
             // Communication layer
             (0x02, com_id) if let Some(session) = com_sessions.get_mut(&ComId(com_id)) => {
-                match HandleComIdRequest::from_bytes(data) {
-                    Ok(request) => {
-                        let command = session.push(packet_sessions, request);
-                        if let Some(command) = command {
-                            com_sessions.remove(&command.0);
-                            packet_sessions.remove(&command.0);
-                        }
-                        Ok(())
-                    }
+                match ComIdRequest::from_bytes(data) {
+                    Ok(request) => Ok(session.push(packet_sessions, request)),
                     Err(_) => Err(Error::InvalidArgument),
                 }
             }

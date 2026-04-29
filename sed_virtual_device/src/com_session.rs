@@ -1,17 +1,18 @@
 use std::collections::HashMap;
 
 use sed_packet::com_id::{
-    ComIdRequestCode, ComIdState, Date, HandleComIdRequest, HandleComIdResponse, HandleComIdResponseParams,
-    StackResetStatus,
+    ComIdRequest, ComIdRequestCode, ComIdResponse, ComIdResponsePayload, ComIdState, Date, StackResetStatus,
 };
 
+use crate::NUM_COM_IDS;
 use crate::com_id::{ComId, ComIdExt};
+use crate::device::BASE_COM_ID;
 use crate::packet_session::PacketSession;
 
 #[derive(Debug)]
 pub struct ComSession {
     com_id: ComId,
-    response_queue: Option<HandleComIdResponse>,
+    response_queue: Option<ComIdResponse>,
 }
 
 impl ComSession {
@@ -19,46 +20,41 @@ impl ComSession {
         Self { com_id, response_queue: None }
     }
 
-    pub fn push(
-        &mut self,
-        packet_sessions: &HashMap<ComId, PacketSession>,
-        request: HandleComIdRequest,
-    ) -> Option<StackResetCommand> {
+    pub fn push(&mut self, packet_sessions: &mut HashMap<ComId, PacketSession>, request: ComIdRequest) {
         match request.request_code {
-            ComIdRequestCode::NoResponseAvailable => None,
-            ComIdRequestCode::VerifyComIdValid => self.verify_com_id_valid(packet_sessions, &request),
+            ComIdRequestCode::NoResponseAvailable => (),
+            ComIdRequestCode::Verify => self.verify_com_id_valid(packet_sessions, &request),
             ComIdRequestCode::StackReset => self.stack_reset(packet_sessions, request),
         }
     }
 
-    pub fn pop(&mut self) -> &HandleComIdResponse {
-        self.response_queue.get_or_insert_with(|| HandleComIdResponse {
+    pub fn pop(&mut self) -> &ComIdResponse {
+        self.response_queue.get_or_insert_with(|| ComIdResponse {
             com_id: self.com_id.0,
             com_id_ext: 0,
-            params: HandleComIdResponseParams::NoResponseAvailable { available_data_length: 0 },
+            payload: ComIdResponsePayload::NoResponseAvailable { available_data_length: 0 },
         })
     }
 
-    fn verify_com_id_valid(
-        &mut self,
-        packet_sessions: &HashMap<ComId, PacketSession>,
-        request: &HandleComIdRequest,
-    ) -> Option<StackResetCommand> {
+    fn verify_com_id_valid(&mut self, packet_sessions: &HashMap<ComId, PacketSession>, request: &ComIdRequest) {
         let com_id = ComId(request.com_id);
         let com_id_ext = ComIdExt(request.com_id_ext);
-        let session = packet_sessions.get(&com_id);
-        let state = session.map(|session| (session.com_id_ext(), session.is_associated()));
-        let com_id_state = match state {
-            Some(params) if params == (com_id_ext, true) => ComIdState::Associated,
-            Some(params) if params == (com_id_ext, false) => ComIdState::Issued,
-            Some(_) => ComIdState::Invalid,
+        println!("{com_id:?}");
+        let com_id_state = match packet_sessions.get(&com_id) {
+            Some(session) => match session.com_id_ext() {
+                value if value == com_id_ext => match session.is_associated() {
+                    true => ComIdState::Associated,
+                    false => ComIdState::Issued,
+                },
+                _ => ComIdState::Invalid,
+            },
             None => ComIdState::Inactive,
         };
 
-        let response = HandleComIdResponse {
+        let response = ComIdResponse {
             com_id: request.com_id,
             com_id_ext: request.com_id_ext,
-            params: HandleComIdResponseParams::VerifyComIdValid {
+            payload: ComIdResponsePayload::Verify {
                 available_data_length: 0x22,
                 com_id_state,
                 time_of_allocation: Date::unsupported(),
@@ -69,33 +65,37 @@ impl ComSession {
 
         // The currently queued response shall be discarded.
         let _ = self.response_queue.replace(response);
-        None
     }
 
-    fn stack_reset(
-        &mut self,
-        packet_sessions: &HashMap<ComId, PacketSession>,
-        request: HandleComIdRequest,
-    ) -> Option<StackResetCommand> {
+    fn stack_reset(&mut self, packet_sessions: &mut HashMap<ComId, PacketSession>, request: ComIdRequest) {
         let com_id = ComId(request.com_id);
         let com_id_ext = ComIdExt(request.com_id_ext);
-        let is_active = packet_sessions.get(&com_id).map(|session| session.com_id_ext() == com_id_ext).unwrap_or(false);
-        let (command, status) = if is_active {
-            (Some(StackResetCommand(com_id)), StackResetStatus::Success)
+
+        let status = if let Some(session) = packet_sessions.get_mut(&com_id)
+            && session.com_id_ext() == com_id_ext
+        {
+            let new_com_id_ext = increment_dynamic_com_id_ext(com_id, session.com_id_ext());
+            *session = PacketSession::new(com_id, new_com_id_ext);
+            StackResetStatus::Success
         } else {
-            (None, StackResetStatus::Failure)
+            StackResetStatus::Failure
         };
 
-        let response = HandleComIdResponse {
+        let response = ComIdResponse {
             com_id: request.com_id,
             com_id_ext: request.com_id,
-            params: HandleComIdResponseParams::StackReset { available_data_length: 0x04, status },
+            payload: ComIdResponsePayload::StackReset { available_data_length: 0x04, status },
         };
 
         // The currently queued response shall be discarded.
         let _ = self.response_queue.replace(response);
-        command
     }
 }
 
-pub struct StackResetCommand(pub ComId);
+fn increment_dynamic_com_id_ext(com_id: ComId, com_id_ext: ComIdExt) -> ComIdExt {
+    if (BASE_COM_ID.0..BASE_COM_ID.0 + NUM_COM_IDS).contains(&com_id.0) {
+        ComIdExt(0)
+    } else {
+        ComIdExt(com_id_ext.0.wrapping_add(1))
+    }
+}

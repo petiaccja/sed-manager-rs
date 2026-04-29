@@ -1,4 +1,4 @@
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 use sed_device::Error;
 use sed_packet::packet::ComPacket;
@@ -39,6 +39,10 @@ impl PacketSession {
     /// This property is required to track ComID state.
     pub fn is_associated(&self) -> bool {
         self.is_associated
+    }
+
+    pub fn sessions(&self) -> HashSet<SessionId> {
+        self.sessions.keys().cloned().collect()
     }
 
     pub fn push(&mut self, tper: &mut TPer, com_packet: ComPacket) {

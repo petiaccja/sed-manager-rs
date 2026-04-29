@@ -1,9 +1,13 @@
 use sed_packet::session_id::SessionId;
 use sed_packet::token::{Command, Detokenize, FromTokens, ToTokens};
-use sed_packet::{Bytes, Field, FieldRef, Named, Object, Uid};
-use sed_spec::methods::{CellBlock, Get, MethodCall, MethodResult, MethodStatus, Random, RandomResult};
-use sed_spec::preconfig::core::shared::method_id::GET;
-use sed_spec::preconfig::core::shared::{invoking_id::THIS_SP, method_id::RANDOM};
+use sed_packet::{Bytes, Field, FieldRef, MaxBytes, Named, Object, Uid};
+use sed_spec::methods::{
+    CellBlock, Get, MethodCall, MethodResult, MethodStatus, Random, RandomResult, StartSession, SyncSession,
+};
+use sed_spec::objects::{AuthorityRef, SecurityProviderRef};
+use sed_spec::preconfig::core::shared::invoking_id::{SESSION_MANAGER, THIS_SP};
+use sed_spec::preconfig::core::shared::method_id::{GET, RANDOM};
+use sed_spec::preconfig::core::shared::sm_method_id::START_SESSION;
 use tracing::instrument;
 
 use crate::error::Error;
@@ -30,12 +34,59 @@ pub struct Session {
 }
 
 impl Session {
+    /// Establish a session with the device.
+    ///
+    /// This method performs the exchange of session startup methods with the
+    /// device. Use [`from_started`] if you've already performed the session
+    /// startup.
+    ///
+    /// [`from_started`]: Self::from_started
+    pub async fn start(
+        controller: Controller,
+        host_session_number: u32,
+        sp: SecurityProviderRef,
+        authority: Option<AuthorityRef>,
+        password: Option<MaxBytes<32>>,
+    ) -> Result<Self, Error> {
+        let call = MethodCall {
+            invoking_id: SESSION_MANAGER,
+            method_id: START_SESSION,
+            parameters: StartSession {
+                host_session_id: host_session_number,
+                spid: sp,
+                write: true,
+                host_challenge: password,
+                host_exchange_authority: None,
+                host_exchange_cert: None,
+                host_signing_authority: authority,
+                host_signing_cert: None,
+                session_timeout: None,
+                trans_timeout: None,
+                initial_credit: None,
+                signed_hash: None,
+            },
+            status: MethodStatus::Success,
+        };
+        let result_tokens = controller
+            .call(SessionId::MANAGEMENT, call.to_tokens().expect("invalid method call"))
+            .await
+            .map_err(|_| Error::Closed)??;
+        let result = MethodCall::<SyncSession>::from_tokens(&result_tokens)?;
+        if result.status == MethodStatus::Success {
+            let tper_session_id = result.parameters.sp_session_id;
+            let session_id = SessionId { hsn: host_session_number, tsn: tper_session_id };
+            Ok(Self::from_started(session_id, controller))
+        } else {
+            Err(result.status.into())
+        }
+    }
+
     /// Create a [`Session`] object from an already established session.
     ///
     /// This method assumes that the exchange of session startup methods with
     /// the device has complete successfully and returned the given
     /// `session_id`. In the absence of an already established session, the
-    /// device will drop the packets and this session's method will time out.
+    /// device will drop the packets and this session's methods will time out.
     pub fn from_started(session_id: SessionId, controller: Controller) -> Self {
         Self { session_id, controller }
     }

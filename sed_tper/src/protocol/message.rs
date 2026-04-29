@@ -1,7 +1,7 @@
 use std::time::Instant;
 
 use sed_device::Error as DeviceError;
-use sed_packet::com_id::{HandleComIdRequest, HandleComIdResponse};
+use sed_packet::com_id::{ComIdRequest, ComIdResponse};
 use sed_packet::packet::{ComPacket, Packet};
 use sed_packet::session_id::SessionId;
 use sed_spec::methods::Properties;
@@ -11,7 +11,7 @@ use crate::protocol::method::WriteQueuedMethod;
 use crate::protocol::protocol::Address;
 
 pub type MethodResponse = Result<Vec<u8>, Error>;
-pub type ComResponse = Result<HandleComIdResponse, Error>;
+pub type ComResponse = Result<ComIdResponse, Error>;
 
 #[non_exhaustive]
 #[derive(Debug)]
@@ -30,7 +30,7 @@ pub enum Message {
     Timeout(Instant),
     SecuritySendDone(SecuritySendDone),
     SecurityRecvDoneComPacket(Result<ComPacket, Error>),
-    SecurityRecvDoneComIdRequest(Result<HandleComIdResponse, Error>),
+    SecurityRecvDoneComIdRequest(Result<ComIdResponse, Error>),
 }
 
 /// Initiate an RPC method call to the device.
@@ -43,7 +43,7 @@ pub struct SendMethod {
 /// Initiate a ComID request to the device.
 #[derive(Debug)]
 pub struct SendComRequest {
-    pub request: HandleComIdRequest,
+    pub request: ComIdRequest,
     pub channel: oneshot::Sender<ComResponse>,
 }
 
@@ -109,7 +109,7 @@ pub struct PacketReceived {
 /// An event that is emitted when a ComID response is received from the device.
 #[derive(Debug)]
 pub struct ComResponseReceived {
-    pub response: HandleComIdResponse,
+    pub response: ComIdResponse,
 }
 
 #[derive(Debug)]
