@@ -16,6 +16,11 @@ impl SessionId {
     pub fn assign(&self, packet: Packet) -> Packet {
         Packet { tper_session_number: self.tsn, host_session_number: self.hsn, ..packet }
     }
+
+    pub fn assign_in_place(&self, packet: &mut Packet) {
+        packet.tper_session_number = self.tsn;
+        packet.host_session_number = self.hsn;
+    }
 }
 
 impl core::fmt::Display for SessionId {

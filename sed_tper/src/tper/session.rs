@@ -41,6 +41,7 @@ impl Session {
     /// startup.
     ///
     /// [`from_started`]: Self::from_started
+    #[instrument(level = "info", skip(controller, password), err)]
     pub async fn start(
         controller: Controller,
         host_session_number: u32,
@@ -111,14 +112,14 @@ impl Session {
     /// Note that the TPer may not return the requested field, even if you have
     /// access to them. This is because the SSC specification does not always
     /// require the field to have a value assigned.
-    #[instrument(level = "info")]
+    #[instrument(level = "info", skip(self), ret, err)]
     pub async fn get_field<O, const TABLE: u64, const FIELD: u16>(
         &self,
         field: FieldRef<O, TABLE, FIELD>,
     ) -> Result<<FieldRef<O, TABLE, FIELD> as Field<FIELD>>::Type, Error>
     where
         FieldRef<O, TABLE, FIELD>: Field<FIELD>,
-        <FieldRef<O, TABLE, FIELD> as Field<FIELD>>::Type: Detokenize,
+        <FieldRef<O, TABLE, FIELD> as Field<FIELD>>::Type: Detokenize + core::fmt::Debug,
     {
         type FieldType<O, const TABLE: u64, const FIELD: u16> = <FieldRef<O, TABLE, FIELD> as Field<FIELD>>::Type;
 
@@ -149,11 +150,11 @@ impl Session {
     /// Note that the TPer may not return the all fields, even if you have
     /// access to them. This is because the SSC specification does not always
     /// require the field to have a value assigned.
-    #[instrument(level = "info", , fields(object = debug(Uid::from(object.clone()))))]
+    #[instrument(level = "info", skip(self), ret, err)]
     pub async fn get_object<Obj>(&self, object: Obj::Ref) -> Result<Obj, Error>
     where
-        Obj: Object + Detokenize,
-        Obj::Ref: Clone,
+        Obj: Object + Detokenize + core::fmt::Debug,
+        Obj::Ref: Clone + core::fmt::Debug,
         Uid: From<Obj::Ref>,
     {
         let cell_block = CellBlock::object(0..Obj::FIELD_COUNT);
@@ -182,7 +183,7 @@ impl Session {
     /// # Parameters
     ///
     /// - `count`: the number of random bytes to generate.
-    #[instrument(level = "info")]
+    #[instrument(level = "info", skip(self), ret, err)]
     pub async fn random(&self, count: usize) -> Result<Bytes, Error> {
         let call = MethodCall {
             invoking_id: THIS_SP,
@@ -209,6 +210,7 @@ impl Session {
     /// separate async task, and does not wait for the result. This may cause
     /// timing issues, and TPer might reply that it's busy when you start
     /// another session.
+    #[instrument(level = "info", skip(self), ret, err)]
     pub async fn close(self) -> Result<(), Error> {
         // Drop would send another EOS token, which is undesired.
         let this = std::mem::ManuallyDrop::new(self);

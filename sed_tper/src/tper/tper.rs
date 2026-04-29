@@ -50,7 +50,7 @@ impl TPer {
         Discovery::from_bytes(&bytes).map_err(|error| Error::InvalidDiscovery(error))
     }
 
-    #[instrument(level = "info", ret, err)]
+    #[instrument(level = "info", skip(self), ret, err)]
     pub async fn verify_com_id_valid(&self, com_id: u16, com_id_ext: u16) -> Result<ComIdState, Error> {
         use ComIdResponsePayload::*;
 
@@ -62,7 +62,7 @@ impl TPer {
         }
     }
 
-    #[instrument(level = "info", ret, err)]
+    #[instrument(level = "info", skip(self), ret, err)]
     pub async fn stack_reset(&self, com_id: u16, com_id_ext: u16) -> Result<(), Error> {
         use ComIdResponsePayload::*;
 
@@ -80,7 +80,7 @@ impl TPer {
         }
     }
 
-    #[instrument(level = "debug", ret, err)]
+    #[instrument(level = "debug", skip(self, password), ret, err)]
     pub async fn start_session(
         &self,
         sp: SecurityProviderRef,

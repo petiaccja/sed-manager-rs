@@ -51,7 +51,11 @@ impl PacketSession {
             let packets = if session_id == SessionId::MANAGEMENT {
                 self.management_session.dispatch(tper, &mut self.sessions, packet)
             } else if let Some(session) = self.sessions.get_mut(&session_id) {
-                session.dispatch(tper, packet)
+                let packets = session.dispatch(tper, packet);
+                if matches!(session, Session::Closed) {
+                    self.sessions.remove(&session_id);
+                }
+                packets
             } else {
                 vec![]
             };
