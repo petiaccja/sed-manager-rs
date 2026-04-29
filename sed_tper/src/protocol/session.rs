@@ -42,7 +42,7 @@ impl Session {
         Address::Session(self.session_id)
     }
 
-    #[instrument(level = "debug")]
+    #[instrument(level = "debug", skip_all)]
     pub fn send_method(&mut self, context: Context, SendMethod { method, channel }: SendMethod) {
         let address = self.address();
         self.state = match replace(&mut self.state, State::Closed) {
@@ -74,8 +74,8 @@ impl Session {
         }
     }
 
-    #[instrument(level = "debug")]
-    pub fn commit_batch(&mut self, context: Context, message: CommitBatch) {
+    #[instrument(level = "debug", skip_all)]
+    pub fn commit_batch(&mut self, context: Context, _message: CommitBatch) {
         match &mut self.state {
             State::Active { send_method_queue, .. } => {
                 let packets = packetize_method_queue(&self.properties, replace(send_method_queue, VecDeque::new()));
@@ -86,7 +86,7 @@ impl Session {
         }
     }
 
-    #[instrument(level = "debug")]
+    #[instrument(level = "debug", skip_all)]
     pub fn send_packet_done(&mut self, context: Context, SendPacketDone { status, methods }: SendPacketDone) {
         let address = self.address();
         match &mut self.state {
@@ -124,7 +124,7 @@ impl Session {
         }
     }
 
-    #[instrument(level = "debug")]
+    #[instrument(level = "debug", skip(self, context))]
     pub fn timeout(&mut self, context: Context, time: Instant) {
         match &mut self.state {
             State::Active { channel_queue, .. } | State::Closing { channel_queue, .. } => {
@@ -136,7 +136,7 @@ impl Session {
         }
     }
 
-    #[instrument(level = "debug")]
+    #[instrument(level = "debug", skip_all)]
     pub fn packet_reveived(&mut self, context: Context, PacketReceived { packet }: PacketReceived) {
         match &mut self.state {
             State::Active { receive_buffer, channel_queue, .. }
@@ -174,7 +174,7 @@ impl Session {
         }
     }
 
-    #[instrument(level = "debug")]
+    #[instrument(level = "debug", skip_all)]
     pub fn abort(&mut self, context: Context) {
         match &self.state {
             State::Active { .. } => {

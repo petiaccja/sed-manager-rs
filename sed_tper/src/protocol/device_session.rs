@@ -45,25 +45,25 @@ impl DeviceSession {
         }
     }
 
-    #[instrument(level = "debug")]
+    #[instrument(level = "debug", skip_all)]
     pub fn send_packet(&mut self, context: Context, message: SendPacket) {
         self.packet_queue.push_back(message);
         context.send(Self::ADDRESS, Message::CommitBatch(CommitBatch));
     }
 
-    #[instrument(level = "debug")]
+    #[instrument(level = "debug", skip_all)]
     pub fn send_com_request(&mut self, context: Context, message: SendComRequest) {
         self.com_id_queue.push_back(message);
         context.send(Self::ADDRESS, Message::CommitBatch(CommitBatch));
     }
 
-    #[instrument(level = "debug")]
-    pub fn commit_batch(&mut self, context: Context, message: CommitBatch) {
+    #[instrument(level = "debug", skip_all)]
+    pub fn commit_batch(&mut self, context: Context, _message: CommitBatch) {
         self.commit_batch_com_packet(context.clone());
         self.commit_batch_com_id_request(context);
     }
 
-    #[instrument(level = "debug")]
+    #[instrument(level = "debug", skip_all)]
     pub fn security_send_done(&mut self, context: Context, SecuritySendDone { protocol, result }: SecuritySendDone) {
         match protocol {
             0x01 => self.security_send_done_com_packet(context, result),
@@ -73,7 +73,7 @@ impl DeviceSession {
         }
     }
 
-    #[instrument(level = "debug")]
+    #[instrument(level = "debug", skip_all)]
     pub fn security_recv_com_packet_done(&mut self, context: Context, result: Result<ComPacket, Error>) {
         self.packet_state = match replace(&mut self.packet_state, PacketProtocolState::Processing) {
             PacketProtocolState::Receiving => match result {
@@ -91,7 +91,7 @@ impl DeviceSession {
         }
     }
 
-    #[instrument(level = "debug")]
+    #[instrument(level = "debug", skip_all)]
     pub fn security_recv_com_id_request_done(&mut self, context: Context, result: Result<ComIdResponse, Error>) {
         self.com_id_state = match replace(&mut self.com_id_state, ComIdProtocolState::Processing) {
             ComIdProtocolState::Receiving => match result {
@@ -105,7 +105,7 @@ impl DeviceSession {
         }
     }
 
-    #[instrument(level = "debug")]
+    #[instrument(level = "debug", skip_all)]
     fn commit_batch_com_packet(&mut self, context: Context) {
         self.packet_state = match replace(&mut self.packet_state, PacketProtocolState::Processing) {
             PacketProtocolState::Ready => {
@@ -127,7 +127,7 @@ impl DeviceSession {
         }
     }
 
-    #[instrument(level = "debug")]
+    #[instrument(level = "debug", skip_all)]
     fn commit_batch_com_id_request(&mut self, context: Context) {
         self.com_id_state = match replace(&mut self.com_id_state, ComIdProtocolState::Processing) {
             ComIdProtocolState::Ready => {
@@ -143,7 +143,7 @@ impl DeviceSession {
         }
     }
 
-    #[instrument(level = "debug")]
+    #[instrument(level = "debug", skip_all)]
     fn security_send_done_com_packet(&mut self, context: Context, result: Result<(), sed_device::Error>) {
         self.packet_state = match replace(&mut self.packet_state, PacketProtocolState::Processing) {
             PacketProtocolState::Sending { sender, methods } => match result {
@@ -161,7 +161,7 @@ impl DeviceSession {
         }
     }
 
-    #[instrument(level = "debug")]
+    #[instrument(level = "debug", skip_all)]
     fn security_send_done_com_id_request(&mut self, context: Context, result: Result<(), sed_device::Error>) {
         let sender = Address::ComSession;
         self.com_id_state = match replace(&mut self.com_id_state, ComIdProtocolState::Processing) {
@@ -219,7 +219,7 @@ async fn security_send(device: Arc<dyn Device>, protocol: u8, com_id: u16, data:
 }
 
 async fn security_recv_com_packet(device: Arc<dyn Device>, com_id: u16) -> Message {
-    #[instrument(level = "debug", skip(device))]
+    #[instrument(level = "debug", skip_all)]
     async fn _security_recv_com_packet(device: Arc<dyn Device>, com_id: u16) -> Result<ComPacket, Error> {
         let mut retry = Retry::new(Instant::now() + Properties::ASSUMED.def_trans_timeout);
         let mut transfer_len = 1024;
@@ -227,7 +227,7 @@ async fn security_recv_com_packet(device: Arc<dyn Device>, com_id: u16) -> Messa
         loop {
             let bytes = device.security_recv(0x01, com_id.to_be_bytes(), transfer_len)?;
             let response = ComPacket::from_bytes(&bytes).map_err(|err| Error::InvalidComIdResponse(err))?;
-            debug!(response = debug(&response));
+            debug!(response = ?response);
             let outstanding_data = response.outstanding_data;
             transfer_len = min(max(response.min_transfer, outstanding_data), 256 * 1024) as usize;
             merged.append(response);
@@ -242,7 +242,7 @@ async fn security_recv_com_packet(device: Arc<dyn Device>, com_id: u16) -> Messa
 }
 
 async fn security_recv_com_id_request(device: Arc<dyn Device>, com_id: u16) -> Message {
-    #[instrument(level = "debug", skip(device))]
+    #[instrument(level = "debug", skip_all)]
     async fn _security_recv_com_id_request(device: Arc<dyn Device>, com_id: u16) -> Result<ComIdResponse, Error> {
         let mut retry = Retry::new(Instant::now() + Properties::ASSUMED.def_trans_timeout);
         loop {

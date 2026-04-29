@@ -40,7 +40,7 @@ impl ManagementSession {
         }
     }
 
-    #[instrument(level = "debug")]
+    #[instrument(level = "debug", skip_all)]
     pub fn send_method(&mut self, context: Context, SendMethod { method, channel }: SendMethod) {
         let Ok(call) = MgmtMethodCallSend::from_tokens(&method) else {
             let _ = channel.send(Err(Error::MethodCallExpected));
@@ -65,7 +65,7 @@ impl ManagementSession {
         }
     }
 
-    #[instrument(level = "debug")]
+    #[instrument(level = "debug", skip_all)]
     pub fn send_packet_done(&mut self, context: Context, SendPacketDone { status, methods }: SendPacketDone) {
         for WriteQueuedMethod { channel, mgmt_session_meta } in methods {
             let _span = debug_span!("method sent").entered();
@@ -95,7 +95,7 @@ impl ManagementSession {
         }
     }
 
-    #[instrument(level = "debug")]
+    #[instrument(level = "debug", skip(self))]
     pub fn timeout(&mut self, time: Instant) {
         for (_, queue) in &mut self.sync_session_queue {
             retain_alive(time, queue);
@@ -103,7 +103,7 @@ impl ManagementSession {
         self.sync_session_queue.retain(|_, queue| !queue.is_empty());
     }
 
-    #[instrument(level = "debug")]
+    #[instrument(level = "debug", skip_all)]
     pub fn packet_received(&mut self, context: Context, PacketReceived { packet }: PacketReceived) {
         assert_eq!(packet.tper_session_number, 0, "the packet was sent to the wrong session");
         assert_eq!(packet.host_session_number, 0, "the packet was sent to the wrong session");

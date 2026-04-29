@@ -35,7 +35,7 @@ impl ComSession {
         Self { timeout, send_queue: VecDeque::new(), state: State::Idle }
     }
 
-    #[instrument(level = "debug")]
+    #[instrument(level = "debug", skip_all)]
     pub fn send_com_request(&mut self, context: Context, SendComRequest { request, channel }: SendComRequest) {
         match &self.state {
             State::Idle => {
@@ -48,7 +48,7 @@ impl ComSession {
         };
     }
 
-    #[instrument(level = "debug")]
+    #[instrument(level = "debug", skip_all, fields(status = ?status))]
     pub fn send_com_request_done(
         &mut self,
         context: Context,
@@ -65,7 +65,7 @@ impl ComSession {
         }
     }
 
-    #[instrument(level = "debug")]
+    #[instrument(level = "debug", skip(self))]
     pub fn timeout(&mut self, time: Instant) {
         self.state = match core::mem::replace(&mut self.state, State::Idle) {
             State::Idle => State::Idle,
