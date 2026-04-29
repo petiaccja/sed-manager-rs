@@ -10,7 +10,8 @@ use sed_packet::com_id::ComIdRequest;
 use sed_packet::packet::{COM_PACKET_HEADER_LEN, PACKET_HEADER_LEN, SUB_PACKET_HEADER_LEN};
 use sed_packet::session_id::SessionId;
 use sed_spec::methods::Properties;
-use tracing::{Instrument, Span, debug_span, instrument, warn};
+use tracing::field::Empty;
+use tracing::{Instrument, Span, debug_span, warn};
 
 use crate::protocol::device_session::DeviceSession;
 use crate::protocol::message::{ComResponse, Message, MethodResponse, SendComRequest, SendMethod};
@@ -94,16 +95,14 @@ impl Protocol {
     /// timeouts to ensure a graceful shutdown. This will leave the protocol
     /// stack on the device's side ready for a subsequent session, but might
     /// take a little time.
-    #[instrument(level = "debug")]
     pub async fn run(mut self) {
         while let Ok(dispatch_message) = self.message_receiver.recv().await {
             self.dispatch(dispatch_message);
         }
     }
 
-    fn dispatch(&mut self, DispatchMessage { address, context, message, source }: DispatchMessage) {
-        let span = debug_span!("dispatch").entered();
-        span.follows_from(source);
+    fn dispatch(&mut self, DispatchMessage { address, context, message }: DispatchMessage) {
+        let _span = context.root_span.clone().entered();
         match address {
             Address::Control => self.dispatch_control(context, message),
             Address::DeviceSession => self.dispatch_device_session(context, message),
@@ -115,15 +114,23 @@ impl Protocol {
 
     fn dispatch_control(&mut self, _context: Context, message: Message) {
         match message {
-            Message::Spawn(message) => match self.sessions.entry(message.id) {
-                Entry::Occupied(_) => warn!(message = debug(message), "message dropped"),
-                Entry::Vacant(entry) => {
-                    let _ = entry.insert(Session::new(message.id, message.properties));
+            Message::Spawn(message) => {
+                let span = debug_span!(
+                    "spawn_session",
+                    session_id = debug(&message.id),
+                    properties = debug(&message.properties),
+                    err = Empty
+                )
+                .entered();
+                match self.sessions.entry(message.id) {
+                    Entry::Occupied(_) => drop(span.record("err", "session already exists")),
+                    Entry::Vacant(entry) => drop(entry.insert(Session::new(message.id, message.properties))),
                 }
-            },
+            }
             Message::Delete(message) => {
+                let span = debug_span!("delete_session", session_id = debug(&message.0), err = Empty).entered();
                 if self.sessions.remove(&message.0).is_none() {
-                    warn!(session_id = debug(&message.0), "session not found")
+                    span.record("err", "session not found");
                 }
             }
             _ => warn!(message = debug(message), "message dropped"),
@@ -190,63 +197,81 @@ pub struct Controller {
 
 impl Controller {
     /// Perform an remote procedure call using tokenized methods.
-    #[instrument(level = "debug")]
     pub fn call(&self, session_id: SessionId, method_tokens: Vec<u8>) -> oneshot::Receiver<MethodResponse> {
+        let root_span = Span::current();
+        // TODO: remove sensitive data from traces.
+        let _span =
+            debug_span!("call", session_id = debug(&session_id), method_tokens = debug(&method_tokens)).entered();
+
         let address = Address::from(session_id);
         let (tx, rx) = oneshot::channel();
-        self.context.send(address, Message::SendMethod(SendMethod { method: method_tokens, channel: tx }));
+        self.context
+            .with_root_span(root_span)
+            .send(address, Message::SendMethod(SendMethod { method: method_tokens, channel: tx }));
         rx
     }
 
     /// Send a ComID request to the device.
-    #[instrument(level = "debug")]
     pub fn com_id_request(&self, request: ComIdRequest) -> oneshot::Receiver<ComResponse> {
+        let root_span = Span::current();
+        let _span = debug_span!("com_id_request", request = debug(&request)).entered();
+
         let address = Address::ComSession;
         let (tx, rx) = oneshot::channel();
-        self.context.send(address, Message::SendComRequest(SendComRequest { request, channel: tx }));
+        self.context
+            .with_root_span(root_span)
+            .send(address, Message::SendComRequest(SendComRequest { request, channel: tx }));
         rx
     }
 
     /// Spawn a new session with the given ID and properties.
     #[cfg(feature = "test-utils")]
-    #[instrument(level = "debug")]
     pub fn spawn(&self, session_id: SessionId, properties: Properties) {
         use crate::protocol::message::Spawn;
 
+        let root_span = Span::current();
+        let _span = debug_span!("spawn", session_id = debug(&session_id), properties = debug(&properties)).entered();
+
         let address = Address::Control;
-        self.context.send(address, Message::Spawn(Spawn { id: session_id, properties }));
+        self.context
+            .with_root_span(root_span)
+            .send(address, Message::Spawn(Spawn { id: session_id, properties }));
     }
 
     /// Delete the session with the given ID.
     #[cfg(feature = "test-utils")]
-    #[instrument(level = "debug")]
     pub fn delete(&self, session_id: SessionId) {
         use crate::protocol::message::Delete;
 
+        let root_span = Span::current();
+        let _span = debug_span!("delete", session_id = debug(&session_id)).entered();
+
         let address = Address::Control;
-        self.context.send(address, Message::Delete(Delete(session_id)));
+        self.context.with_root_span(root_span).send(address, Message::Delete(Delete(session_id)));
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct Context {
     message_queue: async_channel::Sender<DispatchMessage>,
+    root_span: Span,
 }
 
 impl Context {
     pub fn new(message_queue: async_channel::Sender<DispatchMessage>) -> Self {
-        Self { message_queue }
+        Self { message_queue, root_span: Span::none() }
     }
 
     pub fn send(&self, address: Address, message: Message) {
         self.message_queue
-            .try_send(DispatchMessage { address, context: self.clone(), message, source: Span::current() })
+            .try_send(DispatchMessage { address, context: self.clone(), message })
             .expect("bug: not using on unbounded channel or the channel got closed too early");
     }
 
     pub fn send_timeout(&self, address: Address, time: Instant, cancel: Option<CancelToken>) {
         let message_queue = self.message_queue.clone();
         let context = self.clone();
+        let root_span = context.root_span.clone();
         spawn(
             async move {
                 // This check is only necessary for testing with zero timeouts.
@@ -261,15 +286,11 @@ impl Context {
                     false
                 };
                 if !cancelled {
-                    let _ = message_queue.try_send(DispatchMessage {
-                        address,
-                        context,
-                        message: Message::Timeout(time),
-                        source: Span::current(),
-                    });
+                    let _ =
+                        message_queue.try_send(DispatchMessage { address, context, message: Message::Timeout(time) });
                 }
             }
-            .instrument(debug_span!(parent: Span::none(), "timeout").follows_from(Span::current()).clone()),
+            .instrument(debug_span!(parent: root_span, "timeout").follows_from(Span::current()).clone()),
         );
     }
 
@@ -279,20 +300,25 @@ impl Context {
     {
         let message_queue = self.message_queue.clone();
         let context = self.clone();
+        let root_span = context.root_span.clone();
         spawn(
             async move {
                 let message = future.await;
                 // The protocol has already been shut down, but that's okay.
-                let _ = message_queue.try_send(DispatchMessage { address, context, message, source: Span::current() });
+                let _ = message_queue.try_send(DispatchMessage { address, context, message });
             }
-            .instrument(debug_span!(parent: Span::none(), "background task").follows_from(Span::current()).clone()),
+            .instrument(debug_span!(parent: root_span, "future").follows_from(Span::current()).clone()),
         );
+    }
+
+    pub fn with_root_span(&self, root_span: Span) -> Self {
+        Self { message_queue: self.message_queue.clone(), root_span }
     }
 
     #[cfg(test)]
     pub fn mock() -> (Self, async_channel::Receiver<DispatchMessage>) {
         let (tx, rx) = async_channel::unbounded();
-        (Self { message_queue: tx }, rx)
+        (Self { message_queue: tx, root_span: Span::none() }, rx)
     }
 }
 
@@ -301,7 +327,6 @@ pub struct DispatchMessage {
     pub address: Address,
     pub context: Context,
     pub message: Message,
-    pub source: Span,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]

@@ -44,13 +44,13 @@ impl TPer {
         Self { controller, host_session_id: 1.into() }
     }
 
-    #[instrument(level = "info")]
+    #[instrument(level = "info", ret, err)]
     pub async fn discover(device: &dyn Device) -> Result<Discovery, Error> {
         let bytes = device.security_recv(0x01, 0x0001_u16.to_be_bytes(), 4096)?;
         Discovery::from_bytes(&bytes).map_err(|error| Error::InvalidDiscovery(error))
     }
 
-    #[instrument(level = "info")]
+    #[instrument(level = "info", ret, err)]
     pub async fn verify_com_id_valid(&self, com_id: u16, com_id_ext: u16) -> Result<ComIdState, Error> {
         use ComIdResponsePayload::*;
 
@@ -62,7 +62,7 @@ impl TPer {
         }
     }
 
-    #[instrument(level = "info")]
+    #[instrument(level = "info", ret, err)]
     pub async fn stack_reset(&self, com_id: u16, com_id_ext: u16) -> Result<(), Error> {
         use ComIdResponsePayload::*;
 
@@ -80,7 +80,7 @@ impl TPer {
         }
     }
 
-    #[instrument(level = "debug")]
+    #[instrument(level = "debug", ret, err)]
     pub async fn start_session(
         &self,
         sp: SecurityProviderRef,
