@@ -3,6 +3,8 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use sed_device::Error;
 use sed_packet::packet::ComPacket;
 use sed_packet::session_id::SessionId;
+use sed_spec::objects::{AuthorityRef, SecurityProviderRef};
+use sed_spec::preconfig::core::shared::authority::ANYBODY;
 
 use crate::com_id::{ComId, ComIdExt};
 use crate::management_session::ManagementSession;
@@ -43,6 +45,20 @@ impl PacketSession {
 
     pub fn sessions(&self) -> HashSet<SessionId> {
         self.sessions.keys().cloned().collect()
+    }
+
+    /// Start a session without checking authentication.
+    pub fn start_session(
+        &mut self,
+        host_session_number: u32,
+        sp: SecurityProviderRef,
+        authority: Option<AuthorityRef>,
+    ) -> SessionId {
+        let authority = authority.unwrap_or(ANYBODY);
+        let tsn = self.management_session.next_tsn();
+        let session_id = SessionId { hsn: host_session_number, tsn };
+        self.sessions.insert(session_id, Session::new(session_id, sp, authority));
+        session_id
     }
 
     pub fn push(&mut self, tper: &mut TPer, com_packet: ComPacket) {

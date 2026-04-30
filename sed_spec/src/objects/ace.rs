@@ -50,7 +50,7 @@ impl ObjectUid for Ace {
 }
 
 pub trait AceExpr {
-    fn eval(&self, authenticated: &[AuthorityRef]) -> Option<bool>;
+    fn eval(&self, authenticated: impl IntoIterator<Item = AuthorityRef>) -> Option<bool>;
     fn allow_authority(&self, authority: AuthorityRef) -> Option<Vec<AceOperand>>;
     fn deny_authority(&self, authority: AuthorityRef) -> Option<Vec<AceOperand>>;
     fn normalize(&self) -> Option<Vec<AceOperand>>;
@@ -60,8 +60,9 @@ impl<Sequence> AceExpr for Sequence
 where
     for<'seq> &'seq Sequence: IntoIterator<Item = &'seq AceOperand>,
 {
-    fn eval(&self, authenticated: &[AuthorityRef]) -> Option<bool> {
+    fn eval(&self, authenticated: impl IntoIterator<Item = AuthorityRef>) -> Option<bool> {
         let mut stack = Vec::<bool>::new();
+        let authenticated: HashSet<_> = authenticated.into_iter().collect();
         for item in self.into_iter() {
             match item {
                 AceOperand::Authority(authority) => {
@@ -91,7 +92,7 @@ where
     }
 
     fn allow_authority(&self, authority: AuthorityRef) -> Option<Vec<AceOperand>> {
-        let already_allowed = self.eval(&[authority])?;
+        let already_allowed = self.eval(std::iter::once(authority))?;
         if already_allowed {
             Some(self.into_iter().cloned().collect())
         } else {
@@ -216,46 +217,46 @@ mod tests {
     #[test]
     fn eval_ace_expr_empty() {
         let ace_expr = vec![];
-        assert_eq!(ace_expr.eval(&[ALICE]), Some(false));
-        assert_eq!(ace_expr.eval(&[]), Some(false));
+        assert_eq!(ace_expr.eval([ALICE]), Some(false));
+        assert_eq!(ace_expr.eval([]), Some(false));
     }
 
     #[test]
     fn eval_ace_expr_too_many_ops() {
         let ace_expr = ace_expr!(ALICE CHARLIE || ||);
-        assert_eq!(ace_expr.eval(&[ALICE]), None);
+        assert_eq!(ace_expr.eval([ALICE]), None);
     }
 
     #[test]
     fn eval_ace_expr_too_few_ops() {
         let ace_expr = ace_expr!(ALICE BOB CHARLIE ||);
-        assert_eq!(ace_expr.eval(&[ALICE]), None);
+        assert_eq!(ace_expr.eval([ALICE]), None);
     }
 
     #[test]
     fn eval_ace_expr_or() {
         let ace_expr = ace_expr!(ALICE CHARLIE BOB || ||);
-        assert_eq!(ace_expr.eval(&[ALICE]), Some(true));
-        assert_eq!(ace_expr.eval(&[BOB]), Some(true));
-        assert_eq!(ace_expr.eval(&[CHARLIE]), Some(true));
-        assert_eq!(ace_expr.eval(&[DAVE]), Some(false));
+        assert_eq!(ace_expr.eval([ALICE]), Some(true));
+        assert_eq!(ace_expr.eval([BOB]), Some(true));
+        assert_eq!(ace_expr.eval([CHARLIE]), Some(true));
+        assert_eq!(ace_expr.eval([DAVE]), Some(false));
     }
 
     #[test]
     fn eval_ace_expr_and() {
         let ace_expr = ace_expr!(ALICE CHARLIE BOB && &&);
-        assert_eq!(ace_expr.eval(&[ALICE]), Some(false));
-        assert_eq!(ace_expr.eval(&[BOB]), Some(false));
-        assert_eq!(ace_expr.eval(&[CHARLIE]), Some(false));
-        assert_eq!(ace_expr.eval(&[ALICE, BOB, CHARLIE]), Some(true));
+        assert_eq!(ace_expr.eval([ALICE]), Some(false));
+        assert_eq!(ace_expr.eval([BOB]), Some(false));
+        assert_eq!(ace_expr.eval([CHARLIE]), Some(false));
+        assert_eq!(ace_expr.eval([ALICE, BOB, CHARLIE]), Some(true));
     }
 
     #[test]
     fn eval_ace_expr_not() {
         let ace_expr = ace_expr!(ALICE !);
-        assert_eq!(ace_expr.eval(&[ALICE]), Some(false));
-        assert_eq!(ace_expr.eval(&[BOB]), Some(true));
-        assert_eq!(ace_expr.eval(&[]), Some(true));
+        assert_eq!(ace_expr.eval([ALICE]), Some(false));
+        assert_eq!(ace_expr.eval([BOB]), Some(true));
+        assert_eq!(ace_expr.eval([]), Some(true));
     }
 
     #[test]

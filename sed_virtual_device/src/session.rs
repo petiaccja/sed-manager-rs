@@ -1,26 +1,32 @@
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
 
 use sed_packet::packet::{Packet, SubPacket, SubPacketKind};
 use sed_packet::session_id::SessionId;
 use sed_packet::token::{Command, ToTokens};
 use sed_packet::{Bytes, Uid};
 use sed_spec::methods::{
-    CloseSession, ExtractResult, MethodResult, MethodStatus, MgmtMethodCall, MgmtMethodCallParams, Random,
+    CloseSession, ExtractResult, MethodParam, MethodResult, MethodStatus, MgmtMethodCall, MgmtMethodCallParams, Random,
     RandomResult, SessionMethodCall, SessionMethodCallParams, extract_method,
 };
+use sed_spec::objects::{AccessControlRef, AceExpr, AuthorityRef, MethodRef, SecurityProviderRef};
 use sed_spec::preconfig::core::shared::invoking_id::THIS_SP;
 
 use crate::tper::TPer;
 
 #[derive(Debug)]
 pub enum Session {
-    Open { session_id: SessionId, recv_buffer: VecDeque<u8> },
+    Open {
+        session_id: SessionId,
+        sp: SecurityProviderRef,
+        authenticated: HashSet<AuthorityRef>,
+        recv_buffer: VecDeque<u8>,
+    },
     Closed,
 }
 
 impl Session {
-    pub fn new(session_id: SessionId) -> Self {
-        Self::Open { recv_buffer: VecDeque::new(), session_id }
+    pub fn new(session_id: SessionId, sp: SecurityProviderRef, authority: AuthorityRef) -> Self {
+        Self::Open { session_id, sp, authenticated: [authority].into(), recv_buffer: VecDeque::new() }
     }
 
     #[must_use]
@@ -32,74 +38,75 @@ impl Session {
             }
         };
 
-        let mut response = Vec::new();
-
-        let next_state = match self {
-            Session::Open { session_id, recv_buffer } => {
-                let next_state = loop {
-                    let extract_result = extract_method(recv_buffer);
-                    match &extract_result {
-                        ExtractResult::Ok { value, .. } => response.push(Self::call(tper, value)),
-                        ExtractResult::EndOfStream => response.push(close(*session_id)),
-                        ExtractResult::NeedMoreTokens => (),
-                        ExtractResult::InvalidTokens(_) => response.push(abort(*session_id)),
-                    };
-                    match &extract_result {
-                        ExtractResult::Ok { .. } => (),
-                        ExtractResult::EndOfStream => break Some(Self::Closed),
-                        ExtractResult::NeedMoreTokens => break None,
-                        ExtractResult::InvalidTokens(_) => break Some(Self::Closed),
-                    };
-                };
-                response.iter_mut().for_each(|packet| session_id.assign_in_place(packet));
-                next_state
+        let mut extracted_methods = Vec::new();
+        if let Self::Open { recv_buffer, .. } = self {
+            loop {
+                match extract_method::<SessionMethodCall>(recv_buffer) {
+                    value @ ExtractResult::Ok { .. } => extracted_methods.push(value),
+                    ExtractResult::NeedMoreTokens => break,
+                    value => {
+                        extracted_methods.push(value);
+                        break;
+                    }
+                }
             }
-            Session::Closed => None,
-        };
-
-        if let Some(next_state) = next_state {
-            *self = next_state;
         }
 
-        response
+        extracted_methods
+            .iter()
+            .filter_map(|extract_result| match &extract_result {
+                ExtractResult::Ok { value, .. } => self.call(tper, value),
+                ExtractResult::EndOfStream => self.close(),
+                ExtractResult::NeedMoreTokens => None,
+                ExtractResult::InvalidTokens(_) => self.abort(),
+            })
+            .collect()
     }
 
-    fn call(tper: &mut TPer, call: &SessionMethodCall) -> Packet {
+    fn call(&mut self, tper: &mut TPer, call: &SessionMethodCall) -> Option<Packet> {
         use SessionMethodCallParams::*;
 
-        let invoking_id = call.invoking_id;
-        let result_tokens = match &call.params {
-            Activate(_params) => todo!(),
-            Authenticate(_params) => todo!(),
-            Next(_params) => todo!(),
-            GetAcl(_params) => todo!(),
-            GenKey(_params) => todo!(),
-            Revert(_params) => todo!(),
-            RevertSp(_params) => todo!(),
-            Random(params) => MethodResult(Self::random(tper, invoking_id, params)).to_tokens(),
-            Get(_params) => todo!(),
-            SetAce(_params) => todo!(),
-            SetAuthority(_params) => todo!(),
-            SetCPin(_params) => todo!(),
-            SetKAes256(_params) => todo!(),
-            SetLockingRange(_params) => todo!(),
-            SetMbrControl(_params) => todo!(),
-            SetSecurityProvider(_params) => todo!(),
-            SetTableDesc(_params) => todo!(),
-            SetBytes(_params) => todo!(),
-        };
-        Packet {
-            payload: vec![SubPacket {
-                kind: SubPacketKind::Data,
-                length: std::marker::PhantomData,
-                payload: result_tokens.expect("failed to serialize method result"),
-            }],
-            ..Default::default()
+        if let Self::Open { session_id, .. } = self {
+            let session_id = *session_id;
+
+            let invoking_id = call.invoking_id;
+            let result_tokens = match &call.params {
+                Activate(_params) => todo!(),
+                Authenticate(_params) => todo!(),
+                Next(_params) => todo!(),
+                GetAcl(_params) => todo!(),
+                GenKey(_params) => todo!(),
+                Revert(_params) => todo!(),
+                RevertSp(_params) => todo!(),
+                Random(params) => MethodResult(self.random(tper, invoking_id, params)).to_tokens(),
+                Get(_params) => todo!(),
+                SetAce(_params) => todo!(),
+                SetAuthority(_params) => todo!(),
+                SetCPin(_params) => todo!(),
+                SetKAes256(_params) => todo!(),
+                SetLockingRange(_params) => todo!(),
+                SetMbrControl(_params) => todo!(),
+                SetSecurityProvider(_params) => todo!(),
+                SetTableDesc(_params) => todo!(),
+                SetBytes(_params) => todo!(),
+            };
+            Some(session_id.assign(Packet {
+                payload: vec![SubPacket {
+                    kind: SubPacketKind::Data,
+                    length: std::marker::PhantomData,
+                    payload: result_tokens.expect("failed to serialize method result"),
+                }],
+                ..Default::default()
+            }))
+        } else {
+            None
         }
     }
 
-    fn random(_tper: &mut TPer, invoking_id: Uid, params: &Random) -> Result<RandomResult, MethodStatus> {
+    fn random(&self, tper: &TPer, invoking_id: Uid, params: &Random) -> Result<RandomResult, MethodStatus> {
         use rand::prelude::*;
+
+        self.check_permission(tper, invoking_id, params.method_id().try_into().unwrap(), [0].into_iter())?;
 
         if invoking_id == THIS_SP {
             let mut rng = rand::rng();
@@ -110,34 +117,87 @@ impl Session {
             Err(MethodStatus::InvalidParameter)
         }
     }
-}
 
-fn close(session_id: SessionId) -> Packet {
-    let call = Command::EndOfSession;
-    session_id.assign(Packet {
-        payload: vec![SubPacket {
-            kind: SubPacketKind::Data,
-            length: std::marker::PhantomData,
-            payload: call.to_tokens().expect("method tokenization failed"),
-        }],
-        ..Default::default()
-    })
-}
+    fn check_permission(
+        &self,
+        tper: &TPer,
+        invoking_id: Uid,
+        method_id: MethodRef,
+        mut columns: impl Iterator<Item = u16>,
+    ) -> Result<(), MethodStatus> {
+        let Self::Open { sp, authenticated, .. } = self else {
+            return Err(MethodStatus::Fail);
+        };
+        let sp = tper.sp(*sp).ok_or(MethodStatus::InvalidParameter)?;
+        let ac_table = sp.access_control();
 
-fn abort(session_id: SessionId) -> Packet {
-    let call = MgmtMethodCall {
-        params: MgmtMethodCallParams::CloseSession(CloseSession {
-            remote_session_number: session_id.hsn,
-            local_session_number: session_id.tsn,
-        }),
-        status: MethodStatus::Success,
-    };
-    SessionId::MANAGEMENT.assign(Packet {
-        payload: vec![SubPacket {
-            kind: SubPacketKind::Data,
-            length: std::marker::PhantomData,
-            payload: call.to_tokens().expect("method tokenization failed"),
-        }],
-        ..Default::default()
-    })
+        let Some(access_control) = ac_table.get(&AccessControlRef { invoking_id, method_id }) else {
+            return Err(MethodStatus::NotAuthorized);
+        };
+
+        let ace_table = sp.ace();
+        let mut permitted_columns = HashSet::new();
+        for ace_ref in &access_control.acl {
+            let ace = ace_table.get(ace_ref).expect("referenced ACE is missing from preconfig");
+            let has_permission = ace
+                .boolean_expr
+                .as_ref()
+                .map(|expr| expr.eval(authenticated.iter().cloned()))
+                .flatten()
+                .unwrap_or(false);
+            if has_permission {
+                permitted_columns.extend(ace.columns.as_ref().unwrap_or(&HashSet::new()).iter().cloned());
+            }
+        }
+
+        if columns.all(|column| permitted_columns.contains(&column)) {
+            Ok(())
+        } else {
+            Err(MethodStatus::NotAuthorized)
+        }
+    }
+
+    fn close(&mut self) -> Option<Packet> {
+        if let Self::Open { session_id, .. } = self {
+            let session_id = *session_id;
+            *self = Self::Closed;
+
+            let call = Command::EndOfSession;
+            Some(session_id.assign(Packet {
+                payload: vec![SubPacket {
+                    kind: SubPacketKind::Data,
+                    length: std::marker::PhantomData,
+                    payload: call.to_tokens().expect("method tokenization failed"),
+                }],
+                ..Default::default()
+            }))
+        } else {
+            None
+        }
+    }
+
+    fn abort(&mut self) -> Option<Packet> {
+        if let Self::Open { session_id, .. } = self {
+            let session_id = *session_id;
+            *self = Self::Closed;
+
+            let call = MgmtMethodCall {
+                params: MgmtMethodCallParams::CloseSession(CloseSession {
+                    remote_session_number: session_id.hsn,
+                    local_session_number: session_id.tsn,
+                }),
+                status: MethodStatus::Success,
+            };
+            Some(SessionId::MANAGEMENT.assign(Packet {
+                payload: vec![SubPacket {
+                    kind: SubPacketKind::Data,
+                    length: std::marker::PhantomData,
+                    payload: call.to_tokens().expect("method tokenization failed"),
+                }],
+                ..Default::default()
+            }))
+        } else {
+            None
+        }
+    }
 }

@@ -47,6 +47,10 @@ impl ManagementSession {
         Self { next_tsn: 1000.into(), properties: Properties::ASSUMED, recv_buffer: VecDeque::new() }
     }
 
+    pub fn next_tsn(&self) -> u32 {
+        self.next_tsn.fetch_add(1, Ordering::Relaxed)
+    }
+
     #[must_use]
     pub fn dispatch(&mut self, tper: &TPer, sessions: &mut HashMap<SessionId, Session>, packet: Packet) -> Vec<Packet> {
         let data_sub_packets = packet.payload.iter().filter(|sub_packet| sub_packet.kind == SubPacketKind::Data);
@@ -101,9 +105,13 @@ impl ManagementSession {
         params: StartSession,
     ) -> MethodCall<SyncSession> {
         let outcome = self.start_session_impl(tper, &params);
+        let authority = params.host_signing_authority.unwrap_or(ANYBODY);
         if let Ok(tsn) = outcome {
             let session_id = SessionId { hsn: params.host_session_id, tsn };
-            assert!(sessions.insert(session_id, Session::new(session_id)).is_none(), "TSN reused");
+            assert!(
+                sessions.insert(session_id, Session::new(session_id, params.spid, authority)).is_none(),
+                "TSN reused"
+            );
         }
         match outcome {
             Ok(tsn) => MethodCall {

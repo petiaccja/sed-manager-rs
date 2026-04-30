@@ -1,8 +1,9 @@
 use std::sync::Arc;
 
-use sed_spec::preconfig::opal_2::admin::sp;
+use googletest::{assert_that, matchers::*};
+use sed_spec::{methods::Properties, preconfig::opal_2::admin::sp};
 use sed_telemetry::{WithTracing, with_tracing};
-use sed_tper::TPer;
+use sed_tper::{Session, TPer, protocol::Protocol};
 use sed_virtual_device::{BASE_COM_ID, VirtualDevice};
 use tracing::instrument;
 
@@ -19,4 +20,20 @@ async fn session_lifetime(_with_tracing: WithTracing) {
     session.close().await.unwrap();
 
     assert!(device.sessions(BASE_COM_ID, 0).unwrap().is_empty());
+}
+
+#[instrument]
+#[rstest::rstest]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn random(_with_tracing: WithTracing) {
+    let device = Arc::new(VirtualDevice::new());
+    let session_id = device.start_session(1, sp::ADMIN, None);
+    let (protocol, controller) = Protocol::new(BASE_COM_ID, 0, device);
+    let protocol = tokio::spawn(protocol.run());
+
+    controller.spawn(session_id, Properties::ASSUMED);
+    let session = Session::from_started(session_id, controller);
+    assert_that!(session.random(4).await, ok(len(eq(4))));
+    let _ = session.close().await;
+    let _ = protocol.await;
 }

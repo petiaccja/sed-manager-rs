@@ -1,6 +1,6 @@
 use sed_packet::session_id::SessionId;
 use sed_packet::token::{Command, Detokenize, FromTokens, ToTokens};
-use sed_packet::{Bytes, Field, FieldRef, MaxBytes, Named, Object, Uid};
+use sed_packet::{Field, FieldRef, MaxBytes, Named, Object, Uid};
 use sed_spec::methods::{
     CellBlock, Get, MethodCall, MethodResult, MethodStatus, Random, RandomResult, StartSession, SyncSession,
 };
@@ -31,6 +31,7 @@ use crate::protocol::Controller;
 pub struct Session {
     session_id: SessionId,
     controller: Controller,
+    eos_sent: bool,
 }
 
 impl Session {
@@ -86,10 +87,15 @@ impl Session {
     ///
     /// This method assumes that the exchange of session startup methods with
     /// the device has complete successfully and returned the given
-    /// `session_id`. In the absence of an already established session, the
-    /// device will drop the packets and this session's methods will time out.
+    /// `session_id`.
+    ///
+    /// Additionally, the protocol stack must also have been informed about the
+    /// startup via the controller.
+    ///
+    /// If the preconditions are not met, requests will be dropped or will time
+    /// out.
     pub fn from_started(session_id: SessionId, controller: Controller) -> Self {
-        Self { session_id, controller }
+        Self { session_id, controller, eos_sent: false }
     }
 
     /// Execute a procedure using this session and then close the session.
@@ -184,7 +190,7 @@ impl Session {
     ///
     /// - `count`: the number of random bytes to generate.
     #[instrument(level = "info", skip(self), ret, err)]
-    pub async fn random(&self, count: usize) -> Result<Bytes, Error> {
+    pub async fn random(&self, count: usize) -> Result<Vec<u8>, Error> {
         let call = MethodCall {
             invoking_id: THIS_SP,
             method_id: RANDOM.into(),
@@ -197,7 +203,7 @@ impl Session {
             .await
             .map_err(|_| Error::Closed)??;
         let result = MethodResult::<RandomResult>::from_tokens(&result_tokens)?.0?;
-        Ok(result.result)
+        Ok(result.result.0)
     }
 
     /// Explicitly close the session.
@@ -211,12 +217,11 @@ impl Session {
     /// timing issues, and TPer might reply that it's busy when you start
     /// another session.
     #[instrument(level = "info", skip(self), ret, err)]
-    pub async fn close(self) -> Result<(), Error> {
-        // Drop would send another EOS token, which is undesired.
-        let this = std::mem::ManuallyDrop::new(self);
-        let result_tokens = this
+    pub async fn close(mut self) -> Result<(), Error> {
+        self.eos_sent = true;
+        let result_tokens = self
             .controller
-            .call(this.session_id, Command::EndOfSession.to_tokens().expect("invalid token"))
+            .call(self.session_id, Command::EndOfSession.to_tokens().expect("invalid token"))
             .await
             .map_err(|_| Error::Closed)??;
         let result = Command::from_tokens(&result_tokens)?;
@@ -235,7 +240,9 @@ impl Session {
 /// closing the previous one.
 impl Drop for Session {
     fn drop(&mut self) {
-        let _ = self.controller.call(self.session_id, Command::EndOfSession.to_tokens().expect("invalid token"));
+        if !self.eos_sent {
+            let _ = self.controller.call(self.session_id, Command::EndOfSession.to_tokens().expect("invalid token"));
+        }
     }
 }
 

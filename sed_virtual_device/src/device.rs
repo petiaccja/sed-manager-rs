@@ -6,6 +6,7 @@ use sed_device::{Device, Error, Interface};
 use sed_packet::com_id::ComIdRequest;
 use sed_packet::packet::ComPacket;
 use sed_packet::session_id::SessionId;
+use sed_spec::objects::{AuthorityRef, SecurityProviderRef};
 use sorbit::ser_de::{FromBytes, ToBytes as _};
 
 use crate::com_id::{ComId, ComIdExt};
@@ -23,6 +24,9 @@ pub struct VirtualDevice {
 }
 
 impl VirtualDevice {
+    /// Create a new virtual device.
+    ///
+    /// The device's configuration is the preconfiguration for the Opal 2.0 SSC.
     pub fn new() -> Self {
         let static_com_ids = (BASE_COM_ID.0..BASE_COM_ID.0 + NUM_COM_IDS).map(|com_id| ComId(com_id));
         let com_sessions = static_com_ids.clone().map(|com_id| (com_id, ComSession::new(com_id))).collect();
@@ -34,6 +38,24 @@ impl VirtualDevice {
         }
     }
 
+    /// Start a session on the smallest base ComID.
+    ///
+    /// This method does not check for authentication, it always starts the
+    /// session.
+    pub fn start_session(
+        &self,
+        host_session_number: u32,
+        sp: SecurityProviderRef,
+        authority: Option<AuthorityRef>,
+    ) -> SessionId {
+        let mut sessions = self.sessions.lock().expect("the virtual device panicked in another thread");
+        let Sessions { packet_sessions, .. } = sessions.deref_mut();
+
+        let packet_session = packet_sessions.get_mut(&BASE_COM_ID).expect("base session accidentally deleted");
+        packet_session.start_session(host_session_number, sp, authority)
+    }
+
+    /// Return a list of the currently active sessions on the ComID.
     pub fn sessions(&self, com_id: u16, com_id_ext: u16) -> Result<HashSet<SessionId>, Error> {
         let sessions = self.sessions.lock().expect("the virtual device panicked in another thread");
         let Sessions { packet_sessions, .. } = sessions.deref();
