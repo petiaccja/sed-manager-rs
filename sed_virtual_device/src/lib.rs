@@ -9,3 +9,4 @@ mod tper;
 
 pub use device::{NUM_COM_IDS, VirtualDevice};
 pub const BASE_COM_ID: u16 = device::BASE_COM_ID.0;
+pub use tper::{INITIAL_SID_PASSWORD, PSID_PASSWORD};

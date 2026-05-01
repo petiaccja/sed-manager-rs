@@ -3,6 +3,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use sed_device::Error;
 use sed_packet::packet::ComPacket;
 use sed_packet::session_id::SessionId;
+use sed_spec::methods::MethodStatus;
 use sed_spec::objects::{AuthorityRef, SecurityProviderRef};
 use sed_spec::preconfig::core::shared::authority::ANYBODY;
 
@@ -48,17 +49,18 @@ impl PacketSession {
     }
 
     /// Start a session without checking authentication.
-    pub fn start_session(
+    pub fn insert_session(
         &mut self,
+        tper: &TPer,
         host_session_number: u32,
         sp: SecurityProviderRef,
         authority: Option<AuthorityRef>,
-    ) -> SessionId {
+    ) -> Result<SessionId, MethodStatus> {
         let authority = authority.unwrap_or(ANYBODY);
         let tsn = self.management_session.next_tsn();
         let session_id = SessionId { hsn: host_session_number, tsn };
-        self.sessions.insert(session_id, Session::new(session_id, sp, authority));
-        session_id
+        self.sessions.insert(session_id, Session::new(tper, session_id, sp, authority)?);
+        Ok(session_id)
     }
 
     pub fn push(&mut self, tper: &mut TPer, com_packet: ComPacket) {

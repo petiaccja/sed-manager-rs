@@ -106,15 +106,7 @@ impl ManagementSession {
         sessions: &mut HashMap<SessionId, Session>,
         params: StartSession,
     ) -> MethodCall<SyncSession> {
-        let outcome = self.start_session_impl(tper, &params);
-        let authority = params.host_signing_authority.unwrap_or(ANYBODY);
-        if let Ok(tsn) = outcome {
-            let session_id = SessionId { hsn: params.host_session_id, tsn };
-            assert!(
-                sessions.insert(session_id, Session::new(session_id, params.spid, authority)).is_none(),
-                "TSN reused"
-            );
-        }
+        let outcome = self.start_session_impl(tper, sessions, &params);
         match outcome {
             Ok(tsn) => MethodCall {
                 invoking_id: SESSION_MANAGER,
@@ -149,7 +141,12 @@ impl ManagementSession {
         }
     }
 
-    fn start_session_impl(&mut self, tper: &TPer, params: &StartSession) -> Result<u32, MethodStatus> {
+    fn start_session_impl(
+        &mut self,
+        tper: &TPer,
+        sessions: &mut HashMap<SessionId, Session>,
+        params: &StartSession,
+    ) -> Result<u32, MethodStatus> {
         use LifeCycleState::*;
 
         let (sp_uid, authority, password) = (params.spid, &params.host_signing_authority, &params.host_challenge);
@@ -174,9 +171,9 @@ impl ManagementSession {
 
         match tper.sp(sp_uid) {
             Some(sp) => {
-                let authority = authority.unwrap_or(ANYBODY);
+                let authority_uid = authority.unwrap_or(ANYBODY);
                 let authorities = sp.authority();
-                let authority = authorities.get(&authority).ok_or(MethodStatus::InvalidParameter)?;
+                let authority = authorities.get(&authority_uid).ok_or(MethodStatus::InvalidParameter)?;
                 if let Some(credential) = authority.credential {
                     let credential: CPinRef = credential.try_into().expect("internal error: invalid credential ref");
                     let c_pins = sp.c_pin();
@@ -186,6 +183,12 @@ impl ManagementSession {
                     }
                 }
                 let tsn = self.next_tsn.fetch_add(1, Ordering::Relaxed);
+                let session_id = SessionId { hsn: params.host_session_id, tsn };
+                assert!(
+                    sessions.insert(session_id, Session::new(tper, session_id, params.spid, authority_uid)?).is_none(),
+                    "the same TSN was erronously assigned to multiple sessions"
+                );
+
                 Ok(tsn)
             }
             None => Err(MethodStatus::InvalidParameter),

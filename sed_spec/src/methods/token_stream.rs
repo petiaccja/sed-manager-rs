@@ -36,7 +36,7 @@ pub fn extract_method<Method>(token_stream: &mut VecDeque<u8>) -> ExtractResult<
 where
     Method: Detokenize,
 {
-    if is_end_of_session(token_stream) {
+    if extract_end_of_session(token_stream).is_some() {
         ExtractResult::EndOfStream
     } else {
         let bytes = token_stream.make_contiguous() as &[u8];
@@ -59,15 +59,15 @@ where
     }
 }
 
-fn is_end_of_session(token_stream: &mut VecDeque<u8>) -> bool {
+fn extract_end_of_session(token_stream: &mut VecDeque<u8>) -> Option<Command> {
     let bytes = token_stream.make_contiguous() as &[u8];
     let mut detokenizer = create_detokenizer(bytes);
     match Command::detokenize(&mut detokenizer) {
         Ok(Command::EndOfSession) => {
             let _ = token_stream.pop_front();
-            true
+            Some(Command::EndOfSession)
         }
-        _ => false,
+        _ => None,
     }
 }
 

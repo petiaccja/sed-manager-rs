@@ -17,8 +17,8 @@ use crate::preconfig::core::shared::method_id;
 
 #[derive(Debug, Clone, PartialEq, Eq, DetokenizeStruct, TokenizeStruct)]
 pub struct Authenticate {
-    authority: AuthorityRef,
-    proof: Option<MaxBytes<32>>,
+    pub authority: AuthorityRef,
+    pub proof: Option<MaxBytes<32>>,
 }
 
 impl SessionMethodParam for Authenticate {
@@ -34,19 +34,33 @@ pub enum AuthenticateResult {
 
 impl Tokenize for AuthenticateResult {
     fn tokenize<T: Tokenizer>(&self, tokenizer: &mut T) -> Result<(), T::Error> {
-        match self {
+        tokenizer.tokenize_list(|tokenizer| match self {
             AuthenticateResult::Success(success) => success.tokenize(tokenizer),
             AuthenticateResult::Challenge(bytes) => bytes.tokenize(tokenizer),
-        }
+        })
     }
 }
 
 impl Detokenize for AuthenticateResult {
     fn detokenize<D: Detokenizer>(detokenizer: &mut D) -> Result<Self, D::Error> {
-        match detokenizer.peek_kind()? {
-            ValueKind::Integer { .. } => bool::detokenize(detokenizer).map(|success| Self::Success(success)),
-            ValueKind::Bytes => Bytes::detokenize(detokenizer).map(|bytes| Self::Challenge(bytes)),
-            _ => Err(D::Error::message("expected either a boolean or bytes")),
+        let mut result = None;
+        detokenizer.detokenize_list(|detokenizer| {
+            if result.is_some() {
+                return Err(D::Error::message("too many parameters in method result"));
+            }
+            match detokenizer.peek_kind()? {
+                ValueKind::Integer { .. } => bool::detokenize(detokenizer).map(|success| Self::Success(success)),
+                ValueKind::Bytes => Bytes::detokenize(detokenizer).map(|bytes| Self::Challenge(bytes)),
+                _ => Err(D::Error::message("expected either a boolean or bytes")),
+            }
+            .map(|result_| {
+                result = Some(result_);
+                ()
+            })
+        })?;
+        match result {
+            Some(result) => Ok(result),
+            None => Err(D::Error::message("empty method result")),
         }
     }
 }

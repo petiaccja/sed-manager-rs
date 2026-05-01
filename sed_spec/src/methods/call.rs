@@ -156,22 +156,22 @@ pub struct SessionMethodCall {
 pub enum SessionMethodCallParams {
     Activate(Activate),
     Authenticate(Authenticate),
-    Next(NextUntyped),
-    GetAcl(GetAcl),
     GenKey(GenKey),
+    Get(Get),
+    GetAcl(GetAcl),
+    Next(NextUntyped),
+    Random(Random),
     Revert(Revert),
     RevertSp(RevertSp),
-    Random(Random),
-    Get(Get),
     SetAce(SetObject<Ace>),
     SetAuthority(SetObject<Authority>),
+    SetBytes(SetBytes),
     SetCPin(SetObject<CPin>),
     SetKAes256(SetObject<KAes256>),
     SetLockingRange(SetObject<LockingRange>),
     SetMbrControl(SetObject<MbrControl>),
     SetSecurityProvider(SetObject<SecurityProvider>),
     SetTableDesc(SetObject<TableDesc>),
-    SetBytes(SetBytes),
 }
 
 impl Tokenize for SessionMethodCall {

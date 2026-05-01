@@ -9,3 +9,4 @@ sed_packet.workspace = true
 sed_spec.workspace = true
 sorbit.workspace = true
 rand.workspace = true
+tracing.workspace = true

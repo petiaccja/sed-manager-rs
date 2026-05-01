@@ -7,6 +7,7 @@ use sed_packet::com_id::ComIdRequest;
 use sed_packet::discovery::Discovery;
 use sed_packet::packet::ComPacket;
 use sed_packet::session_id::SessionId;
+use sed_spec::methods::MethodStatus;
 use sed_spec::objects::{AuthorityRef, SecurityProviderRef};
 use sorbit::ser_de::{FromBytes, ToBytes as _};
 
@@ -44,17 +45,18 @@ impl VirtualDevice {
     ///
     /// This method does not check for authentication, it always starts the
     /// session.
-    pub fn start_session(
+    pub fn insert_session(
         &self,
         host_session_number: u32,
         sp: SecurityProviderRef,
         authority: Option<AuthorityRef>,
-    ) -> SessionId {
+    ) -> Result<SessionId, MethodStatus> {
+        let tper = self.tper.lock().expect("the virtual device panicked in another thread");
         let mut sessions = self.sessions.lock().expect("the virtual device panicked in another thread");
         let Sessions { packet_sessions, .. } = sessions.deref_mut();
 
         let packet_session = packet_sessions.get_mut(&BASE_COM_ID).expect("base session accidentally deleted");
-        packet_session.start_session(host_session_number, sp, authority)
+        packet_session.insert_session(tper.deref(), host_session_number, sp, authority)
     }
 
     /// Return a list of the currently active sessions on the ComID.

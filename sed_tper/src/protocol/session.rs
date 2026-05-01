@@ -9,7 +9,8 @@ use sed_packet::session_id::SessionId;
 use sed_packet::token::{Command, ToTokens as _};
 use sed_spec::methods::{ExtractResult, Properties, extract_method};
 
-use tracing::instrument;
+use tracing::field::debug;
+use tracing::{Span, instrument};
 
 use crate::error::Error;
 use crate::protocol::message::{
@@ -136,7 +137,7 @@ impl Session {
         }
     }
 
-    #[instrument(level = "debug", skip_all)]
+    #[instrument(level = "debug", skip_all, fields(error, tokens))]
     pub fn packet_reveived(&mut self, context: Context, PacketReceived { packet }: PacketReceived) {
         match &mut self.state {
             State::Active { receive_buffer, channel_queue, .. }
@@ -156,6 +157,9 @@ impl Session {
                             let _ = channel.send(Ok(tokens));
                         } else {
                             // Either the device sent too much stuff, or there is a packet distribution bug.
+                            Span::current()
+                                .record("error", "too many methods received from device, or protocol routing bug")
+                                .record("tokens", debug(tokens));
                             self.abort(context);
                         }
                     }
@@ -167,7 +171,12 @@ impl Session {
                         }
                         self.shutdown(context)
                     }
-                    ExtractResult::InvalidTokens(_) => self.abort(context),
+                    ExtractResult::InvalidTokens(err) => {
+                        Span::current()
+                            .record("error", tracing::field::debug(&err))
+                            .record("tokens", debug(receive_buffer));
+                        self.abort(context)
+                    }
                 };
             }
             State::Closed => (),

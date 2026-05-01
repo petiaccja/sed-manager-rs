@@ -6,9 +6,9 @@ use sed_packet::session_id::SessionId;
 use sed_packet::token::{Command, ToTokens};
 use sed_packet::{Bytes, Uid};
 use sed_spec::methods::{
-    Activate, ActivateResult, CloseSession, ExtractResult, MethodParam, MethodResult, MethodStatus, MgmtMethodCall,
-    MgmtMethodCallParams, Random, RandomResult, SessionMethodCall, SessionMethodCallParams, SessionMethodParam as _,
-    extract_method,
+    Activate, ActivateResult, Authenticate, AuthenticateResult, CloseSession, ExtractResult, MethodResult,
+    MethodStatus, MgmtMethodCall, MgmtMethodCallParams, Random, RandomResult, SessionMethodCall,
+    SessionMethodCallParams, SessionMethodParam as _, extract_method,
 };
 use sed_spec::objects::{AccessControlRef, AceExpr, AuthorityRef, MethodRef, SecurityProviderRef};
 use sed_spec::preconfig::core::shared::invoking_id::THIS_SP;
@@ -28,8 +28,16 @@ pub enum Session {
 }
 
 impl Session {
-    pub fn new(session_id: SessionId, sp: SecurityProviderRef, authority: AuthorityRef) -> Self {
-        Self::Open { session_id, sp, authenticated: [authority].into(), recv_buffer: VecDeque::new() }
+    pub fn new(
+        tper: &TPer,
+        session_id: SessionId,
+        sp_uid: SecurityProviderRef,
+        authority_uid: AuthorityRef,
+    ) -> Result<Self, MethodStatus> {
+        let sp = tper.sp(sp_uid).ok_or(MethodStatus::InvalidParameter)?;
+        let authority = sp.authority().get(&authority_uid).ok_or(MethodStatus::InvalidParameter)?;
+        let authenticated = std::iter::once(authority_uid).chain(authority.class).collect();
+        Ok(Self::Open { session_id, sp: sp_uid, authenticated, recv_buffer: VecDeque::new() })
     }
 
     #[must_use]
@@ -75,24 +83,25 @@ impl Session {
             let invoking_id = call.invoking_id;
             let result_tokens = match &call.params {
                 Activate(params) => MethodResult(self.activate(tper, invoking_id, params)).to_tokens(),
-                Authenticate(_params) => todo!(),
-                Next(_params) => todo!(),
-                GetAcl(_params) => todo!(),
+                Authenticate(params) => MethodResult(self.authenticate(tper, invoking_id, params)).to_tokens(),
                 GenKey(_params) => todo!(),
+                Get(_params) => todo!(),
+                GetAcl(_params) => todo!(),
+                Next(_params) => todo!(),
+                Random(params) => MethodResult(self.random(tper, invoking_id, params)).to_tokens(),
                 Revert(_params) => todo!(),
                 RevertSp(_params) => todo!(),
-                Random(params) => MethodResult(self.random(tper, invoking_id, params)).to_tokens(),
-                Get(_params) => todo!(),
                 SetAce(_params) => todo!(),
                 SetAuthority(_params) => todo!(),
+                SetBytes(_params) => todo!(),
                 SetCPin(_params) => todo!(),
                 SetKAes256(_params) => todo!(),
                 SetLockingRange(_params) => todo!(),
                 SetMbrControl(_params) => todo!(),
                 SetSecurityProvider(_params) => todo!(),
                 SetTableDesc(_params) => todo!(),
-                SetBytes(_params) => todo!(),
             };
+            tracing::debug!(method_result = tracing::field::debug(&result_tokens), "response");
             Some(session_id.assign(Packet {
                 payload: vec![SubPacket {
                     kind: SubPacketKind::Data,
@@ -106,9 +115,11 @@ impl Session {
         }
     }
 
-    fn activate(&self, tper: &mut TPer, invoking_id: Uid, _params: &Activate) -> Result<ActivateResult, MethodStatus> {
+    fn activate(&self, tper: &mut TPer, invoking_id: Uid, params: &Activate) -> Result<ActivateResult, MethodStatus> {
         use sed_spec::preconfig::opal_2::admin;
         use sed_spec::preconfig::opal_2::locking;
+
+        self.check_permission(tper, invoking_id, params.method_id().try_into().unwrap(), [0].into_iter())?;
 
         let sp_uid = SecurityProviderRef::try_from(invoking_id).map_err(|_| MethodStatus::InvalidParameter)?;
         let admin_sp = tper.admin_sp_mut();
@@ -123,6 +134,41 @@ impl Session {
             Ok(ActivateResult)
         } else {
             Err(MethodStatus::SPDisabled)
+        }
+    }
+
+    fn authenticate(
+        &mut self,
+        tper: &mut TPer,
+        invoking_id: Uid,
+        params: &Authenticate,
+    ) -> Result<AuthenticateResult, MethodStatus> {
+        self.check_permission(tper, invoking_id, params.method_id().try_into().unwrap(), [0].into_iter())?;
+
+        let Self::Open { sp: sp_uid, authenticated, .. } = self else {
+            return Err(MethodStatus::Fail);
+        };
+
+        let sp = tper.sp(*sp_uid).expect_sp(*sp_uid);
+        let authority = sp.authority().get(&params.authority).ok_or(MethodStatus::InvalidParameter)?;
+        if authority.is_class == Some(true) {
+            return Err(MethodStatus::InvalidParameter);
+        }
+        if let Some(c_pin_uid) = authority.credential {
+            let c_pin_uid = c_pin_uid.try_into().expect("internal error: non-PIN authentication");
+            let c_pin = sp.c_pin().get(&c_pin_uid).expect_object("C_PIN", c_pin_uid);
+            if c_pin.pin == params.proof {
+                authenticated.insert(params.authority);
+                if let Some(class) = authority.class {
+                    authenticated.insert(class);
+                }
+                Ok(AuthenticateResult::Success(true))
+            } else {
+                Ok(AuthenticateResult::Success(false))
+            }
+        } else {
+            authenticated.insert(params.authority);
+            Ok(AuthenticateResult::Success(true))
         }
     }
 
@@ -198,22 +244,24 @@ impl Session {
         let sp = tper.sp(*sp).ok_or(MethodStatus::InvalidParameter)?;
         let ac_table = sp.access_control();
 
-        let Some(access_control) = ac_table.get(&AccessControlRef { invoking_id, method_id }) else {
-            return Err(MethodStatus::NotAuthorized);
-        };
-
-        let ace_table = sp.ace();
         let mut permitted_columns = HashSet::new();
-        for ace_ref in &access_control.acl {
-            let ace = ace_table.get(ace_ref).expect_object("ACE", ace_ref);
-            let has_permission = ace
-                .boolean_expr
-                .as_ref()
-                .map(|expr| expr.eval(authenticated.iter().cloned()))
-                .flatten()
-                .unwrap_or(false);
-            if has_permission {
-                permitted_columns.extend(ace.columns.as_ref().unwrap_or(&HashSet::new()).iter().cloned());
+        // Check both the invoking ID and its containing table. ACLs for the
+        // containing table apply to any object in the table.
+        for invoking_id in std::iter::once(invoking_id).chain(invoking_id.containing_table()) {
+            if let Some(access_control) = ac_table.get(&AccessControlRef { invoking_id, method_id }) {
+                let ace_table = sp.ace();
+                for ace_ref in &access_control.acl {
+                    let ace = ace_table.get(ace_ref).expect_object("ACE", ace_ref);
+                    let has_permission = ace
+                        .boolean_expr
+                        .as_ref()
+                        .map(|expr| expr.eval(authenticated.iter().cloned()))
+                        .flatten()
+                        .unwrap_or(false);
+                    if has_permission {
+                        permitted_columns.extend(ace.columns.as_ref().unwrap_or(&HashSet::new()).iter().cloned());
+                    }
+                }
             }
         }
 

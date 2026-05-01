@@ -2,8 +2,8 @@ use sed_packet::session_id::SessionId;
 use sed_packet::token::{Command, Detokenize, FromTokens, ToTokens};
 use sed_packet::{Field, FieldRef, MaxBytes, Named, Object, Uid};
 use sed_spec::methods::{
-    Activate, CellBlock, Get, MethodCall, MethodResult, MethodStatus, Random, SessionMethodParam as _, StartSession,
-    SyncSession,
+    Activate, Authenticate, AuthenticateResult, CellBlock, Get, MethodCall, MethodResult, MethodStatus, Random,
+    SessionMethodParam as _, StartSession, SyncSession,
 };
 use sed_spec::objects::{AuthorityRef, SecurityProviderRef};
 use sed_spec::preconfig::core::shared::invoking_id::{SESSION_MANAGER, THIS_SP};
@@ -132,6 +132,23 @@ impl Session {
             .map_err(|_| Error::Closed)??;
         let _result = Activate::result_from_tokens(&result_tokens)??;
         Ok(())
+    }
+
+    #[instrument(level = "info", skip(self), ret, err)]
+    pub async fn authenticate(&self, authority: AuthorityRef, password: Option<MaxBytes<32>>) -> Result<(), Error> {
+        let params = Authenticate { authority, proof: password };
+        let call = params.to_call(THIS_SP);
+        let result_tokens = self
+            .controller
+            .call(self.session_id, call.to_tokens().expect("invalid method call"))
+            .await
+            .map_err(|_| Error::Closed)??;
+        let result = Authenticate::result_from_tokens(&result_tokens)??;
+        match result {
+            AuthenticateResult::Success(true) => Ok(()),
+            AuthenticateResult::Success(false) => Err(MethodStatus::NotAuthorized.into()),
+            AuthenticateResult::Challenge(_) => Err(Error::NotImplemented),
+        }
     }
 
     /// Get one field of an object.

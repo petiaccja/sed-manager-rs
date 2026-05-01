@@ -9,6 +9,8 @@ use std::marker::PhantomData;
 pub use admin::Admin;
 pub use locking::Locking;
 pub use opal_2::Opal2TPer;
+pub use preconfig_shared::{INITIAL_SID_PASSWORD, PSID_PASSWORD};
+
 use sed_packet::discovery::{
     BlockSIDAuthDescriptor, Discovery, FeatureDescriptor, GeometryDescriptor, LockingDescriptor, OpalV2Descriptor,
     OwnerPasswordState, TPerDescriptor,
