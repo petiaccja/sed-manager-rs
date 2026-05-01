@@ -4,6 +4,7 @@ use std::sync::Mutex;
 
 use sed_device::{Device, Error, Interface};
 use sed_packet::com_id::ComIdRequest;
+use sed_packet::discovery::Discovery;
 use sed_packet::packet::ComPacket;
 use sed_packet::session_id::SessionId;
 use sed_spec::objects::{AuthorityRef, SecurityProviderRef};
@@ -11,6 +12,7 @@ use sorbit::ser_de::{FromBytes, ToBytes as _};
 
 use crate::com_id::{ComId, ComIdExt};
 use crate::com_session::ComSession;
+use crate::internal_error::Expect;
 use crate::packet_session::PacketSession;
 use crate::tper::{Opal2TPer, TPer};
 
@@ -63,6 +65,13 @@ impl VirtualDevice {
             Some(packet_session) if packet_session.com_id_ext().0 == com_id_ext => Ok(packet_session.sessions()),
             _ => Err(Error::InvalidProtocolOrComID),
         }
+    }
+
+    /// Returns the usual discovery message, bypassing IF-RECV.
+    ///
+    /// Use this in tests to check device state.
+    pub fn discover(&self) -> Discovery {
+        self.tper.lock().unwrap().discover()
     }
 }
 
@@ -122,7 +131,7 @@ impl Device for VirtualDevice {
     }
 
     fn security_recv(&self, security_protocol: u8, protocol_specific: [u8; 2], len: usize) -> Result<Vec<u8>, Error> {
-        let mut tper = self.tper.lock().expect("the virtual device panicked in another thread");
+        let tper = self.tper.lock().expect("the virtual device panicked in another thread");
         let mut sessions = self.sessions.lock().expect("the virtual device panicked in another thread");
         let Sessions { com_sessions, packet_sessions } = sessions.deref_mut();
 
@@ -140,14 +149,14 @@ impl Device for VirtualDevice {
             // Communication layer
             (0x02, com_id) if let Some(session) = com_sessions.get_mut(&ComId(com_id)) => {
                 let response = session.pop();
-                let mut message = response.to_bytes().expect("serializing ComID response failed");
+                let mut message = response.to_bytes().expect_serialize();
                 message.resize(len, 0);
                 Ok(message)
             }
             // Packet layer
             (0x01, com_id) if let Some(session) = packet_sessions.get_mut(&ComId(com_id)) => {
                 session.pop(len).map(|com_packet| {
-                    let mut bytes = com_packet.to_bytes().expect("serializing ComPacket failed");
+                    let mut bytes = com_packet.to_bytes().expect_serialize();
                     bytes.resize(len, 0);
                     bytes
                 })

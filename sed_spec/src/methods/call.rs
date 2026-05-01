@@ -3,9 +3,10 @@ use sed_packet::{TableRef, Uid};
 
 use crate::methods::{
     Activate, Authenticate, CloseSession, GenKey, Get, GetAcl, MethodParam, MethodStatus, NextUntyped,
-    PropertiesMethod, Random, Revert, RevertSp, SetBytes, SetObject, StartSession, SyncSession,
+    PropertiesMethod, Random, Revert, RevertSp, SessionMethodParam as _, SetBytes, SetObject, StartSession,
+    SyncSession,
 };
-use crate::objects::{Ace, Authority, CPin, KAes256, LockingRange, MbrControl, SecurityProvider, TableDesc};
+use crate::objects::{Ace, Authority, CPin, KAes256, LockingRange, MbrControl, MethodRef, SecurityProvider, TableDesc};
 use crate::preconfig::core::shared::invoking_id::SESSION_MANAGER;
 use crate::preconfig::core::shared::{method_id, table_id};
 
@@ -265,7 +266,7 @@ impl Detokenize for SessionMethodCall {
             _ => return Err(D::Error::message("expected a CALL token")),
         }
         let invoking_id = Uid::detokenize(detokenizer)?;
-        let method_id = Uid::detokenize(detokenizer)?;
+        let method_id = MethodRef::detokenize(detokenizer)?;
         let invoking_table = TableRef::containing_table(invoking_id).or(TableRef::try_from(invoking_id).ok());
         let params = match method_id {
             Activate::METHOD_ID => SessionMethodCallParams::Activate(<_>::detokenize(detokenizer)?),
@@ -277,7 +278,7 @@ impl Detokenize for SessionMethodCall {
             RevertSp::METHOD_ID => SessionMethodCallParams::RevertSp(<_>::detokenize(detokenizer)?),
             Random::METHOD_ID => SessionMethodCallParams::Random(<_>::detokenize(detokenizer)?),
             Get::METHOD_ID => SessionMethodCallParams::Get(<_>::detokenize(detokenizer)?),
-            method_id if method_id == method_id::SET.to_uid() => match invoking_table {
+            method_id if method_id == method_id::SET => match invoking_table {
                 Some(table_id::ACE) => SessionMethodCallParams::SetAce(<_>::detokenize(detokenizer)?),
                 Some(table_id::AUTHORITY) => SessionMethodCallParams::SetAuthority(<_>::detokenize(detokenizer)?),
                 Some(table_id::C_PIN) => SessionMethodCallParams::SetCPin(<_>::detokenize(detokenizer)?),

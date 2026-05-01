@@ -2,11 +2,11 @@ use sed_packet::session_id::SessionId;
 use sed_packet::token::{Command, Detokenize, FromTokens, ToTokens};
 use sed_packet::{Field, FieldRef, MaxBytes, Named, Object, Uid};
 use sed_spec::methods::{
-    CellBlock, Get, MethodCall, MethodResult, MethodStatus, Random, RandomResult, StartSession, SyncSession,
+    Activate, CellBlock, Get, MethodCall, MethodResult, MethodStatus, Random, SessionMethodParam as _, StartSession,
+    SyncSession,
 };
 use sed_spec::objects::{AuthorityRef, SecurityProviderRef};
 use sed_spec::preconfig::core::shared::invoking_id::{SESSION_MANAGER, THIS_SP};
-use sed_spec::preconfig::core::shared::method_id::{GET, RANDOM};
 use sed_spec::preconfig::core::shared::sm_method_id::START_SESSION;
 use tracing::instrument;
 
@@ -113,6 +113,27 @@ impl Session {
         result
     }
 
+    /// Activate the security provider
+    ///
+    /// This method is typically called on the Locking SP of the TPer. When
+    /// successful, the security provider transitions from the
+    /// [`ManufacturedInactive`] state to the [`Manufactured`] state and its
+    /// functionality becomes available.
+    ///
+    /// To start a session on the SP as Admin1, you can use the SID authority's
+    /// password at the time of the activation.
+    #[instrument(level = "info", skip(self), ret, err)]
+    pub async fn activate(&self, sp: SecurityProviderRef) -> Result<(), Error> {
+        let call = Activate.to_call(sp.to_uid());
+        let result_tokens = self
+            .controller
+            .call(self.session_id, call.to_tokens().expect("invalid method call"))
+            .await
+            .map_err(|_| Error::Closed)??;
+        let _result = Activate::result_from_tokens(&result_tokens)??;
+        Ok(())
+    }
+
     /// Get one field of an object.
     ///
     /// Note that the TPer may not return the requested field, even if you have
@@ -129,12 +150,8 @@ impl Session {
     {
         type FieldType<O, const TABLE: u64, const FIELD: u16> = <FieldRef<O, TABLE, FIELD> as Field<FIELD>>::Type;
 
-        let call = MethodCall {
-            invoking_id: field.object().to_uid(),
-            method_id: GET.to_uid(),
-            parameters: Get { cell_block: CellBlock::object(field.field()..=field.field()) },
-            status: MethodStatus::Success,
-        };
+        let parameters = Get { cell_block: CellBlock::object(field.field()..=field.field()) };
+        let call = parameters.to_call(field.object().to_uid());
         let result_tokens = self
             .controller
             .call(self.session_id, call.to_tokens().expect("invalid method call"))
@@ -164,13 +181,8 @@ impl Session {
         Uid: From<Obj::Ref>,
     {
         let cell_block = CellBlock::object(0..Obj::FIELD_COUNT);
-
-        let call = MethodCall {
-            invoking_id: object.into(),
-            method_id: GET.to_uid(),
-            parameters: Get { cell_block },
-            status: MethodStatus::Success,
-        };
+        let parameters = Get { cell_block };
+        let call = parameters.to_call(object.into());
         let result_tokens = self
             .controller
             .call(self.session_id, call.to_tokens().expect("invalid method call"))
@@ -191,18 +203,14 @@ impl Session {
     /// - `count`: the number of random bytes to generate.
     #[instrument(level = "info", skip(self), ret, err)]
     pub async fn random(&self, count: usize) -> Result<Vec<u8>, Error> {
-        let call = MethodCall {
-            invoking_id: THIS_SP,
-            method_id: RANDOM.into(),
-            parameters: Random { count: count as u64, buffer_out: None },
-            status: MethodStatus::Success,
-        };
+        let parameters = Random { count: count as u64, buffer_out: None };
+        let call = parameters.to_call(THIS_SP);
         let result_tokens = self
             .controller
             .call(self.session_id, call.to_tokens().expect("invalid method call"))
             .await
             .map_err(|_| Error::Closed)??;
-        let result = MethodResult::<RandomResult>::from_tokens(&result_tokens)?.0?;
+        let result = Random::result_from_tokens(&result_tokens)??;
         Ok(result.result.0)
     }
 

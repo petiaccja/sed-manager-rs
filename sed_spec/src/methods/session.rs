@@ -1,10 +1,12 @@
+use std::convert::Infallible;
+
 use sed_packet::{
     Bytes, MaxBytes, Object, ObjectRef, Uid,
     token::{Detokenize, Detokenizer, MessageError as _, Tokenize, Tokenizer, ValueKind},
 };
 use sed_spec_macros::{DetokenizeStruct, TokenizeStruct};
 
-use crate::methods::MethodParam;
+use crate::methods::SessionMethodParam;
 use crate::methods::cell_block::CellBlock;
 use crate::objects::{AceRef, AuthorityRef, MethodRef};
 use crate::preconfig::core::shared::method_id;
@@ -19,8 +21,9 @@ pub struct Authenticate {
     proof: Option<MaxBytes<32>>,
 }
 
-impl MethodParam for Authenticate {
-    const METHOD_ID: Uid = method_id::AUTHENTICATE.to_uid();
+impl SessionMethodParam for Authenticate {
+    const METHOD_ID: MethodRef = method_id::AUTHENTICATE;
+    type Result = AuthenticateResult;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -58,8 +61,9 @@ pub struct Next<const TABLE: u64> {
     pub count: Option<u64>,
 }
 
-impl<const TABLE: u64> MethodParam for Next<TABLE> {
-    const METHOD_ID: Uid = method_id::NEXT.to_uid();
+impl<const TABLE: u64> SessionMethodParam for Next<TABLE> {
+    const METHOD_ID: MethodRef = method_id::NEXT;
+    type Result = NextResult<TABLE>;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, DetokenizeStruct, TokenizeStruct)]
@@ -68,8 +72,9 @@ pub struct NextUntyped {
     pub count: Option<u64>,
 }
 
-impl MethodParam for NextUntyped {
-    const METHOD_ID: Uid = method_id::NEXT.to_uid();
+impl SessionMethodParam for NextUntyped {
+    const METHOD_ID: MethodRef = method_id::NEXT;
+    type Result = Infallible;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, DetokenizeStruct, TokenizeStruct)]
@@ -87,8 +92,9 @@ pub struct GetAcl {
     pub method_id: MethodRef,
 }
 
-impl MethodParam for GetAcl {
-    const METHOD_ID: Uid = method_id::GET_ACL.to_uid();
+impl SessionMethodParam for GetAcl {
+    const METHOD_ID: MethodRef = method_id::GET_ACL;
+    type Result = GetAclResult;
 }
 
 // This is tokenized in a weird way. The fact that the "access control list" is
@@ -121,8 +127,9 @@ pub struct GenKey {
     pub pin_length: Option<u8>,
 }
 
-impl MethodParam for GenKey {
-    const METHOD_ID: Uid = method_id::GEN_KEY.to_uid();
+impl SessionMethodParam for GenKey {
+    const METHOD_ID: MethodRef = method_id::GEN_KEY;
+    type Result = GenKeyResult;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, DetokenizeStruct, TokenizeStruct)]
@@ -135,8 +142,9 @@ pub struct GenKeyResult;
 #[derive(Debug, Clone, PartialEq, Eq, DetokenizeStruct, TokenizeStruct)]
 pub struct Revert;
 
-impl MethodParam for Revert {
-    const METHOD_ID: Uid = method_id::REVERT.to_uid();
+impl SessionMethodParam for Revert {
+    const METHOD_ID: MethodRef = method_id::REVERT;
+    type Result = RevertResult;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, DetokenizeStruct, TokenizeStruct)]
@@ -151,8 +159,9 @@ pub struct RevertSp {
     pub keep_global_range_key: Option<bool>,
 }
 
-impl MethodParam for RevertSp {
-    const METHOD_ID: Uid = method_id::REVERT_SP.to_uid();
+impl SessionMethodParam for RevertSp {
+    const METHOD_ID: MethodRef = method_id::REVERT_SP;
+    type Result = RevertSpResult;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, DetokenizeStruct, TokenizeStruct)]
@@ -165,8 +174,9 @@ pub struct RevertSpResult;
 #[derive(Debug, Clone, PartialEq, Eq, DetokenizeStruct, TokenizeStruct)]
 pub struct Activate;
 
-impl MethodParam for Activate {
-    const METHOD_ID: Uid = method_id::ACTIVATE.to_uid();
+impl SessionMethodParam for Activate {
+    const METHOD_ID: MethodRef = method_id::ACTIVATE;
+    type Result = ActivateResult;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, DetokenizeStruct, TokenizeStruct)]
@@ -182,8 +192,9 @@ pub struct Random {
     pub buffer_out: Option<CellBlock>,
 }
 
-impl MethodParam for Random {
-    const METHOD_ID: Uid = method_id::RANDOM.to_uid();
+impl SessionMethodParam for Random {
+    const METHOD_ID: MethodRef = method_id::RANDOM;
+    type Result = RandomResult;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, DetokenizeStruct, TokenizeStruct)]
@@ -200,8 +211,9 @@ pub struct Get {
     pub cell_block: CellBlock,
 }
 
-impl MethodParam for Get {
-    const METHOD_ID: Uid = method_id::GET.to_uid();
+impl SessionMethodParam for Get {
+    const METHOD_ID: MethodRef = method_id::GET;
+    type Result = Infallible;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, DetokenizeStruct, TokenizeStruct)]
@@ -228,12 +240,13 @@ where
     pub values: Option<O>,
 }
 
-impl<O> MethodParam for SetObject<O>
+impl<O> SessionMethodParam for SetObject<O>
 where
     O: Object + Tokenize + Detokenize,
     O::Ref: Tokenize + Detokenize,
 {
-    const METHOD_ID: Uid = method_id::SET.to_uid();
+    const METHOD_ID: MethodRef = method_id::SET;
+    type Result = SetResult;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, DetokenizeStruct, TokenizeStruct)]
@@ -242,8 +255,9 @@ pub struct SetBytes {
     pub values: Option<Bytes>,
 }
 
-impl MethodParam for SetBytes {
-    const METHOD_ID: Uid = method_id::SET.to_uid();
+impl SessionMethodParam for SetBytes {
+    const METHOD_ID: MethodRef = method_id::SET;
+    type Result = SetResult;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, DetokenizeStruct, TokenizeStruct)]

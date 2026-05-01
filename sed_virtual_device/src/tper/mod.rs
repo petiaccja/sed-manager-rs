@@ -66,7 +66,7 @@ impl TPer {
 }
 
 impl TPer {
-    pub fn pop_discovery(&mut self) -> Vec<u8> {
+    pub fn discover(&self) -> Discovery {
         let fixed = [
             Self::tper_feature_desc(),
             self.ssc_feature_desc(),
@@ -74,9 +74,11 @@ impl TPer {
             self.block_sid_authentication_desc(),
         ];
         let locking = self.locking_feature_desc();
-        let discovery =
-            Discovery { feature_descriptors: fixed.into_iter().chain(locking).collect(), ..Default::default() };
-        discovery.to_bytes().expect("serializing discovery failed")
+        Discovery { feature_descriptors: fixed.into_iter().chain(locking).collect(), ..Default::default() }
+    }
+
+    pub fn pop_discovery(&self) -> Vec<u8> {
+        self.discover().to_bytes().expect("serializing discovery failed")
     }
 
     fn tper_feature_desc() -> FeatureDescriptor {

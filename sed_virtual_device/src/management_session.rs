@@ -12,7 +12,9 @@ use sed_spec::methods::{
 use sed_spec::objects::CPinRef;
 use sed_spec::preconfig::core::shared::authority::ANYBODY;
 use sed_spec::preconfig::core::shared::invoking_id::SESSION_MANAGER;
+use sed_spec::types::LifeCycleState;
 
+use crate::internal_error::Expect;
 use crate::session::Session;
 use crate::tper::TPer;
 
@@ -92,7 +94,7 @@ impl ManagementSession {
             payload: vec![SubPacket {
                 kind: SubPacketKind::Data,
                 length: std::marker::PhantomData,
-                payload: result_tokens.expect("failed to serialize method result"),
+                payload: result_tokens.expect_serialize(),
             }],
             ..Default::default()
         })
@@ -148,17 +150,37 @@ impl ManagementSession {
     }
 
     fn start_session_impl(&mut self, tper: &TPer, params: &StartSession) -> Result<u32, MethodStatus> {
+        use LifeCycleState::*;
+
         let (sp_uid, authority, password) = (params.spid, &params.host_signing_authority, &params.host_challenge);
-        let authority = authority.unwrap_or(ANYBODY);
+
+        let admin_sp = tper.admin_sp();
+        let Some(sp_info) = admin_sp.sp.get(&sp_uid) else {
+            return Err(MethodStatus::InvalidParameter);
+        };
+
+        match sp_info.life_cycle_state {
+            Some(life_cycle_state) => match life_cycle_state {
+                Issued | Manufactured => (),
+                IssuedDisabled | ManufacturedDisabled => return Err(MethodStatus::SPDisabled),
+                IssuedFrozen | ManufacturedFrozen => return Err(MethodStatus::SPFrozen),
+                ManufacturedInactive | IssuedDisabledFrozen => return Err(MethodStatus::SPDisabled),
+                ManufacturedDisabledFrozen => return Err(MethodStatus::SPDisabled),
+                IssuedFailed | ManufacturedFailed => return Err(MethodStatus::Fail),
+                Unknown(_) => return Err(MethodStatus::Fail),
+            },
+            None => unreachable!("life cycle state missing from SP preconfig"),
+        };
 
         match tper.sp(sp_uid) {
             Some(sp) => {
+                let authority = authority.unwrap_or(ANYBODY);
                 let authorities = sp.authority();
                 let authority = authorities.get(&authority).ok_or(MethodStatus::InvalidParameter)?;
                 if let Some(credential) = authority.credential {
-                    let credential: CPinRef = credential.try_into().expect("invalid credential in preconfig");
+                    let credential: CPinRef = credential.try_into().expect("internal error: invalid credential ref");
                     let c_pins = sp.c_pin();
-                    let credential = c_pins.get(&credential).expect("credential missing from C_PIN table");
+                    let credential = c_pins.get(&credential).expect_object("C_PIN", credential);
                     if &credential.pin != password {
                         return Err(MethodStatus::NotAuthorized);
                     }
