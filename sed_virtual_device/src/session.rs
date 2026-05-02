@@ -7,11 +7,12 @@ use sed_packet::token::{Command, ToTokens};
 use sed_packet::{Bytes, Uid};
 use sed_spec::methods::{
     Activate, ActivateResult, Authenticate, AuthenticateResult, CloseSession, ExtractResult, GenKey, GenKeyResult,
-    MethodResult, MethodStatus, MgmtMethodCall, MgmtMethodCallParams, Random, RandomResult, SessionMethodCall,
-    SessionMethodCallParams, SessionMethodParam as _, extract_method,
+    GetAcl, GetAclResult, MethodResult, MethodStatus, MgmtMethodCall, MgmtMethodCallParams, Random, RandomResult,
+    SessionMethodCall, SessionMethodCallParams, SessionMethodParam as _, extract_method,
 };
 use sed_spec::objects::{AccessControlRef, AceExpr, AuthorityRef, KAes256Ref, MethodRef, SecurityProviderRef};
 use sed_spec::preconfig::core::shared::invoking_id::THIS_SP;
+use sed_spec::preconfig::core::shared::table_id;
 use sed_spec::types::LifeCycleState;
 
 use crate::tper::{Locking, SecurityProvider, TPer};
@@ -86,7 +87,7 @@ impl Session {
                 Authenticate(params) => MethodResult(self.authenticate(tper, invoking_id, params)).to_tokens(),
                 GenKey(params) => MethodResult(self.gen_key(tper, invoking_id, params)).to_tokens(),
                 Get(_params) => todo!(),
-                GetAcl(_params) => todo!(),
+                GetAcl(params) => MethodResult(self.get_acl(tper, invoking_id, params)).to_tokens(),
                 Next(_params) => todo!(),
                 Random(params) => MethodResult(self.random(tper, invoking_id, params)).to_tokens(),
                 Revert(_params) => todo!(),
@@ -188,6 +189,22 @@ impl Session {
             rand::Fill::fill_slice(&mut new_key, &mut rand::rng());
             k_aes_256.key = Some(new_key);
             Ok(GenKeyResult)
+        } else {
+            Err(MethodStatus::InvalidParameter)
+        }
+    }
+
+    fn get_acl(&self, tper: &mut TPer, invoking_id: Uid, params: &GetAcl) -> Result<GetAclResult, MethodStatus> {
+        self.check_permission(tper, invoking_id, params.method_id().try_into().unwrap(), [0].into_iter())?;
+
+        if invoking_id == table_id::ACCESS_CONTROL.to_uid() {
+            let this_sp = self.this_sp(tper)?;
+            let ac = this_sp
+                .access_control()
+                .get(&AccessControlRef { invoking_id: params.invoking_id, method_id: params.method_id })
+                .ok_or(MethodStatus::InvalidParameter)?;
+
+            Ok(GetAclResult { acl: ac.acl.clone() })
         } else {
             Err(MethodStatus::InvalidParameter)
         }

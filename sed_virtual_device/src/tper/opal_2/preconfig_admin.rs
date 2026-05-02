@@ -44,6 +44,11 @@ pub fn access_control() -> Table<AccessControl> {
             AccessControlRef { invoking_id: TABLE.into(), method_id: GET },
             AccessControl { acl: vec![ace::ANYBODY], ..Default::default() },
         ),
+        // AccessControl
+        (
+            AccessControlRef { invoking_id: ACCESS_CONTROL.into(), method_id: GET_ACL },
+            AccessControl { acl: vec![ace::ANYBODY], ..Default::default() },
+        ),
         // ACE
         (
             AccessControlRef { invoking_id: ACE.into(), method_id: NEXT },

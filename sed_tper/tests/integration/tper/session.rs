@@ -4,8 +4,13 @@ use googletest::{assert_that, matchers::*};
 use sed_packet::discovery::LockingDescriptor;
 use sed_spec::{
     methods::{MethodStatus, Properties},
-    preconfig::opal_2::admin::{self, sp},
-    preconfig::opal_2::locking,
+    preconfig::{
+        core::shared::method_id,
+        opal_2::{
+            admin::{self, sp},
+            locking,
+        },
+    },
 };
 use sed_telemetry::{WithTracing, with_tracing};
 use sed_tper::{Session, TPer, error::Error, protocol::Protocol};
@@ -85,6 +90,22 @@ async fn gen_key(_with_tracing: WithTracing) {
     controller.spawn(session_id, Properties::ASSUMED);
     let session = Session::from_started(session_id, controller);
     assert_that!(session.gen_key(locking::k_aes_256::GLOBAL_RANGE_KEY, None, None).await, ok(eq(&())));
+    let _ = session.close().await;
+    let _ = protocol.await;
+}
+
+#[instrument]
+#[rstest::rstest]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn get_acl(_with_tracing: WithTracing) {
+    let device = Arc::new(VirtualDevice::new());
+    let session_id = device.insert_session(1, sp::ADMIN, None).unwrap();
+    let (protocol, controller) = Protocol::new(BASE_COM_ID, 0, device.clone());
+    let protocol = tokio::spawn(protocol.run());
+
+    controller.spawn(session_id, Properties::ASSUMED);
+    let session = Session::from_started(session_id, controller);
+    assert_that!(session.get_acl(admin::c_pin::MSID.into(), method_id::GET).await, ok(not(is_empty())));
     let _ = session.close().await;
     let _ = protocol.await;
 }

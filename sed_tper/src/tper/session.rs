@@ -2,12 +2,13 @@ use sed_packet::session_id::SessionId;
 use sed_packet::token::{Command, Detokenize, FromTokens, ToTokens};
 use sed_packet::{Field, FieldRef, MaxBytes, Named, Object, Uid};
 use sed_spec::methods::{
-    Activate, Authenticate, AuthenticateResult, CellBlock, GenKey, Get, MethodCall, MethodResult, MethodStatus, Random,
-    SessionMethodParam as _, StartSession, SyncSession,
+    Activate, Authenticate, AuthenticateResult, CellBlock, GenKey, Get, GetAcl, MethodCall, MethodResult, MethodStatus,
+    Random, SessionMethodParam as _, StartSession, SyncSession,
 };
-use sed_spec::objects::{AuthorityRef, CredentialRef, SecurityProviderRef};
+use sed_spec::objects::{AceRef, AuthorityRef, CredentialRef, MethodRef, SecurityProviderRef};
 use sed_spec::preconfig::core::shared::invoking_id::{SESSION_MANAGER, THIS_SP};
 use sed_spec::preconfig::core::shared::sm_method_id::START_SESSION;
+use sed_spec::preconfig::core::shared::table_id;
 use tracing::instrument;
 
 use crate::error::Error;
@@ -157,6 +158,15 @@ impl Session {
         }
     }
 
+    /// Generate a random credential for one of the credential objects.
+    ///
+    /// Credential objects (marked by [`CredentialRef`]) have a credential or
+    /// key as one of their fields, and you can use this function to generate
+    /// a random value for that field.
+    ///
+    /// This function is most commonly used to generate a new encryption key
+    /// in the `K_AES_*` tables for one of the locking ranges. This will erase
+    /// (i.e. crypto-shred) the data in that locking range.
     #[instrument(level = "info", skip(self), ret, err)]
     pub async fn gen_key(
         &self,
@@ -172,6 +182,23 @@ impl Session {
             .map_err(|_| Error::Closed)??;
         let _result = GenKey::result_from_tokens(&result_tokens)??;
         Ok(())
+    }
+
+    /// Get the access control list (ACL) for the `invoking_id` / `method_id` pair.
+    ///
+    /// The ACL is a list of references into the ACE table, that is, a list of
+    /// access control elements (ACEs). Authorities that are mentioned in the
+    /// ACEs have permissions perform `method_id` on the `invoking_id`.
+    #[instrument(level = "info", skip(self), ret, err)]
+    pub async fn get_acl(&self, invoking_id: Uid, method_id: MethodRef) -> Result<Vec<AceRef>, Error> {
+        let call = GetAcl { invoking_id, method_id }.to_call(table_id::ACCESS_CONTROL.into());
+        let result_tokens = self
+            .controller
+            .call(self.session_id, call.to_tokens().expect("invalid method call"))
+            .await
+            .map_err(|_| Error::Closed)??;
+        let result = GetAcl::result_from_tokens(&result_tokens)??;
+        Ok(result.acl)
     }
 
     /// Get one field of an object.
