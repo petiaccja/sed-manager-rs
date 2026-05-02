@@ -2,10 +2,10 @@ use sed_packet::session_id::SessionId;
 use sed_packet::token::{Command, Detokenize, FromTokens, ToTokens};
 use sed_packet::{Field, FieldRef, MaxBytes, Named, Object, Uid};
 use sed_spec::methods::{
-    Activate, Authenticate, AuthenticateResult, CellBlock, Get, MethodCall, MethodResult, MethodStatus, Random,
+    Activate, Authenticate, AuthenticateResult, CellBlock, GenKey, Get, MethodCall, MethodResult, MethodStatus, Random,
     SessionMethodParam as _, StartSession, SyncSession,
 };
-use sed_spec::objects::{AuthorityRef, SecurityProviderRef};
+use sed_spec::objects::{AuthorityRef, CredentialRef, SecurityProviderRef};
 use sed_spec::preconfig::core::shared::invoking_id::{SESSION_MANAGER, THIS_SP};
 use sed_spec::preconfig::core::shared::sm_method_id::START_SESSION;
 use tracing::instrument;
@@ -134,6 +134,12 @@ impl Session {
         Ok(())
     }
 
+    /// Authenticate as an authority, with a password when required.
+    ///
+    /// After a successful authentication, you can perform actions for which the
+    /// authority has permission. You may authenticate to multiple authorities,
+    /// at any time, but the device may impose limitations on how many
+    /// authorities can be authenticated at a time.
     #[instrument(level = "info", skip(self), ret, err)]
     pub async fn authenticate(&self, authority: AuthorityRef, password: Option<MaxBytes<32>>) -> Result<(), Error> {
         let params = Authenticate { authority, proof: password };
@@ -149,6 +155,23 @@ impl Session {
             AuthenticateResult::Success(false) => Err(MethodStatus::NotAuthorized.into()),
             AuthenticateResult::Challenge(_) => Err(Error::NotImplemented),
         }
+    }
+
+    #[instrument(level = "info", skip(self), ret, err)]
+    pub async fn gen_key(
+        &self,
+        credential: impl CredentialRef,
+        public_exponent: Option<u64>,
+        pin_length: Option<u8>,
+    ) -> Result<(), Error> {
+        let call = GenKey { public_exponent, pin_length }.to_call(credential.into());
+        let result_tokens = self
+            .controller
+            .call(self.session_id, call.to_tokens().expect("invalid method call"))
+            .await
+            .map_err(|_| Error::Closed)??;
+        let _result = GenKey::result_from_tokens(&result_tokens)??;
+        Ok(())
     }
 
     /// Get one field of an object.

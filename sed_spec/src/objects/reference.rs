@@ -41,12 +41,26 @@ pub type TemplateRef = ObjectRef<{ table_id::TEMPLATE.to_u64() }>;
 /// The UID of an object in the Table table.
 pub type TypeRef = ObjectRef<{ table_id::TYPE.to_u64() }>;
 
-impl Type for AuthorityRef {
-    const UID: TypeRef = TypeRef::new_unchecked(0x0000_0005_0000_0C05);
-}
-
+/// A reference to an entry in the AccessControl meta-table.
+///
+/// This is slightly different than a regular reference, which is just an UID.
+/// This is because the AccessControl table is not indexed by UIDs, it's indexed
+/// by a pair of InvokingIDs and MethodIDs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct AccessControlRef {
     pub invoking_id: Uid,
     pub method_id: MethodRef,
+}
+
+/// A reference to any object that contains a credential.
+///
+/// Credential object have one field which is some sort of secret or password.
+/// Examples include the C_PIN, K_AES_256, or C_RSA tables.
+pub trait CredentialRef: Sized + TryFrom<Uid> + Into<Uid> + core::fmt::Debug + core::fmt::Display {}
+
+impl CredentialRef for CPinRef {}
+impl CredentialRef for KAes256Ref {}
+
+impl Type for AuthorityRef {
+    const UID: TypeRef = TypeRef::new_unchecked(0x0000_0005_0000_0C05);
 }

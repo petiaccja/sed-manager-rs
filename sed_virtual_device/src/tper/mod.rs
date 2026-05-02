@@ -10,6 +10,7 @@ pub use admin::Admin;
 pub use locking::Locking;
 pub use opal_2::Opal2TPer;
 pub use preconfig_shared::{INITIAL_SID_PASSWORD, PSID_PASSWORD};
+pub use security_provider::SecurityProvider;
 
 use sed_packet::discovery::{
     BlockSIDAuthDescriptor, Discovery, FeatureDescriptor, GeometryDescriptor, LockingDescriptor, OpalV2Descriptor,
@@ -20,7 +21,6 @@ use sorbit::ser_de::ToBytes;
 use crate::{
     device::{BASE_COM_ID, NUM_COM_IDS},
     management_session::CAPABILITIES,
-    tper::security_provider::SecurityProvider,
 };
 use sed_spec::{objects::SecurityProviderRef, preconfig::opal_2::admin::c_pin, types::LifeCycleState};
 

@@ -5,6 +5,7 @@ use sed_packet::discovery::LockingDescriptor;
 use sed_spec::{
     methods::{MethodStatus, Properties},
     preconfig::opal_2::admin::{self, sp},
+    preconfig::opal_2::locking,
 };
 use sed_telemetry::{WithTracing, with_tracing};
 use sed_tper::{Session, TPer, error::Error, protocol::Protocol};
@@ -68,6 +69,22 @@ async fn authenticate(_with_tracing: WithTracing) {
         session.authenticate(admin::authority::SID, Some(INITIAL_SID_PASSWORD.as_bytes().into())).await,
         ok(eq(&()))
     );
+    let _ = session.close().await;
+    let _ = protocol.await;
+}
+
+#[instrument]
+#[rstest::rstest]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn gen_key(_with_tracing: WithTracing) {
+    let device = Arc::new(VirtualDevice::new());
+    let session_id = device.insert_session(1, sp::LOCKING, Some(locking::authority::ADMIN.get(1).unwrap())).unwrap();
+    let (protocol, controller) = Protocol::new(BASE_COM_ID, 0, device.clone());
+    let protocol = tokio::spawn(protocol.run());
+
+    controller.spawn(session_id, Properties::ASSUMED);
+    let session = Session::from_started(session_id, controller);
+    assert_that!(session.gen_key(locking::k_aes_256::GLOBAL_RANGE_KEY, None, None).await, ok(eq(&())));
     let _ = session.close().await;
     let _ = protocol.await;
 }

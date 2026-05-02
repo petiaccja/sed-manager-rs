@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::{any::Any, collections::BTreeMap};
 
 use sed_packet::Object;
 use sed_spec::objects::{AccessControl, Ace, Authority, CPin, TableDesc};
@@ -16,4 +16,7 @@ pub trait SecurityProvider {
     fn c_pin_mut(&mut self) -> &mut Table<CPin>;
     fn table(&self) -> &Table<TableDesc>;
     fn table_mut(&mut self) -> &mut Table<TableDesc>;
+
+    fn as_any(&self) -> &dyn Any;
+    fn as_any_mut(&mut self) -> &mut dyn Any;
 }

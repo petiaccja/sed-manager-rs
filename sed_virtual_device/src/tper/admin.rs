@@ -1,3 +1,5 @@
+use std::any::Any;
+
 use sed_spec::objects::{
     AccessControl, Ace, Authority, CPin, SecurityProvider as SecurityProviderObj, SecurityProviderRef, TableDesc,
 };
@@ -54,5 +56,13 @@ impl SecurityProvider for Admin {
 
     fn table_mut(&mut self) -> &mut Table<TableDesc> {
         &mut self.table
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
