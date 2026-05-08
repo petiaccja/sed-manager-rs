@@ -36,7 +36,7 @@ impl Default for AccessControl {
             remove_ace_log: LogSelect::None,
             get_acl_log: LogSelect::None,
             delete_method_log: LogSelect::None,
-            log_to: LogListRef::new_unchecked(0x00000a0200000001_u64),
+            log_to: LogListRef::new(0x00000a0200000001_u64),
         }
     }
 }

@@ -34,7 +34,7 @@ pub trait ObjectUid: Object {
 pub struct ObjectRef<const TABLE: u64>(Uid);
 
 impl<const TABLE: u64> ObjectRef<TABLE> {
-    pub const fn new(value: u64) -> Option<Self> {
+    pub const fn try_new(value: u64) -> Option<Self> {
         let uid = Uid::new(value);
         match uid.containing_table() {
             Some(table) if table.to_u64() == TABLE => Some(Self(uid)),
@@ -42,8 +42,8 @@ impl<const TABLE: u64> ObjectRef<TABLE> {
         }
     }
 
-    pub const fn new_unchecked(value: u64) -> Self {
-        Self::new(value).expect("the UID does not refer to an object in this table")
+    pub const fn new(value: u64) -> Self {
+        Self::try_new(value).expect("the UID does not refer to an object in this table")
     }
 
     pub const fn to_u64(&self) -> u64 {
@@ -75,7 +75,7 @@ impl<const TABLE: u64> TryFrom<u64> for ObjectRef<TABLE> {
     type Error = u64;
 
     fn try_from(value: u64) -> Result<Self, Self::Error> {
-        Self::new(value).ok_or(value)
+        Self::try_new(value).ok_or(value)
     }
 }
 
@@ -83,7 +83,7 @@ impl<const TABLE: u64> TryFrom<Uid> for ObjectRef<TABLE> {
     type Error = Uid;
 
     fn try_from(value: Uid) -> Result<Self, Self::Error> {
-        Self::new(value.to_u64()).ok_or(value)
+        Self::try_new(value.to_u64()).ok_or(value)
     }
 }
 

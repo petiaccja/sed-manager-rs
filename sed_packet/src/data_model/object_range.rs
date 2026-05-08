@@ -86,9 +86,9 @@ impl<const TABLE: u64> ExactSizeIterator for ObjectRange<TABLE> {
 mod tests {
     use super::*;
 
-    const START: ObjectRef<0x0000_0001_0000_0000> = ObjectRef::new_unchecked(0x0000_0001_0000_0001);
-    const END: ObjectRef<0x0000_0001_0000_0000> = ObjectRef::new_unchecked(0x0000_0001_0000_0005);
-    const END_LONG: ObjectRef<0x0000_0001_0000_0000> = ObjectRef::new_unchecked(0x0000_0001_0000_000F);
+    const START: ObjectRef<0x0000_0001_0000_0000> = ObjectRef::new(0x0000_0001_0000_0001);
+    const END: ObjectRef<0x0000_0001_0000_0000> = ObjectRef::new(0x0000_0001_0000_0005);
+    const END_LONG: ObjectRef<0x0000_0001_0000_0000> = ObjectRef::new(0x0000_0001_0000_000F);
 
     #[test]
     fn iter_next_one() {

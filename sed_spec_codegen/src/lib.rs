@@ -100,12 +100,12 @@ impl Object {
         let base_hex = self.base_hex();
         match self {
             Object::Unique(_) => Ok(parse_quote! {
-                pub const #ident : ObjectRef<{THIS_TABLE.to_u64()}> = ObjectRef::new_unchecked(#base_hex);
+                pub const #ident : ObjectRef<{THIS_TABLE.to_u64()}> = ObjectRef::new(#base_hex);
             }),
             Object::Range { count, step, .. } => Ok(parse_quote! {
                 pub const #ident : ObjectRange<{THIS_TABLE.to_u64()}> = ObjectRange {
-                    start: ObjectRef::new_unchecked(#base_hex),
-                    end: ObjectRef::new_unchecked(#base_hex + #count * #step),
+                    start: ObjectRef::new(#base_hex),
+                    end: ObjectRef::new(#base_hex + #count * #step),
                     step: #step as u32,
                 };
             }),
@@ -145,7 +145,7 @@ impl Table {
             if let Object::Unique(_) = object {
                 let ident = to_const_ident(name);
                 let base_hex = object.base_hex();
-                Some(quote! { pub const #ident : TableRef = TableRef::new_unchecked(#base_hex); })
+                Some(quote! { pub const #ident : TableRef = TableRef::new(#base_hex); })
             } else {
                 None
             }

@@ -9,8 +9,8 @@ use crate::path::Path;
 
 // These tables and types are hardcoded here because the generated specification
 // is not available here.
-pub const SP_TABLE: TableRef = TableRef::new_unchecked(0x00000205_00000000);
-pub const META_TABLE: TableRef = TableRef::new_unchecked(0xFFFFFFFF_00000000);
+pub const SP_TABLE: TableRef = TableRef::new(0x00000205_00000000);
+pub const META_TABLE: TableRef = TableRef::new(0xFFFFFFFF_00000000);
 pub(crate) type SpRef = ObjectRef<{ SP_TABLE.to_u64() }>;
 
 pub struct NameRange {
@@ -152,7 +152,7 @@ impl<'a> SecurityProviderLookup<'a> {
     }
 
     pub fn by_uid(&self, uid: Uid) -> Option<String> {
-        let table_ref = uid.containing_table().map(|table_ref| TableRef::new_unchecked(table_ref.to_u64()));
+        let table_ref = uid.containing_table().map(|table_ref| TableRef::new(table_ref.to_u64()));
         let path = if let Some(table_ref) = table_ref {
             let table_lookup = self.table_lookups.get(&table_ref)?;
             let table_name = table_lookup.name();

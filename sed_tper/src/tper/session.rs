@@ -272,7 +272,7 @@ impl Session {
         count: Option<u64>,
     ) -> Result<Vec<ObjectRef<TABLE>>, Error> {
         // This should be const, but generic parameters are not accessible in const :(.
-        let table: TableRef = TableRef::new_unchecked(TABLE);
+        let table: TableRef = TableRef::new(TABLE);
         let parameters = Next { where_, count };
         let call = parameters.to_call(table.into());
         let result_tokens = self

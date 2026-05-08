@@ -13,7 +13,7 @@ pub enum BooleanOp {
 }
 
 impl Type for BooleanOp {
-    const UID: TypeRef = TypeRef::new_unchecked(0x0000_0005_0000_040E);
+    const UID: TypeRef = TypeRef::new(0x0000_0005_0000_040E);
 }
 
 impl Tokenize for BooleanOp {

@@ -5,9 +5,13 @@ use crate::token::{Detokenize, Detokenizer, MessageError, Tokenize, Tokenizer};
 pub struct TableRef(Uid);
 
 impl TableRef {
-    pub const fn new(value: u64) -> Option<Self> {
+    pub const fn try_new(value: u64) -> Option<Self> {
         let uid = Uid::new(value);
         if uid.is_table() { Some(Self(uid)) } else { None }
+    }
+
+    pub const fn new(value: u64) -> Self {
+        Self::try_new(value).expect("the UID must refer to a table")
     }
 
     pub const fn containing_table(uid: Uid) -> Option<Self> {
@@ -15,10 +19,6 @@ impl TableRef {
             Some(table_uid) => Some(Self(table_uid)),
             None => None,
         }
-    }
-
-    pub const fn new_unchecked(value: u64) -> Self {
-        Self::new(value).expect("the UID must refer to a table")
     }
 
     pub const fn to_u64(&self) -> u64 {
@@ -34,7 +34,7 @@ impl TryFrom<u64> for TableRef {
     type Error = u64;
 
     fn try_from(value: u64) -> Result<Self, Self::Error> {
-        Self::new(value).ok_or(value)
+        Self::try_new(value).ok_or(value)
     }
 }
 
@@ -42,7 +42,7 @@ impl TryFrom<Uid> for TableRef {
     type Error = Uid;
 
     fn try_from(value: Uid) -> Result<Self, Self::Error> {
-        Self::new(value.to_u64()).ok_or(value)
+        Self::try_new(value.to_u64()).ok_or(value)
     }
 }
 

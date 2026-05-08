@@ -62,5 +62,5 @@ impl CredentialRef for CPinRef {}
 impl CredentialRef for KAes256Ref {}
 
 impl Type for AuthorityRef {
-    const UID: TypeRef = TypeRef::new_unchecked(0x0000_0005_0000_0C05);
+    const UID: TypeRef = TypeRef::new(0x0000_0005_0000_0C05);
 }

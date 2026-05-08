@@ -190,9 +190,7 @@ impl CellBlock {
             (Some(table), None, None, Some(object)) => (table, object),
             (_, Some(table), None, Some(object)) => (table, object),
             (None, None, Some(object), None) => (
-                TableRef::new_unchecked(
-                    object.containing_table().expect("inv_object is check to be an object").to_u64(),
-                ),
+                TableRef::new(object.containing_table().expect("inv_object is check to be an object").to_u64()),
                 object,
             ),
             _ => return Err(self),
