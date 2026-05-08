@@ -5,7 +5,7 @@ use sed_packet::discovery::LockingDescriptor;
 use sed_spec::{
     methods::{MethodStatus, Properties},
     preconfig::{
-        core::shared::method_id,
+        core::shared::{self, method_id},
         opal_2::{
             admin::{self, sp},
             locking,
@@ -106,6 +106,26 @@ async fn get_acl(_with_tracing: WithTracing) {
     controller.spawn(session_id, Properties::ASSUMED);
     let session = Session::from_started(session_id, controller);
     assert_that!(session.get_acl(admin::c_pin::MSID.into(), method_id::GET).await, ok(not(is_empty())));
+    let _ = session.close().await;
+    let _ = protocol.await;
+}
+
+#[instrument]
+#[rstest::rstest]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn next(_with_tracing: WithTracing) {
+    let device = Arc::new(VirtualDevice::new());
+    let session_id = device.insert_session(1, sp::ADMIN, None).unwrap();
+    let (protocol, controller) = Protocol::new(BASE_COM_ID, 0, device.clone());
+    let protocol = tokio::spawn(protocol.run());
+
+    controller.spawn(session_id, Properties::ASSUMED);
+    let session = Session::from_started(session_id, controller);
+    assert_that!(session.next(None, None).await, ok(eq(&vec![admin::sp::ADMIN, admin::sp::LOCKING])));
+    assert_that!(session.next(Some(admin::sp::ADMIN), None).await, ok(eq(&vec![admin::sp::LOCKING])));
+    assert_that!(session.next(Some(admin::sp::LOCKING), None).await, ok(eq(&vec![])));
+    assert_that!(session.next(None, Some(1)).await, ok(eq(&vec![admin::sp::ADMIN])));
+    assert_that!(session.next(Some(shared::table::C_EC_384), None).await, err(anything()));
     let _ = session.close().await;
     let _ = protocol.await;
 }

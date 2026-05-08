@@ -1,7 +1,8 @@
 use std::any::Any;
 
 use sed_spec::objects::{
-    AccessControl, Ace, Authority, CPin, KAes256, LockingRange, MbrControl, SecurityProviderRef, TableDesc,
+    AccessControl, Ace, Authority, CPin, KAes256, LockingRange, MbrControl, SecurityProvider as SecurityProviderObj,
+    SecurityProviderRef, TableDesc,
 };
 
 use crate::tper::security_provider::{SecurityProvider, Table};
@@ -59,6 +60,22 @@ impl SecurityProvider for Locking {
 
     fn table_mut(&mut self) -> &mut Table<TableDesc> {
         &mut self.table
+    }
+
+    fn k_aes_256(&self) -> Option<&Table<KAes256>> {
+        Some(&self.k_aes_256)
+    }
+
+    fn locking(&self) -> Option<&Table<LockingRange>> {
+        Some(&self.locking)
+    }
+
+    fn mbr_control(&self) -> Option<&Table<MbrControl>> {
+        Some(&self.mbr_control)
+    }
+
+    fn sp(&self) -> Option<&Table<SecurityProviderObj>> {
+        None
     }
 
     fn as_any(&self) -> &dyn Any {

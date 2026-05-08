@@ -1,14 +1,16 @@
-use std::collections::{HashSet, VecDeque};
+use std::collections::{BTreeMap, HashSet, VecDeque};
+use std::ops::Bound;
 
 use crate::internal_error::Expect;
 use sed_packet::packet::{Packet, SubPacket, SubPacketKind};
 use sed_packet::session_id::SessionId;
 use sed_packet::token::{Command, ToTokens};
-use sed_packet::{Bytes, Uid};
+use sed_packet::{Bytes, ObjectRef, TableRef, Uid};
 use sed_spec::methods::{
     Activate, ActivateResult, Authenticate, AuthenticateResult, CloseSession, ExtractResult, GenKey, GenKeyResult,
-    GetAcl, GetAclResult, MethodResult, MethodStatus, MgmtMethodCall, MgmtMethodCallParams, Random, RandomResult,
-    SessionMethodCall, SessionMethodCallParams, SessionMethodParam as _, extract_method,
+    GetAcl, GetAclResult, MethodResult, MethodStatus, MgmtMethodCall, MgmtMethodCallParams, NextResultUntyped,
+    NextUntyped, Random, RandomResult, SessionMethodCall, SessionMethodCallParams, SessionMethodParam as _,
+    extract_method,
 };
 use sed_spec::objects::{AccessControlRef, AceExpr, AuthorityRef, KAes256Ref, MethodRef, SecurityProviderRef};
 use sed_spec::preconfig::core::shared::invoking_id::THIS_SP;
@@ -88,7 +90,7 @@ impl Session {
                 GenKey(params) => MethodResult(self.gen_key(tper, invoking_id, params)).to_tokens(),
                 Get(_params) => todo!(),
                 GetAcl(params) => MethodResult(self.get_acl(tper, invoking_id, params)).to_tokens(),
-                Next(_params) => todo!(),
+                Next(params) => MethodResult(self.next(tper, invoking_id, params)).to_tokens(),
                 Random(params) => MethodResult(self.random(tper, invoking_id, params)).to_tokens(),
                 Revert(_params) => todo!(),
                 RevertSp(_params) => todo!(),
@@ -208,6 +210,47 @@ impl Session {
         } else {
             Err(MethodStatus::InvalidParameter)
         }
+    }
+
+    fn next(&self, tper: &mut TPer, invoking_id: Uid, params: &NextUntyped) -> Result<NextResultUntyped, MethodStatus> {
+        fn list_objects<const TABLE: u64, O>(
+            table: Option<&BTreeMap<ObjectRef<TABLE>, O>>,
+            where_: Option<Uid>,
+            count: Option<u64>,
+        ) -> Result<Vec<Uid>, MethodStatus> {
+            let table = table.ok_or(MethodStatus::InvalidParameter)?;
+
+            let range = if let Some(where_) = where_ {
+                let where_ = ObjectRef::<TABLE>::try_from(where_).map_err(|_| MethodStatus::InvalidParameter)?;
+                if !table.contains_key(&where_) {
+                    return Err(MethodStatus::InvalidParameter);
+                }
+                (Bound::Excluded(where_), Bound::Unbounded)
+            } else {
+                (Bound::Unbounded, Bound::Unbounded)
+            };
+
+            let count = count.map(|count| count as usize).unwrap_or(usize::MAX);
+
+            Ok(table.range(range).take(count).map(|(ref_, _)| ref_.to_uid()).collect())
+        }
+
+        let sp = self.this_sp(tper)?;
+        let table = TableRef::try_from(invoking_id).map_err(|_| MethodStatus::InvalidParameter)?;
+
+        let objects = match table {
+            table_id::ACE => list_objects(Some(sp.ace()), params.where_, params.count)?,
+            table_id::AUTHORITY => list_objects(Some(sp.authority()), params.where_, params.count)?,
+            table_id::C_PIN => list_objects(Some(sp.c_pin()), params.where_, params.count)?,
+            table_id::K_AES_256 => list_objects(sp.k_aes_256(), params.where_, params.count)?,
+            table_id::LOCKING => list_objects(sp.locking(), params.where_, params.count)?,
+            table_id::MBR_CONTROL => list_objects(sp.mbr_control(), params.where_, params.count)?,
+            table_id::SP => list_objects(sp.sp(), params.where_, params.count)?,
+            table_id::TABLE => list_objects(Some(sp.table()), params.where_, params.count)?,
+            _ => return Err(MethodStatus::InvalidParameter),
+        };
+
+        Ok(NextResultUntyped { result: objects })
     }
 
     fn random(&self, tper: &TPer, invoking_id: Uid, params: &Random) -> Result<RandomResult, MethodStatus> {

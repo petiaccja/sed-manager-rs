@@ -1,9 +1,9 @@
 use sed_packet::session_id::SessionId;
 use sed_packet::token::{Command, Detokenize, FromTokens, ToTokens};
-use sed_packet::{Field, FieldRef, MaxBytes, Named, Object, Uid};
+use sed_packet::{Field, FieldRef, MaxBytes, Named, Object, ObjectRef, TableRef, Uid};
 use sed_spec::methods::{
     Activate, Authenticate, AuthenticateResult, CellBlock, GenKey, Get, GetAcl, MethodCall, MethodResult, MethodStatus,
-    Random, SessionMethodParam as _, StartSession, SyncSession,
+    Next, Random, SessionMethodParam as _, StartSession, SyncSession,
 };
 use sed_spec::objects::{AceRef, AuthorityRef, CredentialRef, MethodRef, SecurityProviderRef};
 use sed_spec::preconfig::core::shared::invoking_id::{SESSION_MANAGER, THIS_SP};
@@ -257,6 +257,30 @@ impl Session {
             .map_err(|_| Error::Closed)??;
         // The length of this should be one (or zero) and the only element should be the column requested.
         Ok(MethodResult::<Obj>::from_tokens(&result_tokens)?.0?)
+    }
+
+    /// Iterate over objects in a table.
+    ///
+    /// This method returns the next `count` objects in the table, starting with
+    /// the object immediately after `where_`. If `where_` isn't provided, it
+    /// starts with the first object in the table, and if `count` isn't provided,
+    /// object are returned all the way to the last.
+    #[instrument(level = "info", skip(self), ret, err)]
+    pub async fn next<const TABLE: u64>(
+        &self,
+        where_: Option<ObjectRef<TABLE>>,
+        count: Option<u64>,
+    ) -> Result<Vec<ObjectRef<TABLE>>, Error> {
+        // This should be const, but generic parameters are not accessible in const :(.
+        let table: TableRef = TableRef::new_unchecked(TABLE);
+        let parameters = Next { where_, count };
+        let call = parameters.to_call(table.into());
+        let result_tokens = self
+            .controller
+            .call(self.session_id, call.to_tokens().expect("invalid method call"))
+            .await
+            .map_err(|_| Error::Closed)??;
+        Ok(Next::result_from_tokens(&result_tokens)??.result)
     }
 
     /// Generate random bytes.

@@ -81,6 +81,11 @@ impl<const TABLE: u64> SessionMethodParam for Next<TABLE> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, DetokenizeStruct, TokenizeStruct)]
+pub struct NextResult<const TABLE: u64> {
+    pub result: Vec<ObjectRef<TABLE>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, DetokenizeStruct, TokenizeStruct)]
 pub struct NextUntyped {
     pub where_: Option<Uid>,
     pub count: Option<u64>,
@@ -88,12 +93,12 @@ pub struct NextUntyped {
 
 impl SessionMethodParam for NextUntyped {
     const METHOD_ID: MethodRef = method_id::NEXT;
-    type Result = Infallible;
+    type Result = NextResultUntyped;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, DetokenizeStruct, TokenizeStruct)]
-pub struct NextResult<const TABLE: u64> {
-    pub result: Vec<ObjectRef<TABLE>>,
+pub struct NextResultUntyped {
+    pub result: Vec<Uid>,
 }
 
 //------------------------------------------------------------------------------
