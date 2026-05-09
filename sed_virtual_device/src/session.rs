@@ -268,7 +268,7 @@ impl Session {
         }
     }
 
-    fn revert(&self, tper: &mut TPer, invoking_id: Uid, params: &Revert) -> Result<RevertResult, MethodStatus> {
+    fn revert(&self, tper: &mut TPer, invoking_id: Uid, _params: &Revert) -> Result<RevertResult, MethodStatus> {
         let sp_uid = SecurityProviderRef::try_from(invoking_id).map_err(|_| MethodStatus::InvalidParameter)?;
         tper.restore_preconfig(sp_uid)?;
         Ok(RevertResult)
@@ -283,6 +283,9 @@ impl Session {
             Session::Closed => return Err(MethodStatus::Fail),
         };
 
+        // TODO: this parameters is currently ignored. It doesn't matter much
+        // for the virtual device anyways.
+        let _ = params.keep_global_range_key;
         tper.restore_preconfig(sp_uid)?;
         Ok(RevertSpResult)
     }
