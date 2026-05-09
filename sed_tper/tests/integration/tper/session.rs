@@ -133,6 +133,43 @@ async fn next(_with_tracing: WithTracing) {
 #[instrument]
 #[rstest::rstest]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn revert(_with_tracing: WithTracing) {
+    let device = Arc::new(VirtualDevice::new());
+    let session_id = device.insert_session(1, sp::ADMIN, Some(admin::authority::SID)).unwrap();
+    let (protocol, controller) = Protocol::new(BASE_COM_ID, 0, device);
+    let protocol = tokio::spawn(protocol.run());
+
+    controller.spawn(session_id, Properties::ASSUMED);
+    let session = Session::from_started(session_id, controller);
+    assert_that!(session.revert(sp::LOCKING).await, ok(anything()));
+    let _ = session.close().await;
+    let _ = protocol.await;
+}
+
+#[instrument]
+#[rstest::rstest]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn revert_sp(_with_tracing: WithTracing) {
+    let device = Arc::new(VirtualDevice::new());
+    let session_id = device.insert_session(1, sp::LOCKING, Some(locking::authority::ADMIN.get(1).unwrap())).unwrap();
+    let (protocol, controller) = Protocol::new(BASE_COM_ID, 0, device);
+    let protocol = tokio::spawn(protocol.run());
+
+    controller.spawn(session_id, Properties::ASSUMED);
+    let session = Session::from_started(session_id, controller);
+    match session.revert_sp(None).await {
+        Ok(_) => (),
+        Err((session, err)) => {
+            let _ = session.close().await;
+            panic!("revert failed: {err}")
+        }
+    }
+    let _ = protocol.await;
+}
+
+#[instrument]
+#[rstest::rstest]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn random(_with_tracing: WithTracing) {
     let device = Arc::new(VirtualDevice::new());
     let session_id = device.insert_session(1, sp::ADMIN, None).unwrap();

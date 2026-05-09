@@ -22,7 +22,9 @@ use crate::{
     device::{BASE_COM_ID, NUM_COM_IDS},
     management_session::CAPABILITIES,
 };
-use sed_spec::{objects::SecurityProviderRef, preconfig::opal_2::admin::c_pin, types::LifeCycleState};
+use sed_spec::{
+    methods::MethodStatus, objects::SecurityProviderRef, preconfig::opal_2::admin::c_pin, types::LifeCycleState,
+};
 
 #[derive(Debug)]
 pub enum TPer {
@@ -44,30 +46,34 @@ impl TPer {
 
     pub fn admin_sp(&self) -> &Admin {
         match self {
-            TPer::Opal2(tper) => &tper.admin,
+            TPer::Opal2(tper) => tper.admin_sp(),
         }
     }
 
     pub fn admin_sp_mut(&mut self) -> &mut Admin {
         match self {
-            TPer::Opal2(tper) => &mut tper.admin,
+            TPer::Opal2(tper) => tper.admin_sp_mut(),
         }
     }
 
     pub fn locking_sp(&self) -> Option<&Locking> {
         match self {
-            TPer::Opal2(tper) => Some(&tper.locking),
+            TPer::Opal2(tper) => tper.locking_sp(),
         }
     }
 
     pub fn locking_sp_mut(&mut self) -> Option<&mut Locking> {
         match self {
-            TPer::Opal2(tper) => Some(&mut tper.locking),
+            TPer::Opal2(tper) => tper.locking_sp_mut(),
         }
     }
-}
 
-impl TPer {
+    pub fn restore_preconfig(&mut self, sp: SecurityProviderRef) -> Result<(), MethodStatus> {
+        match self {
+            TPer::Opal2(tper) => tper.restore_preconfig(sp),
+        }
+    }
+
     pub fn discover(&self) -> Discovery {
         let fixed = [
             Self::tper_feature_desc(),

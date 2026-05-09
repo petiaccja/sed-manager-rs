@@ -9,8 +9,8 @@ use sed_packet::{Bytes, ObjectRef, TableRef, Uid};
 use sed_spec::methods::{
     Activate, ActivateResult, Authenticate, AuthenticateResult, CloseSession, ExtractResult, GenKey, GenKeyResult,
     GetAcl, GetAclResult, MethodResult, MethodStatus, MgmtMethodCall, MgmtMethodCallParams, NextResultUntyped,
-    NextUntyped, Random, RandomResult, SessionMethodCall, SessionMethodCallParams, SessionMethodParam as _,
-    extract_method,
+    NextUntyped, Random, RandomResult, Revert, RevertResult, RevertSp, RevertSpResult, SessionMethodCall,
+    SessionMethodCallParams, SessionMethodParam as _, extract_method,
 };
 use sed_spec::objects::{AccessControlRef, AceExpr, AuthorityRef, KAes256Ref, MethodRef, SecurityProviderRef};
 use sed_spec::preconfig::core::shared::invoking_id::THIS_SP;
@@ -92,8 +92,8 @@ impl Session {
                 GetAcl(params) => MethodResult(self.get_acl(tper, invoking_id, params)).to_tokens(),
                 Next(params) => MethodResult(self.next(tper, invoking_id, params)).to_tokens(),
                 Random(params) => MethodResult(self.random(tper, invoking_id, params)).to_tokens(),
-                Revert(_params) => todo!(),
-                RevertSp(_params) => todo!(),
+                Revert(params) => MethodResult(self.revert(tper, invoking_id, params)).to_tokens(),
+                RevertSp(params) => MethodResult(self.revert_sp(tper, invoking_id, params)).to_tokens(),
                 SetAce(_params) => todo!(),
                 SetAuthority(_params) => todo!(),
                 SetBytes(_params) => todo!(),
@@ -266,6 +266,25 @@ impl Session {
         } else {
             Err(MethodStatus::InvalidParameter)
         }
+    }
+
+    fn revert(&self, tper: &mut TPer, invoking_id: Uid, params: &Revert) -> Result<RevertResult, MethodStatus> {
+        let sp_uid = SecurityProviderRef::try_from(invoking_id).map_err(|_| MethodStatus::InvalidParameter)?;
+        tper.restore_preconfig(sp_uid)?;
+        Ok(RevertResult)
+    }
+
+    fn revert_sp(&self, tper: &mut TPer, invoking_id: Uid, params: &RevertSp) -> Result<RevertSpResult, MethodStatus> {
+        if invoking_id != THIS_SP {
+            return Err(MethodStatus::InvalidParameter);
+        }
+        let sp_uid = match self {
+            Session::Open { sp, .. } => *sp,
+            Session::Closed => return Err(MethodStatus::Fail),
+        };
+
+        tper.restore_preconfig(sp_uid)?;
+        Ok(RevertSpResult)
     }
 
     fn close(&mut self) -> Option<Packet> {

@@ -3,7 +3,7 @@ use sed_packet::token::{Command, Detokenize, FromTokens, ToTokens};
 use sed_packet::{Field, FieldRef, MaxBytes, Named, Object, ObjectRef, TableRef, Uid};
 use sed_spec::methods::{
     Activate, Authenticate, AuthenticateResult, CellBlock, GenKey, Get, GetAcl, MethodCall, MethodResult, MethodStatus,
-    Next, Random, SessionMethodParam as _, StartSession, SyncSession,
+    Next, Random, Revert, RevertSp, SessionMethodParam as _, StartSession, SyncSession,
 };
 use sed_spec::objects::{AceRef, AuthorityRef, CredentialRef, MethodRef, SecurityProviderRef};
 use sed_spec::preconfig::core::shared::invoking_id::{SESSION_MANAGER, THIS_SP};
@@ -303,6 +303,51 @@ impl Session {
             .map_err(|_| Error::Closed)??;
         let result = Random::result_from_tokens(&result_tokens)??;
         Ok(result.result.0)
+    }
+
+    /// Revert the security provider to its factory original state.
+    pub async fn revert(&self, sp: SecurityProviderRef) -> Result<(), Error> {
+        let parameters = Revert {};
+        let call = parameters.to_call(sp.into());
+        let result_tokens = self
+            .controller
+            .call(self.session_id, call.to_tokens().expect("invalid method call"))
+            .await
+            .map_err(|_| Error::Closed)??;
+        let _result = Revert::result_from_tokens(&result_tokens)??;
+        Ok(())
+    }
+
+    /// Revert the security provider to its factory original state.
+    ///
+    /// After reverting the SP, the session is immediately aborted.
+    pub async fn revert_sp(mut self, keep_global_range_key: Option<bool>) -> Result<(), (Self, Error)> {
+        async fn do_revert_sp(self_: &Session, keep_global_range_key: Option<bool>) -> Result<(), Error> {
+            let parameters = RevertSp { keep_global_range_key };
+            let call = parameters.to_call(THIS_SP);
+            let result_tokens = self_
+                .controller
+                .call(self_.session_id, call.to_tokens().expect("invalid method call"))
+                .await
+                .map_err(|_| Error::Closed)??;
+            let _result = RevertSp::result_from_tokens(&result_tokens)??;
+            Ok(())
+        }
+
+        match do_revert_sp(&self, keep_global_range_key).await {
+            Ok(_) => {
+                // The revert function succeeded, meaning the session is aborted. No need
+                // to send an EOS on drop.
+                self.eos_sent = true;
+                Ok(())
+            }
+            Err(err) => {
+                // The revert function failed, the session is likely alive, but
+                // we cannot tell in case of an I/O error happened during
+                // IF-RECV. Let's assume the session is alive.
+                Err((self, err))
+            }
+        }
     }
 
     /// Explicitly close the session.
