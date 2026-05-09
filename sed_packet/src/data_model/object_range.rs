@@ -18,10 +18,6 @@ impl<const TABLE: u64> ObjectRange<TABLE> {
         }
     }
 
-    pub const fn get_unwrap(&self, index: usize) -> ObjectRef<TABLE> {
-        self.get(index).unwrap()
-    }
-
     pub const fn len(&self) -> usize {
         match self.end.diff(self.start) {
             diff @ 0.. => diff as usize / self.step as usize,

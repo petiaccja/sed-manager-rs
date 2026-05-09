@@ -17,7 +17,7 @@ use crate::tper::{
     security_provider::Table,
 };
 
-const ADMINS: Range<usize> = 1..5;
+const ADMINS: Range<usize> = 0..4;
 
 pub fn preconfig() -> Admin {
     Admin {
@@ -115,15 +115,15 @@ pub fn access_control() -> Table<AccessControl> {
         // Authority
         [
             (
-                AccessControlRef { invoking_id: authority::ADMIN.get_unwrap(admin_idx).into(), method_id: SET },
+                AccessControlRef { invoking_id: authority::ADMIN.get(admin_idx).unwrap().into(), method_id: SET },
                 AccessControl { acl: vec![ace::SET_ENABLED].into(), ..Default::default() },
             ),
             (
-                AccessControlRef { invoking_id: c_pin::ADMIN.get_unwrap(admin_idx).into(), method_id: GET },
+                AccessControlRef { invoking_id: c_pin::ADMIN.get(admin_idx).unwrap().into(), method_id: GET },
                 AccessControl { acl: vec![ace::C_PIN_SID_GET_NOPIN].into(), ..Default::default() },
             ),
             (
-                AccessControlRef { invoking_id: c_pin::ADMIN.get_unwrap(admin_idx).into(), method_id: SET },
+                AccessControlRef { invoking_id: c_pin::ADMIN.get(admin_idx).unwrap().into(), method_id: SET },
                 AccessControl { acl: vec![ace::C_PIN_ADMINS_SET_PIN].into(), ..Default::default() },
             ),
         ]
@@ -239,13 +239,13 @@ pub fn authority() -> Table<Authority> {
     ];
 
     let admins = ADMINS.map(|admin_idx| Authority {
-        uid: Some(authority::ADMIN.get_unwrap(admin_idx)),
+        uid: Some(authority::ADMIN.get(admin_idx).unwrap()),
         name: Some(format!("Admin{}", admin_idx).into()),
         enabled: Some(false),
         is_class: Some(false),
         class: Some(authority::ADMINS),
         operation: Some(AuthMethod::Password),
-        credential: Some(c_pin::ADMIN.get_unwrap(admin_idx).into()),
+        credential: Some(c_pin::ADMIN.get(admin_idx).unwrap().into()),
         ..Default::default()
     });
 
@@ -264,7 +264,7 @@ pub fn c_pin() -> Table<CPin> {
     ];
 
     let admins = ADMINS.map(|admin_idx| CPin {
-        uid: Some(c_pin::ADMIN.get_unwrap(admin_idx)),
+        uid: Some(c_pin::ADMIN.get(admin_idx).unwrap()),
         pin: Some("random_password".as_bytes().into()),
         ..Default::default()
     });

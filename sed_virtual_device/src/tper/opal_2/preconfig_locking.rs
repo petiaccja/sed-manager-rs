@@ -20,9 +20,9 @@ use crate::tper::{
 };
 use sed_spec::objects::KAes256;
 
-const ADMINS: Range<usize> = 1..5;
-const USERS: Range<usize> = 1..9;
-const RANGES: Range<usize> = 1..9;
+const ADMINS: Range<usize> = 0..4;
+const USERS: Range<usize> = 0..8;
+const RANGES: Range<usize> = 0..8;
 const MBR_SIZE: u32 = 0x08000000;
 
 pub fn preconfig() -> Locking {
@@ -145,16 +145,16 @@ pub fn access_control() -> Table<AccessControl> {
         [
             // Authority
             (
-                AccessControlRef { invoking_id: authority::ADMIN.get_unwrap(admin_idx).into(), method_id: SET },
+                AccessControlRef { invoking_id: authority::ADMIN.get(admin_idx).unwrap().into(), method_id: SET },
                 AccessControl { acl: admin_set_acl, ..Default::default() },
             ),
             // C_PIN
             (
-                AccessControlRef { invoking_id: c_pin::ADMIN.get_unwrap(admin_idx).into(), method_id: GET },
+                AccessControlRef { invoking_id: c_pin::ADMIN.get(admin_idx).unwrap().into(), method_id: GET },
                 AccessControl { acl: vec![ace::C_PIN_ADMINS_GET_ALL_NOPIN], ..Default::default() },
             ),
             (
-                AccessControlRef { invoking_id: c_pin::ADMIN.get_unwrap(admin_idx).into(), method_id: SET },
+                AccessControlRef { invoking_id: c_pin::ADMIN.get(admin_idx).unwrap().into(), method_id: SET },
                 AccessControl { acl: vec![ace::C_PIN_ADMINS_SET_PIN], ..Default::default() },
             ),
         ]
@@ -164,32 +164,35 @@ pub fn access_control() -> Table<AccessControl> {
         [
             // ACE
             (
-                AccessControlRef { invoking_id: ace::C_PIN_USER_SET_PIN.get_unwrap(user_idx).into(), method_id: SET },
+                AccessControlRef { invoking_id: ace::C_PIN_USER_SET_PIN.get(user_idx).unwrap().into(), method_id: SET },
                 AccessControl { acl: vec![ace::ACE_SET_BOOLEAN_EXPRESSION], ..Default::default() },
             ),
             (
-                AccessControlRef { invoking_id: ace::USER_SET_COMMON_NAME.get_unwrap(user_idx).into(), method_id: SET },
+                AccessControlRef {
+                    invoking_id: ace::USER_SET_COMMON_NAME.get(user_idx).unwrap().into(),
+                    method_id: SET,
+                },
                 AccessControl { acl: vec![ace::ACE_SET_BOOLEAN_EXPRESSION], ..Default::default() },
             ),
             // Authority
             (
-                AccessControlRef { invoking_id: authority::USER.get_unwrap(user_idx).into(), method_id: SET },
+                AccessControlRef { invoking_id: authority::USER.get(user_idx).unwrap().into(), method_id: SET },
                 AccessControl {
                     acl: vec![
                         ace::AUTHORITY_SET_ENABLED,
-                        ace::USER_SET_COMMON_NAME.get_unwrap(user_idx),
+                        ace::USER_SET_COMMON_NAME.get(user_idx).unwrap(),
                     ],
                     ..Default::default()
                 },
             ),
             // C_PIN
             (
-                AccessControlRef { invoking_id: c_pin::USER.get_unwrap(user_idx).into(), method_id: GET },
+                AccessControlRef { invoking_id: c_pin::USER.get(user_idx).unwrap().into(), method_id: GET },
                 AccessControl { acl: vec![ace::C_PIN_ADMINS_GET_ALL_NOPIN], ..Default::default() },
             ),
             (
-                AccessControlRef { invoking_id: c_pin::USER.get_unwrap(user_idx).into(), method_id: SET },
-                AccessControl { acl: vec![ace::C_PIN_USER_SET_PIN.get_unwrap(user_idx)], ..Default::default() },
+                AccessControlRef { invoking_id: c_pin::USER.get(user_idx).unwrap().into(), method_id: SET },
+                AccessControl { acl: vec![ace::C_PIN_USER_SET_PIN.get(user_idx).unwrap()], ..Default::default() },
             ),
         ]
     });
@@ -250,50 +253,50 @@ pub fn access_control() -> Table<AccessControl> {
             // ACE
             (
                 AccessControlRef {
-                    invoking_id: ace::K_AES_256_RANGE_GEN_KEY.get_unwrap(range_idx).into(),
+                    invoking_id: ace::K_AES_256_RANGE_GEN_KEY.get(range_idx).unwrap().into(),
                     method_id: SET,
                 },
                 AccessControl { acl: vec![ace::ACE_SET_BOOLEAN_EXPRESSION], ..Default::default() },
             ),
             (
                 AccessControlRef {
-                    invoking_id: ace::LOCKING_RANGE_GET_RANGE_START_TO_ACTIVE_KEY.get_unwrap(range_idx).into(),
+                    invoking_id: ace::LOCKING_RANGE_GET_RANGE_START_TO_ACTIVE_KEY.get(range_idx).unwrap().into(),
                     method_id: SET,
                 },
                 AccessControl { acl: vec![ace::ACE_SET_BOOLEAN_EXPRESSION], ..Default::default() },
             ),
             (
                 AccessControlRef {
-                    invoking_id: ace::LOCKING_RANGE_SET_RD_LOCKED.get_unwrap(range_idx).into(),
+                    invoking_id: ace::LOCKING_RANGE_SET_RD_LOCKED.get(range_idx).unwrap().into(),
                     method_id: SET,
                 },
                 AccessControl { acl: vec![ace::ACE_SET_BOOLEAN_EXPRESSION], ..Default::default() },
             ),
             (
                 AccessControlRef {
-                    invoking_id: ace::LOCKING_RANGE_SET_WR_LOCKED.get_unwrap(range_idx).into(),
+                    invoking_id: ace::LOCKING_RANGE_SET_WR_LOCKED.get(range_idx).unwrap().into(),
                     method_id: SET,
                 },
                 AccessControl { acl: vec![ace::ACE_SET_BOOLEAN_EXPRESSION], ..Default::default() },
             ),
             // Locking
             (
-                AccessControlRef { invoking_id: locking::RANGE.get_unwrap(range_idx).into(), method_id: GET },
+                AccessControlRef { invoking_id: locking::RANGE.get(range_idx).unwrap().into(), method_id: GET },
                 AccessControl {
                     acl: vec![
-                        ace::LOCKING_RANGE_GET_RANGE_START_TO_ACTIVE_KEY.get_unwrap(range_idx),
+                        ace::LOCKING_RANGE_GET_RANGE_START_TO_ACTIVE_KEY.get(range_idx).unwrap(),
                         ace::ANYBODY_GET_COMMON_NAME,
                     ],
                     ..Default::default()
                 },
             ),
             (
-                AccessControlRef { invoking_id: locking::RANGE.get_unwrap(range_idx).into(), method_id: SET },
+                AccessControlRef { invoking_id: locking::RANGE.get(range_idx).unwrap().into(), method_id: SET },
                 AccessControl {
                     acl: vec![
                         ace::LOCKING_ADMINS_RANGE_START_TO_LOR,
-                        ace::LOCKING_RANGE_SET_RD_LOCKED.get_unwrap(range_idx),
-                        ace::LOCKING_RANGE_SET_WR_LOCKED.get_unwrap(range_idx),
+                        ace::LOCKING_RANGE_SET_RD_LOCKED.get(range_idx).unwrap(),
+                        ace::LOCKING_RANGE_SET_WR_LOCKED.get(range_idx).unwrap(),
                         ace::ADMINS_SET_COMMON_NAME,
                     ],
                     ..Default::default()
@@ -301,8 +304,11 @@ pub fn access_control() -> Table<AccessControl> {
             ),
             // K_AES_256
             (
-                AccessControlRef { invoking_id: k_aes_256::RANGE_KEY.get_unwrap(range_idx).into(), method_id: GEN_KEY },
-                AccessControl { acl: vec![ace::K_AES_256_RANGE_GEN_KEY.get_unwrap(range_idx)], ..Default::default() },
+                AccessControlRef {
+                    invoking_id: k_aes_256::RANGE_KEY.get(range_idx).unwrap().into(),
+                    method_id: GEN_KEY,
+                },
+                AccessControl { acl: vec![ace::K_AES_256_RANGE_GEN_KEY.get(range_idx).unwrap()], ..Default::default() },
             ),
         ]
     });
@@ -449,15 +455,15 @@ pub fn ace() -> Table<Ace> {
         [
             // Authority
             Ace {
-                uid: Some(ace::USER_SET_COMMON_NAME.get_unwrap(user_idx)),
+                uid: Some(ace::USER_SET_COMMON_NAME.get(user_idx).unwrap()),
                 boolean_expr: Some(ace_expr!((authority::ADMINS))),
                 columns: Some([Authority::COMMON_NAME].into()),
                 ..Default::default()
             },
             // C_PIN
             Ace {
-                uid: Some(ace::C_PIN_USER_SET_PIN.get_unwrap(user_idx)),
-                boolean_expr: Some(ace_expr!((authority::ADMINS) (authority::USER.get_unwrap(user_idx)) ||)),
+                uid: Some(ace::C_PIN_USER_SET_PIN.get(user_idx).unwrap()),
+                boolean_expr: Some(ace_expr!((authority::ADMINS) (authority::USER.get(user_idx).unwrap()) ||)),
                 columns: Some([CPin::PIN].into()),
                 ..Default::default()
             },
@@ -503,26 +509,26 @@ pub fn ace() -> Table<Ace> {
         [
             // K_AES_256
             Ace {
-                uid: Some(ace::K_AES_256_RANGE_GEN_KEY.get_unwrap(range_idx)),
+                uid: Some(ace::K_AES_256_RANGE_GEN_KEY.get(range_idx).unwrap()),
                 boolean_expr: Some(ace_expr!((authority::ADMINS))),
                 columns: Some(Ace::all_columns().collect()),
                 ..Default::default()
             },
             // Locking
             Ace {
-                uid: Some(ace::LOCKING_RANGE_GET_RANGE_START_TO_ACTIVE_KEY.get_unwrap(range_idx)),
+                uid: Some(ace::LOCKING_RANGE_GET_RANGE_START_TO_ACTIVE_KEY.get(range_idx).unwrap()),
                 boolean_expr: Some(ace_expr!((authority::ADMINS))),
                 columns: Some(range_start_to_active_key.clone().into_iter().collect()),
                 ..Default::default()
             },
             Ace {
-                uid: Some(ace::LOCKING_RANGE_SET_RD_LOCKED.get_unwrap(range_idx)),
+                uid: Some(ace::LOCKING_RANGE_SET_RD_LOCKED.get(range_idx).unwrap()),
                 boolean_expr: Some(ace_expr!((authority::ADMINS))),
                 columns: Some([LockingRange::READ_LOCKED].into()),
                 ..Default::default()
             },
             Ace {
-                uid: Some(ace::LOCKING_RANGE_SET_WR_LOCKED.get_unwrap(range_idx)),
+                uid: Some(ace::LOCKING_RANGE_SET_WR_LOCKED.get(range_idx).unwrap()),
                 boolean_expr: Some(ace_expr!((authority::ADMINS))),
                 columns: Some([LockingRange::WRITE_LOCKED].into()),
                 ..Default::default()
@@ -570,24 +576,24 @@ pub fn authority() -> Table<Authority> {
     ];
 
     let admins = ADMINS.map(|admin_idx| Authority {
-        uid: Some(authority::ADMIN.get_unwrap(admin_idx)),
+        uid: Some(authority::ADMIN.get(admin_idx).unwrap()),
         name: Some(format!("Admin{}", admin_idx).into()),
         is_class: Some(false),
         class: Some(authority::ADMINS),
         enabled: Some(admin_idx == 1),
         operation: Some(AuthMethod::Password),
-        credential: Some(c_pin::ADMIN.get_unwrap(admin_idx).into()),
+        credential: Some(c_pin::ADMIN.get(admin_idx).unwrap().into()),
         ..Default::default()
     });
 
     let users = USERS.map(|user_idx| Authority {
-        uid: Some(authority::USER.get_unwrap(user_idx)),
+        uid: Some(authority::USER.get(user_idx).unwrap()),
         name: Some(format!("User{}", user_idx).into()),
         is_class: Some(false),
         class: Some(authority::USERS),
         enabled: Some(false),
         operation: Some(AuthMethod::Password),
-        credential: Some(c_pin::USER.get_unwrap(user_idx).into()),
+        credential: Some(c_pin::USER.get(user_idx).unwrap().into()),
         ..Default::default()
     });
 
@@ -596,13 +602,13 @@ pub fn authority() -> Table<Authority> {
 
 pub fn c_pin() -> Table<CPin> {
     let admins = ADMINS.map(|admin_idx| CPin {
-        uid: Some(c_pin::ADMIN.get_unwrap(admin_idx)),
+        uid: Some(c_pin::ADMIN.get(admin_idx).unwrap()),
         pin: Some("default_admin_pw".as_bytes().into()),
         ..Default::default()
     });
 
     let users = USERS.map(|user_idx| CPin {
-        uid: Some(c_pin::USER.get_unwrap(user_idx)),
+        uid: Some(c_pin::USER.get(user_idx).unwrap()),
         pin: Some("default_user_pw".as_bytes().into()),
         ..Default::default()
     });
@@ -613,8 +619,8 @@ pub fn c_pin() -> Table<CPin> {
 pub fn k_aes_256() -> Table<KAes256> {
     let fixed = [KAes256 { uid: Some(k_aes_256::GLOBAL_RANGE_KEY), ..Default::default() }];
 
-    let ranges =
-        RANGES.map(|range_idx| KAes256 { uid: Some(k_aes_256::RANGE_KEY.get_unwrap(range_idx)), ..Default::default() });
+    let ranges = RANGES
+        .map(|range_idx| KAes256 { uid: Some(k_aes_256::RANGE_KEY.get(range_idx).unwrap()), ..Default::default() });
 
     fixed.into_iter().chain(ranges).into_table().expect("object missing an UID")
 }
@@ -627,8 +633,8 @@ pub fn locking() -> Table<LockingRange> {
     }];
 
     let ranges = RANGES.map(|range_idx| LockingRange {
-        uid: Some(locking::RANGE.get_unwrap(range_idx)),
-        active_key: Some(k_aes_256::RANGE_KEY.get_unwrap(range_idx)),
+        uid: Some(locking::RANGE.get(range_idx).unwrap()),
+        active_key: Some(k_aes_256::RANGE_KEY.get(range_idx).unwrap()),
         ..Default::default()
     });
 
