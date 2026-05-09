@@ -235,6 +235,8 @@ impl Session {
             Ok(table.range(range).take(count).map(|(ref_, _)| ref_.to_uid()).collect())
         }
 
+        self.check_permission(tper, invoking_id, params.method_id().try_into().unwrap(), [0].into_iter())?;
+
         let sp = self.this_sp(tper)?;
         let table = TableRef::try_from(invoking_id).map_err(|_| MethodStatus::InvalidParameter)?;
 
@@ -268,13 +270,17 @@ impl Session {
         }
     }
 
-    fn revert(&self, tper: &mut TPer, invoking_id: Uid, _params: &Revert) -> Result<RevertResult, MethodStatus> {
+    fn revert(&self, tper: &mut TPer, invoking_id: Uid, params: &Revert) -> Result<RevertResult, MethodStatus> {
+        self.check_permission(tper, invoking_id, params.method_id().try_into().unwrap(), [0].into_iter())?;
+
         let sp_uid = SecurityProviderRef::try_from(invoking_id).map_err(|_| MethodStatus::InvalidParameter)?;
         tper.restore_preconfig(sp_uid)?;
         Ok(RevertResult)
     }
 
     fn revert_sp(&self, tper: &mut TPer, invoking_id: Uid, params: &RevertSp) -> Result<RevertSpResult, MethodStatus> {
+        self.check_permission(tper, invoking_id, params.method_id().try_into().unwrap(), [0].into_iter())?;
+
         if invoking_id != THIS_SP {
             return Err(MethodStatus::InvalidParameter);
         }
