@@ -90,6 +90,7 @@ enum Object {
         count: u64,
         #[serde(default = "one")]
         step: u64,
+        display_base: u64,
     },
 }
 
@@ -473,9 +474,10 @@ mod tests {
                 "Authority": {
                     "SID": "0000000900000006",
                     "Admin{n}": {
-                        "base": "0000000900000200",
+                        "base": "0000000900000201",
                         "count": 256,
-                        "step": 1
+                        "step": 1,
+                        "display_base": 1
                     }
                 }
             }
@@ -504,7 +506,10 @@ mod tests {
                         "Authority".into(),
                         Table(HashMap::from([
                             ("SID".into(), Object::Unique(0x0000000900000006)),
-                            ("Admin{n}".into(), Object::Range { base: 0x0000000900000200, count: 256, step: 1 }),
+                            (
+                                "Admin{n}".into(),
+                                Object::Range { base: 0x0000000900000201, count: 256, step: 1, display_base: 1 },
+                            ),
                         ])),
                     )])),
                 )])),
