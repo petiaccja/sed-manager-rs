@@ -1,11 +1,11 @@
 use sed_packet::{ObjectUid, Uid};
-use sed_spec_macros::{DetokenizeStruct, FieldList, Object, TokenizeStruct};
+use sed_spec_macros::{DetokenizeStruct, FieldList, Object, TokenizeField, TokenizeStruct};
 
 use crate::objects::{AuthorityRef, LogListRef};
 use crate::preconfig::core::shared::table_id;
 use crate::types::{AuthMethod, Date, HashProtocol, LogSelect, MessagingType};
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Object, TokenizeStruct, DetokenizeStruct, FieldList)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Object, TokenizeStruct, DetokenizeStruct, FieldList, TokenizeField)]
 #[object(table=table_id::AUTHORITY)]
 pub struct Authority {
     pub uid: Option<AuthorityRef>,

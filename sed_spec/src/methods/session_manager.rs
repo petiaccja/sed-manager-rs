@@ -2,7 +2,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use sed_packet::{
     Bytes, MaxBytes, Named, Uid,
-    token::{Detokenize, Detokenizer, MessageError as _, Tokenize, Tokenizer, ValueKind},
+    token::{Detokenize, Detokenizer, MessageError as _, TokenType, Tokenize, Tokenizer},
 };
 use sed_spec_macros::{DetokenizeStruct, TokenizeStruct};
 
@@ -53,7 +53,7 @@ impl Detokenize for PropertiesMethod {
         let index = AtomicUsize::new(0); // I just want fetch_add, it doesn't need to be atomic.
         detokenizer.detokenize_list(|detokenizer| match index.fetch_add(1, Ordering::Relaxed) {
             0 => match detokenizer.peek_kind()? {
-                ValueKind::Named => detokenize_host_properties(&mut host_properties, detokenizer),
+                TokenType::Named => detokenize_host_properties(&mut host_properties, detokenizer),
                 _ => {
                     properties = Some(Properties::detokenize(detokenizer)?);
                     Ok(())

@@ -1,13 +1,13 @@
 use sed_packet::ObjectUid;
 use smallvec::SmallVec;
 
-use sed_spec_macros::{DetokenizeStruct, FieldList, Object, TokenizeStruct};
+use sed_spec_macros::{DetokenizeStruct, FieldList, Object, TokenizeField, TokenizeStruct};
 
 use crate::objects::{AuthorityRef, SecurityProviderRef};
 use crate::preconfig::core::shared::table_id;
 use crate::types::{Date, LifeCycleState};
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Object, TokenizeStruct, DetokenizeStruct, FieldList)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Object, TokenizeStruct, DetokenizeStruct, FieldList, TokenizeField)]
 #[object(table=table_id::SP)]
 pub struct SecurityProvider {
     pub uid: Option<SecurityProviderRef>,

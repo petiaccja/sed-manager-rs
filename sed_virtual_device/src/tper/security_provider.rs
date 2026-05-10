@@ -26,6 +26,8 @@ pub trait SecurityProvider {
     fn locking(&self) -> Option<&Table<LockingRange>>;
     fn mbr_control(&self) -> Option<&Table<MbrControl>>;
     fn sp(&self) -> Option<&Table<SecurityProviderObj>>;
+    fn mbr(&self) -> Option<&Vec<u8>>;
+    fn data_store(&self, index: usize) -> Option<&Vec<u8>>;
 
     // Type-erased SPs.
     fn as_any(&self) -> &dyn Any;

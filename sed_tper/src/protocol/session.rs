@@ -154,12 +154,13 @@ impl Session {
                     ExtractResult::Ok { value: _, tokens } => {
                         if let Some(RecvQueuedMethod { channel, cancel_sender, .. }) = channel_queue.pop_front() {
                             cancel_sender.map(|cancel_sender| cancel_sender.cancel());
+                            Span::current().record("tokens", debug(&tokens));
                             let _ = channel.send(Ok(tokens));
                         } else {
                             // Either the device sent too much stuff, or there is a packet distribution bug.
                             Span::current()
                                 .record("error", "too many methods received from device, or protocol routing bug")
-                                .record("tokens", debug(tokens));
+                                .record("tokens", debug(&tokens));
                             self.abort(context);
                         }
                     }

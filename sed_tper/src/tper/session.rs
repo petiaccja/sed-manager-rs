@@ -1,6 +1,8 @@
+use std::ops::RangeBounds;
+
 use sed_packet::session_id::SessionId;
-use sed_packet::token::{Command, Detokenize, FromTokens, ToTokens};
-use sed_packet::{Field, FieldRef, MaxBytes, Named, Object, ObjectRef, TableRef, Uid};
+use sed_packet::token::{Command, Detokenize, Detokenizer, FromTokens, ToTokens};
+use sed_packet::{Field, FieldRef, Ignore, MaxBytes, Object, ObjectRef, TableRef, Uid};
 use sed_spec::methods::{
     Activate, Authenticate, AuthenticateResult, CellBlock, GenKey, Get, GetAcl, MethodCall, MethodResult, MethodStatus,
     Next, Random, Revert, RevertSp, SessionMethodParam as _, StartSession, SyncSession,
@@ -9,6 +11,7 @@ use sed_spec::objects::{AceRef, AuthorityRef, CredentialRef, MethodRef, Security
 use sed_spec::preconfig::core::shared::invoking_id::{SESSION_MANAGER, THIS_SP};
 use sed_spec::preconfig::core::shared::sm_method_id::START_SESSION;
 use sed_spec::preconfig::core::shared::table_id;
+use sed_spec_macros::DetokenizeStruct;
 use tracing::instrument;
 
 use crate::error::Error;
@@ -224,14 +227,11 @@ impl Session {
             .call(self.session_id, call.to_tokens().expect("invalid method call"))
             .await
             .map_err(|_| Error::Closed)??;
-        // The length of this should be one (or zero) and the only element should be the column requested.
-        let mut result = MethodResult::<Vec<Named<u16, FieldType<O, TABLE, FIELD>>>>::from_tokens(&result_tokens)?.0?;
-        if let Some(nvp) = result.pop()
-            && nvp.name == FIELD
-        {
-            Ok(nvp.value)
-        } else {
-            Err(Error::FieldNotReturned)
+        let result =
+            MethodResult::<SingleFieldParamList<FieldType<O, TABLE, FIELD>, FIELD>>::from_tokens(&result_tokens)?.0?;
+        match result.field {
+            Some(value) => Ok(value),
+            None => Err(Error::FieldNotReturned),
         }
     }
 
@@ -241,13 +241,17 @@ impl Session {
     /// access to them. This is because the SSC specification does not always
     /// require the field to have a value assigned.
     #[instrument(level = "info", skip(self), ret, err)]
-    pub async fn get_object<Obj>(&self, object: Obj::Ref) -> Result<Obj, Error>
+    pub async fn get_object<Obj>(
+        &self,
+        object: Obj::Ref,
+        fields: impl RangeBounds<u16> + core::fmt::Debug,
+    ) -> Result<Obj, Error>
     where
         Obj: Object + Detokenize + core::fmt::Debug,
         Obj::Ref: Clone + core::fmt::Debug,
         Uid: From<Obj::Ref>,
     {
-        let cell_block = CellBlock::object(0..Obj::FIELD_COUNT);
+        let cell_block = CellBlock::object(fields);
         let parameters = Get { cell_block };
         let call = parameters.to_call(object.into());
         let result_tokens = self
@@ -255,8 +259,7 @@ impl Session {
             .call(self.session_id, call.to_tokens().expect("invalid method call"))
             .await
             .map_err(|_| Error::Closed)??;
-        // The length of this should be one (or zero) and the only element should be the column requested.
-        Ok(MethodResult::<Obj>::from_tokens(&result_tokens)?.0?)
+        Ok(MethodResult::<WholeObjectParamList<Obj>>::from_tokens(&result_tokens)?.0?.object)
     }
 
     /// Iterate over objects in a table.
@@ -390,20 +393,36 @@ impl Drop for Session {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use sed_spec::objects::{SecurityProvider, SecurityProviderRef, SecurityProviderRefExt as _};
+struct SingleFieldParamList<T, const INDEX: u16> {
+    field: Option<T>,
+}
 
-    use super::*;
-
-    #[allow(unused)]
-    async fn foo(session: &Session, sp: SecurityProviderRef) -> Result<String, Error> {
-        session.get_field(sp.name()).await
+impl<T, const INDEX: u16> Detokenize for SingleFieldParamList<T, INDEX>
+where
+    T: Detokenize,
+{
+    fn detokenize<D: Detokenizer>(detokenizer: &mut D) -> Result<Self, D::Error> {
+        let mut field = None;
+        detokenizer.detokenize_list(|de| {
+            de.detokenize_list(|de| {
+                de.detokenize_named(
+                    |de| u16::detokenize(de),
+                    |de, name| {
+                        match name {
+                            x if x == &INDEX => field = Some(T::detokenize(de)?),
+                            _ => drop(Ignore::detokenize(de)?),
+                        };
+                        Ok(())
+                    },
+                )
+                .map(|_| ())
+            })
+        })?;
+        Ok(Self { field })
     }
+}
 
-    #[allow(unused)]
-    async fn bar(session: &Session, sp: SecurityProviderRef) -> Result<SecurityProvider, Error> {
-        let result = session.get_object::<SecurityProvider>(sp).await;
-        todo!()
-    }
+#[derive(DetokenizeStruct)]
+struct WholeObjectParamList<O: Detokenize> {
+    object: O,
 }

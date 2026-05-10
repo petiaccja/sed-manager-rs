@@ -46,11 +46,27 @@ mod test_utils {
 #[cfg(feature = "test-utils")]
 pub use test_utils::*;
 
-pub fn get_otel_exporter_endpoint() -> Result<String, std::env::VarError> {
+enum ExporterProtocol {
+    Grpc,
+    Http,
+}
+
+fn get_otel_exporter_protocol() -> ExporterProtocol {
+    match std::env::var("OTEL_EXPORTER_OTLP_PROTOCOL") {
+        Ok(value) => match value.to_lowercase().as_str() {
+            "http" => ExporterProtocol::Http,
+            "grpc" => ExporterProtocol::Grpc,
+            _ => ExporterProtocol::Grpc,
+        },
+        Err(_) => ExporterProtocol::Grpc,
+    }
+}
+
+fn get_otel_exporter_endpoint() -> Result<String, std::env::VarError> {
     std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT")
 }
 
-pub fn get_otel_exporter_headers() -> Option<HashMap<String, String>> {
+fn get_otel_exporter_headers() -> Option<HashMap<String, String>> {
     std::env::var("OTEL_EXPORTER_OTLP_HEADERS").ok().map(|value| {
         value
             .split(' ')
@@ -76,13 +92,21 @@ pub fn create_otlp_provider() -> Result<SdkTracerProvider, Box<dyn std::error::E
     }
 
     // Create OTLP span exporter
-    let exporter = opentelemetry_otlp::SpanExporter::builder()
-        .with_tonic()
-        .with_metadata(metadata)
-        .with_tls_config(tonic::transport::ClientTlsConfig::new().with_native_roots())
-        .with_endpoint(endpoint)
-        .with_timeout(Duration::from_millis(500))
-        .build()?;
+    let protocol = get_otel_exporter_protocol();
+    let exporter = match protocol {
+        ExporterProtocol::Grpc => opentelemetry_otlp::SpanExporter::builder()
+            .with_tonic()
+            .with_metadata(metadata)
+            .with_tls_config(tonic::transport::ClientTlsConfig::new().with_native_roots())
+            .with_endpoint(endpoint)
+            .with_timeout(Duration::from_millis(500))
+            .build()?,
+        ExporterProtocol::Http => opentelemetry_otlp::SpanExporter::builder()
+            .with_http()
+            .with_endpoint(endpoint)
+            .with_timeout(Duration::from_millis(500))
+            .build()?,
+    };
 
     // Build the tracer provider
     let provider = SdkTracerProvider::builder()

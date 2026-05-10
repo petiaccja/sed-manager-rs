@@ -71,6 +71,14 @@ impl SecurityProvider for Admin {
         None
     }
 
+    fn mbr(&self) -> Option<&Vec<u8>> {
+        None
+    }
+
+    fn data_store(&self, _index: usize) -> Option<&Vec<u8>> {
+        None
+    }
+
     fn sp(&self) -> Option<&Table<SecurityProviderObj>> {
         Some(&self.sp)
     }

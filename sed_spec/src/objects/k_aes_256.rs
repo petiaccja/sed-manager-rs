@@ -1,11 +1,11 @@
 use sed_packet::ObjectUid;
-use sed_spec_macros::{DetokenizeStruct, FieldList, Object, TokenizeStruct};
+use sed_spec_macros::{DetokenizeStruct, FieldList, Object, TokenizeField, TokenizeStruct};
 
 use crate::objects::KAes256Ref;
 use crate::preconfig::core::shared::table_id;
 use crate::types::SymmetricModeMedia;
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Object, TokenizeStruct, DetokenizeStruct, FieldList)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Object, TokenizeStruct, DetokenizeStruct, FieldList, TokenizeField)]
 #[object(table=table_id::K_AES_256)]
 pub struct KAes256 {
     pub uid: Option<KAes256Ref>,

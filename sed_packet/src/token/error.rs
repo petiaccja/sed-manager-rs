@@ -6,20 +6,16 @@ pub trait MessageError {
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum Error {
-    #[error("Serializing/deserializing the token failed: {}", .0)]
-    SerializationFailed(SorbitError),
-    #[error("The payload does not fit into the atom")]
-    OversizedPayload,
-    #[error("The token is valid, but it stores a value of a different type")]
-    InvalidDataType,
-    #[error("Expected an EndList token")]
-    ExpectedStartNamed,
+    #[error("Can not serialize the token: {}", .0)]
+    CanNotSerialize(SorbitError),
+    #[error("The payload ({len} bytes) does not fit into a large atom")]
+    PayloadTooBig { len: usize },
+    #[error("Can not convert `{from}` into `{to}`")]
+    CanNotConvert { from: &'static str, to: &'static str },
     #[error("Expected an EndNamed token")]
     ExpectedEndNamed,
     #[error("Did not expect an EndNamed token at this point")]
     UnexpectedEndNamed,
-    #[error("Expected a StartList token")]
-    ExpectedStartList,
     #[error("Did not expect an EndList token at this point")]
     UnexpectedEndList,
     #[error("{}", .0)]
@@ -28,7 +24,7 @@ pub enum Error {
 
 impl From<SorbitError> for Error {
     fn from(value: SorbitError) -> Self {
-        Self::SerializationFailed(value)
+        Self::CanNotSerialize(value)
     }
 }
 

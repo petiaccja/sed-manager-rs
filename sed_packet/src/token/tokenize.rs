@@ -52,7 +52,7 @@ where
     }
 }
 
-pub enum ValueKind {
+pub enum TokenType {
     Integer { signed: bool },
     Bytes,
     Command,
@@ -61,22 +61,20 @@ pub enum ValueKind {
     Control,
 }
 
-impl ValueKind {
-    fn from_atom(bytes: bool, signed: bool) -> Self {
-        match bytes {
-            true => Self::Bytes,
-            false => Self::Integer { signed },
-        }
-    }
-}
-
-impl From<&Token> for ValueKind {
+impl From<&Token> for TokenType {
     fn from(token: &Token) -> Self {
+        fn atom_type(bytes: bool, signed: bool) -> TokenType {
+            match bytes {
+                true => TokenType::Bytes,
+                false => TokenType::Integer { signed },
+            }
+        }
+
         match token {
-            Token::TinyAtom(atom) => Self::from_atom(false, atom.signed),
-            Token::ShortAtom(atom) => Self::from_atom(atom.byte, atom.signed),
-            Token::MediumAtom(atom) => Self::from_atom(atom.byte, atom.signed),
-            Token::LongAtom(atom) => Self::from_atom(atom.byte, atom.signed),
+            Token::TinyAtom(atom) => atom_type(false, atom.signed),
+            Token::ShortAtom(atom) => atom_type(atom.byte, atom.signed),
+            Token::MediumAtom(atom) => atom_type(atom.byte, atom.signed),
+            Token::LongAtom(atom) => atom_type(atom.byte, atom.signed),
             Token::StartList => Self::List,
             Token::EndList => Self::Control,
             Token::StartName => Self::Named,
@@ -88,6 +86,34 @@ impl From<&Token> for ValueKind {
             Token::EndTransaction => Self::Control,
             Token::Empty => Self::Control,
         }
+    }
+}
+
+impl From<&TokenType> for &'static str {
+    fn from(value: &TokenType) -> Self {
+        match value {
+            TokenType::Integer { signed } => match signed {
+                true => "sint",
+                false => "uint",
+            },
+            TokenType::Bytes => "bytes",
+            TokenType::Command => "command",
+            TokenType::Named => "named",
+            TokenType::List => "list",
+            TokenType::Control => "control",
+        }
+    }
+}
+
+impl From<TokenType> for &'static str {
+    fn from(value: TokenType) -> Self {
+        <_>::from(&value)
+    }
+}
+
+impl core::fmt::Display for TokenType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.into())
     }
 }
 
@@ -112,7 +138,9 @@ pub trait Detokenizer {
     type Error: MessageError;
 
     fn ignore(&mut self, max_recursion: usize) -> Result<(), Self::Error>;
-    fn peek_kind(&mut self) -> Result<ValueKind, Self::Error>;
+    fn peek_kind(&mut self) -> Result<TokenType, Self::Error>;
+    fn detokenize_until<O>(&mut self, value: impl FnMut(&mut Self) -> Result<O, Self::Error>)
+    -> Result<O, Self::Error>;
     fn detokenize_i8(&mut self) -> Result<i8, Self::Error>;
     fn detokenize_i16(&mut self) -> Result<i16, Self::Error>;
     fn detokenize_i32(&mut self) -> Result<i32, Self::Error>;
@@ -134,5 +162,17 @@ pub trait Detokenizer {
 impl<V: Tokenize> Tokenize for &V {
     fn tokenize<T: Tokenizer>(&self, tokenizer: &mut T) -> Result<(), T::Error> {
         (*self).tokenize(tokenizer)
+    }
+}
+
+impl<V: Tokenize> Tokenize for Box<V> {
+    fn tokenize<T: Tokenizer>(&self, tokenizer: &mut T) -> Result<(), T::Error> {
+        self.as_ref().tokenize(tokenizer)
+    }
+}
+
+impl ToTokens for Box<dyn ToTokens> {
+    fn to_tokens(&self) -> Result<Vec<u8>, Error> {
+        self.as_ref().to_tokens()
     }
 }

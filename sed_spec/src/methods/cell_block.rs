@@ -5,7 +5,7 @@
 
 use core::ops::{Add, Bound, RangeBounds, Sub};
 
-use sed_packet::token::{Detokenize, Detokenizer, MessageError as _, Tokenize, Tokenizer, ValueKind};
+use sed_packet::token::{Detokenize, Detokenizer, MessageError as _, TokenType, Tokenize, Tokenizer};
 use sed_packet::{ObjectRef, TableRef, Uid};
 use sed_spec_macros::{DetokenizeStruct, TokenizeStruct};
 
@@ -94,8 +94,8 @@ impl Tokenize for UidOrU64 {
 impl Detokenize for UidOrU64 {
     fn detokenize<D: Detokenizer>(detokenizer: &mut D) -> Result<Self, D::Error> {
         match detokenizer.peek_kind()? {
-            ValueKind::Integer { .. } => u64::detokenize(detokenizer).map(|value| Self::U64(value)),
-            ValueKind::Bytes => Uid::detokenize(detokenizer).map(|value| Self::Uid(value)),
+            TokenType::Integer { .. } => u64::detokenize(detokenizer).map(|value| Self::U64(value)),
+            TokenType::Bytes => Uid::detokenize(detokenizer).map(|value| Self::Uid(value)),
             _ => Err(D::Error::message("expected either an Uid or an unsigned integer")),
         }
     }

@@ -1,9 +1,13 @@
-use sed_packet::{Object, ObjectUid};
+use sed_packet::{MaxBytes, Object, ObjectUid};
 
 use crate::tper::security_provider::Table;
 
-pub const INITIAL_SID_PASSWORD: &str = "password";
-pub const PSID_PASSWORD: &str = "recovery";
+// This is very annoying, unsafe should be absolutely unnecessary here, and
+// this should be rewritten if proper const programming are available in Rust.
+pub const INITIAL_SID_PASSWORD: MaxBytes<32> =
+    unsafe { MaxBytes::from_const_with_len_unchecked(*b"password                        ", 8) };
+pub const PSID_PASSWORD: MaxBytes<32> =
+    unsafe { MaxBytes::from_const_with_len_unchecked(*b"recovery                        ", 8) };
 
 pub trait AllColumns {
     fn all_columns() -> impl Iterator<Item = u16>;

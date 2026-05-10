@@ -17,6 +17,9 @@ pub trait Object {
 
     fn active_fields(&self) -> Vec<u16>;
     fn update(&mut self, other: Self);
+    fn field_count(&self) -> u16 {
+        Self::FIELD_COUNT
+    }
 }
 
 pub trait Field<const INDEX: u16> {
@@ -25,6 +28,10 @@ pub trait Field<const INDEX: u16> {
 
 pub trait ObjectUid: Object {
     fn uid(&self) -> Option<Self::Ref>;
+}
+
+pub trait TokenizeField: Tokenize {
+    fn tokenize_field<T: Tokenizer>(&self, field: u16, tokenizer: &mut T) -> Result<(), T::Error>;
 }
 
 //------------------------------------------------------------------------------

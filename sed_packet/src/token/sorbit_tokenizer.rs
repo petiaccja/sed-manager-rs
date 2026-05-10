@@ -5,7 +5,15 @@ use crate::token::{Detokenizer, Tokenize, Tokenizer};
 use super::command::Command;
 use super::error::Error;
 use super::token::Token;
-use super::tokenize::ValueKind;
+use super::tokenize::TokenType;
+
+macro_rules! convert {
+    ($token:expr, $type:ty) => {{
+        let token = $token;
+        let ty = TokenType::from(&token);
+        <$type>::try_from(token).map_err(|_| Error::CanNotConvert { from: ty.into(), to: stringify!($type) })
+    }};
+}
 
 pub struct SorbitTokenizer<S>
 where
@@ -97,7 +105,9 @@ where
     }
 
     fn tokenize_bytes(&mut self, bytes: &[u8]) -> Result<(), Error> {
-        Token::try_from(bytes).map_err(|_| Error::OversizedPayload)?.serialize(&mut self.serializer)?;
+        Token::try_from(bytes)
+            .map_err(|_| Error::PayloadTooBig { len: bytes.len() })?
+            .serialize(&mut self.serializer)?;
         Ok(())
     }
 }
@@ -171,45 +181,58 @@ where
         }
     }
 
-    fn peek_kind(&mut self) -> Result<ValueKind, Self::Error> {
+    fn peek_kind(&mut self) -> Result<TokenType, Self::Error> {
         let next = self.peek_token()?;
-        Ok(ValueKind::from(next))
+        Ok(TokenType::from(next))
+    }
+
+    fn detokenize_until<O>(
+        &mut self,
+        mut value: impl FnMut(&mut Self) -> Result<O, Self::Error>,
+    ) -> Result<O, Self::Error> {
+        loop {
+            match value(self) {
+                result @ Ok(_) => break result,
+                result @ Err(Error::CanNotSerialize(_)) => break result,
+                Err(_) => (),
+            }
+        }
     }
 
     fn detokenize_i8(&mut self) -> Result<i8, Error> {
-        self.read_token()?.try_into().map_err(|_| Error::InvalidDataType)
+        convert!(self.read_token()?, i8)
     }
 
     fn detokenize_i16(&mut self) -> Result<i16, Error> {
-        self.read_token()?.try_into().map_err(|_| Error::InvalidDataType)
+        convert!(self.read_token()?, i16)
     }
 
     fn detokenize_i32(&mut self) -> Result<i32, Error> {
-        self.read_token()?.try_into().map_err(|_| Error::InvalidDataType)
+        convert!(self.read_token()?, i32)
     }
 
     fn detokenize_i64(&mut self) -> Result<i64, Error> {
-        self.read_token()?.try_into().map_err(|_| Error::InvalidDataType)
+        convert!(self.read_token()?, i64)
     }
 
     fn detokenize_u8(&mut self) -> Result<u8, Error> {
-        self.read_token()?.try_into().map_err(|_| Error::InvalidDataType)
+        convert!(self.read_token()?, u8)
     }
 
     fn detokenize_u16(&mut self) -> Result<u16, Error> {
-        self.read_token()?.try_into().map_err(|_| Error::InvalidDataType)
+        convert!(self.read_token()?, u16)
     }
 
     fn detokenize_u32(&mut self) -> Result<u32, Error> {
-        self.read_token()?.try_into().map_err(|_| Error::InvalidDataType)
+        convert!(self.read_token()?, u32)
     }
 
     fn detokenize_u64(&mut self) -> Result<u64, Error> {
-        self.read_token()?.try_into().map_err(|_| Error::InvalidDataType)
+        convert!(self.read_token()?, u64)
     }
 
     fn detokenize_command(&mut self) -> Result<Command, Error> {
-        self.read_token()?.try_into().map_err(|_| Error::InvalidDataType)
+        convert!(self.read_token()?, Command)
     }
 
     fn detokenize_named<Name, Value>(
@@ -217,8 +240,9 @@ where
         name: impl FnOnce(&mut Self) -> Result<Name, Error>,
         value: impl FnOnce(&mut Self, &Name) -> Result<Value, Error>,
     ) -> Result<(Name, Value), Error> {
-        if self.read_token()? != Token::StartName {
-            return Err(Error::ExpectedStartNamed);
+        match self.read_token()? {
+            Token::StartName => (),
+            unexpected => return Err(Error::CanNotConvert { from: TokenType::from(&unexpected).into(), to: "named" }),
         };
         let name = name(self)?;
         let value = value(self, &name)?;
@@ -229,8 +253,9 @@ where
     }
 
     fn detokenize_list(&mut self, mut item: impl FnMut(&mut Self) -> Result<(), Error>) -> Result<(), Error> {
-        if self.read_token()? != Token::StartList {
-            return Err(Error::ExpectedStartList);
+        match self.read_token()? {
+            Token::StartList => (),
+            unexpected => return Err(Error::CanNotConvert { from: TokenType::from(&unexpected).into(), to: "list" }),
         };
         while self.peek_token()? != &Token::EndList {
             item(self)?;
@@ -240,20 +265,21 @@ where
     }
 
     fn detokenize_bytes(&mut self) -> Result<Vec<u8>, Error> {
-        self.read_token()?.try_into().map_err(|_| Error::InvalidDataType)
+        convert!(self.read_token()?, Vec<u8>)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        Named,
-        token::{FromTokens, ToTokens},
-    };
-
     use super::*;
 
+    use crate::Named;
+    use crate::token::{Detokenize, FromTokens, ToTokens};
+
+    use googletest::assert_that;
+    use googletest::matchers::*;
     use rstest::rstest;
+    use sorbit::{io::FixedMemoryStream, stream_ser_de::StreamDeserializer};
 
     #[rstest]
     #[case(3, &[0x03])]
@@ -341,5 +367,22 @@ mod tests {
     fn tokenize_list(#[case] value: Vec<u8>, #[case] bytes: &[u8]) {
         assert_eq!(value.to_tokens().unwrap(), bytes);
         assert_eq!(Vec::<u8>::from_tokens(bytes).unwrap(), value);
+    }
+
+    #[test]
+    fn detokenize_until_found() {
+        let bytes = &[0xF0, 1, 2, 3, 0xF1, 0xF9];
+        let mut detokenizer = SorbitDetokenizer::new(StreamDeserializer::new(FixedMemoryStream::new(bytes)));
+        assert_eq!(detokenizer.detokenize_until(|de| Command::detokenize(de)), Ok(Command::EndOfData));
+    }
+
+    #[test]
+    fn detokenize_until_missing() {
+        let bytes = &[0xF0, 1, 2, 3, 0xF1, 1];
+        let mut detokenizer = SorbitDetokenizer::new(StreamDeserializer::new(FixedMemoryStream::new(bytes)));
+        assert_that!(
+            detokenizer.detokenize_until(|de| Command::detokenize(de)),
+            err(matches_pattern!(Error::CanNotSerialize(_)))
+        );
     }
 }

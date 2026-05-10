@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use sed_packet::ObjectUid;
-use sed_spec_macros::{DetokenizeStruct, FieldList, Object, TokenizeStruct};
+use sed_spec_macros::{DetokenizeStruct, FieldList, Object, TokenizeField, TokenizeStruct};
 
 use crate::objects::{KAes256Ref, LockingRangeRef};
 use crate::preconfig::core::shared::table_id;
@@ -9,7 +9,7 @@ use crate::types::{
     AdvKeyMode, GeneralStatus, LastReencStatus, ReencryptRequest, ReencryptState, ResetType, VerifyMode,
 };
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Object, TokenizeStruct, DetokenizeStruct, FieldList)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Object, TokenizeStruct, DetokenizeStruct, FieldList, TokenizeField)]
 #[object(table=table_id::LOCKING)]
 pub struct LockingRange {
     pub uid: Option<LockingRangeRef>,

@@ -9,7 +9,7 @@ mod status;
 mod token_stream;
 
 pub use call::{MethodCall, MgmtMethodCall, MgmtMethodCallParams, SessionMethodCall, SessionMethodCallParams};
-pub use cell_block::CellBlock;
+pub use cell_block::{ByteCellBlock, CellBlock, ObjectCellBlock};
 pub use method_param::{MethodParam, SessionMethodParam};
 pub use properties::Properties;
 pub use result::MethodResult;

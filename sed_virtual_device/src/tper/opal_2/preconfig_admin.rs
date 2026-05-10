@@ -254,18 +254,14 @@ pub fn authority() -> Table<Authority> {
 
 pub fn c_pin() -> Table<CPin> {
     let fixed = [
-        CPin { uid: Some(c_pin::SID), pin: Some(INITIAL_SID_PASSWORD.as_bytes().into()), ..Default::default() },
-        CPin { uid: Some(c_pin::MSID), pin: Some(INITIAL_SID_PASSWORD.as_bytes().into()), ..Default::default() },
-        CPin {
-            uid: Some(psid::admin::c_pin::PSID),
-            pin: Some(PSID_PASSWORD.as_bytes().into()),
-            ..Default::default()
-        },
+        CPin { uid: Some(c_pin::SID), pin: Some(INITIAL_SID_PASSWORD), ..Default::default() },
+        CPin { uid: Some(c_pin::MSID), pin: Some(INITIAL_SID_PASSWORD), ..Default::default() },
+        CPin { uid: Some(psid::admin::c_pin::PSID), pin: Some(PSID_PASSWORD), ..Default::default() },
     ];
 
     let admins = ADMINS.map(|admin_idx| CPin {
         uid: Some(c_pin::ADMIN.get(admin_idx).unwrap()),
-        pin: Some("random_password".as_bytes().into()),
+        pin: Some(b"random_password".as_slice().into()),
         ..Default::default()
     });
 

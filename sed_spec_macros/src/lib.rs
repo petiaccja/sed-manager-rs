@@ -1,6 +1,7 @@
 mod field_list;
 mod object;
 mod r#struct;
+mod tokenize_field;
 mod type_ext;
 
 use proc_macro::TokenStream;
@@ -12,6 +13,18 @@ pub fn object(tokens: TokenStream) -> TokenStream {
         Err(err) => return err.into_compile_error().into(),
     };
     match object::object(item) {
+        Ok(tokens) => tokens.into(),
+        Err(err) => err.into_compile_error().into(),
+    }
+}
+
+#[proc_macro_derive(TokenizeField, attributes(object))]
+pub fn tokenize_field(tokens: TokenStream) -> TokenStream {
+    let item = match syn::parse(tokens) {
+        Ok(item) => item,
+        Err(err) => return err.into_compile_error().into(),
+    };
+    match tokenize_field::tokenize_field(item) {
         Ok(tokens) => tokens.into(),
         Err(err) => err.into_compile_error().into(),
     }

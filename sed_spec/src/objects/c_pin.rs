@@ -1,11 +1,11 @@
 use sed_packet::{ObjectUid, TableRef};
-use sed_spec_macros::{DetokenizeStruct, FieldList, Object, TokenizeStruct};
+use sed_spec_macros::{DetokenizeStruct, FieldList, Object, TokenizeField, TokenizeStruct};
 use smallvec::SmallVec;
 
 use crate::objects::CPinRef;
 use crate::preconfig::core::shared::table_id;
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Object, TokenizeStruct, DetokenizeStruct, FieldList)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Object, TokenizeStruct, DetokenizeStruct, FieldList, TokenizeField)]
 #[object(table=table_id::C_PIN)]
 pub struct CPin {
     pub uid: Option<CPinRef>,

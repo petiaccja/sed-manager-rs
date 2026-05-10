@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use sed_packet::ObjectUid;
-use sed_spec_macros::{DetokenizeStruct, FieldList, Object, TokenizeStruct};
+use sed_spec_macros::{DetokenizeStruct, FieldList, Object, TokenizeField, TokenizeStruct};
 
 use crate::objects::{AceRef, AuthorityRef};
 use crate::preconfig::core::shared::table_id;
@@ -33,7 +33,7 @@ macro_rules! ace_expr {
 pub use ace_expr;
 pub use ace_operand;
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Object, TokenizeStruct, DetokenizeStruct, FieldList)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Object, TokenizeStruct, DetokenizeStruct, FieldList, TokenizeField)]
 #[object(table = table_id::ACE)]
 pub struct Ace {
     pub uid: Option<AceRef>,

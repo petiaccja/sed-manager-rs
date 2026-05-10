@@ -24,6 +24,7 @@ const ADMINS: Range<usize> = 0..4;
 const USERS: Range<usize> = 0..8;
 const RANGES: Range<usize> = 0..8;
 const MBR_SIZE: u32 = 0x08000000;
+const DATA_STORE_SIZE: u32 = 0x00A00000;
 
 pub fn preconfig() -> Locking {
     Locking {
@@ -36,7 +37,8 @@ pub fn preconfig() -> Locking {
         locking: locking(),
         mbr_control: mbr_control(),
         table: table(),
-        mbr: mbr(),
+        mbr: vec![0u8; MBR_SIZE as usize],
+        data_store: vec![vec![0u8; DATA_STORE_SIZE as usize]],
     }
 }
 
@@ -665,8 +667,4 @@ pub fn table() -> Table<TableDesc> {
     ]
     .into_table()
     .expect("object missing an UID")
-}
-
-pub fn mbr() -> Vec<u8> {
-    vec![0u8; MBR_SIZE as usize]
 }

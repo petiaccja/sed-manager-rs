@@ -51,7 +51,7 @@ where
                 let tokens: Vec<_> = token_stream.drain(..stream_pos as usize).collect();
                 ExtractResult::Ok { value, tokens }
             }
-            Err(TokenError::SerializationFailed(err)) if err.kind() == ErrorKind::UnexpectedEof => {
+            Err(TokenError::CanNotSerialize(err)) if err.kind() == ErrorKind::UnexpectedEof => {
                 ExtractResult::NeedMoreTokens
             }
             Err(err) => ExtractResult::InvalidTokens(err),
@@ -86,7 +86,7 @@ mod tests {
     #[rstest]
     #[case(VecDeque::from([0xF0, 1, 2, 0xF1, 0xFA]), ExtractResult::Ok { value: vec![1, 2], tokens: vec![0xF0, 1, 2, 0xF1] }, VecDeque::from([0xFA]))]
     #[case(VecDeque::from([0xF0, 1]), ExtractResult::NeedMoreTokens, VecDeque::from([0xF0, 1]))]
-    #[case(VecDeque::from([0xF0, 0xF2, 0xF1]), ExtractResult::InvalidTokens(TokenError::InvalidDataType), VecDeque::from([0xF0, 0xF2, 0xF1]))]
+    #[case(VecDeque::from([0xF0, 0xF2, 0xF1]), ExtractResult::InvalidTokens(TokenError::CanNotConvert{ from: "named", to: "u8" }), VecDeque::from([0xF0, 0xF2, 0xF1]))]
     #[case(VecDeque::from([0xFA, 0xF0, 0xF1]), ExtractResult::EndOfStream, VecDeque::from([0xF0, 0xF1]))]
     fn extract_method_(
         #[case] mut token_stream: VecDeque<u8>,

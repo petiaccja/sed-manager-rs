@@ -1,23 +1,26 @@
 use std::collections::{BTreeMap, HashSet, VecDeque};
-use std::ops::Bound;
+use std::ops::{Add, Bound, Range, RangeBounds};
 
 use crate::internal_error::Expect;
 use sed_packet::packet::{Packet, SubPacket, SubPacketKind};
 use sed_packet::session_id::SessionId;
-use sed_packet::token::{Command, ToTokens};
-use sed_packet::{Bytes, ObjectRef, TableRef, Uid};
+use sed_packet::token::{Command, ToTokens, Tokenize, Tokenizer};
+use sed_packet::{Bytes, Object, ObjectRef, TableRef, TokenizeField, Uid};
 use sed_spec::methods::{
-    Activate, ActivateResult, Authenticate, AuthenticateResult, CloseSession, ExtractResult, GenKey, GenKeyResult,
-    GetAcl, GetAclResult, MethodResult, MethodStatus, MgmtMethodCall, MgmtMethodCallParams, NextResultUntyped,
-    NextUntyped, Random, RandomResult, Revert, RevertResult, RevertSp, RevertSpResult, SessionMethodCall,
-    SessionMethodCallParams, SessionMethodParam as _, extract_method,
+    Activate, ActivateResult, Authenticate, AuthenticateResult, ByteCellBlock, CloseSession, ExtractResult, GenKey,
+    GenKeyResult, Get, GetAcl, GetAclResult, MethodResult, MethodStatus, MgmtMethodCall, MgmtMethodCallParams,
+    NextResultUntyped, NextUntyped, ObjectCellBlock, Random, RandomResult, Revert, RevertResult, RevertSp,
+    RevertSpResult, SessionMethodCall, SessionMethodCallParams, SessionMethodParam as _, extract_method,
 };
-use sed_spec::objects::{AccessControlRef, AceExpr, AuthorityRef, KAes256Ref, MethodRef, SecurityProviderRef};
+use sed_spec::objects::{
+    AccessControlRef, Ace, AceExpr, Authority, AuthorityRef, CPin, KAes256, KAes256Ref, LockingRange, MbrControl,
+    MethodRef, SecurityProvider as SecurityProviderObj, SecurityProviderRef, TableDesc,
+};
 use sed_spec::preconfig::core::shared::invoking_id::THIS_SP;
 use sed_spec::preconfig::core::shared::table_id;
 use sed_spec::types::LifeCycleState;
 
-use crate::tper::{Locking, SecurityProvider, TPer};
+use crate::tper::{Locking, SecurityProvider, TPer, Table};
 
 #[derive(Debug)]
 pub enum Session {
@@ -88,7 +91,7 @@ impl Session {
                 Activate(params) => MethodResult(self.activate(tper, invoking_id, params)).to_tokens(),
                 Authenticate(params) => MethodResult(self.authenticate(tper, invoking_id, params)).to_tokens(),
                 GenKey(params) => MethodResult(self.gen_key(tper, invoking_id, params)).to_tokens(),
-                Get(_params) => todo!(),
+                Get(params) => MethodResult(self.get(tper, invoking_id, params)).to_tokens(),
                 GetAcl(params) => MethodResult(self.get_acl(tper, invoking_id, params)).to_tokens(),
                 Next(params) => MethodResult(self.next(tper, invoking_id, params)).to_tokens(),
                 Random(params) => MethodResult(self.random(tper, invoking_id, params)).to_tokens(),
@@ -191,6 +194,89 @@ impl Session {
             rand::Fill::fill_slice(&mut new_key, &mut rand::rng());
             k_aes_256.key = Some(new_key);
             Ok(GenKeyResult)
+        } else {
+            Err(MethodStatus::InvalidParameter)
+        }
+    }
+
+    fn get<'tper>(
+        &self,
+        tper: &'tper mut TPer,
+        invoking_id: Uid,
+        params: &Get,
+    ) -> Result<GetResult<'tper>, MethodStatus> {
+        fn get_slice<O: Object>(
+            table: &Table<O>,
+            object: Uid,
+            start_column: Option<u16>,
+            end_column: Option<u16>,
+        ) -> Result<ObjectSlice<'_, O>, MethodStatus>
+        where
+            O::Ref: TryFrom<Uid> + Ord,
+        {
+            let object = table
+                .get(&object.try_into().map_err(|_| MethodStatus::InvalidParameter)?)
+                .ok_or(MethodStatus::InvalidParameter)?;
+            let (start_field, end_field) = unmap_bounds(start_column, end_column);
+            Ok(ObjectSlice { object, start_field, end_field })
+        }
+
+        let sp = self.this_sp(tper)?;
+        if let Ok(ObjectCellBlock { table, object, start_column, end_column }) =
+            params.cell_block.clone().try_into_object(invoking_id)
+        {
+            match table {
+                table_id::ACE => get_slice(sp.ace(), object, start_column, end_column).map(|s| GetResult::Ace(s)),
+                table_id::AUTHORITY => {
+                    get_slice(sp.authority(), object, start_column, end_column).map(|s| GetResult::Authority(s))
+                }
+                table_id::C_PIN => get_slice(sp.c_pin(), object, start_column, end_column).map(|s| GetResult::CPin(s)),
+                table_id::K_AES_256 => {
+                    get_slice(sp.k_aes_256().ok_or(MethodStatus::InvalidParameter)?, object, start_column, end_column)
+                        .map(|s| GetResult::KAes256(s))
+                }
+                table_id::LOCKING => {
+                    get_slice(sp.locking().ok_or(MethodStatus::InvalidParameter)?, object, start_column, end_column)
+                        .map(|s| GetResult::LockingRange(s))
+                }
+                table_id::MBR_CONTROL => {
+                    get_slice(sp.mbr_control().ok_or(MethodStatus::InvalidParameter)?, object, start_column, end_column)
+                        .map(|s| GetResult::MbrControl(s))
+                }
+                table_id::SP => {
+                    get_slice(sp.sp().ok_or(MethodStatus::InvalidParameter)?, object, start_column, end_column)
+                        .map(|s| GetResult::SecurityProvider(s))
+                }
+                table_id::TABLE => {
+                    get_slice(sp.table(), object, start_column, end_column).map(|s| GetResult::TableDesc(s))
+                }
+                _ => Err(MethodStatus::InvalidParameter),
+            }
+        } else if let Ok(ByteCellBlock { table, start_byte, end_byte }) =
+            params.cell_block.clone().try_into_byte(invoking_id)
+        {
+            let range = (
+                match start_byte {
+                    Some(value) => Bound::Included(value as usize),
+                    None => Bound::Unbounded,
+                },
+                match end_byte {
+                    Some(value) => Bound::Excluded(value as usize),
+                    None => Bound::Unbounded,
+                },
+            );
+
+            let table = if table == table_id::MBR {
+                sp.mbr().ok_or(MethodStatus::InvalidParameter)
+            } else if table_id::DATA_STORE.contains(&table) {
+                let index = table - table_id::DATA_STORE.start;
+                sp.data_store(index as usize).ok_or(MethodStatus::InvalidParameter)
+            } else {
+                Err(MethodStatus::InvalidParameter)
+            }?;
+
+            let slice = table.get(range).ok_or(MethodStatus::InvalidParameter)?;
+            Ok(GetResult::Bytes(Bytes(slice.into())))
         } else {
             Err(MethodStatus::InvalidParameter)
         }
@@ -394,4 +480,81 @@ impl Session {
             Err(MethodStatus::NotAuthorized)
         }
     }
+}
+
+struct ObjectSlice<'o, O> {
+    object: &'o O,
+    start_field: Bound<u16>,
+    end_field: Bound<u16>,
+}
+
+impl<'o, O> Tokenize for ObjectSlice<'o, O>
+where
+    O: TokenizeField + Object,
+{
+    fn tokenize<T: Tokenizer>(&self, tokenizer: &mut T) -> Result<(), T::Error> {
+        tokenizer.tokenize_list(|tokenizer| {
+            let fields = normalize_bounds(self.start_field, self.end_field, 0, O::FIELD_COUNT);
+            for field in fields {
+                self.object.tokenize_field(field, tokenizer)?;
+            }
+            Ok(())
+        })
+    }
+}
+
+enum GetResult<'tper> {
+    Ace(ObjectSlice<'tper, Ace>),
+    Authority(ObjectSlice<'tper, Authority>),
+    CPin(ObjectSlice<'tper, CPin>),
+    KAes256(ObjectSlice<'tper, KAes256>),
+    LockingRange(ObjectSlice<'tper, LockingRange>),
+    MbrControl(ObjectSlice<'tper, MbrControl>),
+    SecurityProvider(ObjectSlice<'tper, SecurityProviderObj>),
+    TableDesc(ObjectSlice<'tper, TableDesc>),
+    Bytes(Bytes),
+}
+
+impl Tokenize for GetResult<'_> {
+    fn tokenize<T: Tokenizer>(&self, tokenizer: &mut T) -> Result<(), T::Error> {
+        tokenizer.tokenize_list(|tokenizer| match self {
+            GetResult::Ace(value) => value.tokenize(tokenizer),
+            GetResult::Authority(value) => value.tokenize(tokenizer),
+            GetResult::CPin(value) => value.tokenize(tokenizer),
+            GetResult::KAes256(value) => value.tokenize(tokenizer),
+            GetResult::LockingRange(value) => value.tokenize(tokenizer),
+            GetResult::MbrControl(value) => value.tokenize(tokenizer),
+            GetResult::SecurityProvider(value) => value.tokenize(tokenizer),
+            GetResult::TableDesc(value) => value.tokenize(tokenizer),
+            GetResult::Bytes(value) => value.tokenize(tokenizer),
+        })
+    }
+}
+
+fn unmap_bounds<T>(start: Option<T>, end: Option<T>) -> (Bound<T>, Bound<T>) {
+    let start = match start {
+        None => Bound::Unbounded,
+        Some(x) => Bound::Included(x),
+    };
+    let end = match end {
+        None => Bound::Unbounded,
+        Some(x) => Bound::Included(x),
+    };
+    (start, end)
+}
+
+fn normalize_bounds<T: Add<T, Output = T> + From<u8>>(start: Bound<T>, end: Bound<T>, min: T, max: T) -> Range<T> {
+    let start = match start {
+        Bound::Included(x) => x,
+        Bound::Excluded(x) => x + T::from(1u8),
+        Bound::Unbounded => min,
+    };
+
+    let end = match end {
+        Bound::Included(x) => x + T::from(1u8),
+        Bound::Excluded(x) => x,
+        Bound::Unbounded => max,
+    };
+
+    start..end
 }

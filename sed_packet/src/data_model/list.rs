@@ -28,3 +28,16 @@ where
             .map(|_| items)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::token::{FromTokens, ToTokens};
+
+    #[test]
+    fn tokenize() {
+        let tokens = [0xF0, 1, 2, 3, 0xF1];
+        let value = vec![1u8, 2u8, 3u8];
+        assert_eq!(value.to_tokens(), Ok(tokens.into()));
+        assert_eq!(Vec::<u8>::from_tokens(&tokens), Ok(value));
+    }
+}

@@ -10,3 +10,4 @@ thiserror.workspace = true
 
 [dev-dependencies]
 rstest.workspace = true
+googletest.workspace = true

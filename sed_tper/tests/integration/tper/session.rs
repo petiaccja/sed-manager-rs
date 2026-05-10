@@ -4,6 +4,7 @@ use googletest::{assert_that, matchers::*};
 use sed_packet::discovery::LockingDescriptor;
 use sed_spec::{
     methods::{MethodStatus, Properties},
+    objects::{CPin, CPinRefExt},
     preconfig::{
         core::shared::{self, method_id},
         opal_2::{
@@ -70,10 +71,7 @@ async fn authenticate(_with_tracing: WithTracing) {
         session.authenticate(admin::authority::SID, None).await,
         err(eq(&Error::MethodCallFailed(MethodStatus::NotAuthorized)))
     );
-    assert_that!(
-        session.authenticate(admin::authority::SID, Some(INITIAL_SID_PASSWORD.as_bytes().into())).await,
-        ok(eq(&()))
-    );
+    assert_that!(session.authenticate(admin::authority::SID, Some(INITIAL_SID_PASSWORD)).await, ok(eq(&())));
     let _ = session.close().await;
     let _ = protocol.await;
 }
@@ -90,6 +88,40 @@ async fn gen_key(_with_tracing: WithTracing) {
     controller.spawn(session_id, Properties::ASSUMED);
     let session = Session::from_started(session_id, controller);
     assert_that!(session.gen_key(locking::k_aes_256::GLOBAL_RANGE_KEY, None, None).await, ok(eq(&())));
+    let _ = session.close().await;
+    let _ = protocol.await;
+}
+
+#[instrument]
+#[rstest::rstest]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn get_field(_with_tracing: WithTracing) {
+    let device = Arc::new(VirtualDevice::new());
+    let session_id = device.insert_session(1, sp::ADMIN, None).unwrap();
+    let (protocol, controller) = Protocol::new(BASE_COM_ID, 0, device.clone());
+    let protocol = tokio::spawn(protocol.run());
+
+    controller.spawn(session_id, Properties::ASSUMED);
+    let session = Session::from_started(session_id, controller);
+    assert_that!(session.get_field(admin::c_pin::MSID.pin()).await, ok(eq(&INITIAL_SID_PASSWORD)));
+    let _ = session.close().await;
+    let _ = protocol.await;
+}
+
+#[instrument]
+#[rstest::rstest]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn get_object(_with_tracing: WithTracing) {
+    let device = Arc::new(VirtualDevice::new());
+    let session_id = device.insert_session(1, sp::ADMIN, None).unwrap();
+    let (protocol, controller) = Protocol::new(BASE_COM_ID, 0, device.clone());
+    let protocol = tokio::spawn(protocol.run());
+
+    controller.spawn(session_id, Properties::ASSUMED);
+    let session = Session::from_started(session_id, controller);
+    let c_pin_msid = session.get_object::<CPin>(admin::c_pin::MSID, ..).await.unwrap();
+    assert_that!(c_pin_msid.uid, some(eq(admin::c_pin::MSID)));
+    assert_that!(c_pin_msid.pin, some(eq(&INITIAL_SID_PASSWORD)));
     let _ = session.close().await;
     let _ = protocol.await;
 }

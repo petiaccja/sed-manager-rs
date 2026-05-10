@@ -19,6 +19,7 @@ pub struct Locking {
     pub mbr_control: Table<MbrControl>,
     pub table: Table<TableDesc>,
     pub mbr: Vec<u8>,
+    pub data_store: Vec<Vec<u8>>,
 }
 
 impl SecurityProvider for Locking {
@@ -76,6 +77,14 @@ impl SecurityProvider for Locking {
 
     fn sp(&self) -> Option<&Table<SecurityProviderObj>> {
         None
+    }
+
+    fn mbr(&self) -> Option<&Vec<u8>> {
+        Some(&self.mbr)
+    }
+
+    fn data_store(&self, index: usize) -> Option<&Vec<u8>> {
+        self.data_store.get(index)
     }
 
     fn as_any(&self) -> &dyn Any {

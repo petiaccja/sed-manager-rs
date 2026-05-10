@@ -1,12 +1,12 @@
 use sed_packet::{ObjectUid, Uid};
 
-use sed_spec_macros::{DetokenizeStruct, FieldList, Object, TokenizeStruct};
+use sed_spec_macros::{DetokenizeStruct, FieldList, Object, TokenizeField, TokenizeStruct};
 
 use crate::objects::{ColumnRef, TableDescRef, TemplateRef};
 use crate::preconfig::core::shared::table_id;
 use crate::types::TableKind;
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Object, TokenizeStruct, DetokenizeStruct, FieldList)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Object, TokenizeStruct, DetokenizeStruct, FieldList, TokenizeField)]
 #[object(table=table_id::TABLE)]
 pub struct TableDesc {
     pub uid: Option<TableDescRef>,
