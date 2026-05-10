@@ -104,7 +104,7 @@ impl Object {
                 pub const #ident : ObjectRef<{THIS_TABLE.to_u64()}> = ObjectRef::new(#base_hex);
             }),
             Object::Range { count, step, .. } => Ok(parse_quote! {
-                pub const #ident : ObjectRange<{THIS_TABLE.to_u64()}> = ObjectRange {
+                pub const #ident : UidRange<ObjectRef<{THIS_TABLE.to_u64()}>> = UidRange {
                     start: ObjectRef::new(#base_hex),
                     end: ObjectRef::new(#base_hex + #count * #step),
                     step: #step as u32,
@@ -229,7 +229,7 @@ impl Table {
 
         Ok(parse_quote! {
             pub mod #mod_name {
-                use ::sed_packet::{TableRef, ObjectRef, ObjectRange};
+                use ::sed_packet::{TableRef, ObjectRef, UidRange};
 
                 const THIS_TABLE : TableRef = super::super::super::core::shared::table_id::#table_ref;
 

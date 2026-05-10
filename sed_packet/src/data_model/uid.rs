@@ -86,6 +86,30 @@ impl Uid {
             None
         }
     }
+
+    pub const fn next_table(&self, offset: u32) -> Option<Self> {
+        if self.is_table() {
+            let table = match self.table + offset {
+                x @ 0 => x + 1, // Behave the same way as an addition.
+                x => x,
+            };
+            Some(Self { table, object: 0 })
+        } else {
+            None
+        }
+    }
+
+    pub const fn previous_table(&self, offset: u32) -> Option<Self> {
+        if self.is_table() {
+            let table = match self.table - offset {
+                x @ 0 => x - 1, // Behave the same way as an underflow.
+                x => x,
+            };
+            Some(Self { table, object: 0 })
+        } else {
+            None
+        }
+    }
 }
 
 impl Tokenize for Uid {
@@ -201,5 +225,20 @@ mod tests {
     #[case(Uid::new(0x0000_0001_0000_0000), 1, None)]
     fn previous_object(#[case] lhs: Uid, #[case] rhs: u32, #[case] expected: Option<Uid>) {
         assert_eq!(lhs.previous_object(rhs), expected);
+    }
+
+    #[rstest]
+    #[case(Uid::new(0x0000_0001_0000_0000), 1, Some(Uid::new(0x0000_0002_0000_0000)))]
+    #[case(Uid::new(0x0000_0001_0000_0001), 1, None)]
+    fn next_table(#[case] lhs: Uid, #[case] rhs: u32, #[case] expected: Option<Uid>) {
+        assert_eq!(lhs.next_table(rhs), expected);
+    }
+
+    #[rstest]
+    #[case(Uid::new(0x0000_0003_0000_0000), 1, Some(Uid::new(0x0000_0002_0000_0000)))]
+    #[case(Uid::new(0x0000_0003_0000_0001), 1, None)]
+    #[case(Uid::new(0x0000_0000_0000_0000), 1, None)]
+    fn previous_table(#[case] lhs: Uid, #[case] rhs: u32, #[case] expected: Option<Uid>) {
+        assert_eq!(lhs.previous_table(rhs), expected);
     }
 }

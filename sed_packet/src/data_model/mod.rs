@@ -11,7 +11,7 @@ pub mod bytes;
 pub mod ignore;
 pub mod max_bytes;
 pub mod named;
-pub mod object_range;
 pub mod object_ref;
 pub mod table_ref;
 pub mod uid;
+pub mod uid_range;

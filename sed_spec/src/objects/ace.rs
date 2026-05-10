@@ -205,14 +205,14 @@ where
 
 #[cfg(test)]
 mod tests {
+    use std::num::NonZero;
+
     use super::*;
 
-    use crate::preconfig::opal_2::locking::authority;
-
-    const ALICE: AuthorityRef = authority::USER.get(1).unwrap();
-    const BOB: AuthorityRef = authority::USER.get(2).unwrap();
-    const CHARLIE: AuthorityRef = authority::USER.get(3).unwrap();
-    const DAVE: AuthorityRef = authority::USER.get(4).unwrap();
+    const ALICE: AuthorityRef = AuthorityRef::from_half(NonZero::new(1).unwrap());
+    const BOB: AuthorityRef = AuthorityRef::from_half(NonZero::new(2).unwrap());
+    const CHARLIE: AuthorityRef = AuthorityRef::from_half(NonZero::new(3).unwrap());
+    const DAVE: AuthorityRef = AuthorityRef::from_half(NonZero::new(4).unwrap());
 
     #[test]
     fn eval_ace_expr_empty() {

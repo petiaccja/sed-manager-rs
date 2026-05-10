@@ -1,4 +1,5 @@
 use core::marker::PhantomData;
+use std::num::NonZero;
 use std::ops::{Add, AddAssign, Sub, SubAssign};
 
 use crate::data_model::table_ref::TableRef;
@@ -44,6 +45,10 @@ impl<const TABLE: u64> ObjectRef<TABLE> {
 
     pub const fn new(value: u64) -> Self {
         Self::try_new(value).expect("the UID does not refer to an object in this table")
+    }
+
+    pub const fn from_half(object: NonZero<u32>) -> Self {
+        Self::new(TABLE | object.get() as u64)
     }
 
     pub const fn to_u64(&self) -> u64 {
@@ -110,6 +115,7 @@ impl<const TABLE: u64> Detokenize for ObjectRef<TABLE> {
         Self::try_from(Uid::detokenize(detokenizer)?).map_err(|_| D::Error::message("the UID must refer to a table"))
     }
 }
+
 impl<const TABLE: u64> Add<u32> for ObjectRef<TABLE> {
     type Output = Self;
 
