@@ -142,13 +142,23 @@ impl Table {
     }
 
     fn generate_table_id(&self, mod_name: &Ident) -> Result<ItemMod, Error> {
-        let objects = self.0.iter().filter_map(|(name, object)| {
-            if let Object::Unique(_) = object {
-                let ident = to_const_ident(name);
-                let base_hex = object.base_hex();
-                Some(quote! { pub const #ident : TableRef = TableRef::new(#base_hex); })
-            } else {
-                None
+        let objects = self.0.iter().map(|(name, object)| {
+            let name = name.replace("{n}", "").replace("__", "_");
+            let ident = to_const_ident(&name);
+            let base_hex = object.base_hex();
+            match object {
+                Object::Unique(_) => {
+                    quote! { pub const #ident : TableRef = TableRef::new(#base_hex); }
+                }
+                Object::Range { count, step, .. } => {
+                    quote! {
+                        pub const #ident : UidRange<TableRef> = UidRange {
+                            start: TableRef::new(#base_hex),
+                            end: TableRef::new(#base_hex).add(#count as u32 * #step as u32),
+                            step: #step as u32,
+                        };
+                    }
+                }
             }
         });
 
@@ -158,7 +168,7 @@ impl Table {
 
         Ok(parse_quote! {
             pub mod #mod_name {
-                use ::sed_packet::{TableRef};
+                use ::sed_packet::{TableRef, UidRange};
 
                 #(#objects)*
 
