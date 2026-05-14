@@ -255,16 +255,7 @@ impl Session {
         } else if let Ok(ByteCellBlock { table, start_byte, end_byte }) =
             params.cell_block.clone().try_into_byte(invoking_id)
         {
-            let range = (
-                match start_byte {
-                    Some(value) => Bound::Included(value as usize),
-                    None => Bound::Unbounded,
-                },
-                match end_byte {
-                    Some(value) => Bound::Excluded(value as usize),
-                    None => Bound::Unbounded,
-                },
-            );
+            let range = unmap_bounds(start_byte.map(|x| x as usize), end_byte.map(|x| x as usize));
 
             let table = if table == table_id::MBR {
                 sp.mbr().ok_or(MethodStatus::InvalidParameter)

@@ -6,7 +6,7 @@ use sed_spec::{
     methods::{MethodStatus, Properties},
     objects::{CPin, CPinRefExt},
     preconfig::{
-        core::shared::{self, method_id},
+        core::shared::{self, method_id, table_id},
         opal_2::{
             admin::{self, sp},
             locking,
@@ -122,6 +122,22 @@ async fn get_object(_with_tracing: WithTracing) {
     let c_pin_msid = session.get_object::<CPin>(admin::c_pin::MSID, ..).await.unwrap();
     assert_that!(c_pin_msid.uid, some(eq(admin::c_pin::MSID)));
     assert_that!(c_pin_msid.pin, some(eq(&INITIAL_SID_PASSWORD)));
+    let _ = session.close().await;
+    let _ = protocol.await;
+}
+
+#[instrument]
+#[rstest::rstest]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn get_bytes(_with_tracing: WithTracing) {
+    let device = Arc::new(VirtualDevice::new());
+    let session_id = device.insert_session(1, sp::LOCKING, Some(locking::authority::ADMIN.get(0).unwrap())).unwrap();
+    let (protocol, controller) = Protocol::new(BASE_COM_ID, 0, device.clone());
+    let protocol = tokio::spawn(protocol.run());
+
+    controller.spawn(session_id, Properties::ASSUMED);
+    let session = Session::from_started(session_id, controller);
+    assert_that!(session.get_bytes(table_id::MBR, ..6).await, ok(len(eq(6))));
     let _ = session.close().await;
     let _ = protocol.await;
 }

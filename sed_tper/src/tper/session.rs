@@ -4,8 +4,8 @@ use sed_packet::session_id::SessionId;
 use sed_packet::token::{Command, Detokenize, Detokenizer, FromTokens, ToTokens};
 use sed_packet::{Field, FieldRef, Ignore, MaxBytes, Object, ObjectRef, TableRef, Uid};
 use sed_spec::methods::{
-    Activate, Authenticate, AuthenticateResult, CellBlock, GenKey, Get, GetAcl, MethodCall, MethodResult, MethodStatus,
-    Next, Random, Revert, RevertSp, SessionMethodParam as _, StartSession, SyncSession,
+    Activate, Authenticate, AuthenticateResult, CellBlock, GenKey, Get, GetAcl, GetBytesResult, MethodCall,
+    MethodResult, MethodStatus, Next, Random, Revert, RevertSp, SessionMethodParam as _, StartSession, SyncSession,
 };
 use sed_spec::objects::{AceRef, AuthorityRef, CredentialRef, MethodRef, SecurityProviderRef};
 use sed_spec::preconfig::core::shared::invoking_id::{SESSION_MANAGER, THIS_SP};
@@ -260,6 +260,29 @@ impl Session {
             .await
             .map_err(|_| Error::Closed)??;
         Ok(MethodResult::<WholeObjectParamList<Obj>>::from_tokens(&result_tokens)?.0?.object)
+    }
+
+    /// Read a slice of a byte table.
+    ///
+    /// # Parameters
+    /// - `table`: must be a reference to a byte table, object tables will fail.
+    /// - `bytes`: the range of bytes to read. Unbounded ranges will read from
+    ///   the start of the table or until the end of the table.
+    #[instrument(level = "info", skip(self), err)]
+    pub async fn get_bytes(
+        &self,
+        table: TableRef,
+        bytes: impl RangeBounds<u64> + core::fmt::Debug,
+    ) -> Result<Vec<u8>, Error> {
+        let cell_block = CellBlock::bytes_with_table(table, bytes);
+        let parameters = Get { cell_block };
+        let call = parameters.to_call(table.into());
+        let result_tokens = self
+            .controller
+            .call(self.session_id, call.to_tokens().expect("invalid method call"))
+            .await
+            .map_err(|_| Error::Closed)??;
+        Ok(MethodResult::<GetBytesResult>::from_tokens(&result_tokens)?.0?.result.0)
     }
 
     /// Iterate over objects in a table.
