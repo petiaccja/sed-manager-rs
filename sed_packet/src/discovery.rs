@@ -4,7 +4,7 @@
 //L-----------------------------------------------------------------------------
 
 use core::time::Duration;
-use std::marker::PhantomData;
+use std::{marker::PhantomData, ops::Range};
 
 use sorbit::{
     Deserialize, Serialize,
@@ -14,28 +14,6 @@ use sorbit::{
 };
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u16)]
-#[sorbit(byte_order=big_endian)]
-pub enum FeatureCode {
-    TPer = 0x0001,
-    Locking = 0x0002,
-    Geometry = 0x0003,
-    DataRemoval = 0x0404,
-    BlockSIDAuth = 0x0402,
-    AdditionalDataStoreTables = 0x0202,
-    Enterprise = 0x0100,
-    OpalV1 = 0x0200,
-    OpalV2 = 0x0203,
-    Opalite = 0x0301,
-    PyriteV1 = 0x0302,
-    PyriteV2 = 0x0303,
-    Ruby = 0x0304,
-    KeyPerIO = 0x0305,
-    #[sorbit(catch_all)]
-    Unrecognized(u16),
-}
-
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
 #[sorbit(byte_order=big_endian)]
 pub enum OwnerPasswordState {
@@ -43,19 +21,39 @@ pub enum OwnerPasswordState {
     VendorSpecified = 0xFF,
 }
 
+/// The shared properties of feature descriptors in a discovery message.
 pub trait Feature {
-    fn feature_code(&self) -> FeatureCode;
-    fn version(&self) -> u8;
-}
+    /// The name of the feature (i.e. Opal 2.0).
+    fn name(&self) -> &'static str;
 
-pub trait SecuritySubsystemClass: Feature {
-    fn base_com_id(&self) -> u16;
-    fn num_com_ids(&self) -> u16;
-    fn base_com_id_p3(&self) -> Option<u16> {
+    /// The (major) version of the feature descriptor (not the feature).
+    fn version(&self) -> u8;
+
+    /// The minor version of the feature descriptor. Zero if not present.
+    fn minor_version(&self) -> u8 {
+        0
+    }
+
+    /// Additional properties in case the feature is an SSC.
+    fn as_ssc(&self) -> Option<&dyn SecuritySubsystemClass> {
         None
     }
-    fn num_com_ids_p3(&self) -> Option<u16> {
-        None
+}
+
+/// The shared properties of security subsystem classes.
+pub trait SecuritySubsystemClass: Feature {
+    /// The range of statically allocated ComIDs for protocol 0x01.
+    ///
+    /// The range starts at the base ComID and has a length equal to the number
+    /// of statically allocated ComIDs specified by the feature descriptor.
+    fn static_com_ids_p1(&self) -> Range<u16>;
+
+    /// The range of statically allocated ComIDs for protocol 0x02.
+    ///
+    /// The range starts at the base ComID and has a length equal to the number
+    /// of statically allocated ComIDs specified by the feature descriptor.
+    fn static_com_ids_p3(&self) -> Range<u16> {
+        0..0
     }
 }
 
@@ -80,6 +78,16 @@ pub struct TperDescriptor {
     pub async_supported: bool,
     #[sorbit(bit_field=_0, bits=0)]
     pub sync_supported: bool,
+}
+
+impl Feature for TperDescriptor {
+    fn name(&self) -> &'static str {
+        "TPer"
+    }
+
+    fn version(&self) -> u8 {
+        0x01
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -109,6 +117,16 @@ pub struct LockingDescriptor {
     pub locking_supported: bool,
 }
 
+impl Feature for LockingDescriptor {
+    fn name(&self) -> &'static str {
+        "Locking"
+    }
+
+    fn version(&self) -> u8 {
+        0x01
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[sorbit(len=30, byte_order=big_endian)]
 pub struct GeometryDescriptor {
@@ -124,6 +142,16 @@ pub struct GeometryDescriptor {
     pub logical_block_size: u32,
     pub alignment_granularity: u64,
     pub lowest_aligned_lba: u64,
+}
+
+impl Feature for GeometryDescriptor {
+    fn name(&self) -> &'static str {
+        "Geometry"
+    }
+
+    fn version(&self) -> u8 {
+        0x01
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -178,6 +206,16 @@ pub struct DataRemovalDescriptor {
     pub removal_time: DataRemovalTime,
 }
 
+impl Feature for DataRemovalDescriptor {
+    fn name(&self) -> &'static str {
+        "Data removal"
+    }
+
+    fn version(&self) -> u8 {
+        0x02
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[sorbit(len = 14)]
 pub struct BlockSIDAuthDescriptor {
@@ -198,6 +236,16 @@ pub struct BlockSIDAuthDescriptor {
     pub hw_reset_unblocks: bool,
 }
 
+impl Feature for BlockSIDAuthDescriptor {
+    fn name(&self) -> &'static str {
+        "Block SID auth."
+    }
+
+    fn version(&self) -> u8 {
+        self.version
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[sorbit(len = 14)]
 pub struct AdditionalDataStoreTablesDescriptor {
@@ -215,6 +263,20 @@ pub struct AdditionalDataStoreTablesDescriptor {
     pub table_size_alignment: u32,
 }
 
+impl Feature for AdditionalDataStoreTablesDescriptor {
+    fn name(&self) -> &'static str {
+        "Add. DataStore tables"
+    }
+
+    fn version(&self) -> u8 {
+        0x02
+    }
+
+    fn minor_version(&self) -> u8 {
+        self.minor_version
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[sorbit(len = 18)]
 pub struct EnterpriseDescriptor {
@@ -229,6 +291,22 @@ pub struct EnterpriseDescriptor {
     pub no_range_crossing: bool,
 }
 
+impl Feature for EnterpriseDescriptor {
+    fn name(&self) -> &'static str {
+        "Enterprise"
+    }
+
+    fn version(&self) -> u8 {
+        self.version
+    }
+}
+
+impl SecuritySubsystemClass for EnterpriseDescriptor {
+    fn static_com_ids_p1(&self) -> Range<u16> {
+        self.base_com_id..self.base_com_id + self.num_com_ids
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[sorbit(len = 18)]
 pub struct OpalV1Descriptor {
@@ -241,6 +319,22 @@ pub struct OpalV1Descriptor {
     pub num_com_ids: u16,
     #[sorbit(bit_field = _0, repr = u8, bits=0)]
     pub no_range_crossing: bool,
+}
+
+impl Feature for OpalV1Descriptor {
+    fn name(&self) -> &'static str {
+        "Opal 1.0"
+    }
+
+    fn version(&self) -> u8 {
+        self.version
+    }
+}
+
+impl SecuritySubsystemClass for OpalV1Descriptor {
+    fn static_com_ids_p1(&self) -> Range<u16> {
+        self.base_com_id..self.base_com_id + self.num_com_ids
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -261,6 +355,22 @@ pub struct OpalV2Descriptor {
     pub reverted_owner_pw: OwnerPasswordState,
 }
 
+impl Feature for OpalV2Descriptor {
+    fn name(&self) -> &'static str {
+        "Opal 2.0"
+    }
+
+    fn version(&self) -> u8 {
+        self.version
+    }
+}
+
+impl SecuritySubsystemClass for OpalV2Descriptor {
+    fn static_com_ids_p1(&self) -> Range<u16> {
+        self.base_com_id..self.base_com_id + self.num_com_ids
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[sorbit(len = 18)]
 pub struct OpaliteDescriptor {
@@ -274,6 +384,22 @@ pub struct OpaliteDescriptor {
     #[sorbit(offset = 11)]
     pub initial_owner_pw: OwnerPasswordState,
     pub reverted_owner_pw: OwnerPasswordState,
+}
+
+impl Feature for OpaliteDescriptor {
+    fn name(&self) -> &'static str {
+        "Opalite"
+    }
+
+    fn version(&self) -> u8 {
+        self.version
+    }
+}
+
+impl SecuritySubsystemClass for OpaliteDescriptor {
+    fn static_com_ids_p1(&self) -> Range<u16> {
+        self.base_com_id..self.base_com_id + self.num_com_ids
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -291,6 +417,22 @@ pub struct PyriteV1Descriptor {
     pub reverted_owner_pw: OwnerPasswordState,
 }
 
+impl Feature for PyriteV1Descriptor {
+    fn name(&self) -> &'static str {
+        "Pyrite 1.0"
+    }
+
+    fn version(&self) -> u8 {
+        self.version
+    }
+}
+
+impl SecuritySubsystemClass for PyriteV1Descriptor {
+    fn static_com_ids_p1(&self) -> Range<u16> {
+        self.base_com_id..self.base_com_id + self.num_com_ids
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[sorbit(len = 18)]
 pub struct PyriteV2Descriptor {
@@ -304,6 +446,22 @@ pub struct PyriteV2Descriptor {
     #[sorbit(offset = 11)]
     pub initial_owner_pw: OwnerPasswordState,
     pub reverted_owner_pw: OwnerPasswordState,
+}
+
+impl Feature for PyriteV2Descriptor {
+    fn name(&self) -> &'static str {
+        "Pyrite 2.0"
+    }
+
+    fn version(&self) -> u8 {
+        self.version
+    }
+}
+
+impl SecuritySubsystemClass for PyriteV2Descriptor {
+    fn static_com_ids_p1(&self) -> Range<u16> {
+        self.base_com_id..self.base_com_id + self.num_com_ids
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -322,6 +480,22 @@ pub struct RubyDescriptor {
     pub num_locking_users_supported: u16,
     pub initial_owner_pw: OwnerPasswordState,
     pub reverted_owner_pw: OwnerPasswordState,
+}
+
+impl Feature for RubyDescriptor {
+    fn name(&self) -> &'static str {
+        "Ruby"
+    }
+
+    fn version(&self) -> u8 {
+        self.version
+    }
+}
+
+impl SecuritySubsystemClass for RubyDescriptor {
+    fn static_com_ids_p1(&self) -> Range<u16> {
+        self.base_com_id..self.base_com_id + self.num_com_ids
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -390,11 +564,40 @@ pub struct KeyPerIODescriptor {
     pub get_nonce_cmd_nonce_len: u8,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+impl Feature for KeyPerIODescriptor {
+    fn name(&self) -> &'static str {
+        "Key per I/O"
+    }
+
+    fn version(&self) -> u8 {
+        self.version
+    }
+}
+
+impl SecuritySubsystemClass for KeyPerIODescriptor {
+    fn static_com_ids_p1(&self) -> Range<u16> {
+        self.base_com_id_p1..self.base_com_id_p1 + self.num_com_ids_p1
+    }
+
+    fn static_com_ids_p3(&self) -> Range<u16> {
+        self.base_com_id_p3..self.base_com_id_p3 + self.num_com_ids_p3
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UnrecognizedDescriptor {
-    pub feature_code: u16,
     pub version: u8,
     pub length: u8,
+}
+
+impl Feature for UnrecognizedDescriptor {
+    fn name(&self) -> &'static str {
+        "Unrecognized"
+    }
+
+    fn version(&self) -> u8 {
+        self.version
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -416,8 +619,129 @@ pub enum FeatureDescriptor {
     Ruby(RubyDescriptor) = 0x0304,
     KeyPerIO(KeyPerIODescriptor) = 0x0305,
     #[sorbit(catch_all)]
-    Unrecognized(u16),
+    Unrecognized(u16, UnrecognizedDescriptor),
 }
+
+impl Feature for FeatureDescriptor {
+    fn name(&self) -> &'static str {
+        match self {
+            FeatureDescriptor::TPer(desc) => desc.name(),
+            FeatureDescriptor::Locking(desc) => desc.name(),
+            FeatureDescriptor::Geometry(desc) => desc.name(),
+            FeatureDescriptor::DataRemoval(desc) => desc.name(),
+            FeatureDescriptor::BlockSIDAuth(desc) => desc.name(),
+            FeatureDescriptor::AdditionalDataStoreTables(desc) => desc.name(),
+            FeatureDescriptor::Enterprise(desc) => desc.name(),
+            FeatureDescriptor::OpalV1(desc) => desc.name(),
+            FeatureDescriptor::OpalV2(desc) => desc.name(),
+            FeatureDescriptor::Opalite(desc) => desc.name(),
+            FeatureDescriptor::PyriteV1(desc) => desc.name(),
+            FeatureDescriptor::PyriteV2(desc) => desc.name(),
+            FeatureDescriptor::Ruby(desc) => desc.name(),
+            FeatureDescriptor::KeyPerIO(desc) => desc.name(),
+            FeatureDescriptor::Unrecognized(_, desc) => desc.name(),
+        }
+    }
+
+    fn version(&self) -> u8 {
+        match self {
+            FeatureDescriptor::TPer(desc) => desc.version(),
+            FeatureDescriptor::Locking(desc) => desc.version(),
+            FeatureDescriptor::Geometry(desc) => desc.version(),
+            FeatureDescriptor::DataRemoval(desc) => desc.version(),
+            FeatureDescriptor::BlockSIDAuth(desc) => desc.version(),
+            FeatureDescriptor::AdditionalDataStoreTables(desc) => desc.version(),
+            FeatureDescriptor::Enterprise(desc) => desc.version(),
+            FeatureDescriptor::OpalV1(desc) => desc.version(),
+            FeatureDescriptor::OpalV2(desc) => desc.version(),
+            FeatureDescriptor::Opalite(desc) => desc.version(),
+            FeatureDescriptor::PyriteV1(desc) => desc.version(),
+            FeatureDescriptor::PyriteV2(desc) => desc.version(),
+            FeatureDescriptor::Ruby(desc) => desc.version(),
+            FeatureDescriptor::KeyPerIO(desc) => desc.version(),
+            FeatureDescriptor::Unrecognized(_, desc) => desc.version(),
+        }
+    }
+
+    fn minor_version(&self) -> u8 {
+        match self {
+            FeatureDescriptor::TPer(desc) => desc.minor_version(),
+            FeatureDescriptor::Locking(desc) => desc.minor_version(),
+            FeatureDescriptor::Geometry(desc) => desc.minor_version(),
+            FeatureDescriptor::DataRemoval(desc) => desc.minor_version(),
+            FeatureDescriptor::BlockSIDAuth(desc) => desc.minor_version(),
+            FeatureDescriptor::AdditionalDataStoreTables(desc) => desc.minor_version(),
+            FeatureDescriptor::Enterprise(desc) => desc.minor_version(),
+            FeatureDescriptor::OpalV1(desc) => desc.minor_version(),
+            FeatureDescriptor::OpalV2(desc) => desc.minor_version(),
+            FeatureDescriptor::Opalite(desc) => desc.minor_version(),
+            FeatureDescriptor::PyriteV1(desc) => desc.minor_version(),
+            FeatureDescriptor::PyriteV2(desc) => desc.minor_version(),
+            FeatureDescriptor::Ruby(desc) => desc.minor_version(),
+            FeatureDescriptor::KeyPerIO(desc) => desc.minor_version(),
+            FeatureDescriptor::Unrecognized(_, desc) => desc.minor_version(),
+        }
+    }
+
+    fn as_ssc(&self) -> Option<&dyn SecuritySubsystemClass> {
+        match self {
+            FeatureDescriptor::TPer(desc) => desc.as_ssc(),
+            FeatureDescriptor::Locking(desc) => desc.as_ssc(),
+            FeatureDescriptor::Geometry(desc) => desc.as_ssc(),
+            FeatureDescriptor::DataRemoval(desc) => desc.as_ssc(),
+            FeatureDescriptor::BlockSIDAuth(desc) => desc.as_ssc(),
+            FeatureDescriptor::AdditionalDataStoreTables(desc) => desc.as_ssc(),
+            FeatureDescriptor::Enterprise(desc) => desc.as_ssc(),
+            FeatureDescriptor::OpalV1(desc) => desc.as_ssc(),
+            FeatureDescriptor::OpalV2(desc) => desc.as_ssc(),
+            FeatureDescriptor::Opalite(desc) => desc.as_ssc(),
+            FeatureDescriptor::PyriteV1(desc) => desc.as_ssc(),
+            FeatureDescriptor::PyriteV2(desc) => desc.as_ssc(),
+            FeatureDescriptor::Ruby(desc) => desc.as_ssc(),
+            FeatureDescriptor::KeyPerIO(desc) => desc.as_ssc(),
+            FeatureDescriptor::Unrecognized(_, desc) => desc.as_ssc(),
+        }
+    }
+}
+
+macro_rules! impl_convert {
+    ($desc:ty, $variant:ident) => {
+        impl TryFrom<FeatureDescriptor> for $desc {
+            type Error = FeatureDescriptor;
+            fn try_from(value: FeatureDescriptor) -> Result<Self, Self::Error> {
+                match value {
+                    FeatureDescriptor::$variant(desc) => Ok(desc),
+                    _ => Err(value),
+                }
+            }
+        }
+
+        impl<'src> TryFrom<&'src FeatureDescriptor> for &'src $desc {
+            type Error = &'src FeatureDescriptor;
+            fn try_from(value: &'src FeatureDescriptor) -> Result<Self, Self::Error> {
+                match value {
+                    FeatureDescriptor::$variant(desc) => Ok(desc),
+                    _ => Err(value),
+                }
+            }
+        }
+    };
+}
+
+impl_convert!(TperDescriptor, TPer);
+impl_convert!(LockingDescriptor, Locking);
+impl_convert!(GeometryDescriptor, Geometry);
+impl_convert!(DataRemovalDescriptor, DataRemoval);
+impl_convert!(BlockSIDAuthDescriptor, BlockSIDAuth);
+impl_convert!(AdditionalDataStoreTablesDescriptor, AdditionalDataStoreTables);
+impl_convert!(OpalV2Descriptor, OpalV2);
+impl_convert!(EnterpriseDescriptor, Enterprise);
+impl_convert!(OpalV1Descriptor, OpalV1);
+impl_convert!(OpaliteDescriptor, Opalite);
+impl_convert!(PyriteV1Descriptor, PyriteV1);
+impl_convert!(PyriteV2Descriptor, PyriteV2);
+impl_convert!(RubyDescriptor, Ruby);
+impl_convert!(KeyPerIODescriptor, KeyPerIO);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Discovery {
@@ -443,11 +767,11 @@ impl Discovery {
     }
 
     pub fn common_features(&self) -> impl Iterator<Item = &FeatureDescriptor> {
-        self.feature_descriptors.iter().filter(|desc| desc.security_subsystem_class().is_none())
+        self.feature_descriptors.iter().filter(|desc| desc.as_ssc().is_none())
     }
 
     pub fn ssc_features(&self) -> impl Iterator<Item = &dyn SecuritySubsystemClass> {
-        self.feature_descriptors.iter().filter_map(|desc| desc.security_subsystem_class())
+        self.feature_descriptors.iter().filter_map(|desc| desc.as_ssc())
     }
 
     pub fn primary_ssc(&self) -> Option<&dyn SecuritySubsystemClass> {
@@ -519,171 +843,11 @@ impl Deserialize for Discovery {
             let byte_count = length - 44;
             let feature_descriptors = collection::deserialize_items_by_byte_count(deserializer, &byte_count)?;
             let mut discovery = Self { major_version, minor_version, vendor_unique, feature_descriptors };
-            discovery.feature_descriptors.retain(|desc| !matches!(desc, FeatureDescriptor::Unrecognized(0)));
+            discovery.feature_descriptors.retain(|desc| !matches!(desc, FeatureDescriptor::Unrecognized(0, _)));
             Ok(discovery)
         })
     }
 }
-
-macro_rules! impl_feature {
-    ($desc:path, $feature_code:expr, $version:expr) => {
-        impl Feature for $desc {
-            fn feature_code(&self) -> FeatureCode {
-                $feature_code
-            }
-            fn version(&self) -> u8 {
-                $version
-            }
-        }
-    };
-}
-
-macro_rules! impl_security_subsystem_class {
-    ($desc:path) => {
-        impl SecuritySubsystemClass for $desc {
-            fn base_com_id(&self) -> u16 {
-                self.base_com_id
-            }
-            fn num_com_ids(&self) -> u16 {
-                self.num_com_ids
-            }
-        }
-    };
-}
-
-impl_feature!(TperDescriptor, FeatureCode::TPer, 1);
-impl_feature!(LockingDescriptor, FeatureCode::Locking, 1);
-impl_feature!(GeometryDescriptor, FeatureCode::Geometry, 1);
-impl_feature!(DataRemovalDescriptor, FeatureCode::DataRemoval, 1);
-impl_feature!(BlockSIDAuthDescriptor, FeatureCode::BlockSIDAuth, 1);
-impl_feature!(AdditionalDataStoreTablesDescriptor, FeatureCode::AdditionalDataStoreTables, 1);
-impl_feature!(EnterpriseDescriptor, FeatureCode::Enterprise, 1);
-impl_feature!(KeyPerIODescriptor, FeatureCode::KeyPerIO, 1);
-impl_feature!(OpalV1Descriptor, FeatureCode::OpalV1, 1);
-impl_feature!(OpalV2Descriptor, FeatureCode::OpalV2, 1);
-impl_feature!(OpaliteDescriptor, FeatureCode::Opalite, 1);
-impl_feature!(PyriteV1Descriptor, FeatureCode::PyriteV1, 1);
-impl_feature!(PyriteV2Descriptor, FeatureCode::PyriteV2, 1);
-impl_feature!(RubyDescriptor, FeatureCode::Ruby, 1);
-
-impl_security_subsystem_class!(EnterpriseDescriptor);
-impl_security_subsystem_class!(OpalV1Descriptor);
-impl_security_subsystem_class!(OpalV2Descriptor);
-impl_security_subsystem_class!(OpaliteDescriptor);
-impl_security_subsystem_class!(PyriteV1Descriptor);
-impl_security_subsystem_class!(PyriteV2Descriptor);
-impl_security_subsystem_class!(RubyDescriptor);
-
-impl SecuritySubsystemClass for KeyPerIODescriptor {
-    fn base_com_id(&self) -> u16 {
-        self.base_com_id_p1
-    }
-    fn num_com_ids(&self) -> u16 {
-        self.num_com_ids_p1
-    }
-    fn base_com_id_p3(&self) -> Option<u16> {
-        Some(self.base_com_id_p3)
-    }
-    fn num_com_ids_p3(&self) -> Option<u16> {
-        Some(self.num_com_ids_p3)
-    }
-}
-
-impl Feature for FeatureDescriptor {
-    fn feature_code(&self) -> FeatureCode {
-        match self {
-            FeatureDescriptor::TPer(desc) => desc.feature_code(),
-            FeatureDescriptor::Locking(desc) => desc.feature_code(),
-            FeatureDescriptor::Geometry(desc) => desc.feature_code(),
-            FeatureDescriptor::DataRemoval(desc) => desc.feature_code(),
-            FeatureDescriptor::BlockSIDAuth(desc) => desc.feature_code(),
-            FeatureDescriptor::AdditionalDataStoreTables(desc) => desc.feature_code(),
-            FeatureDescriptor::Enterprise(desc) => desc.feature_code(),
-            FeatureDescriptor::OpalV1(desc) => desc.feature_code(),
-            FeatureDescriptor::OpalV2(desc) => desc.feature_code(),
-            FeatureDescriptor::Opalite(desc) => desc.feature_code(),
-            FeatureDescriptor::PyriteV1(desc) => desc.feature_code(),
-            FeatureDescriptor::PyriteV2(desc) => desc.feature_code(),
-            FeatureDescriptor::Ruby(desc) => desc.feature_code(),
-            FeatureDescriptor::KeyPerIO(desc) => desc.feature_code(),
-            FeatureDescriptor::Unrecognized(code) => FeatureCode::Unrecognized(*code),
-        }
-    }
-    fn version(&self) -> u8 {
-        match self {
-            FeatureDescriptor::TPer(desc) => desc.version(),
-            FeatureDescriptor::Locking(desc) => desc.version(),
-            FeatureDescriptor::Geometry(desc) => desc.version(),
-            FeatureDescriptor::DataRemoval(desc) => desc.version(),
-            FeatureDescriptor::BlockSIDAuth(desc) => desc.version(),
-            FeatureDescriptor::AdditionalDataStoreTables(desc) => desc.version(),
-            FeatureDescriptor::Enterprise(desc) => desc.version(),
-            FeatureDescriptor::OpalV1(desc) => desc.version(),
-            FeatureDescriptor::OpalV2(desc) => desc.version(),
-            FeatureDescriptor::Opalite(desc) => desc.version(),
-            FeatureDescriptor::PyriteV1(desc) => desc.version(),
-            FeatureDescriptor::PyriteV2(desc) => desc.version(),
-            FeatureDescriptor::Ruby(desc) => desc.version(),
-            FeatureDescriptor::KeyPerIO(desc) => desc.version(),
-            FeatureDescriptor::Unrecognized(_) => 0,
-        }
-    }
-}
-
-impl FeatureDescriptor {
-    pub fn security_subsystem_class(&self) -> Option<&dyn SecuritySubsystemClass> {
-        match self {
-            FeatureDescriptor::KeyPerIO(desc) => Some(desc as &dyn SecuritySubsystemClass),
-            FeatureDescriptor::Enterprise(desc) => Some(desc as &dyn SecuritySubsystemClass),
-            FeatureDescriptor::OpalV1(desc) => Some(desc as &dyn SecuritySubsystemClass),
-            FeatureDescriptor::OpalV2(desc) => Some(desc as &dyn SecuritySubsystemClass),
-            FeatureDescriptor::Opalite(desc) => Some(desc as &dyn SecuritySubsystemClass),
-            FeatureDescriptor::PyriteV1(desc) => Some(desc as &dyn SecuritySubsystemClass),
-            FeatureDescriptor::PyriteV2(desc) => Some(desc as &dyn SecuritySubsystemClass),
-            FeatureDescriptor::Ruby(desc) => Some(desc as &dyn SecuritySubsystemClass),
-            _ => None,
-        }
-    }
-}
-
-macro_rules! impl_desc_try_from {
-    ($desc:ty, $variant:ident) => {
-        impl TryFrom<FeatureDescriptor> for $desc {
-            type Error = FeatureDescriptor;
-            fn try_from(value: FeatureDescriptor) -> Result<Self, Self::Error> {
-                match value {
-                    FeatureDescriptor::$variant(desc) => Ok(desc),
-                    _ => Err(value),
-                }
-            }
-        }
-
-        impl<'src> TryFrom<&'src FeatureDescriptor> for &'src $desc {
-            type Error = &'src FeatureDescriptor;
-            fn try_from(value: &'src FeatureDescriptor) -> Result<Self, Self::Error> {
-                match value {
-                    FeatureDescriptor::$variant(desc) => Ok(desc),
-                    _ => Err(value),
-                }
-            }
-        }
-    };
-}
-
-impl_desc_try_from!(TperDescriptor, TPer);
-impl_desc_try_from!(LockingDescriptor, Locking);
-impl_desc_try_from!(GeometryDescriptor, Geometry);
-impl_desc_try_from!(DataRemovalDescriptor, DataRemoval);
-impl_desc_try_from!(BlockSIDAuthDescriptor, BlockSIDAuth);
-impl_desc_try_from!(AdditionalDataStoreTablesDescriptor, AdditionalDataStoreTables);
-impl_desc_try_from!(OpalV2Descriptor, OpalV2);
-impl_desc_try_from!(EnterpriseDescriptor, Enterprise);
-impl_desc_try_from!(OpalV1Descriptor, OpalV1);
-impl_desc_try_from!(OpaliteDescriptor, Opalite);
-impl_desc_try_from!(PyriteV1Descriptor, PyriteV1);
-impl_desc_try_from!(PyriteV2Descriptor, PyriteV2);
-impl_desc_try_from!(RubyDescriptor, Ruby);
-impl_desc_try_from!(KeyPerIODescriptor, KeyPerIO);
 
 fn removal_time(format_bit: bool, amount: u16) -> Option<Duration> {
     if amount == 0 {
@@ -709,28 +873,6 @@ impl DataRemovalTime {
     }
     pub fn vendor_erase(&self) -> Option<Duration> {
         removal_time(self.vendor_erase_unit, self.vendor_erase_amount)
-    }
-}
-
-impl core::fmt::Display for FeatureCode {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        match self {
-            FeatureCode::TPer => write!(f, "TPer"),
-            FeatureCode::Locking => write!(f, "Locking"),
-            FeatureCode::Geometry => write!(f, "Geometry"),
-            FeatureCode::DataRemoval => write!(f, "Data removal"),
-            FeatureCode::BlockSIDAuth => write!(f, "Block SID authentication"),
-            FeatureCode::AdditionalDataStoreTables => write!(f, "Additional DataStore tables"),
-            FeatureCode::Enterprise => write!(f, "Enterprise"),
-            FeatureCode::OpalV1 => write!(f, "Opal 1.0"),
-            FeatureCode::OpalV2 => write!(f, "Opal 2.0"),
-            FeatureCode::Opalite => write!(f, "Opalite"),
-            FeatureCode::PyriteV1 => write!(f, "Pyrite 1.0"),
-            FeatureCode::PyriteV2 => write!(f, "Pyrite 2.0"),
-            FeatureCode::Ruby => write!(f, "Ruby"),
-            FeatureCode::KeyPerIO => write!(f, "Key per I/O"),
-            FeatureCode::Unrecognized(code) => write!(f, "Unrecognized feature 0x{code:04X}"),
-        }
     }
 }
 

@@ -3,7 +3,10 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use sed_packet::{ObjectRef, TableRef, Uid, discovery::FeatureDescriptor};
+use sed_packet::{
+    ObjectRef, TableRef, Uid,
+    discovery::{Feature, FeatureDescriptor},
+};
 
 use crate::path::Path;
 
@@ -247,8 +250,8 @@ impl GlobalLookup {
 
     fn search<T>(&self, features: &[FeatureDescriptor], f: impl Fn(FeatureLookup) -> Option<T>) -> Option<T> {
         use crate::preconfig;
-        let ssc_features = features.iter().filter(|feature| feature.security_subsystem_class().is_some());
-        let common_features = features.iter().filter(|feature| feature.security_subsystem_class().is_some());
+        let ssc_features = features.iter().filter(|feature| feature.as_ssc().is_some());
+        let common_features = features.iter().filter(|feature| feature.as_ssc().is_none());
         for feature in ssc_features {
             let result = match feature {
                 FeatureDescriptor::Enterprise(_) => f(preconfig::enterprise::LOOKUP),
