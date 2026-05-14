@@ -1,21 +1,15 @@
 [workspace]
 resolver = "2"
 members = [
-    #"sed_manager",
-    #"sed_manager_macros",
-    #"sed_manager_config",
-    #"sed_manager_config_ui",
-    #"sed_manager_unlock",
-    #"as_array",
-    #"as_array_macros",
+    "sed_async_runtime",
+    "sed_device",
+    "sed_manager",
     "sed_packet",
     "sed_spec",
-    "sed_spec_macros",
     "sed_spec_codegen",
-    "sed_device",
-    "sed_tper",
-    "sed_async_runtime",
+    "sed_spec_macros",
     "sed_telemetry",
+    "sed_tper",
     "sed_virtual_device",
 ]
 
@@ -24,6 +18,7 @@ members = [
 # Workspace packages.
 sed_async_runtime = { version = "0.1.0", path = "sed_async_runtime" }
 sed_device = { version = "0.1.0", path = "sed_device" }
+sed_manager = { version = "0.1.0", path = "sed_manager" }
 sed_packet = { version = "0.1.0", path = "sed_packet" }
 sed_spec = { version = "0.1.0", path = "sed_spec" }
 sed_spec_codegen = { version = "0.1.0", path = "sed_spec_codegen" }
