@@ -1,8 +1,7 @@
 use std::any::Any;
 
 use sed_spec::objects::{
-    AccessControl, Ace, Authority, CPin, KAes256, LockingRange, MbrControl, SecurityProvider as SecurityProviderObj,
-    SecurityProviderRef, TableDesc,
+    AccessControl, Ace, Authority, CPin, KAes256, LockingRange, MbrControl, SecurityProviderRef, TableDesc,
 };
 
 use crate::tper::security_provider::{SecurityProvider, Table};
@@ -67,24 +66,40 @@ impl SecurityProvider for Locking {
         Some(&self.k_aes_256)
     }
 
+    fn k_aes_256_mut(&mut self) -> Option<&mut Table<KAes256>> {
+        Some(&mut self.k_aes_256)
+    }
+
     fn locking(&self) -> Option<&Table<LockingRange>> {
         Some(&self.locking)
+    }
+
+    fn locking_mut(&mut self) -> Option<&mut Table<LockingRange>> {
+        Some(&mut self.locking)
     }
 
     fn mbr_control(&self) -> Option<&Table<MbrControl>> {
         Some(&self.mbr_control)
     }
 
-    fn sp(&self) -> Option<&Table<SecurityProviderObj>> {
-        None
+    fn mbr_control_mut(&mut self) -> Option<&mut Table<MbrControl>> {
+        Some(&mut self.mbr_control)
     }
 
     fn mbr(&self) -> Option<&Vec<u8>> {
         Some(&self.mbr)
     }
 
+    fn mbr_mut(&mut self) -> Option<&mut Vec<u8>> {
+        Some(&mut self.mbr)
+    }
+
     fn data_store(&self, index: usize) -> Option<&Vec<u8>> {
         self.data_store.get(index)
+    }
+
+    fn data_store_mut(&mut self, index: usize) -> Option<&mut Vec<u8>> {
+        self.data_store.get_mut(index)
     }
 
     fn as_any(&self) -> &dyn Any {

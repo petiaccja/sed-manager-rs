@@ -62,6 +62,7 @@ impl TPer {
         }
     }
 
+    #[allow(unused)]
     pub fn locking_sp_mut(&mut self) -> Option<&mut Locking> {
         match self {
             TPer::Opal2(tper) => tper.locking_sp_mut(),

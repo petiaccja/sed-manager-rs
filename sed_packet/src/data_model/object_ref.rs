@@ -70,6 +70,10 @@ impl<const TABLE: u64> ObjectRef<TABLE> {
         self.0.to_half_uid()
     }
 
+    pub const fn containing_table(&self) -> TableRef {
+        TableRef::new(TABLE)
+    }
+
     pub const fn add(&self, offset: u32) -> Self {
         Self(self.0.next_object(offset).expect("this UID is always an object"))
     }

@@ -1,16 +1,17 @@
 use std::ops::RangeBounds;
 
 use sed_packet::session_id::SessionId;
-use sed_packet::token::{Command, Detokenize, Detokenizer, FromTokens, ToTokens};
-use sed_packet::{Field, FieldRef, Ignore, MaxBytes, Object, ObjectRef, TableRef, Uid};
+use sed_packet::token::{Command, Detokenize, Detokenizer, FromTokens, ToTokens, Tokenize};
+use sed_packet::{Bytes, Field, FieldRef, Ignore, MaxBytes, Named, Object, ObjectRef, TableRef, Uid};
 use sed_spec::methods::{
     Activate, Authenticate, AuthenticateResult, CellBlock, GenKey, Get, GetAcl, GetBytesResult, MethodCall,
-    MethodResult, MethodStatus, Next, Random, Revert, RevertSp, SessionMethodParam as _, StartSession, SyncSession,
+    MethodResult, MethodStatus, Next, Random, Revert, RevertSp, SessionMethodParam as _, SetBytes, SetObject,
+    SetResult, StartSession, SyncSession,
 };
 use sed_spec::objects::{AceRef, AuthorityRef, CredentialRef, MethodRef, SecurityProviderRef};
 use sed_spec::preconfig::core::shared::invoking_id::{SESSION_MANAGER, THIS_SP};
 use sed_spec::preconfig::core::shared::sm_method_id::START_SESSION;
-use sed_spec::preconfig::core::shared::table_id;
+use sed_spec::preconfig::core::shared::{method_id, table_id};
 use sed_spec_macros::DetokenizeStruct;
 use tracing::instrument;
 
@@ -237,7 +238,7 @@ impl Session {
 
     /// Get all fields of an object.
     ///
-    /// Note that the TPer may not return the all fields, even if you have
+    /// Note that the TPer may not return all fields, even if you have
     /// access to them. This is because the SSC specification does not always
     /// require the field to have a value assigned.
     #[instrument(level = "info", skip(self), ret, err)]
@@ -332,6 +333,7 @@ impl Session {
     }
 
     /// Revert the security provider to its factory original state.
+    #[instrument(level = "info", skip(self), ret, err)]
     pub async fn revert(&self, sp: SecurityProviderRef) -> Result<(), Error> {
         let parameters = Revert {};
         let call = parameters.to_call(sp.into());
@@ -348,6 +350,7 @@ impl Session {
     ///
     /// After reverting the SP, the session is immediately aborted.
     pub async fn revert_sp(mut self, keep_global_range_key: Option<bool>) -> Result<(), (Self, Error)> {
+        #[instrument(level = "info", skip(self_), ret, err)]
         async fn do_revert_sp(self_: &Session, keep_global_range_key: Option<bool>) -> Result<(), Error> {
             let parameters = RevertSp { keep_global_range_key };
             let call = parameters.to_call(THIS_SP);
@@ -374,6 +377,75 @@ impl Session {
                 Err((self, err))
             }
         }
+    }
+
+    /// Set a field of an object.
+    #[instrument(level = "info", skip(self), ret, err)]
+    pub async fn set_field<O, const TABLE: u64, const FIELD: u16>(
+        &self,
+        field: FieldRef<O, TABLE, FIELD>,
+        value: <FieldRef<O, TABLE, FIELD> as Field<FIELD>>::Type,
+    ) -> Result<(), Error>
+    where
+        FieldRef<O, TABLE, FIELD>: Field<FIELD>,
+        <FieldRef<O, TABLE, FIELD> as Field<FIELD>>::Type: Tokenize + core::fmt::Debug,
+    {
+        let parameters = vec![Named { name: 1u16, value: vec![Named { name: FIELD, value: value }] }];
+        let call = MethodCall {
+            invoking_id: field.object().into(),
+            method_id: method_id::SET.into(),
+            parameters,
+            status: MethodStatus::Success,
+        };
+        let result_tokens = self
+            .controller
+            .call(self.session_id, call.to_tokens().expect("invalid method call"))
+            .await
+            .map_err(|_| Error::Closed)??;
+        let _result = MethodResult::<SetResult>::from_tokens(&result_tokens)?.0?;
+        Ok(())
+    }
+
+    /// Set multiple fields of an object.
+    ///
+    /// Only the fields that are non-`None` in `value` are updated in the TPer.
+    #[instrument(level = "info", skip(self), ret, err)]
+    pub async fn set_object<Obj>(&self, object: Obj::Ref, value: Obj) -> Result<(), Error>
+    where
+        Obj: Object + Tokenize + core::fmt::Debug,
+        Obj::Ref: Tokenize + Into<Uid> + core::fmt::Debug,
+    {
+        let parameters = SetObject { where_: None, values: Some(value) };
+        let call = parameters.to_call(object.into());
+        let result_tokens = self
+            .controller
+            .call(self.session_id, call.to_tokens().expect("invalid method call"))
+            .await
+            .map_err(|_| Error::Closed)??;
+        let _result = SetObject::<Obj>::result_from_tokens(&result_tokens)??;
+        Ok(())
+    }
+
+    /// Write a some bytes to a table.
+    ///
+    /// This function overwrites the bytes at the given location. The table's
+    /// size is not changed.
+    ///
+    /// # Parameters
+    /// - `table`: must be a reference to a byte table, object tables will fail.
+    /// - `where_`: the byte offset to where the `bytes` should be written.
+    /// - `bytes`: the bytes to write into the table.
+    #[instrument(level = "info", skip(self, bytes), fields(bytes_len=bytes.len()), err)]
+    pub async fn set_bytes(&self, table: TableRef, where_: u64, bytes: &[u8]) -> Result<(), Error> {
+        let parameters = SetBytes { where_: Some(where_), values: Some(Bytes(bytes.into())) };
+        let call = parameters.to_call(table.into());
+        let result_tokens = self
+            .controller
+            .call(self.session_id, call.to_tokens().expect("invalid method call"))
+            .await
+            .map_err(|_| Error::Closed)??;
+        let _result = SetBytes::result_from_tokens(&result_tokens)??;
+        Ok(())
     }
 
     /// Explicitly close the session.

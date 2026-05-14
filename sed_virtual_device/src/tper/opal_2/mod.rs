@@ -40,6 +40,7 @@ impl Opal2TPer {
         Some(&self.locking)
     }
 
+    #[allow(unused)]
     pub fn locking_sp_mut(&mut self) -> Option<&mut Locking> {
         Some(&mut self.locking)
     }

@@ -1,6 +1,9 @@
-use proc_macro2::TokenStream;
+use proc_macro2::{Span, TokenStream};
 use quote::{ToTokens, format_ident, quote};
-use syn::{Data, DeriveInput, Error, Ident, Index, Member, Type, spanned::Spanned as _};
+use syn::{
+    Data, DeriveInput, Error, Ident, Index, Member, Path, Token, Type, WhereClause, parse_quote,
+    punctuated::Punctuated, spanned::Spanned as _,
+};
 
 use crate::type_ext::TypeExt;
 
@@ -8,6 +11,10 @@ pub fn tokenize_struct(input: DeriveInput) -> Result<TokenStream, Error> {
     let Data::Struct(struct_item) = input.data else {
         return Err(Error::new(input.span(), "expected a struct"));
     };
+
+    let ident = input.ident;
+    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
+    let where_clause = add_trait_bounds(&struct_item, where_clause, &parse_quote!(sed_packet::token::Tokenize));
 
     let fields = parse_fields(struct_item)?;
 
@@ -20,9 +27,6 @@ pub fn tokenize_struct(input: DeriveInput) -> Result<TokenStream, Error> {
         },
         None => quote! { self.#member.tokenize(__tokenizer) },
     });
-
-    let ident = input.ident;
-    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
 
     Ok(quote! {
         #[automatically_derived]
@@ -43,6 +47,10 @@ pub fn detokenize_struct(input: DeriveInput) -> Result<TokenStream, Error> {
     let Data::Struct(struct_item) = input.data else {
         return Err(Error::new(input.span(), "expected a struct"));
     };
+
+    let ident = &input.ident;
+    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
+    let where_clause = add_trait_bounds(&struct_item, where_clause, &parse_quote!(sed_packet::token::Detokenize));
 
     let fields = parse_fields(struct_item)?;
 
@@ -84,9 +92,6 @@ pub fn detokenize_struct(input: DeriveInput) -> Result<TokenStream, Error> {
             },
         }
     });
-
-    let ident = &input.ident;
-    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
 
     Ok(quote! {
         #[automatically_derived]
@@ -161,4 +166,21 @@ fn member_to_ident(member: Member) -> Ident {
         Member::Named(ident) => ident,
         Member::Unnamed(Index { index, .. }) => format_ident!("m{index}"),
     }
+}
+
+fn add_trait_bounds(
+    struct_item: &syn::DataStruct,
+    where_clause: Option<&WhereClause>,
+    trait_: &Path,
+) -> Option<WhereClause> {
+    let mut where_clause = where_clause.cloned();
+    for field in struct_item.fields.iter() {
+        let where_clause = where_clause.get_or_insert_with(|| WhereClause {
+            where_token: Token![where](Span::call_site()),
+            predicates: Punctuated::default(),
+        });
+        let ty = field.ty.remove_option();
+        where_clause.predicates.push(parse_quote!(#ty: #trait_));
+    }
+    where_clause
 }

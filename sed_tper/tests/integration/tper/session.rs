@@ -230,3 +230,52 @@ async fn random(_with_tracing: WithTracing) {
     let _ = session.close().await;
     let _ = protocol.await;
 }
+
+#[instrument]
+#[rstest::rstest]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn set_field(_with_tracing: WithTracing) {
+    let device = Arc::new(VirtualDevice::new());
+    let session_id = device.insert_session(1, sp::ADMIN, Some(admin::authority::SID)).unwrap();
+    let (protocol, controller) = Protocol::new(BASE_COM_ID, 0, device.clone());
+    let protocol = tokio::spawn(protocol.run());
+
+    controller.spawn(session_id, Properties::ASSUMED);
+    let session = Session::from_started(session_id, controller);
+    assert_that!(session.set_field(admin::c_pin::SID.pin(), b"asd".as_slice().into()).await, ok(anything()));
+    let _ = session.close().await;
+    let _ = protocol.await;
+}
+
+#[instrument]
+#[rstest::rstest]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn set_object(_with_tracing: WithTracing) {
+    let device = Arc::new(VirtualDevice::new());
+    let session_id = device.insert_session(1, sp::ADMIN, Some(admin::authority::SID)).unwrap();
+    let (protocol, controller) = Protocol::new(BASE_COM_ID, 0, device.clone());
+    let protocol = tokio::spawn(protocol.run());
+
+    controller.spawn(session_id, Properties::ASSUMED);
+    let session = Session::from_started(session_id, controller);
+    let values = CPin { pin: Some(b"asd".as_slice().into()), ..Default::default() };
+    assert_that!(session.set_object(admin::c_pin::SID, values).await, ok(anything()));
+    let _ = session.close().await;
+    let _ = protocol.await;
+}
+
+#[instrument]
+#[rstest::rstest]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn set_bytes(_with_tracing: WithTracing) {
+    let device = Arc::new(VirtualDevice::new());
+    let session_id = device.insert_session(1, sp::LOCKING, Some(locking::authority::ADMIN.get(0).unwrap())).unwrap();
+    let (protocol, controller) = Protocol::new(BASE_COM_ID, 0, device.clone());
+    let protocol = tokio::spawn(protocol.run());
+
+    controller.spawn(session_id, Properties::ASSUMED);
+    let session = Session::from_started(session_id, controller);
+    assert_that!(session.set_bytes(table_id::MBR, 0, &[1, 2, 3]).await, ok(anything()));
+    let _ = session.close().await;
+    let _ = protocol.await;
+}

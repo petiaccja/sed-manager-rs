@@ -10,7 +10,8 @@ use sed_spec::methods::{
     Activate, ActivateResult, Authenticate, AuthenticateResult, ByteCellBlock, CloseSession, ExtractResult, GenKey,
     GenKeyResult, Get, GetAcl, GetAclResult, MethodResult, MethodStatus, MgmtMethodCall, MgmtMethodCallParams,
     NextResultUntyped, NextUntyped, ObjectCellBlock, Random, RandomResult, Revert, RevertResult, RevertSp,
-    RevertSpResult, SessionMethodCall, SessionMethodCallParams, SessionMethodParam as _, extract_method,
+    RevertSpResult, SessionMethodCall, SessionMethodCallParams, SessionMethodParam as _, SetBytes, SetObject,
+    SetResult, extract_method,
 };
 use sed_spec::objects::{
     AccessControlRef, Ace, AceExpr, Authority, AuthorityRef, CPin, KAes256, KAes256Ref, LockingRange, MbrControl,
@@ -70,8 +71,8 @@ impl Session {
         }
 
         extracted_methods
-            .iter()
-            .filter_map(|extract_result| match &extract_result {
+            .into_iter()
+            .filter_map(|extract_result| match extract_result {
                 ExtractResult::Ok { value, .. } => self.call(tper, value),
                 ExtractResult::EndOfStream => self.close(),
                 ExtractResult::NeedMoreTokens => None,
@@ -80,32 +81,36 @@ impl Session {
             .collect()
     }
 
-    fn call(&mut self, tper: &mut TPer, call: &SessionMethodCall) -> Option<Packet> {
+    fn call(&mut self, tper: &mut TPer, call: SessionMethodCall) -> Option<Packet> {
         use SessionMethodCallParams::*;
 
         if let Self::Open { session_id, .. } = self {
+            use SecurityProvider as Sp;
+
             let session_id = *session_id;
 
             let invoking_id = call.invoking_id;
-            let result_tokens = match &call.params {
-                Activate(params) => MethodResult(self.activate(tper, invoking_id, params)).to_tokens(),
-                Authenticate(params) => MethodResult(self.authenticate(tper, invoking_id, params)).to_tokens(),
-                GenKey(params) => MethodResult(self.gen_key(tper, invoking_id, params)).to_tokens(),
-                Get(params) => MethodResult(self.get(tper, invoking_id, params)).to_tokens(),
-                GetAcl(params) => MethodResult(self.get_acl(tper, invoking_id, params)).to_tokens(),
-                Next(params) => MethodResult(self.next(tper, invoking_id, params)).to_tokens(),
-                Random(params) => MethodResult(self.random(tper, invoking_id, params)).to_tokens(),
-                Revert(params) => MethodResult(self.revert(tper, invoking_id, params)).to_tokens(),
-                RevertSp(params) => MethodResult(self.revert_sp(tper, invoking_id, params)).to_tokens(),
-                SetAce(_params) => todo!(),
-                SetAuthority(_params) => todo!(),
-                SetBytes(_params) => todo!(),
-                SetCPin(_params) => todo!(),
-                SetKAes256(_params) => todo!(),
-                SetLockingRange(_params) => todo!(),
-                SetMbrControl(_params) => todo!(),
-                SetSecurityProvider(_params) => todo!(),
-                SetTableDesc(_params) => todo!(),
+            let result_tokens = match call.params {
+                Activate(params) => MethodResult(self.activate(tper, invoking_id, &params)).to_tokens(),
+                Authenticate(params) => MethodResult(self.authenticate(tper, invoking_id, &params)).to_tokens(),
+                GenKey(params) => MethodResult(self.gen_key(tper, invoking_id, &params)).to_tokens(),
+                Get(params) => MethodResult(self.get(tper, invoking_id, &params)).to_tokens(),
+                GetAcl(params) => MethodResult(self.get_acl(tper, invoking_id, &params)).to_tokens(),
+                Next(params) => MethodResult(self.next(tper, invoking_id, &params)).to_tokens(),
+                Random(params) => MethodResult(self.random(tper, invoking_id, &params)).to_tokens(),
+                Revert(params) => MethodResult(self.revert(tper, invoking_id, &params)).to_tokens(),
+                RevertSp(params) => MethodResult(self.revert_sp(tper, invoking_id, &params)).to_tokens(),
+                SetAce(p) => MethodResult(self.set_obj(tper, invoking_id, p, Sp::ace_mut)).to_tokens(),
+                SetAuthority(p) => MethodResult(self.set_obj(tper, invoking_id, p, Sp::authority_mut)).to_tokens(),
+                SetBytes(params) => MethodResult(self.set_bytes(tper, invoking_id, params)).to_tokens(),
+                SetCPin(p) => MethodResult(self.set_obj(tper, invoking_id, p, Sp::c_pin_mut)).to_tokens(),
+                SetKAes256(p) => MethodResult(self.set_obj_opt(tper, invoking_id, p, Sp::k_aes_256_mut)).to_tokens(),
+                SetLockingRange(p) => MethodResult(self.set_obj_opt(tper, invoking_id, p, Sp::locking_mut)).to_tokens(),
+                SetMbrControl(p) => {
+                    MethodResult(self.set_obj_opt(tper, invoking_id, p, Sp::mbr_control_mut)).to_tokens()
+                }
+                SetSecurityProvider(p) => MethodResult(self.set_obj_opt(tper, invoking_id, p, Sp::sp_mut)).to_tokens(),
+                SetTableDesc(p) => MethodResult(self.set_obj(tper, invoking_id, p, Sp::table_mut)).to_tokens(),
             };
             tracing::debug!(method_result = tracing::field::debug(&result_tokens), "response");
             Some(session_id.assign(Packet {
@@ -371,6 +376,89 @@ impl Session {
         let _ = params.keep_global_range_key;
         tper.restore_preconfig(sp_uid)?;
         Ok(RevertSpResult)
+    }
+
+    fn set_obj<'tper, O, G>(
+        &self,
+        tper: &'tper mut TPer,
+        invoking_id: Uid,
+        params: SetObject<O>,
+        get_table_mut: G,
+    ) -> Result<SetResult, MethodStatus>
+    where
+        O: Object,
+        <O as Object>::Ref: TryFrom<Uid> + Ord + Copy,
+        Uid: From<<O as Object>::Ref>,
+        G: for<'a> FnOnce(&'a mut (dyn SecurityProvider + 'tper)) -> &'a mut Table<O>,
+    {
+        self.set_obj_opt(tper, invoking_id, params, |sp| Some(get_table_mut(sp)))
+    }
+
+    fn set_obj_opt<'tper, O, G>(
+        &self,
+        tper: &'tper mut TPer,
+        invoking_id: Uid,
+        params: SetObject<O>,
+        get_table_mut: G,
+    ) -> Result<SetResult, MethodStatus>
+    where
+        O: Object,
+        <O as Object>::Ref: TryFrom<Uid> + Ord + Copy,
+        Uid: From<<O as Object>::Ref>,
+        G: for<'a> FnOnce(&'a mut (dyn SecurityProvider + 'tper)) -> Option<&'a mut Table<O>>,
+    {
+        if let Some(values) = &params.values {
+            let columns = values.active_fields();
+            self.check_permission(tper, invoking_id, params.method_id().try_into().unwrap(), columns.into_iter())?;
+        }
+
+        let table_uid = invoking_id
+            .is_table()
+            .then_some(invoking_id)
+            .or(invoking_id.containing_table())
+            .or(params.where_.map(|where_| Uid::from(where_).containing_table()).flatten());
+        let object_uid = <O as Object>::Ref::try_from(invoking_id).ok().or(params.where_);
+        let (Some(table_uid), Some(object_uid)) = (table_uid, object_uid) else {
+            return Err(MethodStatus::InvalidParameter);
+        };
+        if table_uid != Uid::from(object_uid).containing_table().expect("ObjectRefs always have a containing table") {
+            return Err(MethodStatus::InvalidParameter);
+        }
+
+        let sp = self.this_sp_mut(tper)?;
+        let table = get_table_mut(sp).ok_or(MethodStatus::InvalidParameter)?;
+        let object = table.get_mut(&object_uid).ok_or(MethodStatus::InvalidParameter)?;
+
+        if let Some(values) = params.values {
+            object.update(values);
+        }
+
+        Ok(SetResult)
+    }
+
+    fn set_bytes(&self, tper: &mut TPer, invoking_id: Uid, params: SetBytes) -> Result<SetResult, MethodStatus> {
+        self.check_permission(tper, invoking_id, params.method_id().try_into().unwrap(), [0].into_iter())?;
+
+        let sp = self.this_sp_mut(tper)?;
+
+        let table_uid = TableRef::try_from(invoking_id).map_err(|_| MethodStatus::InvalidParameter)?;
+        let table = if table_uid == table_id::MBR {
+            sp.mbr_mut().ok_or(MethodStatus::InvalidParameter)
+        } else if table_id::DATA_STORE.contains(&table_uid) {
+            let index = table_uid - table_id::DATA_STORE.start;
+            sp.data_store_mut(index as usize).ok_or(MethodStatus::InvalidParameter)
+        } else {
+            Err(MethodStatus::InvalidParameter)
+        }?;
+
+        if let Some(values) = params.values {
+            let range = params.where_.map(|x| x as usize).unwrap_or(0)..values.0.len();
+            let slice = table.get_mut(range).ok_or(MethodStatus::InvalidParameter)?;
+            slice.copy_from_slice(&values.0);
+            Ok(SetResult)
+        } else {
+            Ok(SetResult)
+        }
     }
 
     fn close(&mut self) -> Option<Packet> {

@@ -1,14 +1,14 @@
 use std::any::Any;
 
 use sed_spec::objects::{
-    AccessControl, Ace, Authority, CPin, KAes256, LockingRange, MbrControl, SecurityProvider as SecurityProviderObj,
-    SecurityProviderRef, TableDesc,
+    AccessControl, Ace, Authority, CPin, SecurityProvider as SecurityProviderObj, SecurityProviderRef, TableDesc,
 };
 
 use crate::tper::security_provider::{SecurityProvider, Table};
 
 #[derive(Debug)]
 pub struct Admin {
+    #[allow(unused)]
     pub uid: SecurityProviderRef,
     pub access_control: Table<AccessControl>,
     pub ace: Table<Ace>,
@@ -59,28 +59,12 @@ impl SecurityProvider for Admin {
         &mut self.table
     }
 
-    fn k_aes_256(&self) -> Option<&Table<KAes256>> {
-        None
-    }
-
-    fn locking(&self) -> Option<&Table<LockingRange>> {
-        None
-    }
-
-    fn mbr_control(&self) -> Option<&Table<MbrControl>> {
-        None
-    }
-
-    fn mbr(&self) -> Option<&Vec<u8>> {
-        None
-    }
-
-    fn data_store(&self, _index: usize) -> Option<&Vec<u8>> {
-        None
-    }
-
     fn sp(&self) -> Option<&Table<SecurityProviderObj>> {
         Some(&self.sp)
+    }
+
+    fn sp_mut(&mut self) -> Option<&mut Table<SecurityProviderObj>> {
+        Some(&mut self.sp)
     }
 
     fn as_any(&self) -> &dyn Any {

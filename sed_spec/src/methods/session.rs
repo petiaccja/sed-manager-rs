@@ -241,7 +241,7 @@ pub struct GetBytesResult {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, DetokenizeStruct, TokenizeStruct)]
-pub struct GetObjectResult<O: Tokenize + Detokenize> {
+pub struct GetObjectResult<O> {
     pub result: O,
 }
 
@@ -252,8 +252,7 @@ pub struct GetObjectResult<O: Tokenize + Detokenize> {
 #[derive(Debug, Clone, PartialEq, Eq, DetokenizeStruct, TokenizeStruct)]
 pub struct SetObject<O>
 where
-    O: Object + Tokenize + Detokenize,
-    O::Ref: Tokenize + Detokenize,
+    O: Object,
 {
     pub where_: Option<O::Ref>,
     pub values: Option<O>,
@@ -261,8 +260,7 @@ where
 
 impl<O> SessionMethodParam for SetObject<O>
 where
-    O: Object + Tokenize + Detokenize,
-    O::Ref: Tokenize + Detokenize,
+    O: Object,
 {
     const METHOD_ID: MethodRef = method_id::SET;
     type Result = SetResult;
