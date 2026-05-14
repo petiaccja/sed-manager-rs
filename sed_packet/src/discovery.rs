@@ -61,7 +61,7 @@ pub trait SecuritySubsystemClass: Feature {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[sorbit(len=14, byte_order=big_endian)]
-pub struct TPerDescriptor {
+pub struct TperDescriptor {
     #[sorbit(bit_field = _ver, repr=u8, bits=4..=7)]
     #[sorbit(value = constant(0x01))]
     pub version: PhantomData<u8>,
@@ -401,7 +401,7 @@ pub struct UnrecognizedDescriptor {
 #[repr(u16)]
 #[sorbit(byte_order=big_endian)]
 pub enum FeatureDescriptor {
-    TPer(TPerDescriptor) = 0x0001,
+    TPer(TperDescriptor) = 0x0001,
     Locking(LockingDescriptor) = 0x0002,
     Geometry(GeometryDescriptor) = 0x0003,
     DataRemoval(DataRemovalDescriptor) = 0x0404,
@@ -551,7 +551,7 @@ macro_rules! impl_security_subsystem_class {
     };
 }
 
-impl_feature!(TPerDescriptor, FeatureCode::TPer, 1);
+impl_feature!(TperDescriptor, FeatureCode::TPer, 1);
 impl_feature!(LockingDescriptor, FeatureCode::Locking, 1);
 impl_feature!(GeometryDescriptor, FeatureCode::Geometry, 1);
 impl_feature!(DataRemovalDescriptor, FeatureCode::DataRemoval, 1);
@@ -670,7 +670,7 @@ macro_rules! impl_desc_try_from {
     };
 }
 
-impl_desc_try_from!(TPerDescriptor, TPer);
+impl_desc_try_from!(TperDescriptor, TPer);
 impl_desc_try_from!(LockingDescriptor, Locking);
 impl_desc_try_from!(GeometryDescriptor, Geometry);
 impl_desc_try_from!(DataRemovalDescriptor, DataRemoval);
@@ -749,7 +749,7 @@ mod tests {
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // Reserved.
     ];
 
-    const TPER_DESC_VALUE: FeatureDescriptor = FeatureDescriptor::TPer(TPerDescriptor {
+    const TPER_DESC_VALUE: FeatureDescriptor = FeatureDescriptor::TPer(TperDescriptor {
         version: PhantomData,
         length: PhantomData,
         com_id_mgmt_supported: true,

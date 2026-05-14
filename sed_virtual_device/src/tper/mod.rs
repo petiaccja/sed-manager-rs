@@ -8,13 +8,13 @@ use std::marker::PhantomData;
 
 pub use admin::Admin;
 pub use locking::Locking;
-pub use opal_2::Opal2TPer;
+pub use opal_2::Opal2Tper;
 pub use preconfig_shared::{INITIAL_SID_PASSWORD, PSID_PASSWORD};
 pub use security_provider::{SecurityProvider, Table};
 
 use sed_packet::discovery::{
     BlockSIDAuthDescriptor, Discovery, FeatureDescriptor, GeometryDescriptor, LockingDescriptor, OpalV2Descriptor,
-    OwnerPasswordState, TPerDescriptor,
+    OwnerPasswordState, TperDescriptor,
 };
 use sorbit::ser_de::ToBytes;
 
@@ -27,51 +27,51 @@ use sed_spec::{
 };
 
 #[derive(Debug)]
-pub enum TPer {
-    Opal2(Opal2TPer),
+pub enum Tper {
+    Opal2(Opal2Tper),
 }
 
-impl TPer {
+impl Tper {
     pub fn sp(&self, uid: SecurityProviderRef) -> Option<&dyn SecurityProvider> {
         match self {
-            TPer::Opal2(tper) => tper.sp(uid),
+            Tper::Opal2(tper) => tper.sp(uid),
         }
     }
 
     pub fn sp_mut(&mut self, uid: SecurityProviderRef) -> Option<&mut dyn SecurityProvider> {
         match self {
-            TPer::Opal2(tper) => tper.sp_mut(uid),
+            Tper::Opal2(tper) => tper.sp_mut(uid),
         }
     }
 
     pub fn admin_sp(&self) -> &Admin {
         match self {
-            TPer::Opal2(tper) => tper.admin_sp(),
+            Tper::Opal2(tper) => tper.admin_sp(),
         }
     }
 
     pub fn admin_sp_mut(&mut self) -> &mut Admin {
         match self {
-            TPer::Opal2(tper) => tper.admin_sp_mut(),
+            Tper::Opal2(tper) => tper.admin_sp_mut(),
         }
     }
 
     pub fn locking_sp(&self) -> Option<&Locking> {
         match self {
-            TPer::Opal2(tper) => tper.locking_sp(),
+            Tper::Opal2(tper) => tper.locking_sp(),
         }
     }
 
     #[allow(unused)]
     pub fn locking_sp_mut(&mut self) -> Option<&mut Locking> {
         match self {
-            TPer::Opal2(tper) => tper.locking_sp_mut(),
+            Tper::Opal2(tper) => tper.locking_sp_mut(),
         }
     }
 
     pub fn restore_preconfig(&mut self, sp: SecurityProviderRef) -> Result<(), MethodStatus> {
         match self {
-            TPer::Opal2(tper) => tper.restore_preconfig(sp),
+            Tper::Opal2(tper) => tper.restore_preconfig(sp),
         }
     }
 
@@ -91,7 +91,7 @@ impl TPer {
     }
 
     fn tper_feature_desc() -> FeatureDescriptor {
-        let desc = TPerDescriptor {
+        let desc = TperDescriptor {
             version: PhantomData,
             length: PhantomData,
             sync_supported: true,
@@ -139,7 +139,7 @@ impl TPer {
 
     fn ssc_feature_desc(&self) -> FeatureDescriptor {
         match self {
-            TPer::Opal2(_) => FeatureDescriptor::OpalV2(OpalV2Descriptor {
+            Tper::Opal2(_) => FeatureDescriptor::OpalV2(OpalV2Descriptor {
                 version: 1,
                 length: PhantomData,
                 base_com_id: BASE_COM_ID.0,

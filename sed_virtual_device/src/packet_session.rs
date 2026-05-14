@@ -10,7 +10,7 @@ use sed_spec::preconfig::core::shared::authority::ANYBODY;
 use crate::com_id::{ComId, ComIdExt};
 use crate::management_session::ManagementSession;
 use crate::session::Session;
-use crate::tper::TPer;
+use crate::tper::Tper;
 
 #[derive(Debug)]
 pub struct PacketSession {
@@ -51,7 +51,7 @@ impl PacketSession {
     /// Start a session without checking authentication.
     pub fn insert_session(
         &mut self,
-        tper: &TPer,
+        tper: &Tper,
         host_session_number: u32,
         sp: SecurityProviderRef,
         authority: Option<AuthorityRef>,
@@ -63,7 +63,7 @@ impl PacketSession {
         Ok(session_id)
     }
 
-    pub fn push(&mut self, tper: &mut TPer, com_packet: ComPacket) {
+    pub fn push(&mut self, tper: &mut Tper, com_packet: ComPacket) {
         for packet in com_packet.payload {
             let session_id = SessionId::of(&packet);
             let packets = if session_id == SessionId::MANAGEMENT {

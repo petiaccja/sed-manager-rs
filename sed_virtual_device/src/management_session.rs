@@ -16,7 +16,7 @@ use sed_spec::types::LifeCycleState;
 
 use crate::internal_error::Expect;
 use crate::session::Session;
-use crate::tper::TPer;
+use crate::tper::Tper;
 
 pub const CAPABILITIES: Properties = Properties {
     max_methods: usize::MAX,
@@ -54,7 +54,7 @@ impl ManagementSession {
     }
 
     #[must_use]
-    pub fn dispatch(&mut self, tper: &TPer, sessions: &mut HashMap<SessionId, Session>, packet: Packet) -> Vec<Packet> {
+    pub fn dispatch(&mut self, tper: &Tper, sessions: &mut HashMap<SessionId, Session>, packet: Packet) -> Vec<Packet> {
         let data_sub_packets = packet.payload.iter().filter(|sub_packet| sub_packet.kind == SubPacketKind::Data);
         for sub_packet in data_sub_packets {
             self.recv_buffer.extend(sub_packet.payload.iter());
@@ -78,7 +78,7 @@ impl ManagementSession {
 
     fn call(
         &mut self,
-        tper: &TPer,
+        tper: &Tper,
         sessions: &mut HashMap<SessionId, Session>,
         call: MgmtMethodCall,
     ) -> Option<Packet> {
@@ -102,7 +102,7 @@ impl ManagementSession {
 
     fn start_session(
         &mut self,
-        tper: &TPer,
+        tper: &Tper,
         sessions: &mut HashMap<SessionId, Session>,
         params: StartSession,
     ) -> MethodCall<SyncSession> {
@@ -143,7 +143,7 @@ impl ManagementSession {
 
     fn start_session_impl(
         &mut self,
-        tper: &TPer,
+        tper: &Tper,
         sessions: &mut HashMap<SessionId, Session>,
         params: &StartSession,
     ) -> Result<u32, MethodStatus> {

@@ -21,7 +21,7 @@ use sed_spec::preconfig::core::shared::invoking_id::THIS_SP;
 use sed_spec::preconfig::core::shared::table_id;
 use sed_spec::types::LifeCycleState;
 
-use crate::tper::{Locking, SecurityProvider, TPer, Table};
+use crate::tper::{Locking, SecurityProvider, Table, Tper};
 
 #[derive(Debug)]
 pub enum Session {
@@ -36,7 +36,7 @@ pub enum Session {
 
 impl Session {
     pub fn new(
-        tper: &TPer,
+        tper: &Tper,
         session_id: SessionId,
         sp_uid: SecurityProviderRef,
         authority_uid: AuthorityRef,
@@ -48,7 +48,7 @@ impl Session {
     }
 
     #[must_use]
-    pub fn dispatch(&mut self, tper: &mut TPer, packet: Packet) -> Vec<Packet> {
+    pub fn dispatch(&mut self, tper: &mut Tper, packet: Packet) -> Vec<Packet> {
         if let Session::Open { recv_buffer, .. } = self {
             let data_sub_packets = packet.payload.iter().filter(|sub_packet| sub_packet.kind == SubPacketKind::Data);
             for sub_packet in data_sub_packets {
@@ -81,7 +81,7 @@ impl Session {
             .collect()
     }
 
-    fn call(&mut self, tper: &mut TPer, call: SessionMethodCall) -> Option<Packet> {
+    fn call(&mut self, tper: &mut Tper, call: SessionMethodCall) -> Option<Packet> {
         use SessionMethodCallParams::*;
 
         if let Self::Open { session_id, .. } = self {
@@ -126,7 +126,7 @@ impl Session {
         }
     }
 
-    fn activate(&self, tper: &mut TPer, invoking_id: Uid, params: &Activate) -> Result<ActivateResult, MethodStatus> {
+    fn activate(&self, tper: &mut Tper, invoking_id: Uid, params: &Activate) -> Result<ActivateResult, MethodStatus> {
         use sed_spec::preconfig::opal_2::admin;
         use sed_spec::preconfig::opal_2::locking;
 
@@ -150,7 +150,7 @@ impl Session {
 
     fn authenticate(
         &mut self,
-        tper: &mut TPer,
+        tper: &mut Tper,
         invoking_id: Uid,
         params: &Authenticate,
     ) -> Result<AuthenticateResult, MethodStatus> {
@@ -184,7 +184,7 @@ impl Session {
         }
     }
 
-    fn gen_key(&self, tper: &mut TPer, invoking_id: Uid, params: &GenKey) -> Result<GenKeyResult, MethodStatus> {
+    fn gen_key(&self, tper: &mut Tper, invoking_id: Uid, params: &GenKey) -> Result<GenKeyResult, MethodStatus> {
         self.check_permission(tper, invoking_id, params.method_id().try_into().unwrap(), [0].into_iter())?;
 
         let this_sp = self.this_sp_mut(tper)?;
@@ -206,7 +206,7 @@ impl Session {
 
     fn get<'tper>(
         &self,
-        tper: &'tper mut TPer,
+        tper: &'tper mut Tper,
         invoking_id: Uid,
         params: &Get,
     ) -> Result<GetResult<'tper>, MethodStatus> {
@@ -278,7 +278,7 @@ impl Session {
         }
     }
 
-    fn get_acl(&self, tper: &mut TPer, invoking_id: Uid, params: &GetAcl) -> Result<GetAclResult, MethodStatus> {
+    fn get_acl(&self, tper: &mut Tper, invoking_id: Uid, params: &GetAcl) -> Result<GetAclResult, MethodStatus> {
         self.check_permission(tper, invoking_id, params.method_id().try_into().unwrap(), [0].into_iter())?;
 
         if invoking_id == table_id::ACCESS_CONTROL.to_uid() {
@@ -294,7 +294,7 @@ impl Session {
         }
     }
 
-    fn next(&self, tper: &mut TPer, invoking_id: Uid, params: &NextUntyped) -> Result<NextResultUntyped, MethodStatus> {
+    fn next(&self, tper: &mut Tper, invoking_id: Uid, params: &NextUntyped) -> Result<NextResultUntyped, MethodStatus> {
         fn list_objects<const TABLE: u64, O>(
             table: Option<&BTreeMap<ObjectRef<TABLE>, O>>,
             where_: Option<Uid>,
@@ -337,7 +337,7 @@ impl Session {
         Ok(NextResultUntyped { result: objects })
     }
 
-    fn random(&self, tper: &TPer, invoking_id: Uid, params: &Random) -> Result<RandomResult, MethodStatus> {
+    fn random(&self, tper: &Tper, invoking_id: Uid, params: &Random) -> Result<RandomResult, MethodStatus> {
         use rand::prelude::*;
 
         self.check_permission(tper, invoking_id, params.method_id().try_into().unwrap(), [0].into_iter())?;
@@ -352,7 +352,7 @@ impl Session {
         }
     }
 
-    fn revert(&self, tper: &mut TPer, invoking_id: Uid, params: &Revert) -> Result<RevertResult, MethodStatus> {
+    fn revert(&self, tper: &mut Tper, invoking_id: Uid, params: &Revert) -> Result<RevertResult, MethodStatus> {
         self.check_permission(tper, invoking_id, params.method_id().try_into().unwrap(), [0].into_iter())?;
 
         let sp_uid = SecurityProviderRef::try_from(invoking_id).map_err(|_| MethodStatus::InvalidParameter)?;
@@ -360,7 +360,7 @@ impl Session {
         Ok(RevertResult)
     }
 
-    fn revert_sp(&self, tper: &mut TPer, invoking_id: Uid, params: &RevertSp) -> Result<RevertSpResult, MethodStatus> {
+    fn revert_sp(&self, tper: &mut Tper, invoking_id: Uid, params: &RevertSp) -> Result<RevertSpResult, MethodStatus> {
         self.check_permission(tper, invoking_id, params.method_id().try_into().unwrap(), [0].into_iter())?;
 
         if invoking_id != THIS_SP {
@@ -380,7 +380,7 @@ impl Session {
 
     fn set_obj<'tper, O, G>(
         &self,
-        tper: &'tper mut TPer,
+        tper: &'tper mut Tper,
         invoking_id: Uid,
         params: SetObject<O>,
         get_table_mut: G,
@@ -396,7 +396,7 @@ impl Session {
 
     fn set_obj_opt<'tper, O, G>(
         &self,
-        tper: &'tper mut TPer,
+        tper: &'tper mut Tper,
         invoking_id: Uid,
         params: SetObject<O>,
         get_table_mut: G,
@@ -436,7 +436,7 @@ impl Session {
         Ok(SetResult)
     }
 
-    fn set_bytes(&self, tper: &mut TPer, invoking_id: Uid, params: SetBytes) -> Result<SetResult, MethodStatus> {
+    fn set_bytes(&self, tper: &mut Tper, invoking_id: Uid, params: SetBytes) -> Result<SetResult, MethodStatus> {
         self.check_permission(tper, invoking_id, params.method_id().try_into().unwrap(), [0].into_iter())?;
 
         let sp = self.this_sp_mut(tper)?;
@@ -505,14 +505,14 @@ impl Session {
         }
     }
 
-    fn this_sp<'tper>(&self, tper: &'tper TPer) -> Result<&'tper dyn SecurityProvider, MethodStatus> {
+    fn this_sp<'tper>(&self, tper: &'tper Tper) -> Result<&'tper dyn SecurityProvider, MethodStatus> {
         match self {
             Session::Open { sp, .. } => Ok(tper.sp(*sp).expect_sp(*sp)),
             Session::Closed => Err(MethodStatus::Fail),
         }
     }
 
-    fn this_sp_mut<'tper>(&self, tper: &'tper mut TPer) -> Result<&'tper mut dyn SecurityProvider, MethodStatus> {
+    fn this_sp_mut<'tper>(&self, tper: &'tper mut Tper) -> Result<&'tper mut dyn SecurityProvider, MethodStatus> {
         match self {
             Session::Open { sp, .. } => Ok(tper.sp_mut(*sp).expect_sp(*sp)),
             Session::Closed => Err(MethodStatus::Fail),
@@ -521,7 +521,7 @@ impl Session {
 
     fn check_permission(
         &self,
-        tper: &TPer,
+        tper: &Tper,
         invoking_id: Uid,
         method_id: MethodRef,
         mut columns: impl Iterator<Item = u16>,

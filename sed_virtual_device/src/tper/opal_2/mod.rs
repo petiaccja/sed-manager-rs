@@ -6,12 +6,12 @@ mod preconfig_admin;
 mod preconfig_locking;
 
 #[derive(Debug)]
-pub struct Opal2TPer {
+pub struct Opal2Tper {
     admin: Admin,
     locking: Locking,
 }
 
-impl Opal2TPer {
+impl Opal2Tper {
     pub fn sp(&self, uid: SecurityProviderRef) -> Option<&dyn SecurityProvider> {
         match uid {
             sp::ADMIN => Some(&self.admin),
@@ -56,7 +56,7 @@ impl Opal2TPer {
     }
 }
 
-impl Default for Opal2TPer {
+impl Default for Opal2Tper {
     fn default() -> Self {
         Self { admin: preconfig_admin::preconfig(), locking: preconfig_locking::preconfig() }
     }

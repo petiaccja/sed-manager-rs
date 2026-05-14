@@ -15,14 +15,14 @@ use crate::com_id::{ComId, ComIdExt};
 use crate::com_session::ComSession;
 use crate::internal_error::Expect;
 use crate::packet_session::PacketSession;
-use crate::tper::{Opal2TPer, TPer};
+use crate::tper::{Opal2Tper, Tper};
 
 pub const BASE_COM_ID: ComId = ComId(3072);
 pub const NUM_COM_IDS: u16 = 1;
 
 #[derive(Debug)]
 pub struct VirtualDevice {
-    tper: Mutex<TPer>,
+    tper: Mutex<Tper>,
     sessions: Mutex<Sessions>,
 }
 
@@ -36,7 +36,7 @@ impl VirtualDevice {
         let packet_sessions = static_com_ids.map(|com_id| (com_id, PacketSession::new(com_id, ComIdExt(0)))).collect();
 
         Self {
-            tper: TPer::Opal2(Opal2TPer::default()).into(),
+            tper: Tper::Opal2(Opal2Tper::default()).into(),
             sessions: Sessions { com_sessions, packet_sessions }.into(),
         }
     }

@@ -14,7 +14,7 @@ use sed_spec::{
     },
 };
 use sed_telemetry::{WithTracing, with_tracing};
-use sed_tper::{Session, TPer, error::Error, protocol::Protocol};
+use sed_tper::{Session, Tper, error::Error, protocol::Protocol};
 use sed_virtual_device::{BASE_COM_ID, INITIAL_SID_PASSWORD, VirtualDevice};
 use tracing::instrument;
 
@@ -23,7 +23,7 @@ use tracing::instrument;
 #[tokio::test(flavor = "multi_thread")]
 async fn session_lifetime(_with_tracing: WithTracing) {
     let device = Arc::new(VirtualDevice::new());
-    let tper = TPer::connect(BASE_COM_ID, 0, device.clone()).await;
+    let tper = Tper::connect(BASE_COM_ID, 0, device.clone()).await;
     assert!(device.sessions(BASE_COM_ID, 0).unwrap().is_empty());
 
     let session = tper.start_session(sp::ADMIN, None, None).await.unwrap();

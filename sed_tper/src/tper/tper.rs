@@ -21,12 +21,12 @@ use crate::{
 };
 
 #[derive(Debug)]
-pub struct TPer {
+pub struct Tper {
     controller: Controller,
     host_session_id: AtomicU32,
 }
 
-impl TPer {
+impl Tper {
     /// Connect to a device on the specified ComID and ComID extension.
     ///
     /// The ComID pair has to either be a static ComID or dynamically allocated
