@@ -1,14 +1,84 @@
-use sed_packet::MaxBytes;
-use sed_tper::Tper;
+use std::sync::Arc;
 
-use crate::error::Error;
+use sed_packet::MaxBytes;
+use sed_spec::{
+    methods::MethodStatus,
+    objects::{AuthorityRef, CPinRefExt},
+};
+use sed_tper::Tper;
+use sed_tper::error::Error as TperError;
+use tracing::instrument;
+
+use crate::{error::Error, spec::Spec};
 
 pub struct SidSession {
-    tper: Tper,
+    tper: Arc<Tper>,
+    spec: Spec,
 }
 
 impl SidSession {
-    pub fn take_owneship(&self, new_sid_password: MaxBytes<32>) -> Result<(), Error> {
+    pub fn new(tper: Arc<Tper>, spec: Spec) -> Self {
+        Self { tper, spec }
+    }
+
+    pub async fn on_primary_ssc(tper: Arc<Tper>) -> Result<Self, Error> {
+        let discovery = tper.discover_now().await?;
+        let spec = Spec::new(discovery);
+        Ok(Self::new(tper, spec))
+    }
+
+    /// Take ownership of the device by changing the SID password.
+    ///
+    /// # Errors
+    ///
+    /// To change the SID password, we first have to authenticate the SID
+    /// authority using its initial (MSID) password. If ownership has already
+    /// been taken, the MSID password won't work, and an error is returned.
+    ///
+    /// The method may also fail due to any common Tper RPC errors.
+    #[instrument(level = "info", skip(self, new_sid_password), ret, err)]
+    pub async fn take_owneship(&self, new_sid_password: MaxBytes<32>) -> Result<(), Error> {
+        let admin = self.spec.admin.as_ref().ok_or(Error::NoSscSupported)?;
+
+        // Get the MSID password.
+        let initial_password = self
+            .tper
+            .start_session(admin.uid, None, None)
+            .await?
+            .with(async |session| session.get_field(admin.c_pins.msid.pin()).await)
+            .await?;
+
+        // Change the SID password to the new one.
+        self.tper
+            .start_session(admin.uid, Some(admin.authorities.sid), Some(initial_password))
+            .await
+            .map_err(|err| match err {
+                TperError::MethodCallFailed(MethodStatus::NotAuthorized) => Error::AlreadyOwned,
+                err => err.into(),
+            })?
+            .with(async |session| session.set_field(admin.c_pins.sid.pin(), new_sid_password).await)
+            .await?;
+
+        Ok(())
+    }
+
+    /// Activate the locking or key per I/O SPs.
+    #[instrument(level = "info", skip(self, sid_password), ret, err)]
+    pub async fn activate_locking(&self, sid_password: MaxBytes<32>) -> Result<(), Error> {
+        todo!()
+    }
+
+    /// Revert the whole device to its original factory state.
+    ///
+    /// This will revert both the admin and locking/KPIO SPs to their original
+    /// factory state. If encryption has been enabled, all data will be erased.
+    ///
+    /// # Parameters
+    ///
+    /// - `authority`: this may be the SID or the PSID authority.
+    /// - `password`: the password of the `authority`.
+    #[instrument(level = "info", skip(self, password), ret, err)]
+    pub async fn revert_tper(&self, authority: AuthorityRef, password: MaxBytes<32>) -> Result<(), Error> {
         todo!()
     }
 }

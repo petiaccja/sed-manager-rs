@@ -6,4 +6,15 @@ edition = "2024"
 [dependencies]
 sed_tper.workspace = true
 sed_packet.workspace = true
+sed_spec.workspace = true
 thiserror.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+sed_telemetry = { workspace = true, features = ["test-utils"] }
+sed_device = { workspace = true, features = ["test-utils"] }
+sed_tper = { workspace = true, features = ["test-utils"] }
+sed_virtual_device.workspace = true
+rstest.workspace = true
+tokio = { workspace = true, features = ["macros"] }
+googletest.workspace = true
