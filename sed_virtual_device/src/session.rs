@@ -48,7 +48,7 @@ impl Session {
     }
 
     #[must_use]
-    pub fn dispatch(&mut self, tper: &mut Tper, packet: Packet) -> Vec<Packet> {
+    pub fn dispatch(&mut self, tper: &mut Tper, packet: Packet) -> Vec<(Packet, Vec<SecurityProviderRef>)> {
         if let Session::Open { recv_buffer, .. } = self {
             let data_sub_packets = packet.payload.iter().filter(|sub_packet| sub_packet.kind == SubPacketKind::Data);
             for sub_packet in data_sub_packets {
@@ -74,14 +74,14 @@ impl Session {
             .into_iter()
             .filter_map(|extract_result| match extract_result {
                 ExtractResult::Ok { value, .. } => self.call(tper, value),
-                ExtractResult::EndOfStream => self.close(),
+                ExtractResult::EndOfStream => self.close().map(|packet| (packet, vec![])),
                 ExtractResult::NeedMoreTokens => None,
-                ExtractResult::InvalidTokens(_) => self.abort(),
+                ExtractResult::InvalidTokens(_) => self.abort().map(|packet| (packet, vec![])),
             })
             .collect()
     }
 
-    fn call(&mut self, tper: &mut Tper, call: SessionMethodCall) -> Option<Packet> {
+    fn call(&mut self, tper: &mut Tper, call: SessionMethodCall) -> Option<(Packet, Vec<SecurityProviderRef>)> {
         use SessionMethodCallParams::*;
 
         if let Self::Open { session_id, .. } = self {
@@ -90,37 +90,38 @@ impl Session {
             let session_id = *session_id;
 
             let invoking_id = call.invoking_id;
-            let result_tokens = match call.params {
-                Activate(params) => MethodResult(self.activate(tper, invoking_id, &params)).to_tokens(),
-                Authenticate(params) => MethodResult(self.authenticate(tper, invoking_id, &params)).to_tokens(),
-                GenKey(params) => MethodResult(self.gen_key(tper, invoking_id, &params)).to_tokens(),
-                Get(params) => MethodResult(self.get(tper, invoking_id, &params)).to_tokens(),
-                GetAcl(params) => MethodResult(self.get_acl(tper, invoking_id, &params)).to_tokens(),
-                Next(params) => MethodResult(self.next(tper, invoking_id, &params)).to_tokens(),
-                Random(params) => MethodResult(self.random(tper, invoking_id, &params)).to_tokens(),
-                Revert(params) => MethodResult(self.revert(tper, invoking_id, &params)).to_tokens(),
-                RevertSp(params) => MethodResult(self.revert_sp(tper, invoking_id, &params)).to_tokens(),
-                SetAce(p) => MethodResult(self.set_obj(tper, invoking_id, p, Sp::ace_mut)).to_tokens(),
-                SetAuthority(p) => MethodResult(self.set_obj(tper, invoking_id, p, Sp::authority_mut)).to_tokens(),
-                SetBytes(params) => MethodResult(self.set_bytes(tper, invoking_id, params)).to_tokens(),
-                SetCPin(p) => MethodResult(self.set_obj(tper, invoking_id, p, Sp::c_pin_mut)).to_tokens(),
-                SetKAes256(p) => MethodResult(self.set_obj_opt(tper, invoking_id, p, Sp::k_aes_256_mut)).to_tokens(),
-                SetLockingRange(p) => MethodResult(self.set_obj_opt(tper, invoking_id, p, Sp::locking_mut)).to_tokens(),
-                SetMbrControl(p) => {
-                    MethodResult(self.set_obj_opt(tper, invoking_id, p, Sp::mbr_control_mut)).to_tokens()
-                }
-                SetSecurityProvider(p) => MethodResult(self.set_obj_opt(tper, invoking_id, p, Sp::sp_mut)).to_tokens(),
-                SetTableDesc(p) => MethodResult(self.set_obj(tper, invoking_id, p, Sp::table_mut)).to_tokens(),
+            let (result_tokens, reverted_sps) = match call.params {
+                Activate(params) => make_result(self.activate(tper, invoking_id, &params)),
+                Authenticate(params) => make_result(self.authenticate(tper, invoking_id, &params)),
+                GenKey(params) => make_result(self.gen_key(tper, invoking_id, &params)),
+                Get(params) => make_result(self.get(tper, invoking_id, &params)),
+                GetAcl(params) => make_result(self.get_acl(tper, invoking_id, &params)),
+                Next(params) => make_result(self.next(tper, invoking_id, &params)),
+                Random(params) => make_result(self.random(tper, invoking_id, &params)),
+                Revert(params) => make_result_revert(self.revert(tper, invoking_id, &params)),
+                RevertSp(params) => make_result_revert(self.revert_sp(tper, invoking_id, &params)),
+                SetAce(p) => make_result(self.set_obj(tper, invoking_id, p, Sp::ace_mut)),
+                SetAuthority(p) => make_result(self.set_obj(tper, invoking_id, p, Sp::authority_mut)),
+                SetBytes(params) => make_result(self.set_bytes(tper, invoking_id, params)),
+                SetCPin(p) => make_result(self.set_obj(tper, invoking_id, p, Sp::c_pin_mut)),
+                SetKAes256(p) => make_result(self.set_obj_opt(tper, invoking_id, p, Sp::k_aes_256_mut)),
+                SetLockingRange(p) => make_result(self.set_obj_opt(tper, invoking_id, p, Sp::locking_mut)),
+                SetMbrControl(p) => make_result(self.set_obj_opt(tper, invoking_id, p, Sp::mbr_control_mut)),
+                SetSecurityProvider(p) => make_result(self.set_obj_opt(tper, invoking_id, p, Sp::sp_mut)),
+                SetTableDesc(p) => make_result(self.set_obj(tper, invoking_id, p, Sp::table_mut)),
             };
             tracing::debug!(method_result = tracing::field::debug(&result_tokens), "response");
-            Some(session_id.assign(Packet {
-                payload: vec![SubPacket {
-                    kind: SubPacketKind::Data,
-                    length: std::marker::PhantomData,
-                    payload: result_tokens.expect_serialize(),
-                }],
-                ..Default::default()
-            }))
+            Some((
+                session_id.assign(Packet {
+                    payload: vec![SubPacket {
+                        kind: SubPacketKind::Data,
+                        length: std::marker::PhantomData,
+                        payload: result_tokens,
+                    }],
+                    ..Default::default()
+                }),
+                reverted_sps,
+            ))
         } else {
             None
         }
@@ -352,30 +353,44 @@ impl Session {
         }
     }
 
-    fn revert(&self, tper: &mut Tper, invoking_id: Uid, params: &Revert) -> Result<RevertResult, MethodStatus> {
+    fn revert(
+        &mut self,
+        tper: &mut Tper,
+        invoking_id: Uid,
+        params: &Revert,
+    ) -> Result<(RevertResult, Vec<SecurityProviderRef>), MethodStatus> {
         self.check_permission(tper, invoking_id, params.method_id().try_into().unwrap(), [0].into_iter())?;
 
+        let this_sp_uid = self.this_sp_uid().ok_or(MethodStatus::Fail)?;
+
         let sp_uid = SecurityProviderRef::try_from(invoking_id).map_err(|_| MethodStatus::InvalidParameter)?;
-        tper.restore_preconfig(sp_uid)?;
-        Ok(RevertResult)
+        let reverted_sps: Vec<_> = tper.restore_preconfig(sp_uid)?;
+        if reverted_sps.contains(&this_sp_uid) {
+            *self = Self::Closed;
+        }
+        Ok((RevertResult, reverted_sps))
     }
 
-    fn revert_sp(&self, tper: &mut Tper, invoking_id: Uid, params: &RevertSp) -> Result<RevertSpResult, MethodStatus> {
+    fn revert_sp(
+        &mut self,
+        tper: &mut Tper,
+        invoking_id: Uid,
+        params: &RevertSp,
+    ) -> Result<(RevertSpResult, Vec<SecurityProviderRef>), MethodStatus> {
         self.check_permission(tper, invoking_id, params.method_id().try_into().unwrap(), [0].into_iter())?;
 
         if invoking_id != THIS_SP {
             return Err(MethodStatus::InvalidParameter);
         }
-        let sp_uid = match self {
-            Session::Open { sp, .. } => *sp,
-            Session::Closed => return Err(MethodStatus::Fail),
-        };
+        let this_sp_uid = self.this_sp_uid().ok_or(MethodStatus::Fail)?;
 
         // TODO: this parameters is currently ignored. It doesn't matter much
         // for the virtual device anyways.
         let _ = params.keep_global_range_key;
-        tper.restore_preconfig(sp_uid)?;
-        Ok(RevertSpResult)
+        let reverted_sps = tper.restore_preconfig(this_sp_uid)?;
+        *self = Self::Closed;
+
+        Ok((RevertSpResult, reverted_sps))
     }
 
     fn set_obj<'tper, O, G>(
@@ -505,18 +520,21 @@ impl Session {
         }
     }
 
-    fn this_sp<'tper>(&self, tper: &'tper Tper) -> Result<&'tper dyn SecurityProvider, MethodStatus> {
+    pub fn this_sp_uid<'tper>(&self) -> Option<SecurityProviderRef> {
         match self {
-            Session::Open { sp, .. } => Ok(tper.sp(*sp).expect_sp(*sp)),
-            Session::Closed => Err(MethodStatus::Fail),
+            Session::Open { sp, .. } => Some(*sp),
+            Session::Closed => None,
         }
     }
 
+    fn this_sp<'tper>(&self, tper: &'tper Tper) -> Result<&'tper dyn SecurityProvider, MethodStatus> {
+        let this_sp_uid = self.this_sp_uid().ok_or(MethodStatus::Fail)?;
+        Ok(tper.sp(this_sp_uid).expect_sp(this_sp_uid))
+    }
+
     fn this_sp_mut<'tper>(&self, tper: &'tper mut Tper) -> Result<&'tper mut dyn SecurityProvider, MethodStatus> {
-        match self {
-            Session::Open { sp, .. } => Ok(tper.sp_mut(*sp).expect_sp(*sp)),
-            Session::Closed => Err(MethodStatus::Fail),
-        }
+        let this_sp_uid = self.this_sp_uid().ok_or(MethodStatus::Fail)?;
+        Ok(tper.sp_mut(this_sp_uid).expect_sp(this_sp_uid))
     }
 
     fn check_permission(
@@ -636,4 +654,19 @@ fn normalize_bounds<T: Add<T, Output = T> + From<u8>>(start: Bound<T>, end: Boun
     };
 
     start..end
+}
+
+fn make_result<ResultList: Tokenize>(
+    result_list: Result<ResultList, MethodStatus>,
+) -> (Vec<u8>, Vec<SecurityProviderRef>) {
+    (MethodResult(result_list).to_tokens().expect_serialize(), vec![])
+}
+
+fn make_result_revert<ResultList: Tokenize>(
+    result_list: Result<(ResultList, Vec<SecurityProviderRef>), MethodStatus>,
+) -> (Vec<u8>, Vec<SecurityProviderRef>) {
+    match result_list {
+        Ok((result_list, revert_list)) => (MethodResult(Ok(result_list)).to_tokens().expect_serialize(), revert_list),
+        Err(err) => (MethodResult::<ResultList>(Err(err)).to_tokens().expect_serialize(), vec![]),
+    }
 }

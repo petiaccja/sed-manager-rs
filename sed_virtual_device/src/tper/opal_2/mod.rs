@@ -45,16 +45,16 @@ impl Opal2Tper {
         Some(&mut self.locking)
     }
 
-    pub fn restore_preconfig(&mut self, sp: SecurityProviderRef) -> Result<(), MethodStatus> {
+    pub fn restore_preconfig(&mut self, sp: SecurityProviderRef) -> Result<Vec<SecurityProviderRef>, MethodStatus> {
         match sp {
             sp::ADMIN => {
                 self.admin = preconfig_admin::preconfig();
                 self.locking = preconfig_locking::preconfig();
-                Ok(())
+                Ok(vec![sp::ADMIN, sp::LOCKING])
             }
             sp::LOCKING => {
                 self.locking = preconfig_locking::preconfig();
-                Ok(())
+                Ok(vec![sp::LOCKING])
             }
             _ => Err(MethodStatus::InvalidParameter),
         }

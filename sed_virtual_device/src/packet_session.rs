@@ -66,17 +66,28 @@ impl PacketSession {
     pub fn push(&mut self, tper: &mut Tper, com_packet: ComPacket) {
         for packet in com_packet.payload {
             let session_id = SessionId::of(&packet);
+            let mut reverted_sps = HashSet::new();
+
             let packets = if session_id == SessionId::MANAGEMENT {
                 self.management_session.dispatch(tper, &mut self.sessions, packet)
             } else if let Some(session) = self.sessions.get_mut(&session_id) {
-                let packets = session.dispatch(tper, packet);
+                let results = session.dispatch(tper, packet);
                 if matches!(session, Session::Closed) {
                     self.sessions.remove(&session_id);
                 }
-                packets
+                results
+                    .into_iter()
+                    .map(|(packet, reverted_sps_)| {
+                        reverted_sps.extend(reverted_sps_);
+                        packet
+                    })
+                    .collect()
             } else {
                 vec![]
             };
+
+            self.sessions
+                .retain(|_, session| !session.this_sp_uid().is_some_and(|uid| reverted_sps.contains(&uid)));
 
             let com_packets =
                 packets.into_iter().map(|packet| ComPacket { payload: vec![packet], ..Default::default() });

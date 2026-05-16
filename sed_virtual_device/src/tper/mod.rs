@@ -69,7 +69,7 @@ impl Tper {
         }
     }
 
-    pub fn restore_preconfig(&mut self, sp: SecurityProviderRef) -> Result<(), MethodStatus> {
+    pub fn restore_preconfig(&mut self, sp: SecurityProviderRef) -> Result<Vec<SecurityProviderRef>, MethodStatus> {
         match self {
             Tper::Opal2(tper) => tper.restore_preconfig(sp),
         }
