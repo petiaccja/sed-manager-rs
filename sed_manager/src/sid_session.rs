@@ -3,7 +3,8 @@ use std::sync::Arc;
 use sed_packet::MaxBytes;
 use sed_spec::{
     methods::MethodStatus,
-    objects::{AuthorityRef, CPinRefExt},
+    objects::{AuthorityRef, CPinRefExt, SecurityProviderRefExt},
+    types::LifeCycleState,
 };
 use sed_tper::Tper;
 use sed_tper::error::Error as TperError;
@@ -63,9 +64,41 @@ impl SidSession {
     }
 
     /// Activate the locking or key per I/O SPs.
+    ///
+    /// # Errors
+    ///
+    /// The SID authority is used to activate the locking or KPIO SP. If the SP
+    /// is already in the [`Manufactured`] state (i.e. already activated),
+    /// [`Error::AlreadyActivated`] is returned.
+    ///
+    /// The method may also fail due to any common Tper RPC errors.
+    ///
+    /// [`Manufactured`]: LifeCycleState::Manufactured
     #[instrument(level = "info", skip(self, sid_password), ret, err)]
-    pub async fn activate_locking(&self, sid_password: MaxBytes<32>) -> Result<(), Error> {
-        todo!()
+    pub async fn activate_secondary_sp(&self, sid_password: MaxBytes<32>) -> Result<(), Error> {
+        let admin = self.spec.admin.as_ref().ok_or(Error::NoSscSupported)?;
+        let secondary_sp_uid = self
+            .spec
+            .locking
+            .as_ref()
+            .map(|sp| sp.uid)
+            .or_else(|| self.spec.kpio.as_ref().map(|sp| sp.uid))
+            .ok_or(Error::IncompatibleSsc)?;
+
+        self.tper
+            .start_session(admin.uid, Some(admin.authorities.sid), Some(sid_password))
+            .await?
+            .with(async |session| {
+                let life_cycle_state = session.get_field(secondary_sp_uid.life_cycle_state()).await?;
+                if life_cycle_state != LifeCycleState::ManufacturedInactive {
+                    return Err(Error::AlreadyActivated);
+                }
+                session.activate(secondary_sp_uid).await?;
+                Ok(())
+            })
+            .await?;
+
+        Ok(())
     }
 
     /// Revert the whole device to its original factory state.

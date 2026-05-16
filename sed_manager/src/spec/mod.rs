@@ -83,7 +83,7 @@ fn enterprise() -> (Option<Admin>, Option<Locking>, Option<Kpio>) {
             authorities: AuthorityTable { sid: admin::authority::SID, psid: psid::admin::authority::PSID },
             c_pins: CPinTable { sid: admin::c_pin::SID, msid: admin::c_pin::MSID },
         }),
-        Some(Locking {}),
+        Some(Locking { uid: admin::sp::LOCKING }),
         None,
     )
 }
@@ -96,7 +96,7 @@ fn opal() -> (Option<Admin>, Option<Locking>, Option<Kpio>) {
             authorities: AuthorityTable { sid: admin::authority::SID, psid: psid::admin::authority::PSID },
             c_pins: CPinTable { sid: admin::c_pin::SID, msid: admin::c_pin::MSID },
         }),
-        Some(Locking {}),
+        Some(Locking { uid: admin::sp::LOCKING }),
         None,
     )
 }
@@ -109,7 +109,7 @@ fn opalite() -> (Option<Admin>, Option<Locking>, Option<Kpio>) {
             authorities: AuthorityTable { sid: admin::authority::SID, psid: psid::admin::authority::PSID },
             c_pins: CPinTable { sid: admin::c_pin::SID, msid: admin::c_pin::MSID },
         }),
-        Some(Locking {}),
+        Some(Locking { uid: admin::sp::LOCKING }),
         None,
     )
 }
@@ -122,7 +122,7 @@ fn pyrite() -> (Option<Admin>, Option<Locking>, Option<Kpio>) {
             authorities: AuthorityTable { sid: admin::authority::SID, psid: psid::admin::authority::PSID },
             c_pins: CPinTable { sid: admin::c_pin::SID, msid: admin::c_pin::MSID },
         }),
-        Some(Locking {}),
+        Some(Locking { uid: admin::sp::LOCKING }),
         None,
     )
 }
@@ -135,7 +135,7 @@ fn ruby() -> (Option<Admin>, Option<Locking>, Option<Kpio>) {
             authorities: AuthorityTable { sid: admin::authority::SID, psid: psid::admin::authority::PSID },
             c_pins: CPinTable { sid: admin::c_pin::SID, msid: admin::c_pin::MSID },
         }),
-        Some(Locking {}),
+        Some(Locking { uid: admin::sp::LOCKING }),
         None,
     )
 }
@@ -148,7 +148,7 @@ fn kpio() -> (Option<Admin>, Option<Locking>, Option<Kpio>) {
             authorities: AuthorityTable { sid: admin::authority::SID, psid: psid::admin::authority::PSID },
             c_pins: CPinTable { sid: admin::c_pin::SID, msid: admin::c_pin::MSID },
         }),
-        Some(Locking {}),
         None,
+        Some(Kpio { uid: admin::sp::KEY_PER_IO }),
     )
 }
