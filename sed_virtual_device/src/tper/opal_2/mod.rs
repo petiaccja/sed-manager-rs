@@ -1,4 +1,6 @@
-use sed_spec::{methods::MethodStatus, objects::SecurityProviderRef, preconfig::opal_2::admin::sp};
+use sed_spec::{
+    methods::MethodStatus, objects::SecurityProviderRef, preconfig::opal_2::admin::sp, types::LifeCycleState,
+};
 
 use crate::tper::{Admin, Locking, security_provider::SecurityProvider};
 
@@ -53,6 +55,9 @@ impl Opal2Tper {
                 Ok(vec![sp::ADMIN, sp::LOCKING])
             }
             sp::LOCKING => {
+                if let Some(locking_sp) = self.admin.sp.get_mut(&sp::LOCKING) {
+                    locking_sp.life_cycle_state = Some(LifeCycleState::ManufacturedInactive);
+                }
                 self.locking = preconfig_locking::preconfig();
                 Ok(vec![sp::LOCKING])
             }
