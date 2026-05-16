@@ -22,6 +22,7 @@ use crate::{
 
 #[derive(Debug)]
 pub struct Tper {
+    device: Arc<dyn Device>,
     controller: Controller,
     host_session_id: AtomicU32,
 }
@@ -39,15 +40,20 @@ impl Tper {
     /// stack synchronized again.
     #[instrument(level = "info")]
     pub async fn connect(com_id: u16, com_id_ext: u16, device: Arc<dyn Device>) -> Self {
-        let (protocol, controller) = Protocol::new(com_id, com_id_ext, device);
+        let (protocol, controller) = Protocol::new(com_id, com_id_ext, device.clone());
         spawn(protocol.run());
-        Self { controller, host_session_id: 1.into() }
+        Self { device, controller, host_session_id: 1.into() }
     }
 
     #[instrument(level = "info", ret, err)]
     pub async fn discover(device: &dyn Device) -> Result<Discovery, Error> {
         let bytes = device.security_recv(0x01, 0x0001_u16.to_be_bytes(), 4096)?;
         Discovery::from_bytes(&bytes).map_err(|error| Error::InvalidDiscovery(error))
+    }
+
+    #[instrument(level = "info", skip(self))]
+    pub async fn discover_now(&self) -> Result<Discovery, Error> {
+        Self::discover(&*self.device).await
     }
 
     #[instrument(level = "info", skip(self), ret, err)]

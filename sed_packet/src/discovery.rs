@@ -299,6 +299,10 @@ impl Feature for EnterpriseDescriptor {
     fn version(&self) -> u8 {
         self.version
     }
+
+    fn as_ssc(&self) -> Option<&dyn SecuritySubsystemClass> {
+        Some(self)
+    }
 }
 
 impl SecuritySubsystemClass for EnterpriseDescriptor {
@@ -328,6 +332,10 @@ impl Feature for OpalV1Descriptor {
 
     fn version(&self) -> u8 {
         self.version
+    }
+
+    fn as_ssc(&self) -> Option<&dyn SecuritySubsystemClass> {
+        Some(self)
     }
 }
 
@@ -363,6 +371,10 @@ impl Feature for OpalV2Descriptor {
     fn version(&self) -> u8 {
         self.version
     }
+
+    fn as_ssc(&self) -> Option<&dyn SecuritySubsystemClass> {
+        Some(self)
+    }
 }
 
 impl SecuritySubsystemClass for OpalV2Descriptor {
@@ -393,6 +405,10 @@ impl Feature for OpaliteDescriptor {
 
     fn version(&self) -> u8 {
         self.version
+    }
+
+    fn as_ssc(&self) -> Option<&dyn SecuritySubsystemClass> {
+        Some(self)
     }
 }
 
@@ -425,6 +441,10 @@ impl Feature for PyriteV1Descriptor {
     fn version(&self) -> u8 {
         self.version
     }
+
+    fn as_ssc(&self) -> Option<&dyn SecuritySubsystemClass> {
+        Some(self)
+    }
 }
 
 impl SecuritySubsystemClass for PyriteV1Descriptor {
@@ -455,6 +475,10 @@ impl Feature for PyriteV2Descriptor {
 
     fn version(&self) -> u8 {
         self.version
+    }
+
+    fn as_ssc(&self) -> Option<&dyn SecuritySubsystemClass> {
+        Some(self)
     }
 }
 
@@ -489,6 +513,10 @@ impl Feature for RubyDescriptor {
 
     fn version(&self) -> u8 {
         self.version
+    }
+
+    fn as_ssc(&self) -> Option<&dyn SecuritySubsystemClass> {
+        Some(self)
     }
 }
 
@@ -571,6 +599,10 @@ impl Feature for KeyPerIODescriptor {
 
     fn version(&self) -> u8 {
         self.version
+    }
+
+    fn as_ssc(&self) -> Option<&dyn SecuritySubsystemClass> {
+        Some(self)
     }
 }
 
