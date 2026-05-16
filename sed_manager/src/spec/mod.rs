@@ -7,7 +7,7 @@ pub use kpio::Kpio;
 pub use locking::Locking;
 
 use sed_packet::discovery::{Discovery, Feature, FeatureDescriptor};
-use sed_spec::preconfig::psid;
+use sed_spec::{objects::SecurityProviderRef, preconfig::psid};
 
 use crate::spec::admin::{AuthorityTable, CPinTable};
 
@@ -29,6 +29,10 @@ impl Spec {
             None => (None, None, None),
         };
         Self { admin, locking, kpio }
+    }
+
+    pub fn secondary_sp_uid(&self) -> Option<SecurityProviderRef> {
+        self.locking.as_ref().map(|sp| sp.uid).or_else(|| self.kpio.as_ref().map(|sp| sp.uid))
     }
 }
 

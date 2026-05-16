@@ -131,13 +131,7 @@ impl SidSession {
     #[instrument(level = "info", skip(self, sid_password), ret, err)]
     pub async fn revert_secondary_sp(&self, sid_password: MaxBytes<32>) -> Result<(), Error> {
         let admin = self.spec.admin.as_ref().ok_or(Error::NoSscSupported)?;
-        let secondary_sp_uid = self
-            .spec
-            .locking
-            .as_ref()
-            .map(|sp| sp.uid)
-            .or_else(|| self.spec.kpio.as_ref().map(|sp| sp.uid))
-            .ok_or(Error::IncompatibleSsc)?;
+        let secondary_sp_uid = self.spec.secondary_sp_uid().ok_or(Error::IncompatibleSsc)?;
 
         self.tper
             .start_session(admin.uid, Some(admin.authorities.sid), Some(sid_password))
@@ -159,13 +153,7 @@ impl SidSession {
         password: MaxBytes<32>,
         keep_global_range_key: Option<bool>,
     ) -> Result<(), Error> {
-        let secondary_sp_uid = self
-            .spec
-            .locking
-            .as_ref()
-            .map(|sp| sp.uid)
-            .or_else(|| self.spec.kpio.as_ref().map(|sp| sp.uid))
-            .ok_or(Error::IncompatibleSsc)?;
+        let secondary_sp_uid = self.spec.secondary_sp_uid().ok_or(Error::IncompatibleSsc)?;
 
         let session = self.tper.start_session(secondary_sp_uid, Some(admin), Some(password)).await?;
         match session.revert_sp(keep_global_range_key).await {
