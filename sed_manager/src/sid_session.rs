@@ -103,8 +103,9 @@ impl SidSession {
 
     /// Revert the whole device to its original factory state.
     ///
-    /// This will revert both the admin and locking/KPIO SPs to their original
-    /// factory state. If encryption has been enabled, all data will be erased.
+    /// This method requires a login to the Admin SP as SID or PSID. Both the
+    /// admin and the secondary (locking or KPIO) SP will be reverted to their
+    /// original factory state.
     ///
     /// # Parameters
     ///
@@ -112,6 +113,29 @@ impl SidSession {
     /// - `password`: the password of the `authority`.
     #[instrument(level = "info", skip(self, password), ret, err)]
     pub async fn revert_tper(&self, authority: AuthorityRef, password: MaxBytes<32>) -> Result<(), Error> {
+        todo!()
+    }
+
+    /// Revert the secondary SP to its original factory state.
+    ///
+    /// This method requires a login to the Admin SP as SID.
+    /// Only the secondary SP will be reverted, the Admin SP is unaffected.
+    #[instrument(level = "info", skip(self, sid_password), ret, err)]
+    pub async fn revert_secondary_sp(&self, sid_password: MaxBytes<32>) -> Result<(), Error> {
+        todo!()
+    }
+
+    /// Revert the secondary SP to its original factory state.
+    ///
+    /// This method requires a login to the secondary SP as one of the admins.
+    /// Only the secondary SP will be reverted, the Admin SP is unaffected.
+    #[instrument(level = "info", skip(self, password), ret, err)]
+    pub async fn revert_secondary_sp_ex(
+        &self,
+        admin: AuthorityRef,
+        password: MaxBytes<32>,
+        keep_global_range_key: Option<bool>,
+    ) -> Result<(), Error> {
         todo!()
     }
 }
