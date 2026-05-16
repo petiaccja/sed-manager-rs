@@ -2,8 +2,14 @@ use std::sync::Arc;
 
 use googletest::{assert_that, matchers::*};
 use sed_manager::{error::Error, sid_session::SidSession};
-use sed_packet::discovery::{BlockSIDAuthDescriptor, LockingDescriptor};
-use sed_spec::preconfig::{opal_2::admin as opal_admin, psid};
+use sed_packet::{
+    MaxBytes,
+    discovery::{BlockSIDAuthDescriptor, LockingDescriptor},
+};
+use sed_spec::preconfig::{
+    opal_2::{admin as opal_admin, locking as opal_locking},
+    psid,
+};
 use sed_telemetry::{WithTracing, with_tracing};
 use sed_tper::Tper;
 use sed_virtual_device::{BASE_COM_ID, INITIAL_SID_PASSWORD, PSID_PASSWORD, VirtualDevice};
@@ -75,10 +81,11 @@ async fn activate_secondary_sp_already_activated(_with_tracing: WithTracing) {
 #[rstest::rstest]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn revert_tper_with_sid(_with_tracing: WithTracing) {
-    let new_sid_password: sed_packet::MaxBytes<32> = b"not_default".as_slice().into();
+    let new_sid_password = MaxBytes::<32>::from(b"not_default".as_slice());
     let device = Arc::new(VirtualDevice::new());
     let tper = Arc::new(Tper::connect(BASE_COM_ID, 0, device.clone()).await);
     let session = SidSession::on_primary_ssc(tper).await.unwrap();
+
     session.take_owneship(new_sid_password.clone()).await.unwrap();
     session.activate_secondary_sp(new_sid_password.clone()).await.unwrap();
 
@@ -95,10 +102,11 @@ async fn revert_tper_with_sid(_with_tracing: WithTracing) {
 #[rstest::rstest]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn revert_tper_with_psid(_with_tracing: WithTracing) {
-    let new_sid_password: sed_packet::MaxBytes<32> = b"not_default".as_slice().into();
+    let new_sid_password = MaxBytes::<32>::from(b"not_default".as_slice());
     let device = Arc::new(VirtualDevice::new());
     let tper = Arc::new(Tper::connect(BASE_COM_ID, 0, device.clone()).await);
     let session = SidSession::on_primary_ssc(tper).await.unwrap();
+
     session.take_owneship(new_sid_password.clone()).await.unwrap();
     session.activate_secondary_sp(new_sid_password).await.unwrap();
 
@@ -115,14 +123,40 @@ async fn revert_tper_with_psid(_with_tracing: WithTracing) {
 #[rstest::rstest]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn revert_secondary_sp(_with_tracing: WithTracing) {
-    let new_sid_password: sed_packet::MaxBytes<32> = b"not_default".as_slice().into();
+    let new_sid_password = MaxBytes::<32>::from(b"not_default".as_slice());
     let device = Arc::new(VirtualDevice::new());
     let tper = Arc::new(Tper::connect(BASE_COM_ID, 0, device.clone()).await);
     let session = SidSession::on_primary_ssc(tper).await.unwrap();
+
     session.take_owneship(new_sid_password.clone()).await.unwrap();
     session.activate_secondary_sp(new_sid_password.clone()).await.unwrap();
 
     let result = session.revert_secondary_sp(new_sid_password).await;
+    assert_that!(result, ok(anything()));
+
+    // Secondary SP is reverted.
+    let locking = device.discover().get::<LockingDescriptor>().unwrap().clone();
+    assert_that!(locking.locking_enabled, eq(false));
+
+    // Admin SP is unaffected: the changed SID password persists.
+    let block_sid = device.discover().get::<BlockSIDAuthDescriptor>().unwrap().clone();
+    assert_that!(block_sid.sid_msid_pin_differ, eq(true));
+}
+
+#[instrument]
+#[rstest::rstest]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn revert_secondary_sp_ex(_with_tracing: WithTracing) {
+    let new_sid_password = MaxBytes::<32>::from(b"not_default".as_slice());
+    let device = Arc::new(VirtualDevice::new());
+    let tper = Arc::new(Tper::connect(BASE_COM_ID, 0, device.clone()).await);
+    let session = SidSession::on_primary_ssc(tper).await.unwrap();
+
+    session.take_owneship(new_sid_password.clone()).await.unwrap();
+    session.activate_secondary_sp(new_sid_password.clone()).await.unwrap();
+
+    let admin1 = opal_locking::authority::ADMIN.get(1).unwrap();
+    let result = session.revert_secondary_sp_ex(admin1, new_sid_password, None).await;
     assert_that!(result, ok(anything()));
 
     // Secondary SP is reverted.

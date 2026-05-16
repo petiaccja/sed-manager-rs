@@ -159,6 +159,21 @@ impl SidSession {
         password: MaxBytes<32>,
         keep_global_range_key: Option<bool>,
     ) -> Result<(), Error> {
-        todo!()
+        let secondary_sp_uid = self
+            .spec
+            .locking
+            .as_ref()
+            .map(|sp| sp.uid)
+            .or_else(|| self.spec.kpio.as_ref().map(|sp| sp.uid))
+            .ok_or(Error::IncompatibleSsc)?;
+
+        let session = self.tper.start_session(secondary_sp_uid, Some(admin), Some(password)).await?;
+        match session.revert_sp(keep_global_range_key).await {
+            Ok(()) => Ok(()),
+            Err((session, err)) => {
+                let _ = session.close().await;
+                Err(err.into())
+            }
+        }
     }
 }
