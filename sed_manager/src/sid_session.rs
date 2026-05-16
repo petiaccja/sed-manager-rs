@@ -113,7 +113,16 @@ impl SidSession {
     /// - `password`: the password of the `authority`.
     #[instrument(level = "info", skip(self, password), ret, err)]
     pub async fn revert_tper(&self, authority: AuthorityRef, password: MaxBytes<32>) -> Result<(), Error> {
-        todo!()
+        let admin = self.spec.admin.as_ref().ok_or(Error::NoSscSupported)?;
+        let admin_uid = admin.uid;
+
+        self.tper
+            .start_session(admin_uid, Some(authority), Some(password))
+            .await?
+            .with(async |session| session.revert(admin_uid).await)
+            .await?;
+
+        Ok(())
     }
 
     /// Revert the secondary SP to its original factory state.

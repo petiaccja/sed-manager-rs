@@ -47,6 +47,11 @@ impl Opal2Tper {
 
     pub fn restore_preconfig(&mut self, sp: SecurityProviderRef) -> Result<(), MethodStatus> {
         match sp {
+            sp::ADMIN => {
+                self.admin = preconfig_admin::preconfig();
+                self.locking = preconfig_locking::preconfig();
+                Ok(())
+            }
             sp::LOCKING => {
                 self.locking = preconfig_locking::preconfig();
                 Ok(())

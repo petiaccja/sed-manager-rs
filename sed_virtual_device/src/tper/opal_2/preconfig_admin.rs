@@ -103,7 +103,7 @@ pub fn access_control() -> Table<AccessControl> {
         ),
         (
             AccessControlRef { invoking_id: SP.into(), method_id: REVERT },
-            AccessControl { acl: vec![ace::SP_SID, ace::ADMIN], ..Default::default() },
+            AccessControl { acl: vec![ace::SP_SID, ace::ADMIN, psid::admin::ace::SP_PSID], ..Default::default() },
         ),
         (
             AccessControlRef { invoking_id: SP.into(), method_id: ACTIVATE },
@@ -192,6 +192,12 @@ pub fn ace() -> Table<Ace> {
         Ace {
             uid: Some(ace::SP_SID),
             boolean_expr: Some(ace_expr!((authority::SID))),
+            columns: Some(SecurityProvider::all_columns().collect()),
+            ..Default::default()
+        },
+        Ace {
+            uid: Some(psid::admin::ace::SP_PSID),
+            boolean_expr: Some(ace_expr!((psid::admin::authority::PSID))),
             columns: Some(SecurityProvider::all_columns().collect()),
             ..Default::default()
         },
