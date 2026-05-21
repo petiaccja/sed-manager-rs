@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::path::Path;
 use std::str::FromStr;
-use std::sync::Mutex;
 use std::time::Duration;
 
 use opentelemetry::KeyValue;
@@ -14,13 +13,15 @@ use tracing_subscriber::layer::{Context, SubscriberExt as _};
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{Layer, Registry};
 
-static GLOBAL_SUBSCRIBER_SET: Mutex<bool> = Mutex::new(false);
-
 #[cfg(feature = "test-utils")]
 mod test_utils {
+    use std::sync::Mutex;
+
+    static GLOBAL_SUBSCRIBER_SET: Mutex<bool> = Mutex::new(false);
+
     #[rstest::fixture]
     pub fn with_tracing() -> WithTracing {
-        let mut global_subscriber_set = super::GLOBAL_SUBSCRIBER_SET.lock().unwrap();
+        let mut global_subscriber_set = GLOBAL_SUBSCRIBER_SET.lock().unwrap();
         if *global_subscriber_set {
             WithTracing { _guard: super::TracingGuard { provider: None } }
         } else {
