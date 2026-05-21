@@ -1,0 +1,91 @@
+import { Device } from "../data/device.slint";
+import { ListView, Palette, ScrollView } from "std-widgets.slint";
+import { PaletteExtra } from "palette_extra.slint";
+
+component DeviceSideBarItem {
+    min-width: content.min-width;
+    min-height: content.min-height;
+    preferred-width: content.preferred-width;
+    preferred-height: content.preferred-height;
+
+    in property <bool> selected;
+    in property <Device> device;
+
+    callback clicked <=> touch-area.clicked;
+
+    touch-area := TouchArea {
+        Rectangle {
+            background: selected ? Palette.background : #00000000;
+            content := VerticalLayout {
+                spacing: 0.2rem;
+                padding-left: 0.8rem;
+                padding-right: 0.8rem;
+                padding-top: 0.6rem;
+                padding-bottom: 0.6rem;
+
+                Text {
+                    text: !device.name.is-empty ? device.name : device.path;
+                    font-size: 1.6rem;
+                    font-weight: 600;
+                    overflow: elide;
+                    color: selected ? PaletteExtra.accented-control-foreground : Palette.control-foreground;
+                }
+
+                Text {
+                    text: !device.serial.is-empty ? device.serial : "---";
+                    overflow: elide;
+                    opacity: selected ? 80% : 100%;
+                }
+            }
+        }
+    }
+}
+
+component DeviceSideBarTitle inherits Rectangle {
+    min-width: text.min-width + 1.6rem;
+    min-height: text.min-height + 0.8rem;
+
+    in property <string> text;
+
+    text := Text {
+        x: (root.width - self.width) / 2;
+        y: (root.height - self.height) / 2;
+        text: root.text;
+        font-size: 1.8rem;
+        font-weight: 800;
+    }
+}
+
+export component DeviceSideBar inherits Rectangle {
+    background: Palette.control-background;
+
+    in property <string> title: "Devices";
+    in property <[Device]> devices;
+    in-out property <int> selected;
+
+    VerticalLayout {
+        alignment: stretch;
+
+        if !title.is-empty: DeviceSideBarTitle {
+            vertical-stretch: 0.0;
+            text: title;
+        }
+
+        ScrollView {
+            horizontal-scrollbar-policy: always-off;
+            vertical-stretch: 1.0;
+            preferred-width: content.preferred-width;
+            content := VerticalLayout {
+                alignment: start;
+                for device[index] in devices: DeviceSideBarItem {
+                    selected: index == selected;
+                    device: device;
+
+                    clicked => {
+                        root.selected = index
+                    }
+                }
+            }
+        }
+    }
+}

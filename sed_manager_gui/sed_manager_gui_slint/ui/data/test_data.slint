@@ -1,0 +1,41 @@
+import { Device } from "device.slint";
+import { Status, Outcome } from "status.slint";
+
+export global TestData {
+    out property <[Device]> devices: [
+        {
+            name: "Storaginator 3000",
+            serial: "SERIAL#3244",
+            path: "/dev/nvme0",
+            firmware: "FIRMWARE#4543",
+            interface: "NVMe",
+            security_commands: true,
+        },
+        {
+            name: "Encryptifier Pro 2",
+            serial: "SERIAL#8255",
+            path: "/dev/sda",
+            firmware: "FIRMWARE#9912",
+            interface: "SATA",
+            security_commands: false,
+        },
+        {
+            status: { outcome: Outcome.error, message: "permission denied" },
+            name: "",
+            serial: "",
+            path: "/dev/sdb",
+            firmware: "",
+            interface: "",
+            security_commands: false,
+        },
+        {
+            status: { outcome: Outcome.pending },
+            name: "",
+            serial: "",
+            path: "/dev/sdc",
+            firmware: "",
+            interface: "",
+            security_commands: false,
+        },
+    ];
+}

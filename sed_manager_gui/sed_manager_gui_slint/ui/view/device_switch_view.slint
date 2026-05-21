@@ -1,0 +1,23 @@
+import { Device } from "../data/device.slint";
+import { DeviceView } from "device_view.slint";
+
+export component DeviceSwitchView {
+    in property <int> selected;
+    in property <[Device]> devices;
+
+    VerticalLayout {
+        for device[index] in devices: Rectangle {
+            min-width: content.min-width;
+            min-height: index == selected ? content.min-height : 0px;
+            preferred-width: content.preferred-width;
+            preferred-height: index == selected ? content.preferred-height : 0px;
+            visible: index == selected;
+            vertical-stretch: index == selected ? 1.0 : 0.0;
+            content := DeviceView {
+                width: parent.width;
+                height: index == selected ? parent.height : self.min-height;
+                device: device;
+            }
+        }
+    }
+}

@@ -1,0 +1,11 @@
+export enum Outcome {
+    success,
+    error,
+    pending,
+    idle,
+}
+
+export struct Status {
+    outcome: Outcome,
+    message: string,
+}

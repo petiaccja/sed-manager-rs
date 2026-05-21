@@ -1,0 +1,160 @@
+import { Device } from "../data/device.slint";
+import { Outcome } from "../data/status.slint";
+import { Island } from "visual_elements.slint";
+import { PaletteExtra } from "palette_extra.slint";
+import { Spinner, Palette } from "std-widgets.slint";
+import { Icons } from "../resources/icons.slint";
+import { IconButton } from "icon_button.slint";
+import { VerticalSeparator } from "visual_elements.slint";
+
+component Header {
+    min-width: content.min-width;
+    min-height: content.min-height;
+    preferred-width: content.preferred-width;
+    preferred-height: content.preferred-height;
+
+    in property <Device> device;
+
+    content := HorizontalLayout {
+        padding: 0.6rem;
+        spacing: 1rem;
+
+        Image {
+            source: Icons.hard-drive;
+            image-fit: ImageFit.contain;
+            vertical-alignment: center;
+            colorize: PaletteExtra.accented-foreground;
+            height: 4rem;
+            width: 4rem;
+        }
+
+        name-serial-block := VerticalLayout {
+            alignment: start;
+            spacing: 0.4rem;
+
+            Text {
+                text: !device.name.is-empty ? device.name : device.path;
+                font-weight: 800;
+                font-size: 2rem;
+                color: PaletteExtra.accented-foreground;
+                overflow: elide;
+            }
+
+            Text {
+                text: !device.serial.is-empty ? device.serial : "---";
+                font-size: 1.4rem;
+                overflow: elide;
+            }
+        }
+
+        Rectangle {
+            width: 0.6rem;
+        }
+
+        if device.status.outcome == Outcome.success: GridLayout {
+            padding: 0.25rem;
+            spacing-horizontal: 1rem;
+
+            Text {
+                row: 0;
+                col: 0;
+                text: "Path:";
+            }
+
+            HorizontalLayout {
+                spacing: 0.4rem;
+                alignment: start;
+
+                path-label := TextInput {
+                    text: device.path;
+                    enabled: false;
+                }
+
+                IconButton {
+                    icon: Icons.content-copy;
+                    width: 1.2rem;
+                    height: 1.2rem;
+                    clicked => {
+                        path-label.copy();
+                    }
+                }
+            }
+
+            Text {
+                row: 1;
+                col: 0;
+
+                text: "Interface:";
+            }
+
+            Text {
+                text: device.interface;
+            }
+
+            Text {
+                row: 2;
+                col: 0;
+
+                text: "Firmware:";
+            }
+
+            Text {
+                text: device.firmware;
+            }
+
+            Text {
+                row: 3;
+                col: 0;
+
+                text: "Security commands:";
+            }
+
+            Text {
+                text: device.security_commands ? "Yes" : "No";
+            }
+        }
+
+        if device.status.outcome == Outcome.error: Island {
+            background: PaletteExtra.error-foreground.mix(Palette.background, 0.1);
+            preferred-width: text.preferred-width + 0.8rem;
+            min-width: text.min-width + 0.8rem;
+            text := Text {
+                width: parent.width - 0.8rem;
+                text: "Error opening device: " + device.status.message;
+                color: PaletteExtra.error-foreground;
+                wrap: word-wrap;
+            }
+        }
+
+        if device.status.outcome == Outcome.pending: Spinner {
+            indeterminate: true;
+            preferred-height: 4rem;
+        }
+
+        Rectangle {
+            horizontal-stretch: 1.0;
+        }
+    }
+}
+
+export component DeviceView {
+    in property <Device> device;
+
+    VerticalLayout {
+        padding-left: 1.4rem;
+        padding-right: 1.4rem;
+        padding-top: 0.8rem;
+        padding-bottom: 0.8rem;
+        header := Header {
+            device: device;
+        }
+
+        Rectangle {
+            vertical-stretch: 1.0;
+
+            Text {
+                text: device.name;
+            }
+        }
+    }
+}

@@ -1,0 +1,30 @@
+import { Logo } from "resources/logo.slint";
+import { Device } from "data/device.slint";
+import { TabWidget } from "std-widgets.slint";
+import { DeviceView } from "view/device_view.slint";
+import { DeviceSideBar } from "view/device_side_bar.slint";
+import { DeviceSwitchView } from "view/device_switch_view.slint";
+import { TestData } from "data/test_data.slint";
+
+export component MainWindow inherits Window {
+    title: "SED Manager";
+    icon: Logo.png;
+    preferred-width: 640px;
+    preferred-height: 480px;
+
+    in property <[Device]> devices: TestData.devices;
+
+    HorizontalLayout {
+        side-bar := DeviceSideBar {
+            devices: devices;
+            max-width: 22rem;
+            horizontal-stretch: 0.2;
+        }
+
+        DeviceSwitchView {
+            selected: side-bar.selected;
+            devices: devices;
+            horizontal-stretch: 1.0;
+        }
+    }
+}

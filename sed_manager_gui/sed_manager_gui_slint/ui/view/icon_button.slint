@@ -1,0 +1,42 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
+import { PaletteExtra } from "palette_extra.slint";
+import { Palette } from "std-widgets.slint";
+
+export component IconButton inherits TouchArea {
+    preferred-height: 2rem;
+
+    in property <image> icon;
+    in property <string> text;
+    in property <length> font-size;
+
+    private property <color> foreground-color:  {
+        if self.enabled && self.has-hover {
+            PaletteExtra.accented-control-foreground
+        } else if self.enabled {
+            Palette.control-foreground
+        } else {
+            Palette.control-foreground.with-alpha(0.6)
+        }
+    };
+
+    VerticalLayout {
+        Image {
+            source: icon;
+            image-fit: contain;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+            colorize: foreground-color;
+        }
+
+        if !text.is-empty: Text {
+            text: text;
+            horizontal-alignment: center;
+            color: foreground-color;
+            font-size: font-size;
+        }
+    }
+}
