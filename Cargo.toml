@@ -41,6 +41,7 @@ tokio = { version = "1.51.1", features = ["rt-multi-thread"] }
 oneshot = { version = "0.2.1", features = ["async"] }
 async-channel = { version = "2.5.0" }
 pin-project = "1.1.11"
+async-trait = "0.1.89"
 
 # -- Data structures
 thiserror = { version = "2.0.18" }

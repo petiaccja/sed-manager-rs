@@ -214,7 +214,7 @@ enum ComIdProtocolState {
 }
 
 async fn security_send(device: Arc<dyn Device>, protocol: u8, com_id: u16, data: Vec<u8>) -> Message {
-    let result = device.security_send(protocol, com_id.to_be_bytes(), &data);
+    let result = device.security_send(protocol, com_id.to_be_bytes(), &data).await;
     Message::SecuritySendDone(SecuritySendDone { protocol, result })
 }
 
@@ -225,7 +225,7 @@ async fn security_recv_com_packet(device: Arc<dyn Device>, com_id: u16) -> Messa
         let mut transfer_len = 1024;
         let mut merged = ComPacket::default();
         loop {
-            let bytes = device.security_recv(0x01, com_id.to_be_bytes(), transfer_len)?;
+            let bytes = device.security_recv(0x01, com_id.to_be_bytes(), transfer_len).await?;
             let response = ComPacket::from_bytes(&bytes).map_err(|err| Error::InvalidComIdResponse(err))?;
             debug!(response = ?response);
             let outstanding_data = response.outstanding_data;
@@ -246,7 +246,7 @@ async fn security_recv_com_id_request(device: Arc<dyn Device>, com_id: u16) -> M
     async fn _security_recv_com_id_request(device: Arc<dyn Device>, com_id: u16) -> Result<ComIdResponse, Error> {
         let mut retry = Retry::new(Instant::now() + Properties::ASSUMED.def_trans_timeout);
         loop {
-            let bytes = device.security_recv(0x02, com_id.to_be_bytes(), COM_ID_RESPONSE_LEN)?;
+            let bytes = device.security_recv(0x02, com_id.to_be_bytes(), COM_ID_RESPONSE_LEN).await?;
             let response = ComIdResponse::from_bytes(&bytes).map_err(|err| Error::InvalidComIdResponse(err))?;
             match &response.payload {
                 ComIdResponsePayload::NoResponseAvailable { .. } => retry.sleep().await?,

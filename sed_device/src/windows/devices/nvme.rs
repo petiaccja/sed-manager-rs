@@ -8,38 +8,32 @@ use crate::device::{Device, Interface};
 use crate::shared::aligned_array::AlignedArray;
 use crate::shared::memory::write_nonoverlapping;
 use crate::shared::nvme::IdentifyController;
-use crate::windows::Error as WindowsError;
-use crate::windows::utility::file_handle::FileHandle;
-use crate::windows::utility::ioctl::{STORAGE_PROTOCOL_SPECIFIC_DATA, STORAGE_PROTOCOL_TYPE, ioctl_in_out};
+use crate::windows::utility::ioctl::{STORAGE_PROTOCOL_SPECIFIC_DATA, STORAGE_PROTOCOL_TYPE};
+use crate::windows::utility::raw_device::RawDevice;
 
 use core::mem::offset_of;
 use sorbit::ser_de::FromBytes as _;
-use std::os::windows::raw::HANDLE;
-use winapi::shared::winerror::ERROR_INVALID_DATA;
 use winapi::um::winioctl::{IOCTL_STORAGE_QUERY_PROPERTY, STORAGE_PROPERTY_QUERY};
 
 use super::GenericDevice;
 use super::scsi;
 
-pub struct NVMeDevice {
-    file: FileHandle,
+pub struct NvmeDevice {
+    file: RawDevice,
     cached_desc: IdentifyController,
 }
 
-impl NVMeDevice {
+impl NvmeDevice {
     #[allow(unused)]
-    pub fn open(path: &str) -> Result<Self, DeviceError> {
-        let file = FileHandle::open(path)?;
-        let desc = identify_controller(file.handle())?;
+    pub async fn open(path: &str) -> Result<Self, DeviceError> {
+        let file = RawDevice::open(path)?;
+        let desc = identify_controller(&file).await?;
         Ok(Self { file, cached_desc: desc })
     }
-}
 
-impl TryFrom<GenericDevice> for NVMeDevice {
-    type Error = DeviceError;
-    fn try_from(value: GenericDevice) -> Result<Self, Self::Error> {
+    pub async fn from_generic(value: GenericDevice) -> Result<Self, DeviceError> {
         if Interface::NVMe == value.interface() {
-            let desc = identify_controller(value.get_file().handle())?;
+            let desc = identify_controller(value.get_file()).await?;
             Ok(Self { file: value.take_file(), cached_desc: desc })
         } else {
             Err(DeviceError::InterfaceNotSupported)
@@ -47,7 +41,8 @@ impl TryFrom<GenericDevice> for NVMeDevice {
     }
 }
 
-impl Device for NVMeDevice {
+#[async_trait::async_trait]
+impl Device for NvmeDevice {
     fn path(&self) -> Option<String> {
         Some(self.file.path().into())
     }
@@ -72,22 +67,28 @@ impl Device for NVMeDevice {
         self.cached_desc.security_send_receive_supported
     }
 
-    fn security_send(&self, security_protocol: u8, protocol_specific: [u8; 2], data: &[u8]) -> Result<(), DeviceError> {
+    async fn security_send(
+        &self,
+        security_protocol: u8,
+        protocol_specific: [u8; 2],
+        data: &[u8],
+    ) -> Result<(), DeviceError> {
         if !self.is_security_supported() {
             return Err(DeviceError::SecurityNotSupported);
         }
         let aligned_data = AlignedArray::from_slice(data, 8).unwrap();
         let protocol_specific = u16::from_be_bytes(protocol_specific);
-        Ok(scsi::security_protocol_out(
+        scsi::security_protocol_out(
             &self.file,
             security_protocol,
             protocol_specific,
             aligned_data.as_padded_slice(),
             SCSI_TRANSLATION_INC_512,
-        )?)
+        )
+        .await
     }
 
-    fn security_recv(
+    async fn security_recv(
         &self,
         security_protocol: u8,
         protocol_specific: [u8; 2],
@@ -104,12 +105,13 @@ impl Device for NVMeDevice {
             protocol_specific,
             data.as_padded_mut_slice(),
             SCSI_TRANSLATION_INC_512,
-        )?;
+        )
+        .await?;
         Ok(data.into_vec())
     }
 }
 
-fn identify_controller(handle: HANDLE) -> Result<IdentifyController, WindowsError> {
+async fn identify_controller(raw_device: &RawDevice) -> Result<IdentifyController, DeviceError> {
     const NVME_MAX_LOG_SIZE: usize = 0x1000;
     let mut buffer = AlignedArray::zeroed(NVME_MAX_LOG_SIZE + 128, 8).unwrap();
     let data_offset = offset_of!(STORAGE_PROPERTY_QUERY, AdditionalParameters);
@@ -137,10 +139,10 @@ fn identify_controller(handle: HANDLE) -> Result<IdentifyController, WindowsErro
     write_nonoverlapping(&query, &mut buffer);
     write_nonoverlapping(&data, &mut buffer[data_offset..]);
 
-    let _ = ioctl_in_out(handle, IOCTL_STORAGE_QUERY_PROPERTY, &mut buffer)?;
+    let _ = raw_device.device_io_control_symmetric(IOCTL_STORAGE_QUERY_PROPERTY, &mut buffer).await?;
 
     let identify_ctrl_buffer = &buffer[(data_offset + response_offset)..];
-    IdentifyController::from_bytes(identify_ctrl_buffer).map_err(|_| WindowsError::Win32(ERROR_INVALID_DATA))
+    IdentifyController::from_bytes(identify_ctrl_buffer).map_err(|_| DeviceError::InvalidArgument)
 }
 
 /// The value of the INC_512 flag for SCSI to NVMe translation.
@@ -154,18 +156,22 @@ mod test {
 
     use crate::windows::drive_list::list_physical_drives;
 
-    fn get_nvme_drives() -> Vec<NVMeDevice> {
-        let drives_paths = list_physical_drives().ok().unwrap_or(vec![]);
-        drives_paths
-            .into_iter()
-            .filter_map(|path| GenericDevice::open(&path).ok())
-            .filter_map(|dev| NVMeDevice::try_from(dev).ok())
-            .collect()
+    async fn get_nvme_devices() -> Vec<NvmeDevice> {
+        let paths = list_physical_drives().ok().unwrap_or(vec![]);
+        let mut nvme_devices = Vec::new();
+        for path in paths {
+            if let Ok(generic_device) = GenericDevice::open(&path).await
+                && let Ok(nvme_device) = NvmeDevice::from_generic(generic_device).await
+            {
+                nvme_devices.push(nvme_device);
+            }
+        }
+        nvme_devices
     }
 
-    #[test]
-    fn test_nvme_identify_controller() -> Result<(), DeviceError> {
-        let _nvme_drives = get_nvme_drives();
+    #[tokio::test]
+    async fn test_nvme_identify_controller() -> Result<(), DeviceError> {
+        let _nvme_drives = get_nvme_devices().await;
         Ok(())
     }
 }

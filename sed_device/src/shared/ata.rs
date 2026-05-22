@@ -76,7 +76,7 @@ pub struct ErrorField {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ATAError {
+pub struct AtaError {
     status: StatusField,
     error: ErrorField,
 }
@@ -147,7 +147,7 @@ impl Input {
     }
 }
 
-impl ATAError {
+impl AtaError {
     pub fn from_task_file(task_file: [u8; 8]) -> Self {
         let error_reg = task_file[0];
         let status_reg = task_file[6];
@@ -166,9 +166,9 @@ impl ATAError {
     }
 }
 
-impl core::error::Error for ATAError {}
+impl core::error::Error for AtaError {}
 
-impl core::fmt::Display for ATAError {
+impl core::fmt::Display for AtaError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut status = vec![];
         let mut error = vec![];

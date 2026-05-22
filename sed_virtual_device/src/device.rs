@@ -77,6 +77,7 @@ impl VirtualDevice {
     }
 }
 
+#[async_trait::async_trait]
 impl Device for VirtualDevice {
     fn path(&self) -> Option<String> {
         None
@@ -102,7 +103,7 @@ impl Device for VirtualDevice {
         true
     }
 
-    fn security_send(&self, security_protocol: u8, protocol_specific: [u8; 2], data: &[u8]) -> Result<(), Error> {
+    async fn security_send(&self, security_protocol: u8, protocol_specific: [u8; 2], data: &[u8]) -> Result<(), Error> {
         let mut tper = self.tper.lock().expect("the virtual device panicked in another thread");
         let mut sessions = self.sessions.lock().expect("the virtual device panicked in another thread");
         let Sessions { com_sessions, packet_sessions } = sessions.deref_mut();
@@ -132,7 +133,12 @@ impl Device for VirtualDevice {
         }
     }
 
-    fn security_recv(&self, security_protocol: u8, protocol_specific: [u8; 2], len: usize) -> Result<Vec<u8>, Error> {
+    async fn security_recv(
+        &self,
+        security_protocol: u8,
+        protocol_specific: [u8; 2],
+        len: usize,
+    ) -> Result<Vec<u8>, Error> {
         let tper = self.tper.lock().expect("the virtual device panicked in another thread");
         let mut sessions = self.sessions.lock().expect("the virtual device panicked in another thread");
         let Sessions { com_sessions, packet_sessions } = sessions.deref_mut();

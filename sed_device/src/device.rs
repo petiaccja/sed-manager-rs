@@ -16,6 +16,7 @@ pub enum Interface {
     Other,
 }
 
+#[async_trait::async_trait]
 pub trait Device: Send + Sync {
     fn path(&self) -> Option<String>;
     fn interface(&self) -> Interface;
@@ -24,8 +25,13 @@ pub trait Device: Send + Sync {
     fn firmware_revision(&self) -> String;
     fn is_security_supported(&self) -> bool;
 
-    fn security_send(&self, security_protocol: u8, protocol_specific: [u8; 2], data: &[u8]) -> Result<(), Error>;
-    fn security_recv(&self, security_protocol: u8, protocol_specific: [u8; 2], len: usize) -> Result<Vec<u8>, Error>;
+    async fn security_send(&self, security_protocol: u8, protocol_specific: [u8; 2], data: &[u8]) -> Result<(), Error>;
+    async fn security_recv(
+        &self,
+        security_protocol: u8,
+        protocol_specific: [u8; 2],
+        len: usize,
+    ) -> Result<Vec<u8>, Error>;
 }
 
 impl core::fmt::Display for Interface {

@@ -10,3 +10,4 @@ sed_spec.workspace = true
 sorbit.workspace = true
 rand.workspace = true
 tracing.workspace = true
+async-trait.workspace = true

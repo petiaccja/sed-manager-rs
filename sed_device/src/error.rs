@@ -40,11 +40,11 @@ pub enum Error {
     #[error("Security send/receive is not supported by the device")]
     SecurityNotSupported,
     #[error("ATA error: {}", .0)]
-    ATAError(ata::ATAError),
+    ATAError(#[from] ata::AtaError),
     #[error("SCSI error: {}", .0)]
-    SCSIError(scsi::SCSIError),
+    SCSIError(#[from] scsi::ScsiError),
     #[error("NVMe error: {}", .0)]
-    NVMeError(nvme::StatusCode),
+    NVMeError(#[from] nvme::StatusCode),
 
     #[error("Unspecified error occured (the exact cause could not be determined)")]
     Unspecified,

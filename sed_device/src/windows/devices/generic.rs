@@ -3,26 +3,18 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use core::ffi::c_void;
-use core::ptr::null_mut;
+use std::mem::transmute;
 
-use winapi::{
-    shared::minwindef::DWORD,
-    um::{
-        ioapiset::DeviceIoControl,
-        winioctl::{
-            IOCTL_STORAGE_QUERY_PROPERTY, PropertyStandardQuery, STORAGE_PROPERTY_QUERY, StorageDeviceProperty,
-        },
-    },
+use winapi::um::winioctl::{
+    IOCTL_STORAGE_QUERY_PROPERTY, PropertyStandardQuery, STORAGE_PROPERTY_QUERY, StorageDeviceProperty,
 };
 
-use crate::windows::error::get_last_error;
-use crate::windows::utility::file_handle::FileHandle;
 use crate::windows::utility::ioctl::{STORAGE_BUS_TYPE, STORAGE_DEVICE_DESCRIPTOR};
+use crate::windows::utility::raw_device::RawDevice;
 use crate::{Device, Error, Interface, shared::string::FromNullTerminated};
 
 pub struct GenericDevice {
-    file: FileHandle,
+    file: RawDevice,
     cached_desc: GenericDeviceDesc,
 }
 
@@ -33,6 +25,7 @@ pub struct GenericDeviceDesc {
     pub firmware_revision: Option<String>,
 }
 
+#[async_trait::async_trait]
 impl Device for GenericDevice {
     fn path(&self) -> Option<String> {
         Some(self.file.path().into())
@@ -58,13 +51,18 @@ impl Device for GenericDevice {
         false
     }
 
-    fn security_send(&self, _security_protocol: u8, _protocol_specific: [u8; 2], _data: &[u8]) -> Result<(), Error> {
+    async fn security_send(
+        &self,
+        _security_protocol: u8,
+        _protocol_specific: [u8; 2],
+        _data: &[u8],
+    ) -> Result<(), Error> {
         // The generic device does not support security commands.
         // This is because the IOCTL's may be interface-specific.
         Err(Error::NotImplemented)
     }
 
-    fn security_recv(
+    async fn security_recv(
         &self,
         _security_protocol: u8,
         _protocol_specific: [u8; 2],
@@ -76,17 +74,17 @@ impl Device for GenericDevice {
 }
 
 impl GenericDevice {
-    pub fn open(path: &str) -> Result<Self, Error> {
-        let file = FileHandle::open(path)?;
-        let desc = query_description(&file)?;
+    pub async fn open(path: &str) -> Result<Self, Error> {
+        let file = RawDevice::open(path)?;
+        let desc = query_description(&file).await?;
         Ok(Self { file, cached_desc: desc })
     }
 
-    pub fn get_file(&self) -> &FileHandle {
+    pub fn get_file(&self) -> &RawDevice {
         &self.file
     }
 
-    pub fn take_file(self) -> FileHandle {
+    pub fn take_file(self) -> RawDevice {
         self.file
     }
 }
@@ -125,49 +123,35 @@ impl GenericDeviceDesc {
     }
 }
 
-pub fn query_description(device: &FileHandle) -> Result<GenericDeviceDesc, Error> {
-    match query_description_with_len(device, 2048)? {
+async fn query_description(device: &RawDevice) -> Result<GenericDeviceDesc, Error> {
+    match query_description_with_len(device, 2048).await? {
         Ok(properties) => Ok(properties),
         Err(output_buffer_len) => {
-            query_description_with_len(device, output_buffer_len)?.map_err(|_| Error::BufferTooShort)
+            query_description_with_len(device, output_buffer_len).await?.map_err(|_| Error::BufferTooShort)
         }
     }
 }
 
-fn query_description_with_len(
-    device: &FileHandle,
-    output_buffer_len: usize,
+async fn query_description_with_len(
+    device: &RawDevice,
+    response_buffer_len: usize,
 ) -> Result<Result<GenericDeviceDesc, usize>, Error> {
-    let mut query = STORAGE_PROPERTY_QUERY {
+    let request = STORAGE_PROPERTY_QUERY {
         PropertyId: StorageDeviceProperty,
         QueryType: PropertyStandardQuery,
         AdditionalParameters: [0],
     };
 
-    let mut output_buffer = Vec::<u8>::new();
-    output_buffer.resize(output_buffer_len, 0);
-    let mut bytes_returned: DWORD = 0;
+    let mut request_buffer: [u8; size_of::<STORAGE_PROPERTY_QUERY>()] = unsafe { transmute(request) };
+    let mut response_buffer = vec![0u8; response_buffer_len];
 
-    let result = unsafe {
-        DeviceIoControl(
-            device.handle(),
-            IOCTL_STORAGE_QUERY_PROPERTY,
-            &mut query as *mut STORAGE_PROPERTY_QUERY as *mut c_void,
-            size_of::<STORAGE_PROPERTY_QUERY>() as DWORD,
-            output_buffer.as_mut_ptr() as *mut c_void,
-            output_buffer.len() as DWORD,
-            &mut bytes_returned as *mut DWORD,
-            null_mut(),
-        )
-    };
+    device
+        .device_io_control(IOCTL_STORAGE_QUERY_PROPERTY, Some(&mut request_buffer), Some(&mut response_buffer))
+        .await?;
 
-    let descriptor = unsafe { &*(output_buffer.as_ptr() as *const STORAGE_DEVICE_DESCRIPTOR) };
-
-    if result == 0 {
-        get_last_error()?;
-        Err(Error::Unspecified)
-    } else if (descriptor.Size as usize) < output_buffer.len() {
-        Ok(Ok(GenericDeviceDesc::parse(descriptor, &output_buffer)))
+    let descriptor = unsafe { &*(response_buffer.as_ptr() as *const STORAGE_DEVICE_DESCRIPTOR) };
+    if (descriptor.Size as usize) < response_buffer.len() {
+        Ok(Ok(GenericDeviceDesc::parse(descriptor, &response_buffer)))
     } else {
         Ok(Err(descriptor.Size as usize))
     }

@@ -6,18 +6,27 @@
 use num_enum::FromPrimitive;
 use sorbit::{Deserialize, Serialize, UnpackFrom};
 
-#[derive(Serialize, Debug, Clone, Copy, PartialEq, Eq)]
-#[repr(u8)]
-pub enum Opcode {
-    SecurityProtocolOut = 0xB5,
-    SecurityProtocolIn = 0xA2,
-}
-
+/// A SCSI command.
+///
+/// When serialized, it produced the command descriptor block (CDB) that can be
+/// sent to the SCSI device via IOCTLs.
 #[derive(Serialize, Debug, Clone, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Command {
     SecurityProtocolIn(SecurityProtocolIn) = 0xA2,
     SecurityProtocolOut(SecurityProtocolOut) = 0xB5,
+}
+
+impl From<SecurityProtocolIn> for Command {
+    fn from(value: SecurityProtocolIn) -> Self {
+        Self::SecurityProtocolIn(value)
+    }
+}
+
+impl From<SecurityProtocolOut> for Command {
+    fn from(value: SecurityProtocolOut) -> Self {
+        Self::SecurityProtocolOut(value)
+    }
 }
 
 #[derive(Serialize, Debug, Clone, PartialEq, Eq)]
@@ -33,6 +42,18 @@ pub struct SecurityProtocolIn {
     control: u8,
 }
 
+impl SecurityProtocolIn {
+    pub fn new(security_protocol: u8, security_protocol_specific: u16, alloc_len_bytes: u32, inc_512: bool) -> Self {
+        Self {
+            security_protocol,
+            security_protocol_specific,
+            inc_512,
+            allocation_length: convert_buffer_len(alloc_len_bytes, inc_512),
+            control: 0,
+        }
+    }
+}
+
 #[derive(Serialize, Debug, Clone, PartialEq, Eq)]
 #[sorbit(byte_order=big_endian)]
 pub struct SecurityProtocolOut {
@@ -46,25 +67,138 @@ pub struct SecurityProtocolOut {
     control: u8,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SCSIError {
+impl SecurityProtocolOut {
+    pub fn new(security_protocol: u8, security_protocol_specific: u16, trans_len_bytes: u32, inc_512: bool) -> Self {
+        Self {
+            security_protocol,
+            security_protocol_specific,
+            inc_512,
+            transfer_length: convert_buffer_len(trans_len_bytes, inc_512),
+            control: 0,
+        }
+    }
+}
+
+/// THe sense data returned by the SCSI device.
+///
+/// There are two sense data formats:
+/// - Fixed format
+/// - Descriptor format
+///
+/// Both formats start with a single byte: `| 7..8: valid | 0..7: response code | ...`.
+/// For the fixed format, the valid bit provides additional information about
+/// the data structure, for the descriptor format, the valid bit is reserved and
+/// has to be zero.
+///
+/// The lowest bit of the response code encodes whether the sense data is for the
+/// current command or a previous one.
+///
+/// Thus, the valid bit and the current/previous bit create six variants total.
+///
+/// The sense data is only partially parsed, as most of it is not needed for
+/// this application's purposes.
+#[derive(Deserialize, Debug, Clone, PartialEq, Eq)]
+#[repr(u8)]
+pub enum SenseData {
+    CurrentFixed(FixedSenseData) = 0x70,
+    DeferredFixed(FixedSenseData) = 0x71,
+    CurrentFixedInfo(FixedSenseData) = 0x70 + 0x80,
+    DeferredFixedInfo(FixedSenseData) = 0x71 + 0x80,
+    CurrentDescriptor(DescriptorSenseData) = 0x72,
+    DeferredDescriptor(DescriptorSenseData) = 0x73,
+    VendorSpecific = 0x7F,
+    #[sorbit(catch_all)]
+    Unrecognized(u8),
+}
+
+impl SenseData {
+    /// The maximum length of the sense data in bytes.
+    pub const MAX_LEN: usize = 252;
+}
+
+/// Descriptor format sense data.
+///
+/// The sense response code (first byte) is excluded.
+#[derive(Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct DescriptorSenseData {
+    #[sorbit(bit_field=_byte_1, repr=u8, bits=0..=3)]
     pub sense_key: SenseKey,
     pub additional_sense_code: u8,
     pub additional_sense_code_qualifier: u8,
-    pub parse_failed: bool,
 }
 
-#[derive(Deserialize, Debug, Clone, Copy, PartialEq, Eq, UnpackFrom, FromPrimitive)]
-#[repr(u8)]
-pub enum SenseResponseCode {
-    CurrentFixed = 0x70,
-    DeferredFixed = 0x71,
-    CurrentDescriptor = 0x72,
-    DeferredDescriptor = 0x73,
-    VendorSpecific = 0x7F,
-    #[sorbit(catch_all)]
-    #[num_enum(default)]
-    Unrecognized,
+/// Fixed format sense data.
+///
+/// The sense response code (first byte) is excluded.
+#[derive(Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct FixedSenseData {
+    #[sorbit(offset = 1, bit_field=_byte_2, repr=u8, bits=0..=3) ]
+    pub sense_key: SenseKey,
+    #[sorbit(offset = 11)]
+    pub additional_sense_code: u8,
+    pub additional_sense_code_qualifier: u8,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ScsiError {
+    Sense { sense_key: SenseKey, additional_sense_code: u8, additional_sense_code_qualifier: u8 },
+    Parse,
+    VendorSpecific,
+    Unknown,
+}
+
+impl ScsiError {
+    pub fn ok() -> Self {
+        Self::Sense { sense_key: SenseKey::NoSense, additional_sense_code: 0, additional_sense_code_qualifier: 0 }
+    }
+}
+
+impl core::error::Error for ScsiError {}
+
+impl core::fmt::Display for ScsiError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ScsiError::Sense { sense_key, additional_sense_code, additional_sense_code_qualifier } => {
+                write!(f, "{} [ASC={}h ASCQ={}h]", sense_key, additional_sense_code, additional_sense_code_qualifier)
+            }
+            ScsiError::Parse => write!(f, "failed to parse SCSI sense info"),
+            ScsiError::VendorSpecific => write!(f, "a vendor-specific SCSI error occured"),
+            ScsiError::Unknown => write!(f, "an unknown SCSI error occured"),
+        }
+    }
+}
+
+impl Default for ScsiError {
+    fn default() -> Self {
+        Self::ok()
+    }
+}
+
+impl From<SenseData> for ScsiError {
+    fn from(value: SenseData) -> Self {
+        match value {
+            SenseData::CurrentFixed(FixedSenseData {
+                sense_key,
+                additional_sense_code,
+                additional_sense_code_qualifier,
+            })
+            | SenseData::CurrentFixedInfo(FixedSenseData {
+                sense_key,
+                additional_sense_code,
+                additional_sense_code_qualifier,
+            })
+            | SenseData::CurrentDescriptor(DescriptorSenseData {
+                sense_key,
+                additional_sense_code,
+                additional_sense_code_qualifier,
+            }) => Self::Sense { sense_key, additional_sense_code, additional_sense_code_qualifier },
+            SenseData::DeferredFixed(_) => Self::ok(),
+            SenseData::DeferredFixedInfo(_) => Self::ok(),
+            SenseData::DeferredDescriptor(_) => Self::ok(),
+            SenseData::VendorSpecific => Self::VendorSpecific,
+            SenseData::Unrecognized(_) => Self::Unknown,
+        }
+    }
 }
 
 #[derive(Deserialize, Debug, Clone, Copy, PartialEq, Eq, thiserror::Error, UnpackFrom)]
@@ -106,114 +240,12 @@ pub enum SenseKey {
     Reserved = 0xF,
 }
 
-#[derive(Deserialize, Debug, Clone, PartialEq, Eq)]
-pub struct DescriptorSenseData {
-    #[sorbit(offset = 0, bit_field=_byte_0, repr=u8, bits=0..=6)]
-    pub response_code: SenseResponseCode,
-    #[sorbit(offset = 1, bit_field=_byte_1, repr=u8, bits=0..=3)]
-    pub sense_key: SenseKey,
-    pub additional_sense_code: u8,
-    pub additional_sense_code_qualifier: u8,
-}
-
-#[derive(Deserialize, Debug, Clone, PartialEq, Eq)]
-pub struct FixedSenseData {
-    #[sorbit(offset = 0, bit_field=_byte_0, repr=u8, bits=0..=6) ]
-    pub response_code: SenseResponseCode,
-    #[sorbit(offset = 2, bit_field=_byte_2, repr=u8, bits=0..=3) ]
-    pub sense_key: SenseKey,
-    #[sorbit(offset = 12)]
-    pub additional_sense_code: u8,
-    pub additional_sense_code_qualifier: u8,
-}
-
 fn convert_buffer_len(num_bytes: u32, inc_512: bool) -> u32 {
     if inc_512 {
         assert_eq!(num_bytes % 512, 0);
         num_bytes / 512
     } else {
         num_bytes
-    }
-}
-
-impl Command {
-    pub fn security_protocol_in(
-        security_protocol: u8,
-        security_protocol_specific: u16,
-        alloc_len_bytes: u32,
-        inc_512: bool,
-    ) -> Self {
-        Self::SecurityProtocolIn(SecurityProtocolIn::new(
-            security_protocol,
-            security_protocol_specific,
-            alloc_len_bytes,
-            inc_512,
-        ))
-    }
-
-    pub fn security_protocol_out(
-        security_protocol: u8,
-        security_protocol_specific: u16,
-        trans_len_bytes: u32,
-        inc_512: bool,
-    ) -> Self {
-        Self::SecurityProtocolOut(SecurityProtocolOut::new(
-            security_protocol,
-            security_protocol_specific,
-            trans_len_bytes,
-            inc_512,
-        ))
-    }
-}
-
-impl SecurityProtocolIn {
-    pub fn new(security_protocol: u8, security_protocol_specific: u16, alloc_len_bytes: u32, inc_512: bool) -> Self {
-        Self {
-            security_protocol,
-            security_protocol_specific,
-            inc_512,
-            allocation_length: convert_buffer_len(alloc_len_bytes, inc_512),
-            control: 0,
-        }
-    }
-}
-
-impl SecurityProtocolOut {
-    pub fn new(security_protocol: u8, security_protocol_specific: u16, trans_len_bytes: u32, inc_512: bool) -> Self {
-        Self {
-            security_protocol,
-            security_protocol_specific,
-            inc_512,
-            transfer_length: convert_buffer_len(trans_len_bytes, inc_512),
-            control: 0,
-        }
-    }
-}
-
-impl core::error::Error for SCSIError {}
-
-impl core::fmt::Display for SCSIError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if !self.parse_failed {
-            write!(
-                f,
-                "{} [ASC={}h ASCQ={}h]",
-                self.sense_key, self.additional_sense_code, self.additional_sense_code_qualifier
-            )
-        } else {
-            write!(f, "Failed to parse Sense Info")
-        }
-    }
-}
-
-impl Default for SCSIError {
-    fn default() -> Self {
-        Self {
-            sense_key: SenseKey::NoSense,
-            additional_sense_code: 0,
-            additional_sense_code_qualifier: 0,
-            parse_failed: false,
-        }
     }
 }
 
@@ -296,13 +328,12 @@ mod tests {
     #[test]
     fn deserialize_descriptor_sense_data() {
         let bytes = [0x72, 0x02, 0x12, 0x34, 0x00, 0x00, 0x56];
-        let value = DescriptorSenseData {
-            response_code: SenseResponseCode::CurrentDescriptor,
+        let value = SenseData::CurrentDescriptor(DescriptorSenseData {
             sense_key: SenseKey::NotReady,
             additional_sense_code: 0x12,
             additional_sense_code_qualifier: 0x34,
-        };
-        assert_eq!(value, DescriptorSenseData::from_bytes(&bytes).unwrap());
+        });
+        assert_eq!(value, SenseData::from_bytes(&bytes).unwrap());
     }
 
     #[test]
@@ -313,12 +344,11 @@ mod tests {
         bytes[12] = 0x12;
         bytes[13] = 0x34;
 
-        let value = FixedSenseData {
-            response_code: SenseResponseCode::CurrentFixed,
+        let value = SenseData::CurrentFixed(FixedSenseData {
             sense_key: SenseKey::NotReady,
             additional_sense_code: 0x12,
             additional_sense_code_qualifier: 0x34,
-        };
-        assert_eq!(value, FixedSenseData::from_bytes(&bytes).unwrap());
+        });
+        assert_eq!(value, SenseData::from_bytes(&bytes).unwrap());
     }
 }

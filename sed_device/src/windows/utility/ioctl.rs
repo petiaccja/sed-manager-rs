@@ -3,39 +3,10 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use core::ffi::c_void;
-use core::ptr::null_mut;
-
-use winapi::{
-    shared::{
-        minwindef::{DWORD, FALSE},
-        ntdef::{BOOLEAN, HANDLE, UCHAR, ULONG},
-    },
-    um::ioapiset::DeviceIoControl,
+use winapi::shared::{
+    minwindef::DWORD,
+    ntdef::{BOOLEAN, UCHAR, ULONG},
 };
-
-use crate::windows::error::{Error, get_last_error};
-
-pub fn ioctl_in_out(device: HANDLE, ioctl: DWORD, buffer: &mut [u8]) -> Result<u32, Error> {
-    let mut bytes_returned: u32 = 0;
-    let result = unsafe {
-        DeviceIoControl(
-            device,
-            ioctl,
-            buffer.as_mut_ptr() as *mut c_void,
-            buffer.len() as u32,
-            buffer.as_mut_ptr() as *mut c_void,
-            buffer.len() as u32,
-            &mut bytes_returned as *mut u32,
-            null_mut(),
-        )
-    };
-
-    if result == FALSE {
-        get_last_error()?;
-    };
-    Ok(bytes_returned)
-}
 
 #[repr(C)]
 #[allow(nonstandard_style)]

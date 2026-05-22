@@ -4,6 +4,7 @@
 //L-----------------------------------------------------------------------------
 
 use core::ffi::c_void;
+use std::mem::transmute;
 
 use sorbit::ser_de::{FromBytes as _, ToBytes as _};
 use winapi::shared::ntddscsi::{
@@ -11,26 +12,26 @@ use winapi::shared::ntddscsi::{
 };
 
 use crate::shared::aligned_array::AlignedArray;
-use crate::shared::scsi::{Command, DescriptorSenseData, FixedSenseData, SCSIError, SenseKey, SenseResponseCode};
-use crate::windows::utility::{file_handle::FileHandle, ioctl::ioctl_in_out};
+use crate::shared::scsi::{Command, ScsiError, SecurityProtocolIn, SecurityProtocolOut, SenseData, SenseKey};
+use crate::windows::utility::raw_device::RawDevice;
 use crate::{Device, Error as DeviceError, Interface};
 
 use super::GenericDevice;
 
-pub struct SCSIDevice {
+pub struct ScsiDevice {
     generic_device: GenericDevice,
 }
 
-impl SCSIDevice {
+impl ScsiDevice {
     #[allow(unused)]
-    pub fn open(path: &str) -> Result<Self, DeviceError> {
+    pub async fn open(path: &str) -> Result<Self, DeviceError> {
         // This does not check the interface, you can force SCSI on an unknown device.
-        let generic_device = GenericDevice::open(path)?;
+        let generic_device = GenericDevice::open(path).await?;
         Ok(Self { generic_device })
     }
 }
 
-impl TryFrom<GenericDevice> for SCSIDevice {
+impl TryFrom<GenericDevice> for ScsiDevice {
     type Error = DeviceError;
     fn try_from(value: GenericDevice) -> Result<Self, Self::Error> {
         if let Interface::SCSI = value.interface() {
@@ -41,7 +42,8 @@ impl TryFrom<GenericDevice> for SCSIDevice {
     }
 }
 
-impl Device for SCSIDevice {
+#[async_trait::async_trait]
+impl Device for ScsiDevice {
     fn path(&self) -> Option<String> {
         self.generic_device.path()
     }
@@ -69,7 +71,12 @@ impl Device for SCSIDevice {
         true
     }
 
-    fn security_send(&self, security_protocol: u8, protocol_specific: [u8; 2], data: &[u8]) -> Result<(), DeviceError> {
+    async fn security_send(
+        &self,
+        security_protocol: u8,
+        protocol_specific: [u8; 2],
+        data: &[u8],
+    ) -> Result<(), DeviceError> {
         let aligned_data = AlignedArray::from_slice_padded(data, ALIGNMENT, PADDING).unwrap();
         let protocol_specific = u16::from_be_bytes(protocol_specific);
         Ok(security_protocol_out(
@@ -78,10 +85,11 @@ impl Device for SCSIDevice {
             protocol_specific,
             aligned_data.as_padded_slice(),
             get_inc_512_flag(security_protocol),
-        )?)
+        )
+        .await?)
     }
 
-    fn security_recv(
+    async fn security_recv(
         &self,
         security_protocol: u8,
         protocol_specific: [u8; 2],
@@ -95,20 +103,25 @@ impl Device for SCSIDevice {
             protocol_specific,
             data.as_padded_mut_slice(),
             get_inc_512_flag(security_protocol),
-        )?;
+        )
+        .await?;
         Ok(data.into_vec())
     }
 }
 
-pub fn security_protocol_in(
-    file_handle: &FileHandle,
+pub async fn security_protocol_in(
+    file_handle: &RawDevice,
     security_protocol: u8,
     security_protocol_specific: u16,
     data_in: &mut [u8],
     inc_512: bool,
 ) -> Result<(), DeviceError> {
-    let command =
-        Command::security_protocol_in(security_protocol, security_protocol_specific, data_in.len() as u32, inc_512);
+    let command = Command::from(SecurityProtocolIn::new(
+        security_protocol,
+        security_protocol_specific,
+        data_in.len() as u32,
+        inc_512,
+    ));
     let cdb = command.to_bytes().expect("command serialization should be infallible");
     assert!(cdb.len() <= 16);
     let mut extended_cdb = cdb.iter().cloned().chain(core::iter::repeat(0));
@@ -129,20 +142,26 @@ pub fn security_protocol_in(
         Cdb: core::array::from_fn(|_| extended_cdb.next().unwrap()),
     };
 
-    let mut command_buffer = CommandWithSense::new(command);
-    let _ = ioctl_in_out(file_handle.handle(), IOCTL_SCSI_PASS_THROUGH_DIRECT, command_buffer.as_mut_slice())?;
-    check_sense_info(command_buffer.command.ScsiStatus, &command_buffer.sense_info)
+    let mut request_buffer = make_request_buffer(command);
+    let _ = file_handle
+        .device_io_control_symmetric(IOCTL_SCSI_PASS_THROUGH_DIRECT, request_buffer.as_mut_slice())
+        .await?;
+    parse_request_buffer(&request_buffer).map_err(|err| err.into())
 }
 
-pub fn security_protocol_out(
-    file_handle: &FileHandle,
+pub async fn security_protocol_out(
+    file_handle: &RawDevice,
     security_protocol: u8,
     security_protocol_specific: u16,
     data_out: &[u8],
     inc_512: bool,
 ) -> Result<(), DeviceError> {
-    let command =
-        Command::security_protocol_out(security_protocol, security_protocol_specific, data_out.len() as u32, inc_512);
+    let command = Command::from(SecurityProtocolOut::new(
+        security_protocol,
+        security_protocol_specific,
+        data_out.len() as u32,
+        inc_512,
+    ));
     let cdb = command.to_bytes().expect("command serialization should be infallible");
     assert!(cdb.len() <= 16);
     let mut extended_cdb = cdb.iter().cloned().chain(core::iter::repeat(0));
@@ -163,82 +182,31 @@ pub fn security_protocol_out(
         Cdb: core::array::from_fn(|_| extended_cdb.next().unwrap()),
     };
 
-    let mut command_buffer = CommandWithSense::new(command);
-    let _ = ioctl_in_out(file_handle.handle(), IOCTL_SCSI_PASS_THROUGH_DIRECT, command_buffer.as_mut_slice())?;
-    check_sense_info(command_buffer.command.ScsiStatus, &command_buffer.sense_info)
+    let mut request_buffer = make_request_buffer(command);
+    let _ = file_handle
+        .device_io_control_symmetric(IOCTL_SCSI_PASS_THROUGH_DIRECT, request_buffer.as_mut_slice())
+        .await?;
+    parse_request_buffer(&request_buffer).map_err(|err| err.into())
 }
 
-#[repr(C)]
-struct CommandWithSense {
-    pub command: SCSI_PASS_THROUGH_DIRECT,
-    pub sense_info: [u8; Self::SENSE_LENGTH as usize],
+const REQUEST_BUFFER_LEN: usize = size_of::<SCSI_PASS_THROUGH_DIRECT>() + SenseData::MAX_LEN;
+
+fn make_request_buffer(command: SCSI_PASS_THROUGH_DIRECT) -> [u8; REQUEST_BUFFER_LEN] {
+    let mut buffer = [0u8; REQUEST_BUFFER_LEN];
+    let command_slice: [u8; size_of::<SCSI_PASS_THROUGH_DIRECT>()] = unsafe { transmute(command) };
+    buffer[0..command_slice.len()].copy_from_slice(&command_slice);
+    buffer
 }
 
-impl CommandWithSense {
-    const SENSE_LENGTH: u8 = DEFAULT_SENSE_LENGTH;
-    pub fn new(command: SCSI_PASS_THROUGH_DIRECT) -> Self {
-        let command = SCSI_PASS_THROUGH_DIRECT {
-            SenseInfoOffset: core::mem::offset_of!(CommandWithSense, sense_info) as u32,
-            SenseInfoLength: Self::SENSE_LENGTH,
-            ..command
-        };
-        Self { command, sense_info: [0; Self::SENSE_LENGTH as usize] }
-    }
-
-    pub const fn size() -> usize {
-        core::mem::size_of::<Self>()
-    }
-
-    pub fn as_mut_slice(&mut self) -> &mut [u8] {
-        unsafe { core::slice::from_raw_parts_mut(self as *mut Self as *mut u8, Self::size()) }
+fn parse_request_buffer(buffer: &[u8; REQUEST_BUFFER_LEN]) -> Result<(), ScsiError> {
+    match SenseData::from_bytes(&buffer[0..size_of::<SCSI_PASS_THROUGH_DIRECT>()]) {
+        Ok(sense_data) => match ScsiError::from(sense_data) {
+            ScsiError::Sense { sense_key: SenseKey::NoSense, .. } => Ok(()),
+            err => Err(err),
+        },
+        Err(_) => Err(ScsiError::Parse),
     }
 }
-
-fn check_sense_info(scsi_result: u8, sense_info: &[u8]) -> Result<(), DeviceError> {
-    if scsi_result != 0 {
-        let raw_response_code = sense_info[0] & 0b0111_1111; // Bit 7 is reserved. See the sense info data structures in the shared scsi `mod`.
-        let response_code = SenseResponseCode::from(raw_response_code);
-        match response_code {
-            SenseResponseCode::CurrentFixed => Err(parse_fixed_sense_info(sense_info)),
-            SenseResponseCode::DeferredFixed => Ok(()),
-            SenseResponseCode::CurrentDescriptor => Err(parse_descriptor_sense_info(sense_info)),
-            SenseResponseCode::DeferredDescriptor => Ok(()),
-            SenseResponseCode::VendorSpecific => {
-                Err(SCSIError { sense_key: SenseKey::VendorSpecific, ..Default::default() })
-            }
-            _ => Err(SCSIError { parse_failed: true, ..Default::default() }),
-        }
-        .map_err(|err| DeviceError::SCSIError(err))
-    } else {
-        Ok(())
-    }
-}
-
-fn parse_fixed_sense_info(sense_info: &[u8]) -> SCSIError {
-    let Ok(sense_data) = FixedSenseData::from_bytes(sense_info.into()) else {
-        return SCSIError { parse_failed: true, ..Default::default() };
-    };
-    SCSIError {
-        sense_key: sense_data.sense_key,
-        additional_sense_code: sense_data.additional_sense_code,
-        additional_sense_code_qualifier: sense_data.additional_sense_code_qualifier,
-        ..Default::default()
-    }
-}
-
-fn parse_descriptor_sense_info(sense_info: &[u8]) -> SCSIError {
-    let Ok(sense_data) = DescriptorSenseData::from_bytes(sense_info.into()) else {
-        return SCSIError { parse_failed: true, ..Default::default() };
-    };
-    SCSIError {
-        sense_key: sense_data.sense_key,
-        additional_sense_code: sense_data.additional_sense_code,
-        additional_sense_code_qualifier: sense_data.additional_sense_code_qualifier,
-        ..Default::default()
-    }
-}
-
-const DEFAULT_SENSE_LENGTH: u8 = 128;
 
 /// Align the IOCTL buffers to 8 bytes. I don't fully understand this, because
 /// the docs (for WinAPI SCSI_PASS_THROUGH_DIRECT) mention "cache alignment", but

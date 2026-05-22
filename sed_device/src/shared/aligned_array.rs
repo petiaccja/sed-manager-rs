@@ -13,6 +13,9 @@ pub struct AlignedArray {
     len: usize,
 }
 
+unsafe impl Send for AlignedArray {}
+unsafe impl Sync for AlignedArray {}
+
 impl AlignedArray {
     #[allow(unused)]
     pub fn new() -> Self {

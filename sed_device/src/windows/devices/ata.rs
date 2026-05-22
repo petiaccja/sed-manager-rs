@@ -4,6 +4,7 @@
 //L-----------------------------------------------------------------------------
 
 use core::ffi::c_void;
+use std::mem::transmute;
 
 use sorbit::ser_de::FromBytes;
 use winapi::shared::ntddscsi::{
@@ -11,32 +12,28 @@ use winapi::shared::ntddscsi::{
 };
 
 use crate::shared::aligned_array::AlignedArray;
-use crate::shared::ata::{ATAError, IdentifyDevice, Input};
-use crate::windows::utility::file_handle::FileHandle;
-use crate::windows::utility::ioctl::ioctl_in_out;
+use crate::shared::ata::{AtaError, IdentifyDevice, Input};
+use crate::windows::utility::raw_device::RawDevice;
 use crate::{Device, Error as DeviceError, Interface};
 
 use super::GenericDevice;
 
-pub struct ATADevice {
-    file: FileHandle,
+pub struct AtaDevice {
+    file: RawDevice,
     cached_desc: IdentifyDevice,
 }
 
-impl ATADevice {
+impl AtaDevice {
     #[allow(unused)]
-    pub fn open(path: &str) -> Result<Self, DeviceError> {
-        let file = FileHandle::open(path)?;
-        let desc = identify_device(&file)?;
+    pub async fn open(path: &str) -> Result<Self, DeviceError> {
+        let file = RawDevice::open(path)?;
+        let desc = identify_device(&file).await?;
         Ok(Self { file, cached_desc: desc })
     }
-}
 
-impl TryFrom<GenericDevice> for ATADevice {
-    type Error = DeviceError;
-    fn try_from(value: GenericDevice) -> Result<Self, Self::Error> {
+    pub async fn from_generic(value: GenericDevice) -> Result<Self, DeviceError> {
         if [Interface::ATA, Interface::SATA].contains(&value.interface()) {
-            let desc = identify_device(value.get_file())?;
+            let desc = identify_device(value.get_file()).await?;
             Ok(Self { file: value.take_file(), cached_desc: desc })
         } else {
             Err(DeviceError::InterfaceNotSupported)
@@ -44,7 +41,8 @@ impl TryFrom<GenericDevice> for ATADevice {
     }
 }
 
-impl Device for ATADevice {
+#[async_trait::async_trait]
+impl Device for AtaDevice {
     fn path(&self) -> Option<String> {
         Some(self.file.path().to_string())
     }
@@ -69,16 +67,21 @@ impl Device for ATADevice {
         self.cached_desc.trusted_computing_supported
     }
 
-    fn security_send(&self, security_protocol: u8, protocol_specific: [u8; 2], data: &[u8]) -> Result<(), DeviceError> {
+    async fn security_send(
+        &self,
+        security_protocol: u8,
+        protocol_specific: [u8; 2],
+        data: &[u8],
+    ) -> Result<(), DeviceError> {
         if !self.is_security_supported() {
             return Err(DeviceError::SecurityNotSupported);
         }
         let aligned_data = AlignedArray::from_slice_padded(data, ALIGNMENT, PADDING).unwrap();
         let protocol_specific = u16::from_be_bytes(protocol_specific);
-        Ok(trusted_send(&self.file, security_protocol, protocol_specific, aligned_data.as_padded_slice())?)
+        Ok(trusted_send(&self.file, security_protocol, protocol_specific, aligned_data.as_padded_slice()).await?)
     }
 
-    fn security_recv(
+    async fn security_recv(
         &self,
         security_protocol: u8,
         protocol_specific: [u8; 2],
@@ -89,17 +92,17 @@ impl Device for ATADevice {
         }
         let mut data = AlignedArray::zeroed_padded(len, ALIGNMENT, PADDING).unwrap();
         let protocol_specific = u16::from_be_bytes(protocol_specific);
-        trusted_receive(&self.file, security_protocol, protocol_specific, data.as_padded_mut_slice())?;
+        trusted_receive(&self.file, security_protocol, protocol_specific, data.as_padded_mut_slice()).await?;
         Ok(data.into_vec())
     }
 }
 
-fn identify_device(file_handle: &FileHandle) -> Result<IdentifyDevice, DeviceError> {
+async fn identify_device(file_handle: &RawDevice) -> Result<IdentifyDevice, DeviceError> {
     let mut data_out = vec![0_u8; 512];
     let input = Input::identify_device();
     let task_file = input.serialize();
 
-    let mut command = ATA_PASS_THROUGH_DIRECT {
+    let command = ATA_PASS_THROUGH_DIRECT {
         Length: size_of::<ATA_PASS_THROUGH_DIRECT>() as u16,
         AtaFlags: ATA_FLAGS_DATA_IN | ATA_FLAGS_USE_DMA,
         PathId: 0,          // Set by the driver.
@@ -114,17 +117,16 @@ fn identify_device(file_handle: &FileHandle) -> Result<IdentifyDevice, DeviceErr
         CurrentTaskFile: task_file,
     };
 
-    let command_buffer = unsafe {
-        core::slice::from_raw_parts_mut(&mut command as *mut _ as *mut u8, size_of::<ATA_PASS_THROUGH_DIRECT>())
-    };
-
-    let _ = ioctl_in_out(file_handle.handle(), IOCTL_ATA_PASS_THROUGH_DIRECT, command_buffer)?;
-    check_ata_status(&command.CurrentTaskFile)?;
-    IdentifyDevice::from_bytes(&data_out).map_err(|_| DeviceError::ATAError(ATAError::with_error_bit()))
+    let mut request_buffer = make_request_buffer(command);
+    let _ = file_handle
+        .device_io_control_symmetric(IOCTL_ATA_PASS_THROUGH_DIRECT, request_buffer.as_mut_slice())
+        .await?;
+    parse_request_buffer(request_buffer)?;
+    IdentifyDevice::from_bytes(&data_out).map_err(|_| DeviceError::ATAError(AtaError::with_error_bit()))
 }
 
-fn trusted_send(
-    file_handle: &FileHandle,
+async fn trusted_send(
+    file_handle: &RawDevice,
     security_protocol: u8,
     security_protocol_specific: u16,
     data_out: &[u8],
@@ -132,7 +134,7 @@ fn trusted_send(
     let input = Input::trusted_send_dma(security_protocol, security_protocol_specific, data_out.len() as u32)?;
     let task_file = input.serialize();
 
-    let mut command = ATA_PASS_THROUGH_DIRECT {
+    let command = ATA_PASS_THROUGH_DIRECT {
         Length: size_of::<ATA_PASS_THROUGH_DIRECT>() as u16,
         AtaFlags: ATA_FLAGS_DATA_OUT | ATA_FLAGS_USE_DMA,
         PathId: 0,          // Set by the driver.
@@ -147,16 +149,15 @@ fn trusted_send(
         CurrentTaskFile: task_file,
     };
 
-    let command_buffer = unsafe {
-        core::slice::from_raw_parts_mut(&mut command as *mut _ as *mut u8, size_of::<ATA_PASS_THROUGH_DIRECT>())
-    };
-
-    let _ = ioctl_in_out(file_handle.handle(), IOCTL_ATA_PASS_THROUGH_DIRECT, command_buffer)?;
-    check_ata_status(&command.CurrentTaskFile)
+    let mut request_buffer = make_request_buffer(command);
+    let _ = file_handle
+        .device_io_control_symmetric(IOCTL_ATA_PASS_THROUGH_DIRECT, request_buffer.as_mut_slice())
+        .await?;
+    parse_request_buffer(request_buffer).map_err(|err| err.into())
 }
 
-fn trusted_receive(
-    file_handle: &FileHandle,
+async fn trusted_receive(
+    file_handle: &RawDevice,
     security_protocol: u8,
     security_protocol_specific: u16,
     data_out: &mut [u8],
@@ -164,7 +165,7 @@ fn trusted_receive(
     let input = Input::trusted_receive_dma(security_protocol, security_protocol_specific, data_out.len() as u32)?;
     let task_file = input.serialize();
 
-    let mut command = ATA_PASS_THROUGH_DIRECT {
+    let command = ATA_PASS_THROUGH_DIRECT {
         Length: size_of::<ATA_PASS_THROUGH_DIRECT>() as u16,
         AtaFlags: ATA_FLAGS_DATA_IN | ATA_FLAGS_USE_DMA,
         PathId: 0,          // Set by the driver.
@@ -179,12 +180,11 @@ fn trusted_receive(
         CurrentTaskFile: task_file,
     };
 
-    let command_buffer = unsafe {
-        core::slice::from_raw_parts_mut(&mut command as *mut _ as *mut u8, size_of::<ATA_PASS_THROUGH_DIRECT>())
-    };
-
-    let _ = ioctl_in_out(file_handle.handle(), IOCTL_ATA_PASS_THROUGH_DIRECT, command_buffer)?;
-    check_ata_status(&command.CurrentTaskFile)
+    let mut request_buffer = make_request_buffer(command);
+    let _ = file_handle
+        .device_io_control_symmetric(IOCTL_ATA_PASS_THROUGH_DIRECT, request_buffer.as_mut_slice())
+        .await?;
+    parse_request_buffer(request_buffer).map_err(|err| err.into())
 }
 
 /// See [`super::scsi`] for info about alignment.
@@ -196,7 +196,14 @@ const PADDING: usize = 512;
 // Number of seconds to wait for the device to complete the ATA command.
 const TIMEOUT: u32 = 10;
 
-fn check_ata_status(task_file: &[u8; 8]) -> Result<(), DeviceError> {
-    let status = ATAError::from_task_file(task_file.clone());
-    if status.success() { Ok(()) } else { Err(DeviceError::ATAError(status)) }
+const REQUEST_BUFFER_LEN: usize = size_of::<ATA_PASS_THROUGH_DIRECT>();
+
+fn make_request_buffer(command: ATA_PASS_THROUGH_DIRECT) -> [u8; REQUEST_BUFFER_LEN] {
+    unsafe { transmute(command) }
+}
+
+fn parse_request_buffer(buffer: [u8; REQUEST_BUFFER_LEN]) -> Result<(), AtaError> {
+    let command: ATA_PASS_THROUGH_DIRECT = unsafe { transmute(buffer) };
+    let status = AtaError::from_task_file(command.CurrentTaskFile);
+    if status.success() { Ok(()) } else { Err(status.into()) }
 }

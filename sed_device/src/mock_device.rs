@@ -40,6 +40,7 @@ impl MockDevice {
     }
 }
 
+#[async_trait::async_trait]
 impl Device for MockDevice {
     fn path(&self) -> Option<String> {
         None
@@ -65,7 +66,7 @@ impl Device for MockDevice {
         true
     }
 
-    fn security_send(&self, security_protocol: u8, protocol_specific: [u8; 2], data: &[u8]) -> Result<(), Error> {
+    async fn security_send(&self, security_protocol: u8, protocol_specific: [u8; 2], data: &[u8]) -> Result<(), Error> {
         let (index, expected_event) = self.next_event(security_protocol, protocol_specific, data.len());
         let display_name = expected_event.name().to_owned();
         let display_index = index + 1;
@@ -93,7 +94,12 @@ impl Device for MockDevice {
         }
     }
 
-    fn security_recv(&self, security_protocol: u8, protocol_specific: [u8; 2], len: usize) -> Result<Vec<u8>, Error> {
+    async fn security_recv(
+        &self,
+        security_protocol: u8,
+        protocol_specific: [u8; 2],
+        len: usize,
+    ) -> Result<Vec<u8>, Error> {
         let (index, expected_event) = self.next_event(security_protocol, protocol_specific, len);
         let display_name = expected_event.name().to_owned();
         let display_index = index + 1;

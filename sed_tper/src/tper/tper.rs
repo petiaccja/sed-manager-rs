@@ -47,7 +47,7 @@ impl Tper {
 
     #[instrument(level = "info", ret, err)]
     pub async fn discover(device: &dyn Device) -> Result<Discovery, Error> {
-        let bytes = device.security_recv(0x01, 0x0001_u16.to_be_bytes(), 4096)?;
+        let bytes = device.security_recv(0x01, 0x0001_u16.to_be_bytes(), 4096).await?;
         Discovery::from_bytes(&bytes).map_err(|error| Error::InvalidDiscovery(error))
     }
 

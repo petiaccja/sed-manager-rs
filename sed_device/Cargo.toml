@@ -12,6 +12,8 @@ thiserror.workspace = true
 num_enum.workspace = true
 winapi.workspace = true
 nix.workspace = true
+async-trait.workspace = true
 
 [dev-dependencies]
 sed_device = { path = ".", features = ["test-utils"] }
+tokio.workspace = true

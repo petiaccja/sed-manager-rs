@@ -64,6 +64,21 @@ pub enum StatusCode {
     InvalidStatusField,
 }
 
+impl core::fmt::Display for StatusCode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            StatusCode::Generic(code) => write!(f, "{code} (type=0h, code={:02x}h)", u8::from(*code)),
+            StatusCode::CommandSpecific(code) => write!(f, "Command specific error (type=1h, code={:02x}h)", code),
+            StatusCode::MediaIntegrity(code) => write!(f, "Media integrity error (type=2h, code={:02x}h)", code),
+            StatusCode::PathRelated(code) => write!(f, "Path related error (type=3h, code={:02x}h)", code),
+            StatusCode::Unknown(code) => write!(f, "Unknown error (type=4h-7h, code={:02x}h)", code),
+            StatusCode::InvalidStatusField => write!(f, "Invalid status field"),
+        }
+    }
+}
+
+impl core::error::Error for StatusCode {}
+
 /// NVMe status code types.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PackInto, UnpackFrom)]
 #[repr(u8)]
@@ -185,19 +200,6 @@ impl IdentifyController {
     }
     pub fn firmware_revision_as_str(&self) -> String {
         String::from_utf8_lossy(&self.firmware_revision).trim().to_string()
-    }
-}
-
-impl core::fmt::Display for StatusCode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            StatusCode::Generic(code) => write!(f, "{code} (type=0h, code={:02x}h)", u8::from(*code)),
-            StatusCode::CommandSpecific(code) => write!(f, "Command specific error (type=1h, code={:02x}h)", code),
-            StatusCode::MediaIntegrity(code) => write!(f, "Media integrity error (type=2h, code={:02x}h)", code),
-            StatusCode::PathRelated(code) => write!(f, "Path related error (type=3h, code={:02x}h)", code),
-            StatusCode::Unknown(code) => write!(f, "Unknown error (type=4h-7h, code={:02x}h)", code),
-            StatusCode::InvalidStatusField => write!(f, "Invalid status field"),
-        }
     }
 }
 
