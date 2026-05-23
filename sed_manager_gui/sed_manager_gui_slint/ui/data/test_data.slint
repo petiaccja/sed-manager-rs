@@ -10,23 +10,29 @@ export global TestData {
             firmware: "FIRMWARE#4543",
             interface: "NVMe",
             security_commands: true,
+            is_removable: false,
         },
         {
             name: "Encryptifier Pro 2",
             serial: "SERIAL#8255",
-            path: "/dev/sda",
+            path: "/dev/sda/success/very/long/device/path",
             firmware: "FIRMWARE#9912",
             interface: "SATA",
             security_commands: false,
+            is_removable: true,
         },
         {
-            status: { outcome: Outcome.error, message: "permission denied" },
+            status: {
+                outcome: Outcome.error,
+                message: "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua."
+            },
             name: "",
             serial: "",
-            path: "/dev/sdb",
+            path: "/dev/sdb/error/very/long/device/path",
             firmware: "",
             interface: "",
             security_commands: false,
+            is_removable: false,
         },
         {
             status: { outcome: Outcome.pending },
@@ -36,6 +42,7 @@ export global TestData {
             firmware: "",
             interface: "",
             security_commands: false,
+            is_removable: false,
         },
     ];
 }

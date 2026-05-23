@@ -104,6 +104,10 @@ impl Device for VirtualDevice {
         true
     }
 
+    fn is_removable(&self) -> bool {
+        true
+    }
+
     async fn security_send(&self, security_protocol: u8, protocol_specific: [u8; 2], data: &[u8]) -> Result<(), Error> {
         let mut tper = self.tper.lock().expect("the virtual device panicked in another thread");
         let mut sessions = self.sessions.lock().expect("the virtual device panicked in another thread");

@@ -1,0 +1,172 @@
+import { PaletteExtra } from "palette_extra.slint";
+import { Button, Palette, ScrollView } from "std-widgets.slint";
+import { Icons } from "../resources/lib.slint";
+
+export enum ToastLevel {
+    success,
+    info,
+    warning,
+    error,
+}
+
+export struct Toast {
+    level: ToastLevel,
+    title: string,
+    message: string,
+}
+
+export struct ToastQueueItem {
+    toast: Toast,
+    id: int,
+}
+
+export global ToastQueue {
+    in-out property <[ToastQueueItem]> queue;
+
+    callback push(notification: Toast);
+    callback dismiss(index: int);
+}
+
+export component ToastCard inherits Rectangle {
+    background: background_brush;
+    border-radius: 1rem;
+    border-width: 0.1rem;
+    border-color: foreground_brush.mix(Palette.background, 0.5);
+
+    in property <Toast> notification;
+    in property <bool> has-icon;
+
+    private property <brush> background_brush: {
+        if notification.level == ToastLevel.success {
+            PaletteExtra.success-background
+        } else if notification.level == ToastLevel.info {
+            PaletteExtra.info-background
+        } else if notification.level == ToastLevel.warning {
+            PaletteExtra.warning-background
+        } else {
+            PaletteExtra.error-background
+        }
+    }
+    private property <brush> foreground_brush: {
+        if notification.level == ToastLevel.success {
+            PaletteExtra.success-foreground
+        } else if notification.level == ToastLevel.info {
+            PaletteExtra.info-foreground
+        } else if notification.level == ToastLevel.warning {
+            PaletteExtra.warning-foreground
+        } else {
+            PaletteExtra.error-foreground
+        }
+    }
+
+    HorizontalLayout {
+        padding: 0.5rem;
+        spacing: 0.5rem;
+
+        if has-icon: Image {
+            width: 2rem;
+            source: {
+                if notification.level == ToastLevel.success {
+                    Icons.check
+                } else if notification.level == ToastLevel.info {
+                    Icons.info
+                } else if notification.level == ToastLevel.warning {
+                    Icons.warning
+                } else {
+                    Icons.error
+                }
+            };
+            colorize: foreground_brush;
+        }
+
+        VerticalLayout {
+            spacing: 0.2rem;
+            alignment: stretch;
+            horizontal-stretch: 1.0;
+
+            if !notification.title.is-empty: Text {
+                text: notification.title;
+                color: foreground_brush;
+                font-size: 1.2rem;
+                font-weight: 400;
+                overflow: elide;
+            }
+
+            if !notification.message.is-empty: ScrollView {
+                vertical-stretch: 1.0;
+                min-height: 1.4rem;
+                preferred-width: text.preferred-width;
+
+                VerticalLayout {
+                    text := Text {
+                        text: notification.message;
+                        wrap: word-wrap;
+                    }
+                }
+            }
+        }
+    }
+}
+
+component ToastInstance {
+    animate opacity {
+        duration: fade-duration;
+        easing: ease-in-out-quad;
+    }
+
+    in property <int> id;
+    in property <Toast> toast;
+
+    private property <duration> fade-duration: 0.05s;
+
+    function dismiss() {
+        ToastQueue.dismiss(id)
+    }
+
+    dismiss-timer := Timer {
+        interval: 5s;
+        running: true;
+        triggered => {
+            root.dismiss()
+        }
+    }
+
+    fade-timer := Timer {
+        interval: 4s;
+        running: true;
+        triggered => {
+            fade-duration = 1s;
+            root.opacity = 0%;
+        }
+    }
+
+    TouchArea {
+        changed has-hover => {
+            if self.has-hover {
+                fade-duration = 0.05s;
+                root.opacity = 100%;
+                dismiss-timer.restart()
+            }
+        }
+
+        clicked => {
+            root.dismiss()
+        }
+    }
+
+    ToastCard {
+        notification: toast;
+    }
+}
+
+export component ToastArea {
+    VerticalLayout {
+        alignment: end;
+        spacing: 1rem;
+
+        for item in ToastQueue.queue: ToastInstance {
+            id: item.id;
+            toast: item.toast;
+        }
+    }
+}

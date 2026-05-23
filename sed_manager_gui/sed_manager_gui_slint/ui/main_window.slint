@@ -1,16 +1,32 @@
 import { Logo } from "resources/logo.slint";
-import { Device } from "data/device.slint";
+import { Device, Outcome } from "data/lib.slint";
 import { TabWidget } from "std-widgets.slint";
-import { DeviceView, DeviceSideBar, DeviceSwitchView } from "views/lib.slint";
+import {
+    DeviceView,
+    DeviceSideBar,
+    DeviceSwitchView,
+    DeviceScanButton,
+} from "views/lib.slint";
 import { TestData } from "data/lib.slint";
+import {
+    ToastQueue,
+    ToastArea,
+    ToastLevel,
+} from "widgets/lib.slint";
+
+export { ToastQueue } from "widgets/lib.slint";
 
 export component MainWindow inherits Window {
     title: "SED Manager";
     icon: Logo.png;
-    preferred-width: 640px;
+    preferred-width: 720px;
     preferred-height: 480px;
 
     in property <[Device]> devices: TestData.devices;
+    in property <Outcome> scan-outcome;
+
+    callback scan <=> scan-button.clicked;
+    callback close <=> side-bar.close;
 
     HorizontalLayout {
         side-bar := DeviceSideBar {
@@ -24,5 +40,22 @@ export component MainWindow inherits Window {
             devices: devices;
             horizontal-stretch: 1.0;
         }
+    }
+
+    scan-button := DeviceScanButton {
+        x: side-bar.x + side-bar.width - self.width - 1rem;
+        y: side-bar.y + side-bar.height - self.height - 1rem;
+        z: 1;
+        width: 4rem;
+        height: 4rem;
+        outcome: scan-outcome;
+    }
+
+    ToastArea {
+        x: 1rem;
+        y: 1rem;
+        z: 2;
+        width: 20rem;
+        height: parent.height - 2 * self.y;
     }
 }

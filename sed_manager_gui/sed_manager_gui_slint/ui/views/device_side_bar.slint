@@ -1,6 +1,7 @@
-import { Device } from "../data/device.slint";
-import { ListView, Palette, ScrollView } from "std-widgets.slint";
-import { PaletteExtra } from "../widgets/palette_extra.slint";
+import { Device } from "../data/lib.slint";
+import { Palette, ScrollView } from "std-widgets.slint";
+import { PaletteExtra, IconButton } from "../widgets/lib.slint";
+import { Icons } from "../resources/lib.slint";
 
 component DeviceSideBarItem {
     min-width: content.min-width;
@@ -12,6 +13,7 @@ component DeviceSideBarItem {
     in property <Device> device;
 
     callback clicked <=> touch-area.clicked;
+    callback close(path: string);
 
     touch-area := TouchArea {
         Rectangle {
@@ -39,6 +41,18 @@ component DeviceSideBarItem {
             }
         }
     }
+
+    IconButton {
+        x: root.width - self.width - 0.5rem;
+        y: root.height - self.height - 0.5rem;
+        width: 2rem;
+        height: 2rem;
+        icon: Icons.close;
+
+        clicked => {
+            close(device.path)
+        }
+    }
 }
 
 component DeviceSideBarTitle inherits Rectangle {
@@ -63,6 +77,8 @@ export component DeviceSideBar inherits Rectangle {
     in property <[Device]> devices;
     in-out property <int> selected;
 
+    callback close(path: string);
+
     VerticalLayout {
         alignment: stretch;
 
@@ -83,6 +99,9 @@ export component DeviceSideBar inherits Rectangle {
 
                     clicked => {
                         root.selected = index
+                    }
+                    close(path) => {
+                        close(path)
                     }
                 }
             }

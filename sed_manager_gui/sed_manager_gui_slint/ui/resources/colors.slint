@@ -1,0 +1,15 @@
+import { PaletteExtra } from "../widgets/palette_extra.slint";
+import { Palette } from "std-widgets.slint";
+
+export global Colors {
+    out property <color> take-ownership: PaletteExtra.make-accented(#00da36, Palette.control-foreground, Palette.control-background);
+    out property <color> activate-locking: PaletteExtra.make-accented(#ffd92f, Palette.control-foreground, Palette.control-background);
+    out property <color> change-password: PaletteExtra.make-accented(#017715, Palette.control-foreground, Palette.control-background);
+    out property <color> edit-ranges: PaletteExtra.make-accented(#9900ff, Palette.control-foreground, Palette.control-background);
+    out property <color> edit-users: PaletteExtra.make-accented(#006eff, Palette.control-foreground, Palette.control-background);
+    out property <color> edit-permissions: PaletteExtra.make-accented(#ff9900, Palette.control-foreground, Palette.control-background);
+    out property <color> shadow-mbr: PaletteExtra.make-accented(#96fcff, Palette.control-foreground, Palette.control-background);
+    out property <color> revert-device: PaletteExtra.error-foreground;
+    out property <color> query-status: PaletteExtra.make-accented(#ff46ff, Palette.control-foreground, Palette.control-background);
+    out property <color> stack-reset: PaletteExtra.make-accented(#00a2ff, Palette.control-foreground, Palette.control-background);
+}

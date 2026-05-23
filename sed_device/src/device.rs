@@ -15,6 +15,7 @@ pub enum Interface {
     NVMe,
     SD,
     MMC,
+    USB,
     Other,
 }
 
@@ -26,6 +27,7 @@ pub trait Device: Send + Sync {
     fn serial_number(&self) -> String;
     fn firmware_revision(&self) -> String;
     fn is_security_supported(&self) -> bool;
+    fn is_removable(&self) -> bool;
 
     async fn security_send(&self, security_protocol: u8, protocol_specific: [u8; 2], data: &[u8]) -> Result<(), Error>;
     async fn security_recv(
@@ -45,6 +47,7 @@ impl core::fmt::Display for Interface {
             Interface::NVMe => write!(f, "NVMe"),
             Interface::SD => write!(f, "SD"),
             Interface::MMC => write!(f, "MMC"),
+            Interface::USB => write!(f, "USB"),
             Interface::Other => write!(f, "Other"),
         }
     }

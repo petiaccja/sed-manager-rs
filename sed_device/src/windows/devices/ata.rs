@@ -14,28 +14,33 @@ use windows::Win32::Storage::IscsiDisc::{
 
 use crate::shared::aligned_array::AlignedArray;
 use crate::shared::ata::{AtaError, IdentifyDevice, Input};
+use crate::windows::devices::generic::{GenericDeviceDesc, query_description};
 use crate::windows::devices::raw_device::RawDevice;
 use crate::{Device, Error as DeviceError, Interface};
 
 use super::GenericDevice;
 
 pub struct AtaDevice {
-    file: RawDevice,
-    cached_desc: IdentifyDevice,
+    raw_device: RawDevice,
+    generic_desc: GenericDeviceDesc,
+    desc: IdentifyDevice,
 }
 
 impl AtaDevice {
     #[allow(unused)]
     pub async fn open(path: &str) -> Result<Self, DeviceError> {
-        let file = RawDevice::open(path)?;
-        let desc = identify_device(&file).await?;
-        Ok(Self { file, cached_desc: desc })
+        let raw_device = RawDevice::open(path)?;
+        let generic_desc = query_description(&raw_device).await?;
+        let desc = identify_device(&raw_device).await?;
+        Ok(Self { raw_device, generic_desc, desc })
     }
 
     pub async fn from_generic(value: GenericDevice) -> Result<Self, DeviceError> {
         if [Interface::ATA, Interface::SATA].contains(&value.interface()) {
-            let desc = identify_device(value.get_file()).await?;
-            Ok(Self { file: value.take_file(), cached_desc: desc })
+            let raw_device = value.into_raw_device();
+            let generic_desc = query_description(&raw_device).await?;
+            let desc = identify_device(&raw_device).await?;
+            Ok(Self { raw_device, generic_desc, desc })
         } else {
             Err(DeviceError::InterfaceNotSupported)
         }
@@ -45,27 +50,31 @@ impl AtaDevice {
 #[async_trait::async_trait]
 impl Device for AtaDevice {
     fn path(&self) -> Option<&Path> {
-        Some(self.file.path())
+        Some(self.raw_device.path())
     }
 
     fn interface(&self) -> Interface {
-        self.cached_desc.interface()
+        self.desc.interface()
     }
 
     fn model_number(&self) -> String {
-        self.cached_desc.model_number()
+        self.desc.model_number()
     }
 
     fn serial_number(&self) -> String {
-        self.cached_desc.serial_number()
+        self.desc.serial_number()
     }
 
     fn firmware_revision(&self) -> String {
-        self.cached_desc.firmware_revision()
+        self.desc.firmware_revision()
     }
 
     fn is_security_supported(&self) -> bool {
-        self.cached_desc.trusted_computing_supported
+        self.desc.trusted_computing_supported
+    }
+
+    fn is_removable(&self) -> bool {
+        self.generic_desc.is_removable
     }
 
     async fn security_send(
@@ -79,7 +88,10 @@ impl Device for AtaDevice {
         }
         let aligned_data = AlignedArray::from_slice_padded(data, ALIGNMENT, PADDING).unwrap();
         let protocol_specific = u16::from_be_bytes(protocol_specific);
-        Ok(trusted_send(&self.file, security_protocol, protocol_specific, aligned_data.as_padded_slice()).await?)
+        Ok(
+            trusted_send(&self.raw_device, security_protocol, protocol_specific, aligned_data.as_padded_slice())
+                .await?,
+        )
     }
 
     async fn security_recv(
@@ -93,7 +105,7 @@ impl Device for AtaDevice {
         }
         let mut data = AlignedArray::zeroed_padded(len, ALIGNMENT, PADDING).unwrap();
         let protocol_specific = u16::from_be_bytes(protocol_specific);
-        trusted_receive(&self.file, security_protocol, protocol_specific, data.as_padded_mut_slice()).await?;
+        trusted_receive(&self.raw_device, security_protocol, protocol_specific, data.as_padded_mut_slice()).await?;
         Ok(data.into_vec())
     }
 }

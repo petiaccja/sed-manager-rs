@@ -66,6 +66,10 @@ impl Device for MockDevice {
         true
     }
 
+    fn is_removable(&self) -> bool {
+        false
+    }
+
     async fn security_send(&self, security_protocol: u8, protocol_specific: [u8; 2], data: &[u8]) -> Result<(), Error> {
         let (index, expected_event) = self.next_event(security_protocol, protocol_specific, data.len());
         let display_name = expected_event.name().to_owned();

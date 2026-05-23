@@ -6,6 +6,8 @@ export component DeviceSwitchView {
     in property <[Device]> devices;
 
     VerticalLayout {
+        if devices.length == 0: Rectangle { }
+
         for device[index] in devices: Rectangle {
             min-width: content.min-width;
             min-height: index == selected ? content.min-height : 0px;

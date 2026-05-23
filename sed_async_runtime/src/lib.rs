@@ -6,6 +6,40 @@ use std::time::{Duration, Instant};
 
 pub use cancellation_token::{CancelSender, CancelToken, cancel_channel};
 
+pub struct Runtime {
+    inner: tokio::runtime::Runtime,
+}
+
+impl Runtime {
+    pub fn multi_threaded() -> Self {
+        Self {
+            inner: tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .build()
+                .expect("could not create tokio runtime"),
+        }
+    }
+
+    pub fn block_on<F>(&self, f: F) -> F::Output
+    where
+        F: Future,
+    {
+        self.inner.block_on(f)
+    }
+
+    pub fn spawn<F>(&self, f: F) -> JoinHandle<F::Output>
+    where
+        F: Future + Send + 'static,
+        F::Output: Send + 'static,
+    {
+        self.inner.spawn(f).into()
+    }
+
+    pub fn shutdown(self, duration: Duration) {
+        self.inner.shutdown_timeout(duration);
+    }
+}
+
 pub struct JoinHandle<T> {
     inner: tokio::task::JoinHandle<T>,
 }

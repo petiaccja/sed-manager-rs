@@ -14,12 +14,12 @@ use windows::{
         Foundation::ERROR_NO_MORE_ITEMS,
         System::Ioctl::GUID_DEVINTERFACE_DISK,
     },
-    core::{HRESULT, HSTRING, HStringBuilder, PCWSTR},
+    core::{HRESULT, PCWSTR},
 };
 
 use crate::Error as DeviceError;
 
-pub fn list_physical_drives() -> Result<Vec<PathBuf>, DeviceError> {
+pub async fn list_physical_drives() -> Result<Vec<PathBuf>, DeviceError> {
     let dev_info = unsafe {
         SetupDiGetClassDevsW(
             Some(&GUID_DEVINTERFACE_DISK as *const _),
@@ -79,7 +79,7 @@ pub fn list_physical_drives() -> Result<Vec<PathBuf>, DeviceError> {
         };
 
         let device_path = PCWSTR(detail.DevicePath.as_ptr());
-        device_paths.push(HSTRING::from(HStringBuilder::new(unsafe { device_path.len() })).to_os_string().into());
+        device_paths.push(unsafe { device_path.to_hstring() }.to_os_string().into());
     }
 
     Ok(device_paths)
@@ -89,10 +89,10 @@ pub fn list_physical_drives() -> Result<Vec<PathBuf>, DeviceError> {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_get_physical_drives() -> Result<(), DeviceError> {
+    #[tokio::test]
+    async fn test_get_physical_drives() -> Result<(), DeviceError> {
         // There must be at least one physical drive, so this test should pass.
-        match list_physical_drives() {
+        match list_physical_drives().await {
             Ok(physical_drives) => {
                 assert!(!physical_drives.is_empty());
                 Ok(())

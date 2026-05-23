@@ -9,6 +9,8 @@ mod nvme;
 mod raw_device;
 mod scsi;
 
+use std::path::Path;
+
 use crate::Device;
 use crate::Error;
 use crate::Interface;
@@ -22,8 +24,8 @@ fn into_boxed<ConcreteDevice: Device + 'static>(device: ConcreteDevice) -> Box<d
     Box::from(device) as Box<dyn Device>
 }
 
-pub async fn open_device(drive_path: &str) -> Result<Box<dyn Device>, Error> {
-    let generic_device = GenericDevice::open(drive_path).await?;
+pub async fn open_device(path: impl AsRef<Path>) -> Result<Box<dyn Device>, Error> {
+    let generic_device = GenericDevice::open(path).await?;
     match generic_device.interface() {
         Interface::NVMe => NvmeDevice::from_generic(generic_device).await.map(|dev| into_boxed(dev)),
         Interface::SCSI => ScsiDevice::try_from(generic_device).map(|dev| into_boxed(dev)),

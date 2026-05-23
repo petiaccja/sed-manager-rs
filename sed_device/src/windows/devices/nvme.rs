@@ -11,6 +11,7 @@ use crate::device::{Device, Interface};
 use crate::shared::aligned_array::AlignedArray;
 use crate::shared::memory::write_nonoverlapping;
 use crate::shared::nvme::IdentifyController;
+use crate::windows::devices::generic::{GenericDeviceDesc, query_description};
 use crate::windows::devices::raw_device::RawDevice;
 
 use sorbit::ser_de::FromBytes as _;
@@ -23,22 +24,26 @@ use super::GenericDevice;
 use super::scsi;
 
 pub struct NvmeDevice {
-    file: RawDevice,
-    cached_desc: IdentifyController,
+    raw_device: RawDevice,
+    generic_desc: GenericDeviceDesc,
+    desc: IdentifyController,
 }
 
 impl NvmeDevice {
     #[allow(unused)]
     pub async fn open(path: &str) -> Result<Self, DeviceError> {
-        let file = RawDevice::open(path)?;
-        let desc = identify_controller(&file).await?;
-        Ok(Self { file, cached_desc: desc })
+        let raw_device = RawDevice::open(path)?;
+        let generic_desc = query_description(&raw_device).await?;
+        let desc = identify_controller(&raw_device).await?;
+        Ok(Self { raw_device, generic_desc, desc })
     }
 
     pub async fn from_generic(value: GenericDevice) -> Result<Self, DeviceError> {
         if Interface::NVMe == value.interface() {
-            let desc = identify_controller(value.get_file()).await?;
-            Ok(Self { file: value.take_file(), cached_desc: desc })
+            let raw_device = value.into_raw_device();
+            let generic_desc = query_description(&raw_device).await?;
+            let desc = identify_controller(&raw_device).await?;
+            Ok(Self { raw_device, generic_desc, desc })
         } else {
             Err(DeviceError::InterfaceNotSupported)
         }
@@ -48,7 +53,7 @@ impl NvmeDevice {
 #[async_trait::async_trait]
 impl Device for NvmeDevice {
     fn path(&self) -> Option<&Path> {
-        Some(&self.file.path())
+        Some(&self.raw_device.path())
     }
 
     fn interface(&self) -> Interface {
@@ -56,19 +61,23 @@ impl Device for NvmeDevice {
     }
 
     fn model_number(&self) -> String {
-        self.cached_desc.model_number_as_str()
+        self.desc.model_number_as_str()
     }
 
     fn serial_number(&self) -> String {
-        self.cached_desc.serial_number_as_str()
+        self.desc.serial_number_as_str()
     }
 
     fn firmware_revision(&self) -> String {
-        self.cached_desc.firmware_revision_as_str()
+        self.desc.firmware_revision_as_str()
     }
 
     fn is_security_supported(&self) -> bool {
-        self.cached_desc.security_send_receive_supported
+        self.desc.security_send_receive_supported
+    }
+
+    fn is_removable(&self) -> bool {
+        self.generic_desc.is_removable
     }
 
     async fn security_send(
@@ -83,7 +92,7 @@ impl Device for NvmeDevice {
         let aligned_data = AlignedArray::from_slice(data, 8).unwrap();
         let protocol_specific = u16::from_be_bytes(protocol_specific);
         scsi::security_protocol_out(
-            &self.file,
+            &self.raw_device,
             security_protocol,
             protocol_specific,
             aligned_data.as_padded_slice(),
@@ -104,7 +113,7 @@ impl Device for NvmeDevice {
         let mut data = AlignedArray::zeroed(len, 8).unwrap();
         let protocol_specific = u16::from_be_bytes(protocol_specific);
         scsi::security_protocol_in(
-            &self.file,
+            &self.raw_device,
             security_protocol,
             protocol_specific,
             data.as_padded_mut_slice(),
@@ -161,7 +170,7 @@ mod test {
     use crate::windows::drive_list::list_physical_drives;
 
     async fn get_nvme_devices() -> Vec<NvmeDevice> {
-        let paths = list_physical_drives().ok().unwrap_or(vec![]);
+        let paths = list_physical_drives().await.ok().unwrap_or(vec![]);
         let mut nvme_devices = Vec::new();
         for path in paths {
             if let Ok(generic_device) = GenericDevice::open(&path).await

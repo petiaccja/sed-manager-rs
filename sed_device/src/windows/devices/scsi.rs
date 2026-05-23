@@ -72,6 +72,10 @@ impl Device for ScsiDevice {
         true
     }
 
+    fn is_removable(&self) -> bool {
+        self.generic_device.is_removable()
+    }
+
     async fn security_send(
         &self,
         security_protocol: u8,

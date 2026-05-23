@@ -5,17 +5,32 @@
 
 import { Palette } from "std-widgets.slint";
 
+global BaseColors {
+    out property <color> success: #00c531;
+    out property <color> info: #50A0B0;
+    out property <color> warning: #FFD000;
+    out property <color> error: #FF0000;
+}
+
 export global PaletteExtra {
     out property <color> accent: compute-accent-color();
+    out property <color> highlight: Palette.control-foreground.with-alpha(0.1);
+    out property <color> separator: make-accented(accent.mix(#808080, 0.05), Palette.foreground, Palette.background).with-alpha(0.65);
+
     out property <color> accented-background: make-accented(accent, Palette.background, Palette.foreground);
     out property <color> accented-foreground: make-accented(accent, Palette.foreground, Palette.background);
     out property <color> accented-control-background: make-accented(accent, reduced-control-background, Palette.control-foreground);
     out property <color> accented-control-foreground: make-accented(accent, Palette.control-foreground, reduced-control-background);
-    out property <color> highlight: Palette.control-foreground.with-alpha(0.1);
-    out property <color> success-foreground: make-accented(#00c531, Palette.foreground, Palette.background);
-    out property <color> error-foreground: make-accented(#FF0000, Palette.foreground, Palette.background);
-    out property <color> warning-foreground: make-accented(#FFD000, Palette.foreground, Palette.background);
-    out property <color> separator: make-accented(accent.mix(#808080, 0.2), Palette.foreground, Palette.background).with-alpha(0.65);
+
+    out property <color> success-foreground: make-accented(BaseColors.success, Palette.foreground, Palette.background);
+    out property <color> info-foreground: make-accented(BaseColors.info, Palette.foreground, Palette.background);
+    out property <color> warning-foreground: make-accented(BaseColors.warning, Palette.foreground, Palette.background);
+    out property <color> error-foreground: make-accented(BaseColors.error, Palette.foreground, Palette.background);
+    out property <color> success-background: make-accented(BaseColors.success, Palette.background, Palette.foreground).mix(Palette.background, 0.1);
+    out property <color> info-background: make-accented(BaseColors.info, Palette.background, Palette.foreground).mix(Palette.background, 0.1);
+    out property <color> warning-background: make-accented(BaseColors.warning, Palette.background, Palette.foreground).mix(Palette.background, 0.1);
+    out property <color> error-background: make-accented(BaseColors.error, Palette.background, Palette.foreground).mix(Palette.background, 0.1);
+
     private property <color> reduced-control-background: reduce-alpha(Palette.control-background);
     private property <float> min-saturation: 0.4;
     private property <float> min-value: 0.25;

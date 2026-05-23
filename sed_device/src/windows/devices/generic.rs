@@ -17,7 +17,7 @@ use crate::windows::devices::raw_device::RawDevice;
 use crate::{Device, Error, Interface};
 
 pub struct GenericDevice {
-    file: RawDevice,
+    raw_device: RawDevice,
     cached_desc: GenericDeviceDesc,
 }
 
@@ -26,12 +26,13 @@ pub struct GenericDeviceDesc {
     pub model_number: Option<String>,
     pub serial_number: Option<String>,
     pub firmware_revision: Option<String>,
+    pub is_removable: bool,
 }
 
 #[async_trait::async_trait]
 impl Device for GenericDevice {
     fn path(&self) -> Option<&Path> {
-        Some(&self.file.path())
+        Some(&self.raw_device.path())
     }
 
     fn interface(&self) -> Interface {
@@ -51,6 +52,10 @@ impl Device for GenericDevice {
     }
 
     fn is_security_supported(&self) -> bool {
+        false
+    }
+
+    fn is_removable(&self) -> bool {
         false
     }
 
@@ -80,15 +85,15 @@ impl GenericDevice {
     pub async fn open(path: impl AsRef<Path>) -> Result<Self, Error> {
         let file = RawDevice::open(path)?;
         let desc = query_description(&file).await?;
-        Ok(Self { file, cached_desc: desc })
+        Ok(Self { raw_device: file, cached_desc: desc })
     }
 
     pub fn get_file(&self) -> &RawDevice {
-        &self.file
+        &self.raw_device
     }
 
-    pub fn take_file(self) -> RawDevice {
-        self.file
+    pub fn into_raw_device(self) -> RawDevice {
+        self.raw_device
     }
 }
 
@@ -103,6 +108,7 @@ impl GenericDeviceDesc {
             BusTypeSd => Interface::SD,
             BusTypeMmc => Interface::MMC,
             BusTypeNvme => Interface::NVMe,
+            BusTypeUsb => Interface::USB,
             _ => Interface::Other,
         };
         let model_number = if descriptor.ProductIdOffset != 0 {
@@ -126,11 +132,12 @@ impl GenericDeviceDesc {
         } else {
             None
         };
-        Self { interface, model_number, serial_number, firmware_revision }
+        let is_removable = descriptor.RemovableMedia;
+        Self { interface, model_number, serial_number, firmware_revision, is_removable }
     }
 }
 
-async fn query_description(device: &RawDevice) -> Result<GenericDeviceDesc, Error> {
+pub async fn query_description(device: &RawDevice) -> Result<GenericDeviceDesc, Error> {
     match query_description_with_len(device, 2048).await? {
         Ok(properties) => Ok(properties),
         Err(output_buffer_len) => {
