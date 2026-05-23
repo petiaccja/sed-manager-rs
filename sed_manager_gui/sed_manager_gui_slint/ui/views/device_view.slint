@@ -1,11 +1,12 @@
-import { Device } from "../data/device.slint";
-import { Outcome } from "../data/status.slint";
-import { Island } from "visual_elements.slint";
-import { PaletteExtra } from "palette_extra.slint";
+import { Device, Outcome } from "../data/lib.slint";
+import {
+    Island,
+    PaletteExtra,
+    VerticalSeparator,
+    IconButton,
+} from "../widgets/lib.slint";
 import { Spinner, Palette } from "std-widgets.slint";
-import { Icons } from "../resources/icons.slint";
-import { IconButton } from "icon_button.slint";
-import { VerticalSeparator } from "visual_elements.slint";
+import { Icons } from "../resources/lib.slint";
 
 component Header {
     min-width: content.min-width;

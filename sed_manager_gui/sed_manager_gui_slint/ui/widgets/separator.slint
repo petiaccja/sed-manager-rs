@@ -4,7 +4,6 @@
 //L-----------------------------------------------------------------------------
 
 import { PaletteExtra } from "palette_extra.slint";
-import { Palette } from "std-widgets.slint";
 
 export component HorizontalSeparator inherits Rectangle {
     preferred-width: 100%;
@@ -16,14 +15,4 @@ export component VerticalSeparator inherits Rectangle {
     width: 1px;
     preferred-height: 100%;
     background: PaletteExtra.separator;
-}
-
-export component Island inherits Rectangle {
-    background: Palette.control-background;
-    border-radius: 8px;
-
-    // Get padding from sides that give `distance` at the rounded corners.
-    public pure function corner-padding(distance: length) -> length {
-        (self.border-radius * (Math.sqrt(2.0) - 1.0) + distance) / Math.sqrt(2.0);
-    }
 }

@@ -1,0 +1,16 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
+import { Palette } from "std-widgets.slint";
+
+export component Island inherits Rectangle {
+    background: Palette.control-background;
+    border-radius: 8px;
+
+    // Get padding from sides that give `distance` at the rounded corners.
+    public pure function corner-padding(distance: length) -> length {
+        (self.border-radius * (Math.sqrt(2.0) - 1.0) + distance) / Math.sqrt(2.0);
+    }
+}
