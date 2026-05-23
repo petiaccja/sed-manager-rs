@@ -5,15 +5,16 @@
 
 use core::ffi::c_void;
 use std::mem::transmute;
+use std::path::Path;
 
 use sorbit::ser_de::{FromBytes as _, ToBytes as _};
-use winapi::shared::ntddscsi::{
+use windows::Win32::Storage::IscsiDisc::{
     IOCTL_SCSI_PASS_THROUGH_DIRECT, SCSI_IOCTL_DATA_IN, SCSI_IOCTL_DATA_OUT, SCSI_PASS_THROUGH_DIRECT,
 };
 
 use crate::shared::aligned_array::AlignedArray;
 use crate::shared::scsi::{Command, ScsiError, SecurityProtocolIn, SecurityProtocolOut, SenseData, SenseKey};
-use crate::windows::utility::raw_device::RawDevice;
+use crate::windows::devices::raw_device::RawDevice;
 use crate::{Device, Error as DeviceError, Interface};
 
 use super::GenericDevice;
@@ -44,7 +45,7 @@ impl TryFrom<GenericDevice> for ScsiDevice {
 
 #[async_trait::async_trait]
 impl Device for ScsiDevice {
-    fn path(&self) -> Option<String> {
+    fn path(&self) -> Option<&Path> {
         self.generic_device.path()
     }
 
@@ -134,7 +135,7 @@ pub async fn security_protocol_in(
         Lun: 0,
         CdbLength: cdb.len() as u8,
         SenseInfoLength: 0,
-        DataIn: SCSI_IOCTL_DATA_IN,
+        DataIn: SCSI_IOCTL_DATA_IN as u8,
         DataTransferLength: data_in.len() as u32,
         TimeOutValue: 2,
         DataBuffer: data_in.as_mut_ptr() as *mut c_void,
@@ -174,7 +175,7 @@ pub async fn security_protocol_out(
         Lun: 0,
         CdbLength: cdb.len() as u8,
         SenseInfoLength: 0,
-        DataIn: SCSI_IOCTL_DATA_OUT,
+        DataIn: SCSI_IOCTL_DATA_OUT as u8,
         DataTransferLength: data_out.len() as u32,
         TimeOutValue: 2,
         DataBuffer: data_out.as_ptr() as *mut c_void, // Data is not actually modified, hence the unsafe cast.

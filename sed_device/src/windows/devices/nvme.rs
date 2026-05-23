@@ -3,17 +3,21 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
+use core::mem::offset_of;
+use std::path::Path;
+
 use crate::Error as DeviceError;
 use crate::device::{Device, Interface};
 use crate::shared::aligned_array::AlignedArray;
 use crate::shared::memory::write_nonoverlapping;
 use crate::shared::nvme::IdentifyController;
-use crate::windows::utility::ioctl::{STORAGE_PROTOCOL_SPECIFIC_DATA, STORAGE_PROTOCOL_TYPE};
-use crate::windows::utility::raw_device::RawDevice;
+use crate::windows::devices::raw_device::RawDevice;
 
-use core::mem::offset_of;
 use sorbit::ser_de::FromBytes as _;
-use winapi::um::winioctl::{IOCTL_STORAGE_QUERY_PROPERTY, STORAGE_PROPERTY_QUERY};
+use windows::Win32::System::Ioctl::{
+    IOCTL_STORAGE_QUERY_PROPERTY, PropertyStandardQuery, ProtocolTypeNvme, STORAGE_PROPERTY_QUERY,
+    STORAGE_PROTOCOL_SPECIFIC_DATA, StorageAdapterProtocolSpecificProperty,
+};
 
 use super::GenericDevice;
 use super::scsi;
@@ -43,8 +47,8 @@ impl NvmeDevice {
 
 #[async_trait::async_trait]
 impl Device for NvmeDevice {
-    fn path(&self) -> Option<String> {
-        Some(self.file.path().into())
+    fn path(&self) -> Option<&Path> {
+        Some(&self.file.path())
     }
 
     fn interface(&self) -> Interface {
@@ -118,13 +122,13 @@ async fn identify_controller(raw_device: &RawDevice) -> Result<IdentifyControlle
     let response_offset = size_of::<STORAGE_PROTOCOL_SPECIFIC_DATA>();
 
     let query = STORAGE_PROPERTY_QUERY {
-        PropertyId: 49, // StorageAdapterProtocolSpecificProperty
-        QueryType: 0,   // PropertyStandardQuery
+        PropertyId: StorageAdapterProtocolSpecificProperty,
+        QueryType: PropertyStandardQuery,
         AdditionalParameters: [0],
     };
 
     let data = STORAGE_PROTOCOL_SPECIFIC_DATA {
-        ProtocolType: STORAGE_PROTOCOL_TYPE::ProtocolTypeNvme,
+        ProtocolType: ProtocolTypeNvme,
         DataType: 1,                 // NVMeDataTypeIdentify
         ProtocolDataRequestValue: 1, // NVME_IDENTIFY_CNS_CONTROLLER
         ProtocolDataRequestSubValue: 0,

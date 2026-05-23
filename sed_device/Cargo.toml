@@ -10,10 +10,17 @@ test-utils = []
 sorbit.workspace = true
 thiserror.workspace = true
 num_enum.workspace = true
-winapi.workspace = true
+windows = { workspace = true, features = [
+    "Win32_System_IO",
+    "Win32_Security",
+    "Win32_Storage_FileSystem",
+    "Win32_Storage_IscsiDisc",
+    "Win32_System_Ioctl",
+    "Win32_Devices_DeviceAndDriverInstallation",
+] }
 nix.workspace = true
 async-trait.workspace = true
 
 [dev-dependencies]
 sed_device = { path = ".", features = ["test-utils"] }
-tokio.workspace = true
+tokio = { workspace = true,  features = ["macros"] }

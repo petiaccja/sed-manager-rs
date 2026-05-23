@@ -1,4 +1,4 @@
-use std::{collections::VecDeque, sync::Mutex};
+use std::{collections::VecDeque, path::Path, sync::Mutex};
 
 use crate::{Device, Error, Interface};
 
@@ -42,7 +42,7 @@ impl MockDevice {
 
 #[async_trait::async_trait]
 impl Device for MockDevice {
-    fn path(&self) -> Option<String> {
+    fn path(&self) -> Option<&Path> {
         None
     }
 

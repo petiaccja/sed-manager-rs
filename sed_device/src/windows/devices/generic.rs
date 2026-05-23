@@ -3,15 +3,18 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
+use std::ffi::CStr;
 use std::mem::transmute;
+use std::path::Path;
 
-use winapi::um::winioctl::{
-    IOCTL_STORAGE_QUERY_PROPERTY, PropertyStandardQuery, STORAGE_PROPERTY_QUERY, StorageDeviceProperty,
+use windows::Win32::Storage::FileSystem::*;
+use windows::Win32::System::Ioctl::{
+    IOCTL_STORAGE_QUERY_PROPERTY, PropertyStandardQuery, STORAGE_DEVICE_DESCRIPTOR, STORAGE_PROPERTY_QUERY,
+    StorageDeviceProperty,
 };
 
-use crate::windows::utility::ioctl::{STORAGE_BUS_TYPE, STORAGE_DEVICE_DESCRIPTOR};
-use crate::windows::utility::raw_device::RawDevice;
-use crate::{Device, Error, Interface, shared::string::FromNullTerminated};
+use crate::windows::devices::raw_device::RawDevice;
+use crate::{Device, Error, Interface};
 
 pub struct GenericDevice {
     file: RawDevice,
@@ -27,8 +30,8 @@ pub struct GenericDeviceDesc {
 
 #[async_trait::async_trait]
 impl Device for GenericDevice {
-    fn path(&self) -> Option<String> {
-        Some(self.file.path().into())
+    fn path(&self) -> Option<&Path> {
+        Some(&self.file.path())
     }
 
     fn interface(&self) -> Interface {
@@ -74,7 +77,7 @@ impl Device for GenericDevice {
 }
 
 impl GenericDevice {
-    pub async fn open(path: &str) -> Result<Self, Error> {
+    pub async fn open(path: impl AsRef<Path>) -> Result<Self, Error> {
         let file = RawDevice::open(path)?;
         let desc = query_description(&file).await?;
         Ok(Self { file, cached_desc: desc })
@@ -91,31 +94,35 @@ impl GenericDevice {
 
 impl GenericDeviceDesc {
     pub fn parse(descriptor: &STORAGE_DEVICE_DESCRIPTOR, buffer: &[u8]) -> Self {
+        #[allow(non_upper_case_globals)]
         let interface = match descriptor.BusType {
-            STORAGE_BUS_TYPE::BusTypeUnknown => Interface::Other,
-            STORAGE_BUS_TYPE::BusTypeScsi => Interface::SCSI,
-            STORAGE_BUS_TYPE::BusTypeAta => Interface::ATA,
-            STORAGE_BUS_TYPE::BusTypeSata => Interface::SATA,
-            STORAGE_BUS_TYPE::BusTypeSd => Interface::SD,
-            STORAGE_BUS_TYPE::BusTypeMmc => Interface::MMC,
-            STORAGE_BUS_TYPE::BusTypeNvme => Interface::NVMe,
+            BusTypeUnknown => Interface::Other,
+            BusTypeScsi => Interface::SCSI,
+            BusTypeAta => Interface::ATA,
+            BusTypeSata => Interface::SATA,
+            BusTypeSd => Interface::SD,
+            BusTypeMmc => Interface::MMC,
+            BusTypeNvme => Interface::NVMe,
             _ => Interface::Other,
         };
         let model_number = if descriptor.ProductIdOffset != 0 {
-            let product_id_ptr = unsafe { buffer.as_ptr().add(descriptor.ProductIdOffset as usize) };
-            String::from_null_terminated_utf8(product_id_ptr).map(|s| s.trim().into())
+            let ptr = unsafe { buffer.as_ptr().add(descriptor.ProductIdOffset as usize) };
+            let cstr = unsafe { CStr::from_ptr(ptr as *const i8) };
+            Some(cstr.to_string_lossy().trim().to_owned())
         } else {
             None
         };
         let serial_number = if descriptor.SerialNumberOffset != 0 {
-            let product_id_ptr = unsafe { buffer.as_ptr().add(descriptor.SerialNumberOffset as usize) };
-            String::from_null_terminated_utf8(product_id_ptr).map(|s| s.trim().into())
+            let ptr = unsafe { buffer.as_ptr().add(descriptor.SerialNumberOffset as usize) };
+            let cstr = unsafe { CStr::from_ptr(ptr as *const i8) };
+            Some(cstr.to_string_lossy().trim().to_owned())
         } else {
             None
         };
         let firmware_revision = if descriptor.ProductRevisionOffset != 0 {
-            let product_id_ptr = unsafe { buffer.as_ptr().add(descriptor.ProductRevisionOffset as usize) };
-            String::from_null_terminated_utf8(product_id_ptr).map(|s| s.trim().into())
+            let ptr = unsafe { buffer.as_ptr().add(descriptor.ProductRevisionOffset as usize) };
+            let cstr = unsafe { CStr::from_ptr(ptr as *const i8) };
+            Some(cstr.to_string_lossy().trim().to_owned())
         } else {
             None
         };

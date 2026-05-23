@@ -3,167 +3,86 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use core::ptr::null_mut;
-use core::{ffi::c_void, iter::from_fn, mem::zeroed, ops::Deref};
-use winapi::{
-    shared::{
-        guiddef::GUID,
-        rpcdce::{RPC_C_AUTHN_LEVEL_CALL, RPC_C_AUTHN_WINNT, RPC_C_AUTHZ_NONE, RPC_C_IMP_LEVEL_IMPERSONATE},
-        winerror::E_FAIL,
-        wtypesbase::CLSCTX_INPROC_SERVER,
-    },
-    um::{
-        combaseapi::{CoCreateInstance, CoSetProxyBlanket},
-        oaidl::VARIANT,
-        objidl::EOAC_NONE,
-        oleauto::{VariantClear, VariantInit},
-        unknwnbase::IUnknown,
-        wbemcli::{
-            CLSID_WbemLocator, IEnumWbemClassObject, IID_IWbemLocator, IWbemClassObject, IWbemLocator, IWbemServices,
-            WBEM_FLAG_FORWARD_ONLY, WBEM_FLAG_RETURN_IMMEDIATELY, WBEM_INFINITE, WBEM_S_FALSE,
+use std::path::PathBuf;
+
+use windows::{
+    Win32::{
+        Devices::DeviceAndDriverInstallation::{
+            DIGCF_DEVICEINTERFACE, DIGCF_PRESENT, SP_DEVICE_INTERFACE_DATA, SP_DEVICE_INTERFACE_DETAIL_DATA_W,
+            SetupDiEnumDeviceInterfaces, SetupDiGetClassDevsW, SetupDiGetDeviceInterfaceDetailW,
         },
+        Foundation::ERROR_NO_MORE_ITEMS,
+        System::Ioctl::GUID_DEVINTERFACE_DISK,
     },
+    core::{HRESULT, HSTRING, HStringBuilder, PCWSTR},
 };
 
 use crate::Error as DeviceError;
-use crate::shared::string::{FromNullTerminated, ToNullTerminated};
 
-use super::error::{Error as WindowsError, check_hresult};
-use super::utility::{com_interface::COM_INTERFACE, com_ptr::ComPtr};
-
-fn co_create_instance<T: Deref<Target = IUnknown>>(clsid: &GUID, riid: &GUID) -> Result<ComPtr<T>, WindowsError> {
-    let mut ptr = ComPtr::<T>::null();
-    let result = unsafe {
-        check_hresult(CoCreateInstance(
-            clsid as *const GUID,
-            null_mut(),
-            CLSCTX_INPROC_SERVER,
-            riid as *const GUID,
-            ptr.as_mut() as *mut *mut T as *mut *mut c_void,
-        ))
+pub fn list_physical_drives() -> Result<Vec<PathBuf>, DeviceError> {
+    let dev_info = unsafe {
+        SetupDiGetClassDevsW(
+            Some(&GUID_DEVINTERFACE_DISK as *const _),
+            None,
+            None,
+            DIGCF_PRESENT | DIGCF_DEVICEINTERFACE,
+        )?
     };
-    match result {
-        Ok(_) => Ok(ptr),
-        Err(err) => Err(err),
-    }
-}
 
-fn get_wbem_services(
-    wbem_locator: *mut IWbemLocator,
-    network_resource: &str,
-) -> Result<ComPtr<IWbemServices>, WindowsError> {
-    let mut network_resource_utf16: Vec<_> = network_resource.to_null_terminated_utf16();
-    let mut ptr = ComPtr::<IWbemServices>::null();
-    let result = unsafe {
-        check_hresult((*wbem_locator).ConnectServer(
-            network_resource_utf16.as_mut_ptr(),
-            null_mut(),
-            null_mut(),
-            null_mut(),
-            0,
-            null_mut(),
-            null_mut(),
-            ptr.as_mut() as *mut *mut IWbemServices,
-        ))
-    };
-    match result {
-        Ok(_) => Ok(ptr),
-        Err(err) => Err(err),
-    }
-}
+    let mut device_paths = Vec::<PathBuf>::new();
 
-fn co_set_proxy_blanket(wbem_services: *mut IWbemServices) -> Result<(), WindowsError> {
-    unsafe {
-        check_hresult(CoSetProxyBlanket(
-            wbem_services as *mut IUnknown,
-            RPC_C_AUTHN_WINNT,
-            RPC_C_AUTHZ_NONE,
-            null_mut(),
-            RPC_C_AUTHN_LEVEL_CALL,
-            RPC_C_IMP_LEVEL_IMPERSONATE,
-            null_mut(),
-            EOAC_NONE,
-        ))
-    }
-}
-
-fn exec_query(wbem_services: *mut IWbemServices, query: &str) -> Result<ComPtr<IEnumWbemClassObject>, WindowsError> {
-    let mut language_utf16: Vec<_> = "WQL".to_null_terminated_utf16();
-    let mut query_utf16: Vec<_> = query.to_null_terminated_utf16();
-    let mut ptr = ComPtr::<IEnumWbemClassObject>::null();
-    let result = unsafe {
-        check_hresult((*wbem_services).ExecQuery(
-            language_utf16.as_mut_ptr(),
-            query_utf16.as_mut_ptr(),
-            (WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY) as i32,
-            null_mut(),
-            ptr.as_mut(),
-        ))
-    };
-    match result {
-        Ok(_) => Ok(ptr),
-        Err(err) => Err(err),
-    }
-}
-
-fn map_enumerator(
-    enumerator: *mut IEnumWbemClassObject,
-) -> core::iter::FromFn<impl FnMut() -> Option<ComPtr<IWbemClassObject>>> {
-    from_fn(move || -> Option<ComPtr<IWbemClassObject>> {
-        let mut returned: u32 = 0;
-        let mut ptr = ComPtr::<IWbemClassObject>::null();
-        let hr = unsafe { (*enumerator).Next(WBEM_INFINITE as i32, 1, ptr.as_mut(), &mut returned as *mut u32) };
-        if hr == WBEM_S_FALSE as i32 {
-            return None;
+    for disk_idx in 0.. {
+        let mut iface_data =
+            SP_DEVICE_INTERFACE_DATA { cbSize: size_of::<SP_DEVICE_INTERFACE_DATA>() as u32, ..Default::default() };
+        match unsafe {
+            SetupDiEnumDeviceInterfaces(
+                dev_info,
+                None,
+                &GUID_DEVINTERFACE_DISK as *const _,
+                disk_idx,
+                &mut iface_data as *mut _,
+            )
+        } {
+            Ok(_) => (),
+            Err(err) if err.code() == HRESULT::from_win32(ERROR_NO_MORE_ITEMS.0) => break,
+            Err(err) => return Err(err.into()),
         }
-        match check_hresult(hr) {
-            Ok(_) => Some(ptr),
-            Err(_) => None,
-        }
-    })
-}
 
-fn get_drive_path(object: *mut IWbemClassObject) -> Result<String, WindowsError> {
-    let mut path_utf16: Vec<_> = "Path".to_null_terminated_utf16();
-    let path = unsafe {
-        // Do not return within this unsafe block.
-        let mut property: VARIANT = zeroed();
-        VariantInit(&mut property as *mut VARIANT);
-        let result = check_hresult((*object).Get(
-            path_utf16.as_mut_ptr(),
-            0,
-            &mut property as *mut VARIANT,
-            null_mut(),
-            null_mut(),
-        ));
-        let path = match result {
-            Ok(_) => {
-                let s = property.n1.n2().n3.bstrVal();
-                match String::from_null_terminated_utf16(*s) {
-                    Some(path) => Ok(path),
-                    None => Err(WindowsError::COM(E_FAIL)),
-                }
-            }
-            Err(err) => Err(err),
+        let mut required_size = 0u32;
+        unsafe {
+            let _ = SetupDiGetDeviceInterfaceDetailW(
+                dev_info,
+                &mut iface_data as *mut _,
+                None,
+                0,
+                Some(&mut required_size as *mut _),
+                None,
+            );
         };
-        // This must be called to clean up resources.
-        VariantClear(&mut property as *mut VARIANT);
-        path
-    }?;
-    Ok(path)
-}
 
-pub fn list_physical_drives() -> Result<Vec<String>, DeviceError> {
-    COM_INTERFACE.with(|com_interface| -> Result<(), WindowsError> { com_interface.init() })?;
+        // This is a `SP_DEVICE_INTERFACE_DETAIL_DATA_W` allocated as a vector,
+        // with extra space at the end.
+        let mut detail_buffer = vec![0u8; required_size as usize];
 
-    let wbem_locator = co_create_instance::<IWbemLocator>(&CLSID_WbemLocator, &IID_IWbemLocator)?;
-    let wbem_services = get_wbem_services(wbem_locator.get(), r"ROOT\Microsoft\Windows\Storage")?;
-    co_set_proxy_blanket(wbem_services.get())?;
-    let enumerator = exec_query(wbem_services.get(), r"SELECT * FROM MSFT_Disk")?;
-    Ok(map_enumerator(enumerator.get())
-        .map(|object| -> Result<String, WindowsError> { get_drive_path(object.get()) })
-        .filter_map(|result| -> Option<String> { result.ok() })
-        .collect::<Vec<_>>())
+        let detail = unsafe { &mut *(detail_buffer.as_mut_ptr() as *mut SP_DEVICE_INTERFACE_DETAIL_DATA_W) };
+        detail.cbSize = size_of_val(detail) as u32;
+
+        unsafe {
+            SetupDiGetDeviceInterfaceDetailW(
+                dev_info,
+                &mut iface_data as *mut _,
+                Some(detail as *mut _),
+                detail_buffer.len() as u32,
+                None,
+                None,
+            )?
+        };
+
+        let device_path = PCWSTR(detail.DevicePath.as_ptr());
+        device_paths.push(HSTRING::from(HStringBuilder::new(unsafe { device_path.len() })).to_os_string().into());
+    }
+
+    Ok(device_paths)
 }
 
 #[cfg(test)]

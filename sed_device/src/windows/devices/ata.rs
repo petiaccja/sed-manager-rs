@@ -5,15 +5,16 @@
 
 use core::ffi::c_void;
 use std::mem::transmute;
+use std::path::Path;
 
 use sorbit::ser_de::FromBytes;
-use winapi::shared::ntddscsi::{
+use windows::Win32::Storage::IscsiDisc::{
     ATA_FLAGS_DATA_IN, ATA_FLAGS_DATA_OUT, ATA_FLAGS_USE_DMA, ATA_PASS_THROUGH_DIRECT, IOCTL_ATA_PASS_THROUGH_DIRECT,
 };
 
 use crate::shared::aligned_array::AlignedArray;
 use crate::shared::ata::{AtaError, IdentifyDevice, Input};
-use crate::windows::utility::raw_device::RawDevice;
+use crate::windows::devices::raw_device::RawDevice;
 use crate::{Device, Error as DeviceError, Interface};
 
 use super::GenericDevice;
@@ -43,8 +44,8 @@ impl AtaDevice {
 
 #[async_trait::async_trait]
 impl Device for AtaDevice {
-    fn path(&self) -> Option<String> {
-        Some(self.file.path().to_string())
+    fn path(&self) -> Option<&Path> {
+        Some(self.file.path())
     }
 
     fn interface(&self) -> Interface {
@@ -104,7 +105,7 @@ async fn identify_device(file_handle: &RawDevice) -> Result<IdentifyDevice, Devi
 
     let command = ATA_PASS_THROUGH_DIRECT {
         Length: size_of::<ATA_PASS_THROUGH_DIRECT>() as u16,
-        AtaFlags: ATA_FLAGS_DATA_IN | ATA_FLAGS_USE_DMA,
+        AtaFlags: (ATA_FLAGS_DATA_IN | ATA_FLAGS_USE_DMA) as u16,
         PathId: 0,          // Set by the driver.
         TargetId: 0,        // Set by the driver.
         Lun: 0,             // Set by the driver.
@@ -136,7 +137,7 @@ async fn trusted_send(
 
     let command = ATA_PASS_THROUGH_DIRECT {
         Length: size_of::<ATA_PASS_THROUGH_DIRECT>() as u16,
-        AtaFlags: ATA_FLAGS_DATA_OUT | ATA_FLAGS_USE_DMA,
+        AtaFlags: (ATA_FLAGS_DATA_OUT | ATA_FLAGS_USE_DMA) as u16,
         PathId: 0,          // Set by the driver.
         TargetId: 0,        // Set by the driver.
         Lun: 0,             // Set by the driver.
@@ -167,7 +168,7 @@ async fn trusted_receive(
 
     let command = ATA_PASS_THROUGH_DIRECT {
         Length: size_of::<ATA_PASS_THROUGH_DIRECT>() as u16,
-        AtaFlags: ATA_FLAGS_DATA_IN | ATA_FLAGS_USE_DMA,
+        AtaFlags: (ATA_FLAGS_DATA_IN | ATA_FLAGS_USE_DMA) as u16,
         PathId: 0,          // Set by the driver.
         TargetId: 0,        // Set by the driver.
         Lun: 0,             // Set by the driver.

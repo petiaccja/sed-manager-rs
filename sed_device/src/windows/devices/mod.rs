@@ -6,6 +6,7 @@
 mod ata;
 mod generic;
 mod nvme;
+mod raw_device;
 mod scsi;
 
 use crate::Device;

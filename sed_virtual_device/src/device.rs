@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::ops::{Deref as _, DerefMut as _};
+use std::path::Path;
 use std::sync::Mutex;
 
 use sed_device::{Device, Error, Interface};
@@ -79,7 +80,7 @@ impl VirtualDevice {
 
 #[async_trait::async_trait]
 impl Device for VirtualDevice {
-    fn path(&self) -> Option<String> {
+    fn path(&self) -> Option<&Path> {
         None
     }
 

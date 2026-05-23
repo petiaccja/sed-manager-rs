@@ -3,6 +3,8 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
+use std::path::Path;
+
 use crate::error::Error;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -18,7 +20,7 @@ pub enum Interface {
 
 #[async_trait::async_trait]
 pub trait Device: Send + Sync {
-    fn path(&self) -> Option<String>;
+    fn path(&self) -> Option<&Path>;
     fn interface(&self) -> Interface;
     fn model_number(&self) -> String;
     fn serial_number(&self) -> String;

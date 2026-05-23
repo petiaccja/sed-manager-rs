@@ -8,7 +8,7 @@ use crate::shared::nvme;
 
 use crate::shared::scsi;
 #[cfg(target_os = "windows")]
-use crate::windows::Error as PlatformError;
+use windows::core::Error as PlatformError;
 
 #[cfg(target_os = "linux")]
 use crate::linux::Error as PlatformError;
@@ -50,5 +50,5 @@ pub enum Error {
     Unspecified,
 
     #[error("{}", .0)]
-    PlatformError(PlatformError),
+    PlatformError(#[from] PlatformError),
 }
