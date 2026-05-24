@@ -11,6 +11,7 @@ use sed_manager_gui_slint as ui;
 use sed_tper::Tper;
 use slint::{ComponentHandle, Model, ModelExt, ModelRc, SharedString, ToSharedString, VecModel, spawn_local};
 
+use crate::display_ui::DisplayUi;
 use crate::toast::ToastQueue;
 
 pub struct MainApp {
@@ -132,19 +133,11 @@ impl MainApp {
                 }
             };
 
-            self.devices.update(
-                |device| device.path == path.to_string_lossy(),
-                |device_| ui::Device {
-                    interface: device.interface().to_shared_string(),
-                    name: device.model_number().into(),
-                    serial: device.serial_number().into(),
-                    firmware: device.firmware_revision().into(),
-                    security_commands: device.is_security_supported().into(),
-                    status: ui::Status { outcome: ui::Outcome::Success, ..Default::default() },
-                    is_removable: device.is_removable(),
-                    ..device_
-                },
-            );
+            if device.is_security_supported() {
+                self.clone().discover(path.clone());
+            }
+
+            self.devices.update(|device| device.path == path.to_string_lossy(), |_| device.display_ui());
             self.services.set_device(path, device);
         });
     }
@@ -155,9 +148,16 @@ impl MainApp {
                 return;
             };
             let discovery = match Tper::discover(&*device).await {
-                Ok(discovery) => discovery,
-                Err(err) => todo!(),
+                Ok(discovery) => discovery.display_ui(),
+                Err(err) => ui::Discovery {
+                    status: ui::Status { message: err.to_shared_string(), outcome: ui::Outcome::Error },
+                    ..Default::default()
+                },
             };
+            self.devices.update(
+                |device| device.path == path.to_string_lossy(),
+                |device| ui::Device { discovery: discovery, ..device },
+            );
         });
     }
 }
@@ -211,7 +211,7 @@ pub trait VecModelExt<T> {
     fn update<F, U>(&self, find: F, update: U)
     where
         F: FnMut(&T) -> bool,
-        U: FnMut(T) -> T;
+        U: FnOnce(T) -> T;
 }
 
 impl<T> VecModelExt<T> for VecModel<T>
@@ -231,10 +231,10 @@ where
         }
     }
 
-    fn update<F, U>(&self, mut find: F, mut update: U)
+    fn update<F, U>(&self, mut find: F, update: U)
     where
         F: FnMut(&T) -> bool,
-        U: FnMut(T) -> T,
+        U: FnOnce(T) -> T,
     {
         self.iter().enumerate().find(|(_, value)| find(value)).map(|(index, value)| {
             self.set_row_data(index, update(value));

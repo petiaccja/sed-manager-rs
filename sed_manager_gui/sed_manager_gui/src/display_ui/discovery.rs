@@ -6,10 +6,10 @@
 use std::{rc::Rc, time::Duration};
 
 use sed_packet::discovery::{
-    AdditionalDataStoreTablesDescriptor, BlockSIDAuthDescriptor, DataRemovalDescriptor, EnterpriseDescriptor, Feature,
-    FeatureDescriptor, GeometryDescriptor, KeyPerIODescriptor, LockingDescriptor, OpalV1Descriptor, OpalV2Descriptor,
-    OpaliteDescriptor, OwnerPasswordState, PyriteV1Descriptor, PyriteV2Descriptor, RubyDescriptor, TperDescriptor,
-    UnrecognizedDescriptor,
+    AdditionalDataStoreTablesDescriptor, BlockSIDAuthDescriptor, DataRemovalDescriptor, Discovery,
+    EnterpriseDescriptor, Feature, FeatureDescriptor, GeometryDescriptor, KeyPerIODescriptor, LockingDescriptor,
+    OpalV1Descriptor, OpalV2Descriptor, OpaliteDescriptor, OwnerPasswordState, PyriteV1Descriptor, PyriteV2Descriptor,
+    RubyDescriptor, TperDescriptor, UnrecognizedDescriptor,
 };
 use slint::VecModel;
 
@@ -67,338 +67,471 @@ impl DisplayUi for TperDescriptor {
     }
 }
 
-impl From<&TperDescriptor> for DeviceDiscoveryFeature {
-    fn from(value: &TPerDescriptor) -> Self {
-        let name = format!("{} features", value.feature_code());
+impl DisplayUi for LockingDescriptor {
+    type Ui = ui::DiscoveryFeature;
+
+    fn display_ui(&self) -> Self::Ui {
         let properties = vec![
-            NameValuePair::new("Sync supported".into(), yes_or_no(value.sync_supported).into()),
-            NameValuePair::new("Async supported".into(), yes_or_no(value.async_supported).into()),
-            NameValuePair::new("ACK/NAK supported".into(), yes_or_no(value.ack_nak_supported).into()),
-            NameValuePair::new("Buffer management supported".into(), yes_or_no(value.buffer_mgmt_supported).into()),
-            NameValuePair::new("Streaming supported".into(), yes_or_no(value.streaming_supported).into()),
-            NameValuePair::new("ComID management supported".into(), yes_or_no(value.com_id_mgmt_supported).into()),
+            ui::DiscoveryProperty { name: "Locking supported".into(), value: yes_or_no(self.locking_supported).into() },
+            ui::DiscoveryProperty { name: "Locking enabled".into(), value: yes_or_no(self.locking_enabled).into() },
+            ui::DiscoveryProperty { name: "Locked".into(), value: yes_or_no(self.locked).into() },
+            ui::DiscoveryProperty {
+                name: "Media encryption supported".into(),
+                value: yes_or_no(self.media_encryption).into(),
+            },
+            ui::DiscoveryProperty { name: "Shadow MBR enabled".into(), value: yes_or_no(self.mbr_enabled).into() },
+            ui::DiscoveryProperty { name: "Shadow MBR done".into(), value: yes_or_no(self.mbr_done).into() },
+            ui::DiscoveryProperty {
+                name: "Shadow MBR supported".into(),
+                value: yes_or_no(!self.mbr_shadowing_not_supported).into(),
+            },
+            ui::DiscoveryProperty {
+                name: "Hardware reset supported".into(),
+                value: yes_or_no(self.hw_reset_supported).into(),
+            },
         ];
-        Self::new(name, properties)
+        ui::DiscoveryFeature { name: self.name().into(), properties: Rc::from(VecModel::from(properties)).into() }
     }
 }
 
-impl From<&LockingDescriptor> for DeviceDiscoveryFeature {
-    fn from(value: &LockingDescriptor) -> Self {
-        let name = format!("{} features", value.feature_code());
+impl DisplayUi for GeometryDescriptor {
+    type Ui = ui::DiscoveryFeature;
+
+    fn display_ui(&self) -> Self::Ui {
         let properties = vec![
-            NameValuePair::new("Locking supported".into(), yes_or_no(value.locking_supported).into()),
-            NameValuePair::new("Locking enabled".into(), yes_or_no(value.locking_enabled).into()),
-            NameValuePair::new("Locked".into(), yes_or_no(value.locked).into()),
-            NameValuePair::new("Media encryption supported".into(), yes_or_no(value.media_encryption).into()),
-            NameValuePair::new("Shadow MBR enabled".into(), yes_or_no(value.mbr_enabled).into()),
-            NameValuePair::new("Shadow MBR done".into(), yes_or_no(value.mbr_done).into()),
-            NameValuePair::new("Shadow MBR supported".into(), yes_or_no(!value.mbr_shadowing_not_supported).into()),
-            NameValuePair::new("Hardware reset supported".into(), yes_or_no(value.hw_reset_supported).into()),
+            ui::DiscoveryProperty { name: "Alignment required".into(), value: yes_or_no(self.align).into() },
+            ui::DiscoveryProperty {
+                name: "Logical block size".into(),
+                value: self.logical_block_size.to_string().into(),
+            },
+            ui::DiscoveryProperty {
+                name: "Alignment granularity".into(),
+                value: self.alignment_granularity.to_string().into(),
+            },
+            ui::DiscoveryProperty {
+                name: "Lowest aligned LBA".into(),
+                value: self.lowest_aligned_lba.to_string().into(),
+            },
         ];
-        Self::new(name, properties)
+        ui::DiscoveryFeature { name: self.name().into(), properties: Rc::from(VecModel::from(properties)).into() }
     }
 }
 
-impl From<&GeometryDescriptor> for DeviceDiscoveryFeature {
-    fn from(value: &GeometryDescriptor) -> Self {
-        let name = format!("{} features", value.feature_code());
+impl DisplayUi for DataRemovalDescriptor {
+    type Ui = ui::DiscoveryFeature;
+
+    fn display_ui(&self) -> Self::Ui {
         let properties = vec![
-            NameValuePair::new("Alignment required".into(), yes_or_no(value.align).into()),
-            NameValuePair::new("Logical block size".into(), value.logical_block_size.to_string()),
-            NameValuePair::new("Alignment granularity".into(), value.alignment_granularity.to_string()),
-            NameValuePair::new("Lowest aligned LBA".into(), value.lowest_aligned_lba.to_string()),
+            ui::DiscoveryProperty { name: "Data removal processing".into(), value: yes_or_no(self.processing).into() },
+            ui::DiscoveryProperty {
+                name: "Data removal interrupted".into(),
+                value: yes_or_no(self.interrupted).into(),
+            },
+            ui::DiscoveryProperty {
+                name: "Overwrite supported".into(),
+                value: yes_or_no(self.supported_mechanism.overwrite).into(),
+            },
+            ui::DiscoveryProperty {
+                name: "Block erase supported".into(),
+                value: yes_or_no(self.supported_mechanism.block_erase).into(),
+            },
+            ui::DiscoveryProperty {
+                name: "Crypto erase supported".into(),
+                value: yes_or_no(self.supported_mechanism.crypto_erase).into(),
+            },
+            ui::DiscoveryProperty {
+                name: "Vendor erase supported".into(),
+                value: yes_or_no(self.supported_mechanism.vendor_erase).into(),
+            },
+            ui::DiscoveryProperty {
+                name: "Overwrite time".into(),
+                value: self.removal_time.overwrite().map(|d| duration(d)).unwrap_or("-".into()).into(),
+            },
+            ui::DiscoveryProperty {
+                name: "Block erase time".into(),
+                value: self.removal_time.block_erase().map(|d| duration(d)).unwrap_or("-".into()).into(),
+            },
+            ui::DiscoveryProperty {
+                name: "Crypto erase time".into(),
+                value: self.removal_time.crypto_erase().map(|d| duration(d)).unwrap_or("-".into()).into(),
+            },
+            ui::DiscoveryProperty {
+                name: "Vendor erase time".into(),
+                value: self.removal_time.vendor_erase().map(|d| duration(d)).unwrap_or("-".into()).into(),
+            },
         ];
-        Self::new(name, properties)
+        ui::DiscoveryFeature { name: self.name().into(), properties: Rc::from(VecModel::from(properties)).into() }
     }
 }
 
-impl From<&DataRemovalDescriptor> for DeviceDiscoveryFeature {
-    fn from(value: &DataRemovalDescriptor) -> Self {
-        let name = format!("{} features", value.feature_code());
+impl DisplayUi for BlockSIDAuthDescriptor {
+    type Ui = ui::DiscoveryFeature;
+
+    fn display_ui(&self) -> Self::Ui {
         let properties = vec![
-            NameValuePair::new("Data removal processing".into(), yes_or_no(value.processing).into()),
-            NameValuePair::new("Data removal interrupted".into(), yes_or_no(value.interrupted).into()),
-            NameValuePair::new("Overwrite supported".into(), yes_or_no(value.supported_mechanism.overwrite).into()),
-            NameValuePair::new("Block erase supported".into(), yes_or_no(value.supported_mechanism.block_erase).into()),
-            NameValuePair::new(
-                "Crypto erase supported".into(),
-                yes_or_no(value.supported_mechanism.crypto_erase).into(),
-            ),
-            NameValuePair::new(
-                "Vendor erase supported".into(),
-                yes_or_no(value.supported_mechanism.vendor_erase).into(),
-            ),
-            NameValuePair::new(
-                "Overwrite time".into(),
-                value.removal_time.overwrite().map(|d| duration(d)).unwrap_or("-".into()),
-            ),
-            NameValuePair::new(
-                "Block erase time".into(),
-                value.removal_time.block_erase().map(|d| duration(d)).unwrap_or("-".into()),
-            ),
-            NameValuePair::new(
-                "Crypto erase time".into(),
-                value.removal_time.crypto_erase().map(|d| duration(d)).unwrap_or("-".into()),
-            ),
-            NameValuePair::new(
-                "Vendor erase time".into(),
-                value.removal_time.vendor_erase().map(|d| duration(d)).unwrap_or("-".into()),
-            ),
+            ui::DiscoveryProperty {
+                name: "SID & MSID PIN differ".into(),
+                value: yes_or_no(self.sid_msid_pin_differ).into(),
+            },
+            ui::DiscoveryProperty {
+                name: "SID authentication blocked".into(),
+                value: yes_or_no(self.sid_authentication_blocked).into(),
+            },
+            ui::DiscoveryProperty {
+                name: "Locking SP freeze supported".into(),
+                value: yes_or_no(self.locking_sp_freeze_supported).into(),
+            },
+            ui::DiscoveryProperty { name: "Locking SP frozen".into(), value: yes_or_no(self.locking_sp_frozen).into() },
+            ui::DiscoveryProperty {
+                name: "Hardware reset unblocks".into(),
+                value: yes_or_no(self.hw_reset_unblocks).into(),
+            },
         ];
-        Self::new(name, properties)
+        ui::DiscoveryFeature { name: self.name().into(), properties: Rc::from(VecModel::from(properties)).into() }
     }
 }
 
-impl From<&BlockSIDAuthDescriptor> for DeviceDiscoveryFeature {
-    fn from(value: &BlockSIDAuthDescriptor) -> Self {
-        let name = format!("{} features", value.feature_code());
+impl DisplayUi for AdditionalDataStoreTablesDescriptor {
+    type Ui = ui::DiscoveryFeature;
+
+    fn display_ui(&self) -> Self::Ui {
         let properties = vec![
-            NameValuePair::new("SID & MSID PIN differ".into(), yes_or_no(value.sid_msid_pin_differ).into()),
-            NameValuePair::new("SID authentication blocked".into(), yes_or_no(value.sid_authentication_blocked).into()),
-            NameValuePair::new(
-                "Locking SP freeze supported".into(),
-                yes_or_no(value.locking_sp_freeze_supported).into(),
-            ),
-            NameValuePair::new("Locking SP frozen".into(), yes_or_no(value.locking_sp_frozen).into()),
-            NameValuePair::new("Hardware reset unblocks".into(), yes_or_no(value.hw_reset_unblocks).into()),
+            ui::DiscoveryProperty {
+                name: "Max number of tables".into(),
+                value: self.max_num_tables.to_string().into(),
+            },
+            ui::DiscoveryProperty {
+                name: "Max total size of tables".into(),
+                value: self.max_total_size_of_tables.to_string().into(),
+            },
+            ui::DiscoveryProperty {
+                name: "Table size alignment".into(),
+                value: self.table_size_alignment.to_string().into(),
+            },
         ];
-        Self::new(name, properties)
+        ui::DiscoveryFeature { name: self.name().into(), properties: Rc::from(VecModel::from(properties)).into() }
     }
 }
 
-impl From<&AdditionalDataStoreTablesDescriptor> for DeviceDiscoveryFeature {
-    fn from(value: &AdditionalDataStoreTablesDescriptor) -> Self {
-        let name = format!("{} features", value.feature_code());
+impl DisplayUi for EnterpriseDescriptor {
+    type Ui = ui::DiscoveryFeature;
 
+    fn display_ui(&self) -> Self::Ui {
         let properties = vec![
-            NameValuePair::new("Max number of tables".into(), value.max_num_tables.to_string()),
-            NameValuePair::new("Max total size of tables".into(), value.max_total_size_of_tables.to_string()),
-            NameValuePair::new("Table size alignment".into(), value.table_size_alignment.to_string()),
+            ui::DiscoveryProperty { name: "Base ComID".into(), value: self.base_com_id.to_string().into() },
+            ui::DiscoveryProperty { name: "Number of ComIDs".into(), value: self.num_com_ids.to_string().into() },
+            ui::DiscoveryProperty {
+                name: "LBA range crossing".into(),
+                value: yes_or_no(!self.no_range_crossing).into(),
+            },
         ];
-        Self::new(name, properties)
+        ui::DiscoveryFeature { name: self.name().into(), properties: Rc::from(VecModel::from(properties)).into() }
     }
 }
 
-impl From<&EnterpriseDescriptor> for DeviceDiscoveryFeature {
-    fn from(value: &EnterpriseDescriptor) -> Self {
-        let name = format!("{} features", value.feature_code());
+impl DisplayUi for OpalV1Descriptor {
+    type Ui = ui::DiscoveryFeature;
+
+    fn display_ui(&self) -> Self::Ui {
         let properties = vec![
-            NameValuePair::new("Base ComID".into(), value.base_com_id.to_string()),
-            NameValuePair::new("Number of ComIDs".into(), value.num_com_ids.to_string()),
-            NameValuePair::new("LBA range crossing".into(), yes_or_no(!value.no_range_crossing).into()),
+            ui::DiscoveryProperty { name: "Base ComID".into(), value: self.base_com_id.to_string().into() },
+            ui::DiscoveryProperty { name: "Number of ComIDs".into(), value: self.num_com_ids.to_string().into() },
+            ui::DiscoveryProperty {
+                name: "LBA range crossing".into(),
+                value: yes_or_no(!self.no_range_crossing).into(),
+            },
         ];
-        Self::new(name, properties)
+        ui::DiscoveryFeature { name: self.name().into(), properties: Rc::from(VecModel::from(properties)).into() }
     }
 }
 
-impl From<&OpalV1Descriptor> for DeviceDiscoveryFeature {
-    fn from(value: &OpalV1Descriptor) -> Self {
-        let name = format!("{} features", value.feature_code());
+impl DisplayUi for OpalV2Descriptor {
+    type Ui = ui::DiscoveryFeature;
+
+    fn display_ui(&self) -> Self::Ui {
         let properties = vec![
-            NameValuePair::new("Base ComID".into(), value.base_com_id.to_string()),
-            NameValuePair::new("Number of ComIDs".into(), value.num_com_ids.to_string()),
-            NameValuePair::new("LBA range crossing".into(), yes_or_no(!value.no_range_crossing).into()),
+            ui::DiscoveryProperty { name: "Base ComID".into(), value: self.base_com_id.to_string().into() },
+            ui::DiscoveryProperty { name: "Number of ComIDs".into(), value: self.num_com_ids.to_string().into() },
+            ui::DiscoveryProperty {
+                name: "LBA range crossing".into(),
+                value: yes_or_no(!self.no_range_crossing).into(),
+            },
+            ui::DiscoveryProperty {
+                name: "Number of locking admins".into(),
+                value: self.num_locking_admins_supported.to_string().into(),
+            },
+            ui::DiscoveryProperty {
+                name: "Number of locking users".into(),
+                value: self.num_locking_users_supported.to_string().into(),
+            },
+            ui::DiscoveryProperty {
+                name: "Initial SID password".into(),
+                value: owner_password_state_to_string(self.initial_owner_pw).into(),
+            },
+            ui::DiscoveryProperty {
+                name: "Reverted SID password".into(),
+                value: owner_password_state_to_string(self.reverted_owner_pw).into(),
+            },
         ];
-        Self::new(name, properties)
+        ui::DiscoveryFeature { name: self.name().into(), properties: Rc::from(VecModel::from(properties)).into() }
     }
 }
 
-impl From<&OpalV2Descriptor> for DeviceDiscoveryFeature {
-    fn from(value: &OpalV2Descriptor) -> Self {
-        let name = format!("{} features", value.feature_code());
+impl DisplayUi for OpaliteDescriptor {
+    type Ui = ui::DiscoveryFeature;
 
+    fn display_ui(&self) -> Self::Ui {
         let properties = vec![
-            NameValuePair::new("Base ComID".into(), value.base_com_id.to_string()),
-            NameValuePair::new("Number of ComIDs".into(), value.num_com_ids.to_string()),
-            NameValuePair::new("LBA range crossing".into(), yes_or_no(!value.no_range_crossing).into()),
-            NameValuePair::new("Number of locking admins".into(), value.num_locking_admins_supported.to_string()),
-            NameValuePair::new("Number of locking users".into(), value.num_locking_users_supported.to_string()),
-            NameValuePair::new(
-                "Initial SID password".into(),
-                owner_password_state_to_string(value.initial_owner_pw).into(),
-            ),
-            NameValuePair::new(
-                "Reverted SID password".into(),
-                owner_password_state_to_string(value.reverted_owner_pw).into(),
-            ),
+            ui::DiscoveryProperty { name: "Base ComID".into(), value: self.base_com_id.to_string().into() },
+            ui::DiscoveryProperty { name: "Number of ComIDs".into(), value: self.num_com_ids.to_string().into() },
+            ui::DiscoveryProperty {
+                name: "Initial SID password".into(),
+                value: owner_password_state_to_string(self.initial_owner_pw).into(),
+            },
+            ui::DiscoveryProperty {
+                name: "Reverted SID password".into(),
+                value: owner_password_state_to_string(self.reverted_owner_pw).into(),
+            },
         ];
-        Self::new(name, properties)
+        ui::DiscoveryFeature { name: self.name().into(), properties: Rc::from(VecModel::from(properties)).into() }
     }
 }
 
-impl From<&OpaliteDescriptor> for DeviceDiscoveryFeature {
-    fn from(value: &OpaliteDescriptor) -> Self {
-        let name = format!("{} features", value.feature_code());
+impl DisplayUi for PyriteV1Descriptor {
+    type Ui = ui::DiscoveryFeature;
 
+    fn display_ui(&self) -> Self::Ui {
         let properties = vec![
-            NameValuePair::new("Base ComID".into(), value.base_com_id.to_string()),
-            NameValuePair::new("Number of ComIDs".into(), value.num_com_ids.to_string()),
-            NameValuePair::new(
-                "Initial SID password".into(),
-                owner_password_state_to_string(value.initial_owner_pw).into(),
-            ),
-            NameValuePair::new(
-                "Reverted SID password".into(),
-                owner_password_state_to_string(value.reverted_owner_pw).into(),
-            ),
+            ui::DiscoveryProperty { name: "Base ComID".into(), value: self.base_com_id.to_string().into() },
+            ui::DiscoveryProperty { name: "Number of ComIDs".into(), value: self.num_com_ids.to_string().into() },
+            ui::DiscoveryProperty {
+                name: "Initial SID password".into(),
+                value: owner_password_state_to_string(self.initial_owner_pw).into(),
+            },
+            ui::DiscoveryProperty {
+                name: "Reverted SID password".into(),
+                value: owner_password_state_to_string(self.reverted_owner_pw).into(),
+            },
         ];
-        Self::new(name, properties)
+        ui::DiscoveryFeature { name: self.name().into(), properties: Rc::from(VecModel::from(properties)).into() }
     }
 }
 
-impl From<&PyriteV1Descriptor> for DeviceDiscoveryFeature {
-    fn from(value: &PyriteV1Descriptor) -> Self {
-        let name = format!("{} features", value.feature_code());
+impl DisplayUi for PyriteV2Descriptor {
+    type Ui = ui::DiscoveryFeature;
 
+    fn display_ui(&self) -> Self::Ui {
         let properties = vec![
-            NameValuePair::new("Base ComID".into(), value.base_com_id.to_string()),
-            NameValuePair::new("Number of ComIDs".into(), value.num_com_ids.to_string()),
-            NameValuePair::new(
-                "Initial SID password".into(),
-                owner_password_state_to_string(value.initial_owner_pw).into(),
-            ),
-            NameValuePair::new(
-                "Reverted SID password".into(),
-                owner_password_state_to_string(value.reverted_owner_pw).into(),
-            ),
+            ui::DiscoveryProperty { name: "Base ComID".into(), value: self.base_com_id.to_string().into() },
+            ui::DiscoveryProperty { name: "Number of ComIDs".into(), value: self.num_com_ids.to_string().into() },
+            ui::DiscoveryProperty {
+                name: "Initial SID password".into(),
+                value: owner_password_state_to_string(self.initial_owner_pw).into(),
+            },
+            ui::DiscoveryProperty {
+                name: "Reverted SID password".into(),
+                value: owner_password_state_to_string(self.reverted_owner_pw).into(),
+            },
         ];
-        Self::new(name, properties)
+        ui::DiscoveryFeature { name: self.name().into(), properties: Rc::from(VecModel::from(properties)).into() }
     }
 }
 
-impl From<&PyriteV2Descriptor> for DeviceDiscoveryFeature {
-    fn from(value: &PyriteV2Descriptor) -> Self {
-        let name = format!("{} features", value.feature_code());
+impl DisplayUi for RubyDescriptor {
+    type Ui = ui::DiscoveryFeature;
 
+    fn display_ui(&self) -> Self::Ui {
         let properties = vec![
-            NameValuePair::new("Base ComID".into(), value.base_com_id.to_string()),
-            NameValuePair::new("Number of ComIDs".into(), value.num_com_ids.to_string()),
-            NameValuePair::new(
-                "Initial SID password".into(),
-                owner_password_state_to_string(value.initial_owner_pw).into(),
-            ),
-            NameValuePair::new(
-                "Reverted SID password".into(),
-                owner_password_state_to_string(value.reverted_owner_pw).into(),
-            ),
+            ui::DiscoveryProperty { name: "Base ComID".into(), value: self.base_com_id.to_string().into() },
+            ui::DiscoveryProperty { name: "Number of ComIDs".into(), value: self.num_com_ids.to_string().into() },
+            ui::DiscoveryProperty {
+                name: "LBA range crossing".into(),
+                value: yes_or_no(!self.no_range_crossing).into(),
+            },
+            ui::DiscoveryProperty {
+                name: "Number of locking admins".into(),
+                value: self.num_locking_admins_supported.to_string().into(),
+            },
+            ui::DiscoveryProperty {
+                name: "Number of locking users".into(),
+                value: self.num_locking_users_supported.to_string().into(),
+            },
+            ui::DiscoveryProperty {
+                name: "Initial SID password".into(),
+                value: owner_password_state_to_string(self.initial_owner_pw).into(),
+            },
+            ui::DiscoveryProperty {
+                name: "Reverted SID password".into(),
+                value: owner_password_state_to_string(self.reverted_owner_pw).into(),
+            },
         ];
-        Self::new(name, properties)
+        ui::DiscoveryFeature { name: self.name().into(), properties: Rc::from(VecModel::from(properties)).into() }
     }
 }
 
-impl From<&RubyDescriptor> for DeviceDiscoveryFeature {
-    fn from(value: &RubyDescriptor) -> Self {
-        let name = format!("{} features", value.feature_code());
+impl DisplayUi for KeyPerIODescriptor {
+    type Ui = ui::DiscoveryFeature;
 
+    fn display_ui(&self) -> Self::Ui {
         let properties = vec![
-            NameValuePair::new("Base ComID".into(), value.base_com_id.to_string()),
-            NameValuePair::new("Number of ComIDs".into(), value.num_com_ids.to_string()),
-            NameValuePair::new("LBA range crossing".into(), yes_or_no(!value.no_range_crossing).into()),
-            NameValuePair::new("Number of locking admins".into(), value.num_locking_admins_supported.to_string()),
-            NameValuePair::new("Number of locking users".into(), value.num_locking_users_supported.to_string()),
-            NameValuePair::new(
-                "Initial SID password".into(),
-                owner_password_state_to_string(value.initial_owner_pw).into(),
-            ),
-            NameValuePair::new(
-                "Reverted SID password".into(),
-                owner_password_state_to_string(value.reverted_owner_pw).into(),
-            ),
+            ui::DiscoveryProperty {
+                name: "Base ComID on protocol 1".into(),
+                value: self.base_com_id_p1.to_string().into(),
+            },
+            ui::DiscoveryProperty {
+                name: "Number of ComIDs on protocol 1".into(),
+                value: self.num_com_ids_p1.to_string().into(),
+            },
+            ui::DiscoveryProperty {
+                name: "Base ComID on protocol 3".into(),
+                value: self.base_com_id_p3.to_string().into(),
+            },
+            ui::DiscoveryProperty {
+                name: "Number of ComIDs on protocol 3".into(),
+                value: self.num_com_ids_p3.to_string().into(),
+            },
+            ui::DiscoveryProperty {
+                name: "Initial SID password".into(),
+                value: owner_password_state_to_string(self.initial_owner_pw).into(),
+            },
+            ui::DiscoveryProperty {
+                name: "Reverted SID password".into(),
+                value: owner_password_state_to_string(self.reverted_owner_pw).into(),
+            },
+            ui::DiscoveryProperty {
+                name: "Number of KPIO admins".into(),
+                value: self.num_kpio_admins_supported.to_string().into(),
+            },
+            ui::DiscoveryProperty { name: "KPIO enabled".into(), value: yes_or_no(self.kpio_enabled).into() },
+            ui::DiscoveryProperty { name: "KPIO scope".into(), value: yes_or_no(self.kpio_scope).into() },
+            ui::DiscoveryProperty {
+                name: "Tweak key required".into(),
+                value: yes_or_no(self.tweak_key_required).into(),
+            },
+            ui::DiscoveryProperty {
+                name: "Incorrect key detection supported".into(),
+                value: yes_or_no(self.incorrect_key_detection_supported).into(),
+            },
+            ui::DiscoveryProperty {
+                name: "Replay protection supported".into(),
+                value: yes_or_no(self.replay_protection_supported).into(),
+            },
+            ui::DiscoveryProperty {
+                name: "Replay protection enabled".into(),
+                value: yes_or_no(self.replay_protection_enabled).into(),
+            },
+            ui::DiscoveryProperty { name: "Max key UID length".into(), value: self.max_key_uid_len.to_string().into() },
+            ui::DiscoveryProperty {
+                name: "KMIP key injection supported".into(),
+                value: yes_or_no(self.kmip_key_injection_supported).into(),
+            },
+            ui::DiscoveryProperty {
+                name: "NIST AES-KW supported".into(),
+                value: yes_or_no(self.nist_aes_kw_supported).into(),
+            },
+            ui::DiscoveryProperty {
+                name: "NIST AES-GCM supported".into(),
+                value: yes_or_no(self.nist_aes_gcm_supported).into(),
+            },
+            ui::DiscoveryProperty {
+                name: "NIST RSA-OAEP supported".into(),
+                value: yes_or_no(self.nist_rsa_oaep_supported).into(),
+            },
+            ui::DiscoveryProperty {
+                name: "AES-256 wrapping supported".into(),
+                value: yes_or_no(self.aes256_wrapping_supported).into(),
+            },
+            ui::DiscoveryProperty {
+                name: "RSA2K wrapping supported".into(),
+                value: yes_or_no(self.rsa2k_wrapping_supported).into(),
+            },
+            ui::DiscoveryProperty {
+                name: "RSA3K wrapping supported".into(),
+                value: yes_or_no(self.rsa3k_wrapping_supported).into(),
+            },
+            ui::DiscoveryProperty {
+                name: "RSA4K wrapping supported".into(),
+                value: yes_or_no(self.rsa4k_wrapping_supported).into(),
+            },
+            ui::DiscoveryProperty {
+                name: "Plaintext KEK provisioning supported".into(),
+                value: yes_or_no(self.plaintext_kek_prov_supported).into(),
+            },
+            ui::DiscoveryProperty {
+                name: "PKI KEK transport supported".into(),
+                value: yes_or_no(self.pki_kek_transport_supported).into(),
+            },
+            ui::DiscoveryProperty {
+                name: "Number of KEKs supported".into(),
+                value: self.num_keks_supported.to_string().into(),
+            },
+            ui::DiscoveryProperty {
+                name: "Total number of key tags supported".into(),
+                value: self.total_key_tags_supported.to_string().into(),
+            },
+            ui::DiscoveryProperty {
+                name: "Max key tags per namespace".into(),
+                value: self.max_key_tags_per_namespace.to_string().into(),
+            },
+            ui::DiscoveryProperty {
+                name: "Get nonce command nonce length".into(),
+                value: self.get_nonce_cmd_nonce_len.to_string().into(),
+            },
         ];
-        Self::new(name, properties)
+        ui::DiscoveryFeature { name: self.name().into(), properties: Rc::from(VecModel::from(properties)).into() }
     }
 }
 
-impl From<&KeyPerIODescriptor> for DeviceDiscoveryFeature {
-    fn from(value: &KeyPerIODescriptor) -> Self {
-        let name = format!("{} features", value.feature_code());
+impl DisplayUi for UnrecognizedDescriptor {
+    type Ui = ui::DiscoveryFeature;
 
+    fn display_ui(&self) -> Self::Ui {
         let properties = vec![
-            NameValuePair::new("Base ComID on protocol 1".into(), value.base_com_id_p1.to_string()),
-            NameValuePair::new("Number of ComIDs on protocol 1".into(), value.num_com_ids_p1.to_string()),
-            NameValuePair::new("Base ComID on protocol 3".into(), value.base_com_id_p3.to_string()),
-            NameValuePair::new("Number of ComIDs on protocol 3".into(), value.num_com_ids_p3.to_string()),
-            NameValuePair::new(
-                "Initial SID password".into(),
-                owner_password_state_to_string(value.initial_owner_pw).into(),
-            ),
-            NameValuePair::new(
-                "Reverted SID password".into(),
-                owner_password_state_to_string(value.reverted_owner_pw).into(),
-            ),
-            NameValuePair::new("Number of KPIO admins".into(), value.num_kpio_admins_supported.to_string()),
-            NameValuePair::new("KPIO enabled".into(), yes_or_no(value.kpio_enabled).into()),
-            NameValuePair::new("KPIO scope".into(), yes_or_no(value.kpio_scope).into()),
-            NameValuePair::new("Tweak key required".into(), yes_or_no(value.tweak_key_required).into()),
-            NameValuePair::new(
-                "Incorrect key detection supported".into(),
-                yes_or_no(value.incorrect_key_detection_supported).into(),
-            ),
-            NameValuePair::new(
-                "Replay protection supported".into(),
-                yes_or_no(value.replay_protection_supported).into(),
-            ),
-            NameValuePair::new("Replay protection enabled".into(), yes_or_no(value.replay_protection_enabled).into()),
-            NameValuePair::new("Max key UID length".into(), value.max_key_uid_len.to_string()),
-            NameValuePair::new(
-                "KMIP key injection supported".into(),
-                yes_or_no(value.kmip_key_injection_supported).into(),
-            ),
-            NameValuePair::new("NIST AES-KW supported".into(), yes_or_no(value.nist_aes_kw_supported).into()),
-            NameValuePair::new("NIST AES-GCM supported".into(), yes_or_no(value.nist_aes_gcm_supported).into()),
-            NameValuePair::new("NIST RSA-OAEP supported".into(), yes_or_no(value.nist_rsa_oaep_supported).into()),
-            NameValuePair::new("AES-256 wrapping supported".into(), yes_or_no(value.aes256_wrapping_supported).into()),
-            NameValuePair::new("RSA2K wrapping supported".into(), yes_or_no(value.rsa2k_wrapping_supported).into()),
-            NameValuePair::new("RSA3K wrapping supported".into(), yes_or_no(value.rsa3k_wrapping_supported).into()),
-            NameValuePair::new("RSA4K wrapping supported".into(), yes_or_no(value.rsa4k_wrapping_supported).into()),
-            NameValuePair::new(
-                "Plaintext KEK provisioning supported".into(),
-                yes_or_no(value.plaintext_kek_prov_supported).into(),
-            ),
-            NameValuePair::new(
-                "PKI KEK transport supported".into(),
-                yes_or_no(value.pki_kek_transport_supported).into(),
-            ),
-            NameValuePair::new("Number of KEKs supported".into(), value.num_keks_supported.to_string()),
-            NameValuePair::new("Total number of key tags supported".into(), value.total_key_tags_supported.to_string()),
-            NameValuePair::new("Max key tags per namespace".into(), value.max_key_tags_per_namespace.to_string()),
-            NameValuePair::new("Get nonce command nonce length".into(), value.get_nonce_cmd_nonce_len.to_string()),
+            ui::DiscoveryProperty { name: "Version".into(), value: self.version.to_string().into() },
+            ui::DiscoveryProperty { name: "Length".into(), value: self.length.to_string().into() },
         ];
-        Self::new(name, properties)
+        ui::DiscoveryFeature { name: "Unrecognized".into(), properties: Rc::from(VecModel::from(properties)).into() }
     }
 }
 
-impl From<&UnrecognizedDescriptor> for DeviceDiscoveryFeature {
-    fn from(value: &UnrecognizedDescriptor) -> Self {
-        let name = format!("Unrecognized features");
+impl DisplayUi for FeatureDescriptor {
+    type Ui = ui::DiscoveryFeature;
 
-        let properties = vec![
-            NameValuePair::new("Feature code".into(), format!("{:#6x}", value.feature_code)),
-            NameValuePair::new("Version".into(), value.version.to_string()),
-            NameValuePair::new("Length".into(), value.length.to_string()),
-        ];
-        Self::new(name, properties)
+    fn display_ui(&self) -> Self::Ui {
+        match self {
+            FeatureDescriptor::TPer(desc) => desc.display_ui(),
+            FeatureDescriptor::Locking(desc) => desc.display_ui(),
+            FeatureDescriptor::Geometry(desc) => desc.display_ui(),
+            FeatureDescriptor::DataRemoval(desc) => desc.display_ui(),
+            FeatureDescriptor::BlockSIDAuth(desc) => desc.display_ui(),
+            FeatureDescriptor::AdditionalDataStoreTables(desc) => desc.display_ui(),
+            FeatureDescriptor::Enterprise(desc) => desc.display_ui(),
+            FeatureDescriptor::OpalV1(desc) => desc.display_ui(),
+            FeatureDescriptor::OpalV2(desc) => desc.display_ui(),
+            FeatureDescriptor::Opalite(desc) => desc.display_ui(),
+            FeatureDescriptor::PyriteV1(desc) => desc.display_ui(),
+            FeatureDescriptor::PyriteV2(desc) => desc.display_ui(),
+            FeatureDescriptor::Ruby(desc) => desc.display_ui(),
+            FeatureDescriptor::KeyPerIO(desc) => desc.display_ui(),
+            FeatureDescriptor::Unrecognized(code, desc) => {
+                ui::DiscoveryFeature { name: format!("Unrecognized (0x{code:02x})").into(), ..desc.display_ui() }
+            }
+        }
     }
 }
 
-impl From<&FeatureDescriptor> for DeviceDiscoveryFeature {
-    fn from(value: &FeatureDescriptor) -> Self {
-        match value {
-            FeatureDescriptor::TPer(desc) => desc.into(),
-            FeatureDescriptor::Locking(desc) => desc.into(),
-            FeatureDescriptor::Geometry(desc) => desc.into(),
-            FeatureDescriptor::DataRemoval(desc) => desc.into(),
-            FeatureDescriptor::BlockSIDAuth(desc) => desc.into(),
-            FeatureDescriptor::AdditionalDataStoreTables(desc) => desc.into(),
-            FeatureDescriptor::Enterprise(desc) => desc.into(),
-            FeatureDescriptor::OpalV1(desc) => desc.into(),
-            FeatureDescriptor::OpalV2(desc) => desc.into(),
-            FeatureDescriptor::Opalite(desc) => desc.into(),
-            FeatureDescriptor::PyriteV1(desc) => desc.into(),
-            FeatureDescriptor::PyriteV2(desc) => desc.into(),
-            FeatureDescriptor::Ruby(desc) => desc.into(),
-            FeatureDescriptor::KeyPerIO(desc) => desc.into(),
-            FeatureDescriptor::Unrecognized(desc) => desc.into(),
+impl DisplayUi for Discovery {
+    type Ui = ui::Discovery;
+
+    fn display_ui(&self) -> Self::Ui {
+        let ssc_features =
+            self.feature_descriptors.iter().filter(|desc| desc.as_ssc().is_some()).map(|desc| desc.display_ui());
+        let common_features =
+            self.feature_descriptors.iter().filter(|desc| desc.as_ssc().is_none()).map(|desc| desc.display_ui());
+        ui::Discovery {
+            common_features: Rc::from(VecModel::from(common_features.collect::<Vec<_>>())).into(),
+            ssc_features: Rc::from(VecModel::from(ssc_features.collect::<Vec<_>>())).into(),
+            status: ui::Status { outcome: ui::Outcome::Success, ..Default::default() },
         }
     }
 }

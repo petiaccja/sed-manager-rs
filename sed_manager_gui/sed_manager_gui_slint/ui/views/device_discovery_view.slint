@@ -98,6 +98,7 @@ export component DeviceDiscoveryView {
             common-features := VerticalLayout {
                 width: (root.width - 1rem) / 2;
                 alignment: start;
+                spacing: 1rem;
 
                 for feature in discovery.common-features: FeatureView {
                     feature: feature;
@@ -110,6 +111,7 @@ export component DeviceDiscoveryView {
 
             ssc-features := VerticalLayout {
                 alignment: start;
+                spacing: 1rem;
 
                 for feature in discovery.ssc-features: FeatureView {
                     feature: feature;

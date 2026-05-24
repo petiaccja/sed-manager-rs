@@ -197,6 +197,11 @@ pub async fn security_protocol_out(
 const REQUEST_BUFFER_LEN: usize = size_of::<SCSI_PASS_THROUGH_DIRECT>() + SenseData::MAX_LEN;
 
 fn make_request_buffer(command: SCSI_PASS_THROUGH_DIRECT) -> [u8; REQUEST_BUFFER_LEN] {
+    let command = SCSI_PASS_THROUGH_DIRECT {
+        SenseInfoOffset: size_of::<SCSI_PASS_THROUGH_DIRECT>() as u32,
+        SenseInfoLength: SenseData::MAX_LEN as u8,
+        ..command
+    };
     let mut buffer = [0u8; REQUEST_BUFFER_LEN];
     let command_slice: [u8; size_of::<SCSI_PASS_THROUGH_DIRECT>()] = unsafe { transmute(command) };
     buffer[0..command_slice.len()].copy_from_slice(&command_slice);
@@ -204,12 +209,19 @@ fn make_request_buffer(command: SCSI_PASS_THROUGH_DIRECT) -> [u8; REQUEST_BUFFER
 }
 
 fn parse_request_buffer(buffer: &[u8; REQUEST_BUFFER_LEN]) -> Result<(), ScsiError> {
-    match SenseData::from_bytes(&buffer[0..size_of::<SCSI_PASS_THROUGH_DIRECT>()]) {
-        Ok(sense_data) => match ScsiError::from(sense_data) {
-            ScsiError::Sense { sense_key: SenseKey::NoSense, .. } => Ok(()),
-            err => Err(err),
-        },
-        Err(_) => Err(ScsiError::Parse),
+    let command_buffer = &buffer[..size_of::<SCSI_PASS_THROUGH_DIRECT>()];
+    let command = unsafe { *(command_buffer.as_ptr() as *const SCSI_PASS_THROUGH_DIRECT) };
+    let sense_buffer = &buffer[size_of::<SCSI_PASS_THROUGH_DIRECT>()..];
+    if command.ScsiStatus != 0 {
+        match SenseData::from_bytes(sense_buffer) {
+            Ok(sense_data) => match ScsiError::from(sense_data) {
+                ScsiError::Sense { sense_key: SenseKey::NoSense, .. } => Ok(()),
+                err => Err(err),
+            },
+            Err(_) => Err(ScsiError::Parse),
+        }
+    } else {
+        Ok(())
     }
 }
 
