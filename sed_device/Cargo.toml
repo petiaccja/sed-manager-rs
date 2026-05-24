@@ -18,6 +18,7 @@ windows = { workspace = true, features = [
     "Win32_System_Ioctl",
     "Win32_Devices_DeviceAndDriverInstallation",
     "Win32_System_Threading",
+    "Win32_System_WindowsProgramming",
 ] }
 nix.workspace = true
 async-trait.workspace = true
@@ -27,3 +28,7 @@ pin-project.workspace = true
 [dev-dependencies]
 sed_device = { path = ".", features = ["test-utils"] }
 tokio = { workspace = true,  features = ["macros"] }
+googletest.workspace = true
+windows = { workspace = true, features = [
+    "Win32_System_Pipes",
+] }

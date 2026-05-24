@@ -4,6 +4,7 @@
 //L-----------------------------------------------------------------------------
 
 mod async_io;
+mod device_handle;
 mod devices;
 mod drive_list;
 
