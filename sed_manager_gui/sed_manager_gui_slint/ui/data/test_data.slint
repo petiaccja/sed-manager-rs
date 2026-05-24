@@ -11,6 +11,28 @@ export global TestData {
             interface: "NVMe",
             security_commands: true,
             is_removable: false,
+            discovery: {
+                status: { outcome: Outcome.success },
+                common-features: [
+                    {
+                        name: "TPer",
+                        properties: [
+                            { name: "Sync supported", value: "Yes" },
+                            { name: "Async supported", value: "No" },
+                        ],
+                    },
+                ],
+                ssc-features: [
+                    {
+                        name: "Opal 1.0",
+                        properties: [
+                            { name: "Base ComID", value: "4096" },
+                            { name: "Num ComIDs", value: "1" },
+                            { name: "Initial SID password", value: "MSID" },
+                        ],
+                    },
+                ],
+            }
         },
         {
             name: "Encryptifier Pro 2",
@@ -20,6 +42,9 @@ export global TestData {
             interface: "SATA",
             security_commands: false,
             is_removable: true,
+            discovery: {
+                status: { outcome: Outcome.pending },
+            },
         },
         {
             status: {
@@ -33,6 +58,9 @@ export global TestData {
             interface: "",
             security_commands: false,
             is_removable: false,
+            discovery: {
+                status: { outcome: Outcome.pending },
+            },
         },
         {
             status: { outcome: Outcome.pending },
@@ -43,6 +71,9 @@ export global TestData {
             interface: "",
             security_commands: false,
             is_removable: false,
+            discovery: {
+                status: { outcome: Outcome.pending },
+            },
         },
     ];
 }

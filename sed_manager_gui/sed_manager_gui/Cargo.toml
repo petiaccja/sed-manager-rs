@@ -7,6 +7,7 @@ edition = "2024"
 sed_device.workspace = true
 sed_tper.workspace = true
 sed_manager.workspace = true
+sed_packet.workspace = true
 sed_manager_gui_slint.workspace = true
 slint.workspace = true
 sed_async_runtime.workspace = true

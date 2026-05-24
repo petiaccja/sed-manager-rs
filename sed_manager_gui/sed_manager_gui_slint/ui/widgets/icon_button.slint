@@ -4,24 +4,16 @@
 //L-----------------------------------------------------------------------------
 
 import { PaletteExtra } from "palette_extra.slint";
-import { Palette } from "std-widgets.slint";
+import { Palette, Button } from "std-widgets.slint";
+import { IslandButton } from "island_button.slint";
 
-export component IconButton inherits TouchArea {
+export component IconButton inherits IslandButton {
     preferred-height: 2rem;
+    has-background: false;
 
     in property <image> icon;
     in property <string> text;
     in property <length> font-size;
-
-    private property <color> foreground-color:  {
-        if self.enabled && self.has-hover {
-            PaletteExtra.accented-control-foreground
-        } else if self.enabled {
-            Palette.control-foreground
-        } else {
-            Palette.control-foreground.with-alpha(0.6)
-        }
-    };
 
     VerticalLayout {
         Image {
@@ -29,13 +21,13 @@ export component IconButton inherits TouchArea {
             image-fit: contain;
             horizontal-alignment: center;
             vertical-alignment: center;
-            colorize: foreground-color;
+            colorize: root.foreground;
         }
 
         if !text.is-empty: Text {
             text: text;
             horizontal-alignment: center;
-            color: foreground-color;
+            color: root.foreground;
             font-size: font-size;
         }
     }

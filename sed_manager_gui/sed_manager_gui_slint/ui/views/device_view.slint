@@ -11,6 +11,7 @@ import {
 import { Spinner, Palette } from "std-widgets.slint";
 import { Icons } from "../resources/lib.slint";
 import { HorizontalSeparator } from "../widgets/separator.slint";
+import { DeviceDiscoveryView } from "device_discovery_view.slint";
 
 
 component NameAndSerial {
@@ -29,7 +30,9 @@ component NameAndSerial {
             vertical-alignment: center;
         }
 
-        if !device.serial.is-empty: VerticalSeparator { }
+        if !device.serial.is-empty: VerticalSeparator {
+            background: @linear-gradient(0deg, #00000000 0%, PaletteExtra.separator 20%, PaletteExtra.separator 80%, #00000000 100%);
+        }
 
         if !device.serial.is-empty: Text {
             text: !device.serial.is-empty ? device.serial : "---";
@@ -126,12 +129,12 @@ component Properties {
     }
 }
 
-component Header {
+component Header inherits Island {
     in property <Device> device;
 
     HorizontalLayout {
-        padding: 0.6rem;
         spacing: 0.6rem;
+        padding: 0.6rem;
 
         Image {
             source: Icons.hard-drive;
@@ -177,23 +180,14 @@ export component DeviceView {
     in property <Device> device;
 
     VerticalLayout {
-        padding-left: 1.4rem;
-        padding-right: 1.4rem;
-        padding-top: 0.8rem;
-        padding-bottom: 0.8rem;
+        spacing: 0.8rem;
 
         header := Header {
             device: device;
         }
 
-        HorizontalSeparator { }
-
-        Rectangle {
-            vertical-stretch: 1.0;
-
-            Text {
-                text: device.name;
-            }
+        DeviceDiscoveryView {
+            discovery: device.discovery;
         }
     }
 }

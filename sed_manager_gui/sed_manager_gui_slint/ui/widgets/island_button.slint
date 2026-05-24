@@ -1,0 +1,71 @@
+import { Island } from "island.slint";
+import { Palette } from "std-widgets.slint";
+import { PaletteExtra } from "palette_extra.slint";
+
+export component IslandButton inherits TouchArea {
+    in property <bool> has-background: true;
+    in property <bool> has-idle-background: true;
+    in property <bool> is-selected: false;
+    in-out property <length> border-radius: 0.7rem;
+    in-out property <length> border-top-left-radius: border-radius;
+    in-out property <length> border-top-right-radius: border-radius;
+    in-out property <length> border-bottom-left-radius: border-radius;
+    in-out property <length> border-bottom-right-radius: border-radius;
+
+    out property <brush> background: get-background();
+    out property <brush> foreground: get-foreground();
+
+    function get-background() -> brush {
+        if !self.has-background {
+            #00000000
+        } else if self.has-idle-background {
+            if self.pressed {
+                Palette.control-background.mix(PaletteExtra.accented-control-foreground, 0.87).mix(Palette.control-foreground, 0.87)
+            } else if self.is-selected {
+                Palette.control-background.mix(Palette.control-foreground, 0.87)
+            } else if self.has-hover {
+                Palette.control-background.mix(Palette.control-foreground, 0.94)
+            } else {
+                Palette.control-background
+            }
+        } else {
+            if self.pressed {
+                Palette.control-background.mix(PaletteExtra.accented-control-foreground, 0.93).mix(Palette.control-foreground, 0.93)
+            } else if self.is-selected {
+                Palette.control-background
+            } else if self.has-hover {
+                Palette.control-background.mix(Palette.background, 0.5)
+            } else {
+                #00000000
+            }
+        }
+    }
+
+    function get-foreground() -> brush {
+        if !self.enabled {
+            Palette.control-foreground.mix(Palette.background, 0.6)
+        } else if !self.has-background && self.pressed {
+            Palette.control-foreground.mix(PaletteExtra.accented-control-foreground, 0.2)
+        } else if !self.has-background && self.is-selected {
+            Palette.control-foreground.mix(PaletteExtra.accented-control-foreground, 0.5)
+        } else if !self.has-background && self.has-hover {
+            Palette.control-foreground
+        } else if !self.has-background {
+            Palette.control-foreground.mix(Palette.background, 0.8)
+        } else {
+            Palette.control-foreground
+        }
+    }
+
+    Island {
+        background: background;
+        border-color: foreground.with-alpha(has-background && background != #00000000 ? 0.1 : 0.0);
+        border-radius <=> border-radius;
+        border-top-left-radius <=> border-top-left-radius;
+        border-top-right-radius <=> border-top-right-radius;
+        border-bottom-left-radius <=> border-bottom-left-radius;
+        border-bottom-right-radius <=> border-bottom-right-radius;
+    }
+
+    @children
+}

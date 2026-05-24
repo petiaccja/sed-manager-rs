@@ -1,0 +1,120 @@
+import { Discovery, DiscoveryFeature } from "../data/lib.slint";
+import { ScrollView } from "std-widgets.slint";
+import { IslandButton } from "../widgets/island_button.slint";
+import { Icons } from "../resources/icons.slint";
+import { Island } from "../widgets/island.slint";
+import { PaletteExtra } from "../widgets/palette_extra.slint";
+
+component FeatureView {
+    min-width: 4rem;
+
+    in property <DiscoveryFeature> feature;
+
+    private property <bool> collapsed;
+
+    VerticalLayout {
+        spacing: 0.15rem;
+
+        title-button := IslandButton {
+            border-bottom-left-radius: root.collapsed ? self.border-radius : 0rem;
+            border-bottom-right-radius: root.collapsed ? self.border-radius : 0rem;
+            clicked => {
+                root.collapsed = !root.collapsed;
+            }
+
+            HorizontalLayout {
+                padding: 0.6rem;
+                spacing: 0.6rem;
+
+                Text {
+                    text: feature.name;
+                    horizontal-alignment: center;
+                }
+
+                Image {
+                    width: 1.4rem;
+                    source: root.collapsed ? Icons.chevron-arrow-up : Icons.chevron-arrow-down;
+                    colorize: title-button.foreground;
+                }
+            }
+        }
+
+        if !collapsed: Island {
+            border-top-left-radius: 0rem;
+            border-top-right-radius: 0rem;
+            clip: true;
+
+            properties := GridLayout {
+                for property[index] in feature.properties: Island {
+                    row: index;
+                    col: 0;
+                    background: index.mod(2) == 0 ? PaletteExtra.accent.with-alpha(0.1) : #00000000;
+                    border-width: 0rem;
+                    border-radius: 0rem;
+                    HorizontalLayout {
+                        padding: 0.3rem;
+                        padding-left: 0.6rem;
+                        padding-right: 0.6rem;
+                        Text {
+                            text: property.name;
+                            overflow: elide;
+                        }
+                    }
+                }
+
+                for property[index] in feature.properties: Island {
+                    row: index;
+                    col: 1;
+                    background: index.mod(2) == 0 ? PaletteExtra.accent.with-alpha(0.1) : #00000000;
+                    border-width: 0rem;
+                    border-radius: 0rem;
+                    HorizontalLayout {
+                        padding: 0.3rem;
+                        padding-left: 0.6rem;
+                        padding-right: 0.6rem;
+                        Text {
+                            text: property.value;
+                            overflow: elide;
+                            horizontal-alignment: right;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+export component DeviceDiscoveryView {
+    min-width: max(2 * common-features.min-width + 2 * ssc-features.min-width) + 1rem;
+
+    in property <Discovery> discovery;
+
+    HorizontalLayout {
+        spacing: 1rem;
+
+        ScrollView {
+            horizontal-scrollbar-policy: always-off;
+
+            common-features := VerticalLayout {
+                width: (root.width - 1rem) / 2;
+                alignment: start;
+
+                for feature in discovery.common-features: FeatureView {
+                    feature: feature;
+                }
+            }
+        }
+
+        ScrollView {
+            horizontal-scrollbar-policy: always-off;
+
+            ssc-features := VerticalLayout {
+                alignment: start;
+
+                for feature in discovery.ssc-features: FeatureView {
+                    feature: feature;
+                }
+            }
+        }
+    }
+}

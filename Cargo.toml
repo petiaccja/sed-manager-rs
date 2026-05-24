@@ -83,5 +83,10 @@ tonic = { version = "0.14.5", features = ["tls-native-roots", "gzip"] }
 rand = "0.10.1"
 
 # -- UI
-slint = { version = "1.16.1" }
+slint = { version = "1.16.1", default-features = false, features = [
+    "std",
+    "compat-1-2",
+    "backend-winit",
+    "renderer-femtovg",
+] }
 slint-build = { version = "1.16.1" }

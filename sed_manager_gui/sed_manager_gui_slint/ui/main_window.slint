@@ -29,6 +29,9 @@ export component MainWindow inherits Window {
     callback close <=> side-bar.close;
 
     HorizontalLayout {
+        padding: 1.0rem;
+        spacing: 1.6rem;
+
         side-bar := DeviceSideBar {
             devices: devices;
             max-width: 22rem;
@@ -43,8 +46,8 @@ export component MainWindow inherits Window {
     }
 
     scan-button := DeviceScanButton {
-        x: side-bar.x + side-bar.width - self.width - 1rem;
-        y: side-bar.y + side-bar.height - self.height - 1rem;
+        x: side-bar.x;
+        y: side-bar.y + side-bar.height - self.height;
         z: 1;
         width: 4rem;
         height: 4rem;

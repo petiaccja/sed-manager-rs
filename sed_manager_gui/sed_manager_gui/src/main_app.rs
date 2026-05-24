@@ -148,6 +148,18 @@ impl MainApp {
             self.services.set_device(path, device);
         });
     }
+
+    fn discover(self: Rc<Self>, path: PathBuf) {
+        let _ = spawn_local(async move {
+            let Some(device) = self.services.get_device(&path) else {
+                return;
+            };
+            let discovery = match Tper::discover(&*device).await {
+                Ok(discovery) => discovery,
+                Err(err) => todo!(),
+            };
+        });
+    }
 }
 
 #[derive(Debug, Default)]
@@ -184,6 +196,10 @@ impl Services {
         self.inner.borrow_mut().get_mut(path.as_ref()).map(|service| {
             service.device = Some(device.into());
         });
+    }
+
+    pub fn get_device(&self, path: impl AsRef<Path>) -> Option<Arc<dyn Device>> {
+        self.inner.borrow().get(path.as_ref()).map(|service| service.device.clone()).flatten()
     }
 }
 

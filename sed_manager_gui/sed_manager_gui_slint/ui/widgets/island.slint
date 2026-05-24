@@ -7,7 +7,9 @@ import { Palette } from "std-widgets.slint";
 
 export component Island inherits Rectangle {
     background: Palette.control-background;
-    border-radius: 8px;
+    border-color: Palette.control-foreground.with-alpha(0.1);
+    border-radius: 0.7rem;
+    border-width: 0.1rem;
 
     // Get padding from sides that give `distance` at the rounded corners.
     public pure function corner-padding(distance: length) -> length {

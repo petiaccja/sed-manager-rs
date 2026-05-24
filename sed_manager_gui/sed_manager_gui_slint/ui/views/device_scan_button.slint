@@ -2,27 +2,45 @@ import { Outcome } from "../data/lib.slint";
 import { Icons } from "../resources/lib.slint";
 import { Palette, Spinner } from "std-widgets.slint";
 import { PaletteExtra } from "../widgets/lib.slint";
+import { IconButton } from "../widgets/icon_button.slint";
 
 export component DeviceScanButton {
-    opacity: touch-area.has-hover ? 100% : 50%;
+    opacity: button.has-hover ? 100% : 50%;
 
     in property <Outcome> outcome;
 
-    callback clicked <=> touch-area.clicked;
+    callback clicked <=> button.clicked;
 
-    touch-area := TouchArea { }
-
-    Rectangle {
-        background: PaletteExtra.accented-control-background.mix(Palette.control-background, 0.3);
-        border-radius: 1rem;
-
-        if root.outcome != Outcome.pending: Image {
-            source: Icons.feature-search;
-            width: parent.width - 0.4rem;
-            height: parent.height - 0.4rem;
-        }
-        if root.outcome == Outcome.pending: Spinner {
-            indeterminate: true;
-        }
+    button := IconButton {
+        has-background: true;
+        icon: Icons.feature-search;
+        visible: outcome != Outcome.pending;
     }
+
+    Spinner {
+        indeterminate: true;
+        visible: outcome == Outcome.pending;
+    }
+
+    // opacity: touch-area.has-hover ? 100% : 50%;
+
+    // in property <Outcome> outcome;
+
+    // callback clicked <=> touch-area.clicked;
+
+    // touch-area := TouchArea { }
+
+    // Rectangle {
+    //     background: PaletteExtra.accented-control-background.mix(Palette.control-background, 0.3);
+    //     border-radius: 1rem;
+
+    //     if root.outcome != Outcome.pending: Image {
+    //         source: Icons.feature-search;
+    //         width: parent.width - 0.4rem;
+    //         height: parent.height - 0.4rem;
+    //     }
+    //     if root.outcome == Outcome.pending: Spinner {
+    //         indeterminate: true;
+    //     }
+    // }
 }

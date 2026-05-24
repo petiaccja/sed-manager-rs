@@ -1,5 +1,21 @@
 import { Status } from "status.slint";
 
+export struct DiscoveryProperty {
+    name: string,
+    value: string,
+}
+
+export struct DiscoveryFeature {
+    name: string,
+    properties: [DiscoveryProperty],
+}
+
+export struct Discovery {
+    status: Status,
+    common-features: [DiscoveryFeature],
+    ssc-features: [DiscoveryFeature],
+}
+
 export struct Device {
     status: Status,
     name: string,
@@ -9,4 +25,5 @@ export struct Device {
     interface: string,
     security_commands: bool,
     is_removable: bool,
+    discovery: Discovery,
 }
