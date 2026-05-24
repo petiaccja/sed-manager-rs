@@ -29,7 +29,7 @@ pub struct AtaDevice {
 impl AtaDevice {
     #[allow(unused)]
     pub async fn open(path: &str) -> Result<Self, DeviceError> {
-        let raw_device = RawDevice::open(path)?;
+        let raw_device = RawDevice::open(path).await?;
         let generic_desc = query_description(&raw_device).await?;
         let desc = identify_device(&raw_device).await?;
         Ok(Self { raw_device, generic_desc, desc })

@@ -12,6 +12,7 @@ use windows::Win32::System::IO::*;
 use windows::core::HSTRING;
 
 use crate::Error;
+use crate::windows::async_io::submit_work;
 
 pub struct RawDevice {
     handle: HANDLE,
@@ -22,9 +23,10 @@ unsafe impl Send for RawDevice {}
 unsafe impl Sync for RawDevice {}
 
 impl RawDevice {
-    pub fn open(path: impl AsRef<Path>) -> Result<Self, Error> {
-        let path_utf16 = HSTRING::from(path.as_ref().as_os_str());
-        unsafe {
+    pub async fn open(path: impl AsRef<Path>) -> Result<Self, Error> {
+        let path = path.as_ref().to_owned();
+        let path_utf16 = HSTRING::from(path.as_os_str());
+        let result = submit_work(move || unsafe {
             let handle = CreateFileW(
                 &path_utf16,
                 (GENERIC_READ | GENERIC_WRITE | GENERIC_EXECUTE).0,
@@ -34,7 +36,12 @@ impl RawDevice {
                 FILE_FLAGS_AND_ATTRIBUTES(0),
                 None,
             )?;
-            Ok(Self { handle, path: path.as_ref().into() })
+            Ok(Self { handle, path })
+        })
+        .await;
+        match result {
+            Ok(result) => result,
+            Err(err) => Err(err.err_or_resume_unwind().into()),
         }
     }
 

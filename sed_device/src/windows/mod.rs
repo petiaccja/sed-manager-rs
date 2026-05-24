@@ -3,6 +3,7 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
+mod async_io;
 mod devices;
 mod drive_list;
 

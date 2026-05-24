@@ -83,7 +83,7 @@ impl Device for GenericDevice {
 
 impl GenericDevice {
     pub async fn open(path: impl AsRef<Path>) -> Result<Self, Error> {
-        let file = RawDevice::open(path)?;
+        let file = RawDevice::open(path).await?;
         let desc = query_description(&file).await?;
         Ok(Self { raw_device: file, cached_desc: desc })
     }
