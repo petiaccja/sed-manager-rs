@@ -85,36 +85,59 @@ component FeatureView {
 }
 
 export component DeviceDiscoveryView {
-    min-width: max(2 * common-features.min-width + 2 * ssc-features.min-width) + 1rem;
-
     in property <Discovery> discovery;
 
     HorizontalLayout {
         spacing: 1rem;
 
-        ScrollView {
-            horizontal-scrollbar-policy: always-off;
+        common-features := VerticalLayout {
+            spacing: 0.4rem;
+            horizontal-stretch: 1.0;
 
-            common-features := VerticalLayout {
-                width: (root.width - 1rem) / 2;
-                alignment: start;
-                spacing: 1rem;
+            Text {
+                text: "Featues";
+                font-size: 1.2rem;
+                color: PaletteExtra.accented-control-foreground;
+                overflow: elide;
+                horizontal-alignment: center;
+            }
 
-                for feature in discovery.common-features: FeatureView {
-                    feature: feature;
+            ScrollView {
+                horizontal-scrollbar-policy: always-off;
+
+                VerticalLayout {
+                    alignment: start;
+                    spacing: 1rem;
+
+                    for feature in discovery.common-features: FeatureView {
+                        feature: feature;
+                    }
                 }
             }
         }
 
-        ScrollView {
-            horizontal-scrollbar-policy: always-off;
+        ssc-features := VerticalLayout {
+            spacing: 0.4rem;
+            horizontal-stretch: 1.0;
 
-            ssc-features := VerticalLayout {
-                alignment: start;
-                spacing: 1rem;
+            Text {
+                text: "SSCs";
+                font-size: 1.2rem;
+                color: PaletteExtra.accented-control-foreground;
+                overflow: elide;
+                horizontal-alignment: center;
+            }
 
-                for feature in discovery.ssc-features: FeatureView {
-                    feature: feature;
+            ScrollView {
+                horizontal-scrollbar-policy: always-off;
+
+                VerticalLayout {
+                    alignment: start;
+                    spacing: 1rem;
+
+                    for feature in discovery.ssc-features: FeatureView {
+                        feature: feature;
+                    }
                 }
             }
         }

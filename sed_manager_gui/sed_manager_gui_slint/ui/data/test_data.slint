@@ -4,7 +4,7 @@ import { Status, Outcome } from "status.slint";
 export global TestData {
     out property <[Device]> devices: [
         {
-            name: "Storaginator 3000",
+            name: "Storaginator 1000",
             serial: "SERIAL#3244",
             path: "/dev/nvme0",
             firmware: "FIRMWARE#4543",
@@ -42,7 +42,7 @@ export global TestData {
             }
         },
         {
-            name: "Encryptifier Pro 2",
+            name: "Storaginator 2000",
             serial: "SERIAL#8255",
             path: "/dev/sda/success/very/long/device/path",
             firmware: "FIRMWARE#9912",
@@ -51,6 +51,18 @@ export global TestData {
             is_removable: true,
             discovery: {
                 status: { outcome: Outcome.pending },
+            },
+        },
+        {
+            name: "Storaginator 3000",
+            serial: "SERIAL#8255",
+            path: "/dev/sde",
+            firmware: "FIRMWARE#3422",
+            interface: "USB",
+            security_commands: false,
+            is_removable: true,
+            discovery: {
+                status: { outcome: Outcome.error, message: "IF-RECV failed yadda yadda." },
             },
         },
         {
@@ -66,7 +78,7 @@ export global TestData {
             security_commands: false,
             is_removable: false,
             discovery: {
-                status: { outcome: Outcome.pending },
+                status: { outcome: Outcome.idle },
             },
         },
         {
@@ -79,7 +91,7 @@ export global TestData {
             security_commands: false,
             is_removable: false,
             discovery: {
-                status: { outcome: Outcome.pending },
+                status: { outcome: Outcome.idle },
             },
         },
     ];

@@ -14,6 +14,7 @@ export component DeviceScanButton {
     button := IconButton {
         has-background: true;
         icon: Icons.feature-search;
+        icon-size: 4rem;
         visible: outcome != Outcome.pending;
     }
 
@@ -21,26 +22,4 @@ export component DeviceScanButton {
         indeterminate: true;
         visible: outcome == Outcome.pending;
     }
-
-    // opacity: touch-area.has-hover ? 100% : 50%;
-
-    // in property <Outcome> outcome;
-
-    // callback clicked <=> touch-area.clicked;
-
-    // touch-area := TouchArea { }
-
-    // Rectangle {
-    //     background: PaletteExtra.accented-control-background.mix(Palette.control-background, 0.3);
-    //     border-radius: 1rem;
-
-    //     if root.outcome != Outcome.pending: Image {
-    //         source: Icons.feature-search;
-    //         width: parent.width - 0.4rem;
-    //         height: parent.height - 0.4rem;
-    //     }
-    //     if root.outcome == Outcome.pending: Spinner {
-    //         indeterminate: true;
-    //     }
-    // }
 }

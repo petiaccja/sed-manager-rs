@@ -8,11 +8,11 @@ import {
     ToastLevel,
     ToastQueue,
 } from "../widgets/lib.slint";
-import { Spinner, Palette } from "std-widgets.slint";
+import { Spinner, Palette, TextEdit } from "std-widgets.slint";
 import { Icons } from "../resources/lib.slint";
 import { HorizontalSeparator } from "../widgets/separator.slint";
 import { DeviceDiscoveryView } from "device_discovery_view.slint";
-
+import { DeviceActivityBar } from "device_activity_bar.slint";
 
 component NameAndSerial {
     in property <Device> device;
@@ -65,25 +65,26 @@ component Properties {
                 text: "Path:";
             }
 
-            HorizontalLayout {
-                spacing: 0.4rem;
-                alignment: start;
+            TouchArea {
+                HorizontalLayout {
+                    spacing: 0.4rem;
+                    alignment: start;
 
-                Text {
-                    text: device.path;
-                    overflow: elide;
-                }
-
-                IconButton {
-                    icon: Icons.content-copy;
-                    width: 1.2rem;
-                    height: 1.2rem;
-                    clicked => {
-                        ToastQueue.push({ level: ToastLevel.info, title: "Path copied!" });
-                        path-buffer.copy();
+                    Text {
+                        text: device.path;
+                        overflow: elide;
                     }
 
-                    mouse-cursor: MouseCursor.copy;
+                    Image {
+                        source: Icons.content-copy;
+                        height: 1.2rem;
+                        width: 1.2rem;
+                    }
+                }
+
+                double-clicked => {
+                    path-buffer.copy();
+                    ToastQueue.push({ title: "Path copied to clipboard", level: ToastLevel.info })
                 }
             }
 
@@ -186,8 +187,74 @@ export component DeviceView {
             device: device;
         }
 
-        DeviceDiscoveryView {
-            discovery: device.discovery;
+        if device.discovery.status.outcome == Outcome.success: HorizontalLayout {
+            spacing: 1.6rem;
+            vertical-stretch: 1.0;
+
+            DeviceActivityBar {
+                horizontal-stretch: 0.0;
+            }
+
+            DeviceDiscoveryView {
+                discovery: device.discovery;
+                horizontal-stretch: 1.0;
+            }
+        }
+
+        if device.discovery.status.outcome == Outcome.pending: VerticalLayout {
+            alignment: center;
+            vertical-stretch: 1.0;
+            spacing: 0.6rem;
+
+            HorizontalLayout {
+                alignment: center;
+                Spinner {
+                    width: 8rem;
+                    height: 8rem;
+                    indeterminate: true;
+                }
+            }
+
+            Text {
+                text: "Getting capabilities...";
+                font-size: 1.4rem;
+                horizontal-alignment: center;
+            }
+        }
+
+        if device.discovery.status.outcome == Outcome.idle: VerticalLayout {
+            alignment: center;
+            vertical-stretch: 1.0;
+
+            HorizontalLayout {
+                alignment: center;
+
+                Image {
+                    width: 8rem;
+                    height: 8rem;
+                    source: Icons.question-mark;
+                    colorize: PaletteExtra.accented-control-foreground;
+                    opacity: 20%;
+                }
+            }
+        }
+
+        if device.discovery.status.outcome == Outcome.error: VerticalLayout {
+            alignment: center;
+            vertical-stretch: 1.0;
+
+            HorizontalLayout {
+                alignment: center;
+
+                ToastCard {
+                    notification: {
+                        title: "Could not get capabilities",
+                        message: device.discovery.status.message,
+                        level: ToastLevel.error
+                    };
+                    has-icon: true;
+                }
+            }
         }
     }
 }

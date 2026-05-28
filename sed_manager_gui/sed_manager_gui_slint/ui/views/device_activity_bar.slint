@@ -1,0 +1,107 @@
+import { ScrollView, Palette, GroupBox } from "std-widgets.slint";
+import { IconButton, TextPlacement } from "../widgets/icon_button.slint";
+import { Icons, Colors } from "../resources/lib.slint";
+import { PaletteExtra } from "../widgets/lib.slint";
+
+export component DeviceActivityBar {
+    property <length> button-height: 2.8rem;
+
+    ScrollView {
+        horizontal-scrollbar-policy: always-off;
+        min-width: viewport.min-width;
+        min-height: 8rem;
+
+        private property <bool> has-background;
+
+        viewport := VerticalLayout {
+            spacing: 0.4rem;
+            alignment: start;
+
+            IconButton {
+                text: "Capabilities";
+                icon: Icons.info;
+                preferred-height: button-height;
+                icon-color: PaletteExtra.info-foreground;
+                text-placement: TextPlacement.right;
+                has-background: true;
+                has-idle-background: false;
+                is-selected: true;
+            }
+
+            Rectangle {
+                height: 0.2rem;
+            }
+
+            IconButton {
+                text: "Take ownership";
+                icon: Icons.take-ownership;
+                preferred-height: button-height;
+                icon-color: Colors.take-ownership;
+                text-placement: TextPlacement.right;
+                has-background: has-background;
+            }
+
+            IconButton {
+                text: "Activate locking";
+                icon: Icons.activate-locking;
+                preferred-height: button-height;
+                icon-color: Colors.activate-locking;
+                text-placement: TextPlacement.right;
+                has-background: has-background;
+            }
+
+            IconButton {
+                text: "Change password";
+                icon: Icons.change-password;
+                preferred-height: button-height;
+                icon-color: Colors.change-password;
+                text-placement: TextPlacement.right;
+                has-background: has-background;
+            }
+
+            IconButton {
+                text: "Configure locking";
+                icon: Icons.configure-locking;
+                preferred-height: button-height;
+                icon-color: Colors.configure-locking;
+                text-placement: TextPlacement.right;
+                has-background: has-background;
+            }
+
+            Rectangle {
+                height: 0.2rem;
+            }
+
+            IconButton {
+                text: "Revert device";
+                icon: Icons.revert-device;
+                preferred-height: button-height;
+                icon-color: Colors.revert-device;
+                text-placement: TextPlacement.right;
+                has-background: has-background;
+            }
+
+            Rectangle {
+                height: 0.2rem;
+            }
+
+            IconButton {
+                text: "Query stack status";
+                icon: Icons.com-id-status;
+                preferred-height: button-height;
+                icon-color: Colors.query-status;
+                text-placement: TextPlacement.right;
+                has-background: has-background;
+            }
+
+            IconButton {
+                text: "Reset stack";
+                icon: Icons.stack-reset;
+                preferred-height: button-height;
+                icon-color: Colors.stack-reset;
+                text-placement: TextPlacement.right;
+                has-background: has-background;
+            }
+        }
+    }
+}

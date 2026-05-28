@@ -15,14 +15,15 @@ export global Icons {
     out property <image> settings: @image-url("../../resources/icons/action/settings.svg");
     out property <image> troubleshoot: @image-url("../../resources/icons/action/troubleshoot.svg");
     // Configure activities
-    out property <image> take-ownership: @image-url("../../resources/icons/action/rocket_launch.svg");
-    out property <image> activate-locking: @image-url("../../resources/icons/device/lock.svg");
+    out property <image> take-ownership: for-you;
+    out property <image> activate-locking: enchanced-encryption;
     out property <image> change-password: self.password;
+    out property <image> configure-locking: @image-url("../../resources/icons/device/lock.svg");
     out property <image> edit-ranges: @image-url("../../resources/icons/device/segment.svg");
     out property <image> edit-users: @image-url("../../resources/icons/action/person_edit.svg");
     out property <image> edit-permissions: @image-url("../../resources/icons/action/passkey.svg");
     out property <image> shadow-mbr: @image-url("../../resources/icons/action/tonality.svg");
-    out property <image> revert-device: @image-url("../../resources/icons/action/lock_reset.svg");
+    out property <image> revert-device: reset-settings;
     // Troubleshoot activities
     out property <image> com-id-status: @image-url("../../resources/icons/action/query_stats.svg");
     out property <image> stack-reset: @image-url("../../resources/icons/action/reset_wrench.svg");
@@ -41,6 +42,7 @@ export global Icons {
     out property <image> error: @image-url("../../resources/icons/error/error.svg");
     out property <image> warning: @image-url("../../resources/icons/error/warning.svg");
     out property <image> info: @image-url("../../resources/icons/error/info.svg");
+    out property <image> question-mark: @image-url("../../resources/icons/error/question_mark.svg");
     out property <image> password: @image-url("../../resources/icons/action/pin.svg");
     out property <image> upload: @image-url("../../resources/icons/action/upload_file.svg");
     out property <image> file-open: @image-url("../../resources/icons/action/file_open.svg");
@@ -50,4 +52,7 @@ export global Icons {
     out property <image> light-mode: @image-url("../../resources/icons/action/light_mode.svg");
     out property <image> contrast: @image-url("../../resources/icons/action/contrast.svg");
     out property <image> feature-search: @image-url("../../resources/icons/action/feature_search.svg");
+    out property <image> reset-settings: @image-url("../../resources/icons/action/reset_settings.svg");
+    out property <image> enchanced-encryption: @image-url("../../resources/icons/action/enhanced_encryption.svg");
+    out property <image> for-you: @image-url("../../resources/icons/action/for_you.svg");
 }

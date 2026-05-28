@@ -147,6 +147,16 @@ impl MainApp {
             let Some(device) = self.services.get_device(&path) else {
                 return;
             };
+            self.devices.update(
+                |device| device.path == path.to_string_lossy(),
+                |device| ui::Device {
+                    discovery: ui::Discovery {
+                        status: ui::Status { outcome: ui::Outcome::Pending, ..Default::default() },
+                        ..Default::default()
+                    },
+                    ..device
+                },
+            );
             let discovery = match Tper::discover(&*device).await {
                 Ok(discovery) => discovery.display_ui(),
                 Err(err) => ui::Discovery {

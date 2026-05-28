@@ -20,6 +20,7 @@ component DeviceSideBarItem inherits IslandButton {
 
         VerticalLayout {
             spacing: 0.2rem;
+            horizontal-stretch: 1.0;
 
             Text {
                 text: !device.name.is-empty ? device.name : device.path;
@@ -37,7 +38,8 @@ component DeviceSideBarItem inherits IslandButton {
         }
 
         IconButton {
-            width: 2rem;
+            horizontal-stretch: 0.0;
+            icon-size: 1.6rem;
             icon: Icons.close;
 
             clicked => {
