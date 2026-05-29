@@ -3,15 +3,29 @@ import { IconButton, TextPlacement } from "../widgets/icon_button.slint";
 import { Icons, Colors } from "../resources/lib.slint";
 import { PaletteExtra } from "../widgets/lib.slint";
 
+export enum DeviceActivity {
+    capabilities,
+    take-ownership,
+    activate-locking,
+    change-password,
+    configure-locking,
+    revert-device,
+    stack-status,
+    stack-reset,
+}
+
+
 export component DeviceActivityBar {
     property <length> button-height: 2.8rem;
+
+    out property <DeviceActivity> selected-activity: capabilities;
+
+    callback reset-stack();
 
     ScrollView {
         horizontal-scrollbar-policy: always-off;
         min-width: viewport.min-width;
         min-height: 8rem;
-
-        private property <bool> has-background;
 
         viewport := VerticalLayout {
             spacing: 0.4rem;
@@ -25,7 +39,10 @@ export component DeviceActivityBar {
                 text-placement: TextPlacement.right;
                 has-background: true;
                 has-idle-background: false;
-                is-selected: true;
+                is-selected: selected-activity == DeviceActivity.capabilities;
+                clicked => {
+                    selected-activity = DeviceActivity.capabilities;
+                }
             }
 
             Rectangle {
@@ -38,7 +55,12 @@ export component DeviceActivityBar {
                 preferred-height: button-height;
                 icon-color: Colors.take-ownership;
                 text-placement: TextPlacement.right;
-                has-background: has-background;
+                has-background: true;
+                has-idle-background: false;
+                is-selected: selected-activity == DeviceActivity.take-ownership;
+                clicked => {
+                    selected-activity = DeviceActivity.take-ownership;
+                }
             }
 
             IconButton {
@@ -47,7 +69,12 @@ export component DeviceActivityBar {
                 preferred-height: button-height;
                 icon-color: Colors.activate-locking;
                 text-placement: TextPlacement.right;
-                has-background: has-background;
+                has-background: true;
+                has-idle-background: false;
+                is-selected: selected-activity == DeviceActivity.activate-locking;
+                clicked => {
+                    selected-activity = DeviceActivity.activate-locking;
+                }
             }
 
             IconButton {
@@ -56,7 +83,12 @@ export component DeviceActivityBar {
                 preferred-height: button-height;
                 icon-color: Colors.change-password;
                 text-placement: TextPlacement.right;
-                has-background: has-background;
+                has-background: true;
+                has-idle-background: false;
+                is-selected: selected-activity == DeviceActivity.change-password;
+                clicked => {
+                    selected-activity = DeviceActivity.change-password;
+                }
             }
 
             IconButton {
@@ -65,7 +97,12 @@ export component DeviceActivityBar {
                 preferred-height: button-height;
                 icon-color: Colors.configure-locking;
                 text-placement: TextPlacement.right;
-                has-background: has-background;
+                has-background: true;
+                has-idle-background: false;
+                is-selected: selected-activity == DeviceActivity.configure-locking;
+                clicked => {
+                    selected-activity = DeviceActivity.configure-locking;
+                }
             }
 
             Rectangle {
@@ -78,7 +115,12 @@ export component DeviceActivityBar {
                 preferred-height: button-height;
                 icon-color: Colors.revert-device;
                 text-placement: TextPlacement.right;
-                has-background: has-background;
+                has-background: true;
+                has-idle-background: false;
+                is-selected: selected-activity == DeviceActivity.revert-device;
+                clicked => {
+                    selected-activity = DeviceActivity.revert-device;
+                }
             }
 
             Rectangle {
@@ -86,12 +128,17 @@ export component DeviceActivityBar {
             }
 
             IconButton {
-                text: "Query stack status";
+                text: "Stack status";
                 icon: Icons.com-id-status;
                 preferred-height: button-height;
                 icon-color: Colors.query-status;
                 text-placement: TextPlacement.right;
-                has-background: has-background;
+                has-background: true;
+                has-idle-background: false;
+                is-selected: selected-activity == DeviceActivity.stack-status;
+                clicked => {
+                    selected-activity = DeviceActivity.stack-status;
+                }
             }
 
             IconButton {
@@ -100,7 +147,12 @@ export component DeviceActivityBar {
                 preferred-height: button-height;
                 icon-color: Colors.stack-reset;
                 text-placement: TextPlacement.right;
-                has-background: has-background;
+                has-background: true;
+                has-idle-background: false;
+                is-selected: false; // One-click action, nothing to display.
+                clicked => {
+                    reset-stack()
+                }
             }
         }
     }

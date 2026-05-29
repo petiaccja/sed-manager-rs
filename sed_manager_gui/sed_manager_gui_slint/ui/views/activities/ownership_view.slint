@@ -1,0 +1,28 @@
+import { PasswordForm } from "../password_form.slint";
+import { Button } from "std-widgets.slint";
+
+export component TakeOwnershipView {
+    callback take-ownership();
+
+    VerticalLayout {
+        spacing: 0.6rem;
+        alignment: start;
+
+        form := PasswordForm { }
+
+        Button {
+            text: "Take owneship";
+            primary: true;
+            enabled: form.matches;
+            clicked => {
+                take-ownership()
+            }
+        }
+
+        Text {
+            text: form.matches ? "" : "Passwords do not match";
+            font-italic: true;
+            horizontal-alignment: center;
+        }
+    }
+}

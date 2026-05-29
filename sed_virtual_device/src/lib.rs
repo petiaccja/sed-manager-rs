@@ -7,6 +7,6 @@ mod packet_session;
 mod session;
 mod tper;
 
-pub use device::{NUM_COM_IDS, VirtualDevice};
+pub use device::{NUM_COM_IDS, VIRTUAL_DEVICE_PATH, VirtualDevice};
 pub const BASE_COM_ID: u16 = device::BASE_COM_ID.0;
 pub use tper::{INITIAL_SID_PASSWORD, PSID_PASSWORD};

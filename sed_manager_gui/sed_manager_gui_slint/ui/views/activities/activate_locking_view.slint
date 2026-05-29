@@ -1,0 +1,24 @@
+import { LineEdit, Button } from "std-widgets.slint";
+
+export component ActivateLockingView {
+    callback activate-locking();
+
+    VerticalLayout {
+        spacing: 0.5rem;
+        alignment: start;
+
+        Text {
+            text: "Owner (SID) password:";
+        }
+
+        LineEdit { }
+
+        Button {
+            text: "Activate locking";
+            primary: true;
+            clicked => {
+                activate-locking()
+            }
+        }
+    }
+}

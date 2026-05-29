@@ -9,19 +9,20 @@ use std::{
 use sed_device::{Device, list_physical_drives, open_device};
 use sed_manager_gui_slint as ui;
 use sed_tper::Tper;
+use sed_virtual_device::{VIRTUAL_DEVICE_PATH, VirtualDevice};
 use slint::{ComponentHandle, Model, ModelExt, ModelRc, SharedString, ToSharedString, VecModel, spawn_local};
 
 use crate::display_ui::DisplayUi;
 use crate::toast::ToastQueue;
 
-pub struct MainApp {
+pub struct App {
     ui: ui::MainWindow,
     notification_queue: Rc<ToastQueue>,
     devices: Rc<VecModel<ui::Device>>,
     services: Services,
 }
 
-impl MainApp {
+impl App {
     pub fn new(ui: ui::MainWindow, notification_queue: Rc<ToastQueue>) -> Rc<Self> {
         let view_model = Rc::from(Self {
             ui: ui.clone_strong(),
@@ -86,6 +87,13 @@ impl MainApp {
                 })
                 .collect();
 
+            #[cfg(debug_assertions)]
+            let new_paths = {
+                let mut new_paths = new_paths;
+                new_paths.insert(VIRTUAL_DEVICE_PATH.into());
+                new_paths
+            };
+
             self.devices.retain(|device| new_paths.contains(Path::new(device.path.as_str())));
             self.services.retain(|path, _| new_paths.contains(path));
 
@@ -119,18 +127,22 @@ impl MainApp {
                 },
             );
 
-            let device = match open_device(&path).await {
-                Ok(device) => device,
-                Err(err) => {
-                    self.devices.update(
-                        |device| device.path == path.to_string_lossy(),
-                        |device| ui::Device {
-                            status: ui::Status { outcome: ui::Outcome::Error, message: err.to_shared_string() },
-                            ..device
-                        },
-                    );
-                    return;
+            let device = if &path != VIRTUAL_DEVICE_PATH {
+                match open_device(&path).await {
+                    Ok(device) => device,
+                    Err(err) => {
+                        self.devices.update(
+                            |device| device.path == path.to_string_lossy(),
+                            |device| ui::Device {
+                                status: ui::Status { outcome: ui::Outcome::Error, message: err.to_shared_string() },
+                                ..device
+                            },
+                        );
+                        return;
+                    }
                 }
+            } else {
+                Box::new(VirtualDevice::new()) as _
             };
 
             if device.is_security_supported() {

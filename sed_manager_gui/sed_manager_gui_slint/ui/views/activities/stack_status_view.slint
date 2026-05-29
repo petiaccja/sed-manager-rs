@@ -1,0 +1,63 @@
+import {
+    Island,
+    PaletteExtra,
+    VerticalSeparator,
+    HorizontalSeparator,
+} from "../../widgets/lib.slint";
+import { Button } from "std-widgets.slint";
+
+export component StackStatusView {
+    in property <int> com-id;
+    in property <int> com-id-ext;
+    in property <string> com-id-status;
+
+    callback query-stack-status();
+
+    VerticalLayout {
+        alignment: start;
+
+        Island {
+            HorizontalLayout {
+                alignment: space-between;
+                padding: 0.4rem;
+
+                GridLayout {
+                    for name[index] in ["ComID:", "ComID extension:", "Status:"]: HorizontalLayout {
+                        row: index;
+                        col: 0;
+                        padding: 0.3rem;
+                        padding-left: 0.6rem;
+                        padding-right: 0.6rem;
+                        Text {
+                            text: name;
+                            overflow: elide;
+                        }
+                    }
+
+                    for value[index] in [root.com-id, root.com-id-ext, root.com-id-status]: HorizontalLayout {
+                        row: index;
+                        col: 1;
+                        padding: 0.3rem;
+                        padding-left: 0.6rem;
+                        padding-right: 0.6rem;
+                        Text {
+                            text: value;
+                            overflow: elide;
+                            horizontal-alignment: right;
+                        }
+                    }
+                }
+
+                VerticalLayout {
+                    alignment: end;
+                    Button {
+                        text: "Refresh";
+                        clicked => {
+                            query-stack-status()
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

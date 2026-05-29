@@ -18,6 +18,7 @@ use crate::internal_error::Expect;
 use crate::packet_session::PacketSession;
 use crate::tper::{Opal2Tper, Tper};
 
+pub const VIRTUAL_DEVICE_PATH: &str = "/dev/virtual_device";
 pub const BASE_COM_ID: ComId = ComId(3072);
 pub const NUM_COM_IDS: u16 = 1;
 
@@ -81,7 +82,7 @@ impl VirtualDevice {
 #[async_trait::async_trait]
 impl Device for VirtualDevice {
     fn path(&self) -> Option<&Path> {
-        None
+        Some(VIRTUAL_DEVICE_PATH.as_ref())
     }
 
     fn interface(&self) -> Interface {

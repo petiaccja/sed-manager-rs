@@ -1,9 +1,7 @@
-import { Discovery, DiscoveryFeature } from "../data/lib.slint";
+import { Discovery, DiscoveryFeature } from "../../data/lib.slint";
 import { ScrollView } from "std-widgets.slint";
-import { IslandButton } from "../widgets/island_button.slint";
-import { Icons } from "../resources/icons.slint";
-import { Island } from "../widgets/island.slint";
-import { PaletteExtra } from "../widgets/palette_extra.slint";
+import { Icons } from "../../resources/icons.slint";
+import { PaletteExtra, IslandButton, Island } from "../../widgets/lib.slint";
 
 component FeatureView {
     min-width: 4rem;
@@ -84,7 +82,7 @@ component FeatureView {
     }
 }
 
-export component DeviceDiscoveryView {
+export component DiscoveryView {
     in property <Discovery> discovery;
 
     HorizontalLayout {

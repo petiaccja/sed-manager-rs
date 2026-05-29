@@ -8,11 +8,17 @@ import {
     ToastLevel,
     ToastQueue,
 } from "../widgets/lib.slint";
-import { Spinner, Palette, TextEdit } from "std-widgets.slint";
+import { Spinner, Palette, TextEdit, ScrollView } from "std-widgets.slint";
 import { Icons } from "../resources/lib.slint";
 import { HorizontalSeparator } from "../widgets/separator.slint";
-import { DeviceDiscoveryView } from "device_discovery_view.slint";
-import { DeviceActivityBar } from "device_activity_bar.slint";
+import { DiscoveryView } from "activities/discovery_view.slint";
+import { DeviceActivityBar, DeviceActivity } from "device_activity_bar.slint";
+import { TakeOwnershipView } from "activities/ownership_view.slint";
+import { ActivateLockingView } from "activities/activate_locking_view.slint";
+import { ChangePasswordView } from "activities/change_password_view.slint";
+import { ConfigureLockingView } from "activities/configure_locking_view.slint";
+import { RevertDeviceView } from "activities/revert_device_view.slint";
+import { StackStatusView } from "activities/stack_status_view.slint";
 
 component NameAndSerial {
     in property <Device> device;
@@ -180,6 +186,13 @@ component Header inherits Island {
 export component DeviceView {
     in property <Device> device;
 
+    callback take-owneship();
+    callback activate-locking();
+    callback change-password();
+    callback revert-device();
+    callback query-stack-status();
+    callback reset-stack();
+
     VerticalLayout {
         spacing: 1.6rem;
 
@@ -191,13 +204,82 @@ export component DeviceView {
             spacing: 1.6rem;
             vertical-stretch: 1.0;
 
-            DeviceActivityBar {
+            activity-bar := DeviceActivityBar {
                 horizontal-stretch: 0.0;
+
+                reset-stack => {
+                    reset-stack()
+                }
             }
 
-            DeviceDiscoveryView {
+            if activity-bar.selected-activity == DeviceActivity.capabilities: DiscoveryView {
                 discovery: device.discovery;
                 horizontal-stretch: 1.0;
+            }
+
+            if activity-bar.selected-activity == DeviceActivity.take-ownership: HorizontalLayout {
+                horizontal-stretch: 1.0;
+                alignment: center;
+
+                TakeOwnershipView {
+                    preferred-width: 16rem;
+                    take-ownership => {
+                        take-owneship()
+                    }
+                }
+            }
+
+            if activity-bar.selected-activity == DeviceActivity.activate-locking: HorizontalLayout {
+                horizontal-stretch: 1.0;
+                alignment: center;
+
+                ActivateLockingView {
+                    preferred-width: 16rem;
+                    activate-locking => {
+                        activate-locking()
+                    }
+                }
+            }
+
+            if activity-bar.selected-activity == DeviceActivity.change-password: ScrollView {
+                horizontal-scrollbar-policy: always-off;
+                min-width: content.min-width;
+                content := HorizontalLayout {
+                    alignment: center;
+
+                    ChangePasswordView {
+                        preferred-width: 16rem;
+                        change-password => {
+                            change-password()
+                        }
+                    }
+                }
+            }
+
+            if activity-bar.selected-activity == DeviceActivity.configure-locking: ConfigureLockingView {
+                preferred-width: 16rem;
+            }
+
+            if activity-bar.selected-activity == DeviceActivity.revert-device: ScrollView {
+                horizontal-scrollbar-policy: always-off;
+                min-width: revert-device-view.min-width;
+                revert-device-view := HorizontalLayout {
+                    alignment: center;
+
+                    RevertDeviceView {
+                        preferred-width: 16rem;
+                        revert-device => {
+                            revert-device()
+                        }
+                    }
+                }
+            }
+
+            if activity-bar.selected-activity == DeviceActivity.stack-status: StackStatusView {
+                horizontal-stretch: 1.0;
+                query-stack-status => {
+                    query-stack-status()
+                }
             }
         }
 

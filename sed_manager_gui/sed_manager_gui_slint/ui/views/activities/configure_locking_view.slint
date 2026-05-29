@@ -1,0 +1,21 @@
+import { ToastCard, ToastLevel } from "../../widgets/lib.slint";
+
+export component ConfigureLockingView {
+    VerticalLayout {
+        alignment: start;
+
+        HorizontalLayout {
+            alignment: center;
+
+            ToastCard {
+                preferred-width: 16rem;
+                has-icon: true;
+                notification: {
+                    level: ToastLevel.info,
+                    title: "Not available yet",
+                    message: "Configuration of the locking features is not implemented yet.",
+                };
+            }
+        }
+    }
+}

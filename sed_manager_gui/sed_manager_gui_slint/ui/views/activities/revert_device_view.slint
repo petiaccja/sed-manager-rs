@@ -1,0 +1,59 @@
+import { ComboBox, LineEdit, Button } from "std-widgets.slint";
+import { ToastCard, ToastLevel } from "../../widgets/lib.slint";
+
+export component RevertDeviceView {
+    callback revert-device();
+
+    VerticalLayout {
+        spacing: 0.5rem;
+        alignment: start;
+
+        Text {
+            text: "What to revert?";
+        }
+
+        scope := ComboBox {
+            model: ["Locking configuration", "Everything"];
+            current-index: 0;
+        }
+
+        Text {
+            text: "Authenticate as:";
+        }
+
+        authority := ComboBox {
+            model: {
+                if scope.current-index == 0 {
+                    ["Owner (SID)"];
+                } else {
+                    ["Owner (SID)", "Physical owner (PSID)"];
+                }
+            };
+            current-index: 0;
+            enabled: scope.current-index == 1;
+        }
+
+        Text {
+            text: "Password:";
+        }
+
+        LineEdit { }
+
+        ToastCard {
+            has-icon: true;
+            notification: {
+                level: ToastLevel.warning,
+                title: "Your data will be erased!",
+                message: "All data will be securely and permanently erased from the drive. Make sure to create a backup to avoid data loss."
+            };
+        }
+
+        Button {
+            text: scope.current-index == 0 ? "Revert locking" : "Revert everything";
+            primary: true;
+            clicked => {
+                revert-device()
+            }
+        }
+    }
+}
