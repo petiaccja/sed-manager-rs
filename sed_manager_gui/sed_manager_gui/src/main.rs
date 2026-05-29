@@ -1,7 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod display_ui;
 mod app;
+mod display_ui;
 mod toast;
 
 use sed_manager_gui_slint::{self as ui};

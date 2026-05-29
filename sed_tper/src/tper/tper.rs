@@ -3,7 +3,7 @@ use std::sync::{
     atomic::{AtomicU32, Ordering},
 };
 
-use sed_async_runtime::spawn;
+use sed_async_runtime::{Runtime, spawn};
 use sed_device::Device;
 use sed_packet::discovery::Discovery;
 use sed_packet::{
@@ -20,6 +20,16 @@ use crate::{
     protocol::{Controller, Protocol},
 };
 
+/// A connection to the storage device using a particular ComID/ComIDExt pair.
+///
+/// Through the `Tper`, you can perform all communication layer, management
+/// layer, and session layer operations on the device. This means managing
+/// ComIDs, creating session, and invoking RPC methods.
+///
+/// It is a very bad idea to connect multiple `Tper`s on the same ComID/ComIDExt
+/// pair, and will most certainly lead to catastrophe. You should use dynamic
+/// ComID management if your device supports it, or stick with one `Tper` per
+/// base ComID.
 #[derive(Debug)]
 pub struct Tper {
     device: Arc<dyn Device>,
@@ -33,29 +43,41 @@ impl Tper {
     /// The ComID pair has to either be a static ComID or dynamically allocated
     /// prior to calling this function.
     ///
-    /// To handle communication with the device, and a protocol is spawned
-    /// on the current async runtime. If you shut down that runtime, the
-    /// protocol will be killed, all subsequent requests will time out, and
-    /// you'll likely need to do a stack reset to get the device's communication
-    /// stack synchronized again.
-    #[instrument(level = "info")]
-    pub async fn connect(com_id: u16, com_id_ext: u16, device: Arc<dyn Device>) -> Self {
+    /// To run the communication protocol, an async runtime is required. If you
+    /// don't specify one explicitly, the one associated with the current thread
+    /// will be picked.
+    ///
+    /// If you terminate the async runtime, and thereby the protocol, all
+    /// subsequent requests will time out, and you'll likely need to do a stack
+    /// reset to get the device's communication stack synchronized again.
+    #[instrument(level = "info", skip(runtime))]
+    pub fn connect(com_id: u16, com_id_ext: u16, device: Arc<dyn Device>, runtime: Option<&Runtime>) -> Self {
         let (protocol, controller) = Protocol::new(com_id, com_id_ext, device.clone());
-        spawn(protocol.run());
+        if let Some(runtime) = runtime {
+            runtime.spawn(protocol.run());
+        } else {
+            spawn(protocol.run());
+        }
         Self { device, controller, host_session_id: 1.into() }
     }
 
+    /// Discover the capabilities of the provided device.
     #[instrument(level = "info", ret, err)]
     pub async fn discover(device: &dyn Device) -> Result<Discovery, Error> {
         let bytes = device.security_recv(0x01, 0x0001_u16.to_be_bytes(), 4096).await?;
         Discovery::from_bytes(&bytes).map_err(|error| Error::InvalidDiscovery(error))
     }
 
+    /// Discover the currently connected device.
     #[instrument(level = "info", skip(self))]
-    pub async fn discover_now(&self) -> Result<Discovery, Error> {
+    pub async fn discover_current(&self) -> Result<Discovery, Error> {
         Self::discover(&*self.device).await
     }
 
+    /// Verify the status of a ComID.
+    ///
+    /// The argument may be any ComID, it doesn't have to be the one on which
+    /// this [`Tper`] is connected. The ComID may also be invalid.
     #[instrument(level = "info", skip(self), ret, err)]
     pub async fn verify_com_id_valid(&self, com_id: u16, com_id_ext: u16) -> Result<ComIdState, Error> {
         use ComIdResponsePayload::*;
@@ -68,6 +90,11 @@ impl Tper {
         }
     }
 
+    /// Reset the stack on the given ComID.
+    ///
+    /// All sessions will be terminated on the ComID. Use this when some session
+    /// got stuck or desynchronized, and the device is not responding to RPCs as
+    /// expected.
     #[instrument(level = "info", skip(self), ret, err)]
     pub async fn stack_reset(&self, com_id: u16, com_id_ext: u16) -> Result<(), Error> {
         use ComIdResponsePayload::*;
@@ -86,6 +113,18 @@ impl Tper {
         }
     }
 
+    /// Start an RPC session on the given `sp`, optionally authentaced as
+    /// `authority`.
+    ///
+    /// If the authority is omitted, the session will start on the `Anybody`
+    /// authority. You can later use the [`authenticate`] method inside the
+    /// session to authenticate, provided that the device supports it.
+    ///
+    /// The spawned session will inherit the RPC protocol of the `Tper`. The
+    /// protocol is owned jointly, and will only shut down once all sessions
+    /// are terminated.
+    ///
+    /// [`authenticate`]: Session::authenticate
     #[instrument(level = "debug", skip(self, password), ret, err)]
     pub async fn start_session(
         &self,

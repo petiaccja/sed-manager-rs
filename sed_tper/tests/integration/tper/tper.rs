@@ -25,7 +25,7 @@ async fn discovery(_with_tracing: WithTracing) {
 #[tokio::test(flavor = "multi_thread")]
 async fn verify_com_id_valid_base(_with_tracing: WithTracing) {
     let device = VirtualDevice::new();
-    let tper = Tper::connect(BASE_COM_ID, 0, Arc::new(device)).await;
+    let tper = Tper::connect(BASE_COM_ID, 0, Arc::new(device), None);
     let result = tper.verify_com_id_valid(BASE_COM_ID, 0).await;
     let expected = ComIdState::Issued;
     assert_eq!(result, Ok(expected));
@@ -36,7 +36,7 @@ async fn verify_com_id_valid_base(_with_tracing: WithTracing) {
 #[tokio::test(flavor = "multi_thread")]
 async fn verify_com_id_valid_incorrent_id(_with_tracing: WithTracing) {
     let device = VirtualDevice::new();
-    let tper = Tper::connect(BASE_COM_ID, 0, Arc::new(device)).await;
+    let tper = Tper::connect(BASE_COM_ID, 0, Arc::new(device), None);
     let result = tper.verify_com_id_valid(BASE_COM_ID + 1, 0).await;
     let expected = ComIdState::Inactive;
     assert_eq!(result, Ok(expected));
@@ -47,7 +47,7 @@ async fn verify_com_id_valid_incorrent_id(_with_tracing: WithTracing) {
 #[tokio::test(flavor = "multi_thread")]
 async fn verify_com_id_valid_incorrent_ext(_with_tracing: WithTracing) {
     let device = VirtualDevice::new();
-    let tper = Tper::connect(BASE_COM_ID, 0, Arc::new(device)).await;
+    let tper = Tper::connect(BASE_COM_ID, 0, Arc::new(device), None);
     let result = tper.verify_com_id_valid(BASE_COM_ID, 1).await;
     let expected = ComIdState::Invalid;
     assert_eq!(result, Ok(expected));
@@ -58,7 +58,7 @@ async fn verify_com_id_valid_incorrent_ext(_with_tracing: WithTracing) {
 #[tokio::test(flavor = "multi_thread")]
 async fn stack_reset_base(_with_tracing: WithTracing) {
     let device = VirtualDevice::new();
-    let tper = Tper::connect(BASE_COM_ID, 0, Arc::new(device)).await;
+    let tper = Tper::connect(BASE_COM_ID, 0, Arc::new(device), None);
     let result = tper.stack_reset(BASE_COM_ID, 0).await;
     assert_eq!(result, Ok(()));
     // Do another reset just to see that the base ComId was left intact.
@@ -71,7 +71,7 @@ async fn stack_reset_base(_with_tracing: WithTracing) {
 #[tokio::test(flavor = "multi_thread")]
 async fn stack_reset_incorrent_id(_with_tracing: WithTracing) {
     let device = VirtualDevice::new();
-    let tper = Tper::connect(BASE_COM_ID, 0, Arc::new(device)).await;
+    let tper = Tper::connect(BASE_COM_ID, 0, Arc::new(device), None);
     let result = tper.stack_reset(BASE_COM_ID + 1, 0).await;
     assert_eq!(result, Err(Error::StackResetFailed));
 }
@@ -81,7 +81,7 @@ async fn stack_reset_incorrent_id(_with_tracing: WithTracing) {
 #[tokio::test(flavor = "multi_thread")]
 async fn stack_reset_incorrent_ext(_with_tracing: WithTracing) {
     let device = VirtualDevice::new();
-    let tper = Tper::connect(BASE_COM_ID, 0, Arc::new(device)).await;
+    let tper = Tper::connect(BASE_COM_ID, 0, Arc::new(device), None);
     let result = tper.stack_reset(BASE_COM_ID, 1).await;
     assert_eq!(result, Err(Error::StackResetFailed));
 }

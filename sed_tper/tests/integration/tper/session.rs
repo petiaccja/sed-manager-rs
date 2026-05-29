@@ -23,7 +23,7 @@ use tracing::instrument;
 #[tokio::test(flavor = "multi_thread")]
 async fn session_lifetime(_with_tracing: WithTracing) {
     let device = Arc::new(VirtualDevice::new());
-    let tper = Tper::connect(BASE_COM_ID, 0, device.clone()).await;
+    let tper = Tper::connect(BASE_COM_ID, 0, device.clone(), None);
     assert!(device.sessions(BASE_COM_ID, 0).unwrap().is_empty());
 
     let session = tper.start_session(sp::ADMIN, None, None).await.unwrap();

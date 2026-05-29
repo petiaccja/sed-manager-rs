@@ -23,7 +23,7 @@ impl SidSession {
     }
 
     pub async fn on_primary_ssc(tper: Arc<Tper>) -> Result<Self, Error> {
-        let discovery = tper.discover_now().await?;
+        let discovery = tper.discover_current().await?;
         let spec = Spec::new(discovery);
         Ok(Self::new(tper, spec))
     }
