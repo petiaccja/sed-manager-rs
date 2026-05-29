@@ -6,29 +6,34 @@ use std::{
     sync::Arc,
 };
 
+use sed_async_runtime::Runtime;
 use sed_device::{Device, list_physical_drives, open_device};
+use sed_manager::Spec;
 use sed_manager_gui_slint as ui;
 use sed_tper::Tper;
 use sed_virtual_device::{VIRTUAL_DEVICE_PATH, VirtualDevice};
 use slint::{ComponentHandle, Model, ModelExt, ModelRc, SharedString, ToSharedString, VecModel, spawn_local};
+use tracing::{Instrument, instrument};
 
 use crate::display_ui::DisplayUi;
 use crate::toast::ToastQueue;
 
 pub struct App {
     ui: ui::MainWindow,
-    notification_queue: Rc<ToastQueue>,
+    toast_queue: Rc<ToastQueue>,
     devices: Rc<VecModel<ui::Device>>,
     services: Services,
+    runtime: Rc<Runtime>,
 }
 
 impl App {
-    pub fn new(ui: ui::MainWindow, notification_queue: Rc<ToastQueue>) -> Rc<Self> {
+    pub fn new(ui: ui::MainWindow, notification_queue: Rc<ToastQueue>, runtime: Rc<Runtime>) -> Rc<Self> {
         let view_model = Rc::from(Self {
             ui: ui.clone_strong(),
-            notification_queue,
+            toast_queue: notification_queue,
             devices: VecModel::from(Vec::new()).into(),
             services: Services::new(),
+            runtime,
         });
 
         {
@@ -40,8 +45,19 @@ impl App {
             ui.on_close(move |path| view_model.clone().close(path));
         }
         {
+            let view_model = view_model.clone();
+            ui.on_query_stack_status(move |path| view_model.clone().query_stack_status(path.to_string().into(), false));
+        }
+        {
+            let view_model = view_model.clone();
+            ui.on_reset_stack(move |path| view_model.clone().reset_stack(path.to_string().into()));
+        }
+        {
             let sorted = view_model.devices.clone().sort_by(|lhs, rhs| {
-                (!lhs.security_commands, &lhs.name, &lhs.serial).cmp(&(!rhs.security_commands, &rhs.name, &rhs.serial))
+                fn key(identity: &ui::Identity) -> (bool, &SharedString, &SharedString) {
+                    (!identity.security_commands, &identity.name, &identity.serial)
+                }
+                key(&lhs.identity).cmp(&key(&rhs.identity))
             });
             ui.set_devices(ModelRc::from(Rc::from(sorted)));
         }
@@ -49,13 +65,14 @@ impl App {
         view_model
     }
 
+    #[instrument(skip(self))]
     fn scan(self: Rc<Self>) {
-        let _ = spawn_local(async move {
+        let future = async move {
             self.ui.set_scan_outcome(ui::Outcome::Pending);
             let new_paths = match list_physical_drives().await {
                 Ok(paths) => paths,
                 Err(err) => {
-                    self.notification_queue.push(ui::Toast {
+                    self.toast_queue.push(ui::Toast {
                         level: ui::ToastLevel::Error,
                         message: err.to_shared_string(),
                         title: "Drive scan failed".into(),
@@ -73,7 +90,7 @@ impl App {
                 .filter(|path| match path.to_str() {
                     Some(_) => true,
                     None => {
-                        self.notification_queue.push(ui::Toast {
+                        self.toast_queue.push(ui::Toast {
                             level: ui::ToastLevel::Warning,
                             message: format!(
                                 "Non-unicode drive paths are not supported. The drive {} will be ignored.",
@@ -94,7 +111,7 @@ impl App {
                 new_paths
             };
 
-            self.devices.retain(|device| new_paths.contains(Path::new(device.path.as_str())));
+            self.devices.retain(|device| new_paths.contains(Path::new(device.identity.path.as_str())));
             self.services.retain(|path, _| new_paths.contains(path));
 
             for path in new_paths {
@@ -102,25 +119,28 @@ impl App {
                     let path_str = path.to_string_lossy().into_owned().into();
                     self.services.insert(path.clone());
                     self.devices.push(ui::Device {
-                        path: path_str,
+                        identity: ui::Identity { path: path_str, ..Default::default() },
                         status: ui::Status { outcome: ui::Outcome::Idle, ..Default::default() },
                         ..Default::default()
                     });
                     self.clone().open(path);
                 }
             }
-        });
+        };
+        spawn_local(future.in_current_span()).expect("outside event loop");
     }
 
+    #[instrument(skip(self))]
     fn close(self: Rc<Self>, path: SharedString) {
-        self.devices.retain(|device| device.path != path);
+        self.devices.retain(|device| device.identity.path != path);
         self.services.retain(|path_, _| path.as_str() != path_);
     }
 
+    #[instrument(skip(self))]
     fn open(self: Rc<Self>, path: PathBuf) {
-        let _ = spawn_local(async move {
+        let future = async move {
             self.devices.update(
-                |device| device.path == path.to_string_lossy(),
+                |device| device.identity.path == path.to_string_lossy(),
                 |device| ui::Device {
                     status: ui::Status { outcome: ui::Outcome::Pending, ..Default::default() },
                     ..device
@@ -132,7 +152,7 @@ impl App {
                     Ok(device) => device,
                     Err(err) => {
                         self.devices.update(
-                            |device| device.path == path.to_string_lossy(),
+                            |device| device.identity.path == path.to_string_lossy(),
                             |device| ui::Device {
                                 status: ui::Status { outcome: ui::Outcome::Error, message: err.to_shared_string() },
                                 ..device
@@ -147,20 +167,30 @@ impl App {
 
             if device.is_security_supported() {
                 self.clone().discover(path.clone());
+                self.clone().connect(path.clone());
             }
 
-            self.devices.update(|device| device.path == path.to_string_lossy(), |_| device.display_ui());
+            self.devices.update(
+                |device| device.identity.path == path.to_string_lossy(),
+                |old| ui::Device {
+                    status: ui::Status { outcome: ui::Outcome::Success, ..Default::default() },
+                    identity: device.display_ui(),
+                    ..old
+                },
+            );
             self.services.set_device(path, device);
-        });
+        };
+        spawn_local(future.in_current_span()).expect("outside event loop");
     }
 
+    #[instrument(skip(self))]
     fn discover(self: Rc<Self>, path: PathBuf) {
-        let _ = spawn_local(async move {
+        let future = async move {
             let Some(device) = self.services.get_device(&path) else {
                 return;
             };
             self.devices.update(
-                |device| device.path == path.to_string_lossy(),
+                |device| device.identity.path == path.to_string_lossy(),
                 |device| ui::Device {
                     discovery: ui::Discovery {
                         status: ui::Status { outcome: ui::Outcome::Pending, ..Default::default() },
@@ -177,10 +207,86 @@ impl App {
                 },
             };
             self.devices.update(
-                |device| device.path == path.to_string_lossy(),
+                |device| device.identity.path == path.to_string_lossy(),
                 |device| ui::Device { discovery: discovery, ..device },
             );
-        });
+        };
+        spawn_local(future.in_current_span()).expect("outside event loop");
+    }
+
+    #[instrument(skip(self))]
+    fn connect(self: Rc<Self>, path: PathBuf) {
+        let future = async move {
+            let Some(device) = self.services.get_device(&path) else {
+                return;
+            };
+            let Ok(discovery) = Tper::discover(&*device).await else {
+                return;
+            };
+            let spec = Spec::new(discovery);
+            let Some(ssc) = spec.default_ssc() else {
+                return;
+            };
+            let Some(com_id) = ssc.static_com_ids_p1().next() else {
+                return;
+            };
+            let com_id_ext = 0;
+            let tper = Tper::connect(com_id, com_id_ext, device, Some(&self.runtime));
+            self.services.set_tper(path.clone(), tper);
+            self.query_stack_status(path, true);
+        };
+        spawn_local(future.in_current_span()).expect("outside event loop");
+    }
+
+    #[instrument(skip(self))]
+    fn query_stack_status(self: Rc<Self>, path: PathBuf, silent: bool) {
+        let future = async move {
+            let stack_status = if let Some(tper) = self.services.get_tper(&path) {
+                let com_id_status = match tper.verify_com_id_valid(tper.com_id(), tper.com_id_ext()).await {
+                    Ok(status) => status.to_string(),
+                    Err(_) => "query failed".into(),
+                };
+                ui::StackStatus {
+                    com_id: tper.com_id().into(),
+                    com_id_ext: tper.com_id_ext().into(),
+                    com_id_status: com_id_status.into(),
+                    connected: true,
+                }
+            } else {
+                ui::StackStatus { connected: false, ..Default::default() }
+            };
+            if !silent {
+                self.toast_queue.push(ui::Toast {
+                    level: ui::ToastLevel::Info,
+                    title: "Stack status updated".into(),
+                    ..Default::default()
+                });
+            }
+            self.devices
+                .update(|device| device.identity.path.as_str() == &path, |old| ui::Device { stack_status, ..old });
+        };
+        spawn_local(future.in_current_span()).expect("outside event loop");
+    }
+
+    #[instrument(skip(self))]
+    fn reset_stack(self: Rc<Self>, path: PathBuf) {
+        let future = async move {
+            if let Some(tper) = self.services.get_tper(&path) {
+                match tper.stack_reset(tper.com_id(), tper.com_id_ext()).await {
+                    Ok(_) => self.toast_queue.push(ui::Toast {
+                        level: ui::ToastLevel::Success,
+                        title: "Stack has been reset".into(),
+                        ..Default::default()
+                    }),
+                    Err(err) => self.toast_queue.push(ui::Toast {
+                        level: ui::ToastLevel::Error,
+                        title: "Stack reset failed".into(),
+                        message: err.to_shared_string(),
+                    }),
+                };
+            }
+        };
+        spawn_local(future.in_current_span()).expect("outside event loop");
     }
 }
 
@@ -222,6 +328,16 @@ impl Services {
 
     pub fn get_device(&self, path: impl AsRef<Path>) -> Option<Arc<dyn Device>> {
         self.inner.borrow().get(path.as_ref()).map(|service| service.device.clone()).flatten()
+    }
+
+    pub fn set_tper(&self, path: impl AsRef<Path>, tper: Tper) {
+        self.inner.borrow_mut().get_mut(path.as_ref()).map(|service| {
+            service.tper = Some(tper.into());
+        });
+    }
+
+    pub fn get_tper(&self, path: impl AsRef<Path>) -> Option<Arc<Tper>> {
+        self.inner.borrow().get(path.as_ref()).map(|service| service.tper.clone()).flatten()
     }
 }
 

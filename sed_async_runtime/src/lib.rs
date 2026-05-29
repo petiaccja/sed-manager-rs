@@ -11,10 +11,11 @@ pub struct Runtime {
 }
 
 impl Runtime {
-    pub fn multi_threaded() -> Self {
+    pub fn new_multi_threaded(num_cores: Option<usize>) -> Self {
         Self {
             inner: tokio::runtime::Builder::new_multi_thread()
                 .enable_all()
+                .worker_threads(num_cores.or(std::thread::available_parallelism().ok().map(|c| c.get())).unwrap_or(1))
                 .build()
                 .expect("could not create tokio runtime"),
         }

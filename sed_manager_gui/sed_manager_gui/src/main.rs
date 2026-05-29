@@ -4,15 +4,24 @@ mod app;
 mod display_ui;
 mod toast;
 
+use std::rc::Rc;
+
+use sed_async_runtime::Runtime;
 use sed_manager_gui_slint::{self as ui};
+use sed_telemetry::{create_otlp_provider, init_otlp_subscriber, init_stdout_subscriber};
 use slint::ComponentHandle as _;
 
 use crate::app::App;
 
 fn main() -> Result<(), Box<dyn core::error::Error>> {
+    let runtime = Rc::new(Runtime::new_multi_threaded(Some(1)));
+    let _tracing_guard = match create_otlp_provider() {
+        Ok(provider) => init_otlp_subscriber(provider),
+        Err(_) => init_stdout_subscriber(),
+    };
     let ui = ui::MainWindow::new()?;
     let notification_queue = toast::ToastQueue::new(ui.clone_strong());
-    let _main_app = App::new(ui.clone_strong(), notification_queue.clone());
+    let _main_app = App::new(ui.clone_strong(), notification_queue.clone(), runtime);
     ui.invoke_scan();
     ui.run()?;
     Ok(())

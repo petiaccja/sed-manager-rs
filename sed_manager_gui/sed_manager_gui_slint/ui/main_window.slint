@@ -27,6 +27,12 @@ export component MainWindow inherits Window {
 
     callback scan <=> scan-button.clicked;
     callback close <=> side-bar.close;
+    callback take-owneship <=> device-switch-view.take-owneship;
+    callback activate-locking <=> device-switch-view.activate-locking;
+    callback change-password <=> device-switch-view.change-password;
+    callback revert-device <=> device-switch-view.revert-device;
+    callback query-stack-status <=> device-switch-view.query-stack-status;
+    callback reset-stack <=> device-switch-view.reset-stack;
 
     HorizontalLayout {
         padding: 1.0rem;
@@ -38,7 +44,7 @@ export component MainWindow inherits Window {
             horizontal-stretch: 0.2;
         }
 
-        DeviceSwitchView {
+        device-switch-view := DeviceSwitchView {
             selected: side-bar.selected;
             devices: devices;
             horizontal-stretch: 1.0;

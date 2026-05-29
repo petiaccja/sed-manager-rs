@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use googletest::{assert_that, matchers::*};
-use sed_manager::{error::Error, sid_session::SidSession};
+use sed_manager::{Error, SidSession};
 use sed_packet::{
     MaxBytes,
     discovery::{BlockSIDAuthDescriptor, LockingDescriptor},

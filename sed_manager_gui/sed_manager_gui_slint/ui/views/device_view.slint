@@ -1,4 +1,4 @@
-import { Device, Outcome } from "../data/lib.slint";
+import { Device, Identity, Outcome } from "../data/lib.slint";
 import {
     Island,
     PaletteExtra,
@@ -21,14 +21,14 @@ import { RevertDeviceView } from "activities/revert_device_view.slint";
 import { StackStatusView } from "activities/stack_status_view.slint";
 
 component NameAndSerial {
-    in property <Device> device;
+    in property <Identity> identity;
 
     HorizontalLayout {
         spacing: 0.6rem;
         alignment: start;
 
         Text {
-            text: !device.name.is-empty ? device.name : device.path;
+            text: !identity.name.is-empty ? identity.name : identity.path;
             font-weight: 800;
             font-size: 2rem;
             color: PaletteExtra.accented-foreground;
@@ -36,12 +36,12 @@ component NameAndSerial {
             vertical-alignment: center;
         }
 
-        if !device.serial.is-empty: VerticalSeparator {
+        if !identity.serial.is-empty: VerticalSeparator {
             background: @linear-gradient(0deg, #00000000 0%, PaletteExtra.separator 20%, PaletteExtra.separator 80%, #00000000 100%);
         }
 
-        if !device.serial.is-empty: Text {
-            text: !device.serial.is-empty ? device.serial : "---";
+        if !identity.serial.is-empty: Text {
+            text: !identity.serial.is-empty ? identity.serial : "---";
             font-size: 1.4rem;
             overflow: elide;
             vertical-alignment: center;
@@ -50,11 +50,11 @@ component NameAndSerial {
 }
 
 component Properties {
-    in property <Device> device;
+    in property <Identity> identity;
 
     // This is only so that the text can be copied easily.
     path-buffer := TextInput {
-        text: device.path;
+        text: identity.path;
         visible: false;
     }
 
@@ -77,7 +77,7 @@ component Properties {
                     alignment: start;
 
                     Text {
-                        text: device.path;
+                        text: identity.path;
                         overflow: elide;
                     }
 
@@ -103,7 +103,7 @@ component Properties {
             }
 
             Text {
-                text: device.interface;
+                text: identity.interface;
                 overflow: elide;
             }
 
@@ -116,7 +116,7 @@ component Properties {
             }
 
             Text {
-                text: device.firmware;
+                text: identity.firmware;
                 overflow: elide;
             }
 
@@ -129,7 +129,7 @@ component Properties {
             }
 
             Text {
-                text: device.security_commands ? "Yes" : "No";
+                text: identity.security_commands ? "Yes" : "No";
                 overflow: elide;
             }
         }
@@ -156,11 +156,11 @@ component Header inherits Island {
             alignment: start;
 
             name-serial-block := NameAndSerial {
-                device: device;
+                identity: device.identity;
             }
 
             if device.status.outcome == Outcome.success: Properties {
-                device: device;
+                identity: device.identity;
             }
 
             if device.status.outcome == Outcome.error: ToastCard {
@@ -277,6 +277,7 @@ export component DeviceView {
 
             if activity-bar.selected-activity == DeviceActivity.stack-status: StackStatusView {
                 horizontal-stretch: 1.0;
+                stack-status: device.stack-status;
                 query-stack-status => {
                     query-stack-status()
                 }

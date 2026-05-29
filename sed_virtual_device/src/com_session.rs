@@ -39,7 +39,6 @@ impl ComSession {
     fn verify_com_id_valid(&mut self, packet_sessions: &HashMap<ComId, PacketSession>, request: &ComIdRequest) {
         let com_id = ComId(request.com_id);
         let com_id_ext = ComIdExt(request.com_id_ext);
-        println!("{com_id:?}");
         let com_id_state = match packet_sessions.get(&com_id) {
             Some(session) => match session.com_id_ext() {
                 value if value == com_id_ext => match session.is_associated() {

@@ -16,8 +16,12 @@ export struct Discovery {
     ssc-features: [DiscoveryFeature],
 }
 
-export struct Device {
-    status: Status,
+export struct DiscoveryExcerpt {
+    owned: bool,
+    activated: bool,
+}
+
+export struct Identity {
     name: string,
     serial: string,
     path: string,
@@ -25,5 +29,19 @@ export struct Device {
     interface: string,
     security_commands: bool,
     is_removable: bool,
+}
+
+export struct StackStatus {
+    connected: bool,
+    com_id: int,
+    com_id_ext: int,
+    com_id_status: string,
+}
+
+export struct Device {
+    status: Status,
+    identity: Identity,
     discovery: Discovery,
+    discovery_excerpt: DiscoveryExcerpt,
+    stack_status: StackStatus,
 }

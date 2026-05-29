@@ -21,6 +21,18 @@ pub enum ComIdState {
     Associated = 0x03,
 }
 
+impl core::fmt::Display for ComIdState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            Self::Invalid => "invalid",
+            Self::Inactive => "inactive",
+            Self::Issued => "issued",
+            Self::Associated => "associated",
+        };
+        f.write_str(s)
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 #[sorbit(byte_order=big_endian)]

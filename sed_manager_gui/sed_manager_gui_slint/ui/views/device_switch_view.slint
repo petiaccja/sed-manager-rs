@@ -5,6 +5,13 @@ export component DeviceSwitchView {
     in property <int> selected;
     in property <[Device]> devices;
 
+    callback take-owneship(device: string);
+    callback activate-locking(device: string);
+    callback change-password(device: string);
+    callback revert-device(device: string);
+    callback query-stack-status(device: string);
+    callback reset-stack(device: string);
+
     VerticalLayout {
         if devices.length == 0: Rectangle { }
 
@@ -19,6 +26,25 @@ export component DeviceSwitchView {
                 width: parent.width;
                 height: index == selected ? parent.height : self.min-height;
                 device: device;
+
+                take-owneship() => {
+                    take-owneship(device.identity.path)
+                };
+                activate-locking() => {
+                    activate-locking(device.identity.path)
+                };
+                change-password() => {
+                    change-password(device.identity.path)
+                };
+                revert-device() => {
+                    revert-device(device.identity.path)
+                };
+                query-stack-status() => {
+                    query-stack-status(device.identity.path)
+                };
+                reset-stack() => {
+                    reset-stack(device.identity.path)
+                };
             }
         }
     }

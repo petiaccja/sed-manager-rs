@@ -6,7 +6,7 @@ pub use admin::Admin;
 pub use kpio::Kpio;
 pub use locking::Locking;
 
-use sed_packet::discovery::{Discovery, Feature, FeatureDescriptor};
+use sed_packet::discovery::{Discovery, Feature, FeatureDescriptor, SecuritySubsystemClass};
 use sed_spec::{objects::SecurityProviderRef, preconfig::psid};
 
 use crate::spec::admin::{AuthorityTable, CPinTable};
@@ -18,6 +18,7 @@ pub struct Spec {
     pub locking: Option<Locking>,
     /// The specification of the KPIO SP of the TPer's SSC.
     pub kpio: Option<Kpio>,
+    pub discovery: Discovery,
 }
 
 impl Spec {
@@ -28,7 +29,11 @@ impl Spec {
             Some(feature) => ssc_spec(feature),
             None => (None, None, None),
         };
-        Self { admin, locking, kpio }
+        Self { admin, locking, kpio, discovery }
+    }
+
+    pub fn default_ssc(&self) -> Option<&dyn SecuritySubsystemClass> {
+        self.discovery.ssc_features().next()
     }
 
     pub fn secondary_sp_uid(&self) -> Option<SecurityProviderRef> {

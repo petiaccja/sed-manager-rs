@@ -4,12 +4,12 @@ import {
     VerticalSeparator,
     HorizontalSeparator,
 } from "../../widgets/lib.slint";
+import { StackStatus } from "../../data/lib.slint";
+import { Icons } from "../../resources/lib.slint";
 import { Button } from "std-widgets.slint";
 
 export component StackStatusView {
-    in property <int> com-id;
-    in property <int> com-id-ext;
-    in property <string> com-id-status;
+    in property <StackStatus> stack-status;
 
     callback query-stack-status();
 
@@ -22,8 +22,31 @@ export component StackStatusView {
                 padding: 0.4rem;
 
                 GridLayout {
+                    HorizontalLayout {
+                        alignment: start;
+                        row: 0;
+                        col: 0;
+                        padding: 0.3rem;
+                        padding-left: 0.6rem;
+                        padding-right: 0.6rem;
+                        spacing: 0.3rem;
+
+                        Text {
+                            text: stack-status.connected ? "Connected" : "Not connected";
+                            color: stack-status.connected ? PaletteExtra.success-foreground : PaletteExtra.error-foreground;
+                            font-weight: 600;
+                        }
+
+                        Image {
+                            source: stack-status.connected ? Icons.check : Icons.close;
+                            colorize: stack-status.connected ? PaletteExtra.success-foreground : PaletteExtra.error-foreground;
+                            width: 1.2rem;
+                            height: 1.2rem;
+                        }
+                    }
+
                     for name[index] in ["ComID:", "ComID extension:", "Status:"]: HorizontalLayout {
-                        row: index;
+                        row: index + 1;
                         col: 0;
                         padding: 0.3rem;
                         padding-left: 0.6rem;
@@ -34,8 +57,8 @@ export component StackStatusView {
                         }
                     }
 
-                    for value[index] in [root.com-id, root.com-id-ext, root.com-id-status]: HorizontalLayout {
-                        row: index;
+                    for value[index] in [stack-status.com-id, stack-status.com-id-ext, stack-status.com-id-status]: HorizontalLayout {
+                        row: index + 1;
                         col: 1;
                         padding: 0.3rem;
                         padding-left: 0.6rem;

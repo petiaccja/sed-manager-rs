@@ -32,12 +32,24 @@ use crate::{
 /// base ComID.
 #[derive(Debug)]
 pub struct Tper {
+    com_id: u16,
+    com_id_ext: u16,
     device: Arc<dyn Device>,
     controller: Controller,
     host_session_id: AtomicU32,
 }
 
 impl Tper {
+    /// The ComID on which the `Tper` is connected.
+    pub fn com_id(&self) -> u16 {
+        self.com_id
+    }
+
+    /// The ComID extension on which the `Tper` is connected.
+    pub fn com_id_ext(&self) -> u16 {
+        self.com_id_ext
+    }
+
     /// Connect to a device on the specified ComID and ComID extension.
     ///
     /// The ComID pair has to either be a static ComID or dynamically allocated
@@ -58,7 +70,7 @@ impl Tper {
         } else {
             spawn(protocol.run());
         }
-        Self { device, controller, host_session_id: 1.into() }
+        Self { com_id, com_id_ext, device, controller, host_session_id: 1.into() }
     }
 
     /// Discover the capabilities of the provided device.

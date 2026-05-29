@@ -1,4 +1,4 @@
-import { Device } from "../data/lib.slint";
+import { Device, Identity } from "../data/lib.slint";
 import { Palette, ScrollView } from "std-widgets.slint";
 import { PaletteExtra, IconButton, Island } from "../widgets/lib.slint";
 import { Icons } from "../resources/lib.slint";
@@ -8,7 +8,7 @@ component DeviceSideBarItem inherits IslandButton {
     has-background: true;
     has-idle-background: false;
 
-    in property <Device> device;
+    in property <Identity> identity;
 
     callback close(path: string);
 
@@ -23,7 +23,7 @@ component DeviceSideBarItem inherits IslandButton {
             horizontal-stretch: 1.0;
 
             Text {
-                text: !device.name.is-empty ? device.name : device.path;
+                text: !identity.name.is-empty ? identity.name : identity.path;
                 font-size: 1.6rem;
                 font-weight: 600;
                 overflow: elide;
@@ -31,7 +31,7 @@ component DeviceSideBarItem inherits IslandButton {
             }
 
             Text {
-                text: !device.serial.is-empty ? device.serial : "---";
+                text: !identity.serial.is-empty ? identity.serial : "---";
                 overflow: elide;
                 color: root.foreground;
             }
@@ -43,7 +43,7 @@ component DeviceSideBarItem inherits IslandButton {
             icon: Icons.close;
 
             clicked => {
-                close(device.path)
+                close(identity.path)
             }
         }
     }
@@ -90,7 +90,7 @@ export component DeviceSideBar {
 
                 for device[index] in devices: DeviceSideBarItem {
                     is-selected: index == selected;
-                    device: device;
+                    identity: device.identity;
 
                     clicked => {
                         root.selected = index

@@ -9,11 +9,10 @@ use crate::display_ui::DisplayUi;
 use sed_manager_gui_slint as ui;
 
 impl DisplayUi for dyn Device {
-    type Ui = ui::Device;
+    type Ui = ui::Identity;
 
     fn display_ui(&self) -> Self::Ui {
-        ui::Device {
-            status: ui::Status { outcome: ui::Outcome::Success, ..Default::default() },
+        ui::Identity {
             name: self.model_number().into(),
             serial: self.serial_number().into(),
             path: self.path().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default().into(),
@@ -21,7 +20,6 @@ impl DisplayUi for dyn Device {
             interface: self.interface().to_string().into(),
             security_commands: self.is_security_supported(),
             is_removable: self.is_removable(),
-            ..Default::default()
         }
     }
 }

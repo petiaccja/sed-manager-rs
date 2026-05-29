@@ -805,10 +805,6 @@ impl Discovery {
     pub fn ssc_features(&self) -> impl Iterator<Item = &dyn SecuritySubsystemClass> {
         self.feature_descriptors.iter().filter_map(|desc| desc.as_ssc())
     }
-
-    pub fn primary_ssc(&self) -> Option<&dyn SecuritySubsystemClass> {
-        self.ssc_features().next()
-    }
 }
 
 impl IntoIterator for Discovery {

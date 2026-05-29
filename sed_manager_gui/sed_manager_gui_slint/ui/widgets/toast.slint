@@ -90,6 +90,7 @@ export component ToastCard inherits Rectangle {
                 font-size: 1.2rem;
                 font-weight: 400;
                 overflow: elide;
+                vertical-alignment: center;
             }
 
             if !notification.message.is-empty: ScrollView {
@@ -157,6 +158,7 @@ component ToastInstance {
 
     ToastCard {
         notification: toast;
+        has-icon: true;
     }
 }
 
