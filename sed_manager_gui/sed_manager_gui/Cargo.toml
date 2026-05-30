@@ -14,3 +14,4 @@ sed_virtual_device.workspace = true
 sed_telemetry.workspace = true
 slint.workspace = true
 tracing.workspace = true
+async-lock.workspace = true

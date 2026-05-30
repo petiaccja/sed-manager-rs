@@ -12,7 +12,7 @@ pub enum Error {
     #[error("The feature is not supported by the current TCG SSC")]
     IncompatibleSsc,
     #[error("The device does not support any TCG SSCs")]
-    NoSscSupported,
+    NoSscAvailable,
     #[error("Ownership has already been set up on this device")]
     AlreadyOwned,
     #[error("Locking has already been activated on this device")]

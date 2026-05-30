@@ -1,6 +1,7 @@
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
+    ops::DerefMut,
     path::{Path, PathBuf},
     rc::Rc,
     sync::Arc,
@@ -8,12 +9,15 @@ use std::{
 
 use sed_async_runtime::Runtime;
 use sed_device::{Device, list_physical_drives, open_device};
-use sed_manager::Spec;
+use sed_manager::{Error, SidSession, Spec};
 use sed_manager_gui_slint as ui;
+use sed_packet::MaxBytes;
 use sed_tper::Tper;
 use sed_virtual_device::{VIRTUAL_DEVICE_PATH, VirtualDevice};
-use slint::{ComponentHandle, Model, ModelExt, ModelRc, SharedString, ToSharedString, VecModel, spawn_local};
-use tracing::{Instrument, instrument};
+use slint::{
+    ComponentHandle, EventLoopError, Model, ModelExt, ModelRc, SharedString, ToSharedString, VecModel, spawn_local,
+};
+use tracing::{Instrument, error, instrument};
 
 use crate::display_ui::DisplayUi;
 use crate::toast::ToastQueue;
@@ -46,6 +50,18 @@ impl App {
         }
         {
             let view_model = view_model.clone();
+            ui.on_take_owneship(move |path, password| {
+                view_model.clone().take_ownership(path.to_string().into(), password)
+            });
+        }
+        {
+            let view_model = view_model.clone();
+            ui.on_revert_device(move |path, scope, authority, password| {
+                view_model.clone().revert_device(path.to_string().into(), scope, authority, password)
+            });
+        }
+        {
+            let view_model = view_model.clone();
             ui.on_query_stack_status(move |path| view_model.clone().query_stack_status(path.to_string().into(), false));
         }
         {
@@ -72,11 +88,7 @@ impl App {
             let new_paths = match list_physical_drives().await {
                 Ok(paths) => paths,
                 Err(err) => {
-                    self.toast_queue.push(ui::Toast {
-                        level: ui::ToastLevel::Error,
-                        message: err.to_shared_string(),
-                        title: "Drive scan failed".into(),
-                    });
+                    self.toast_queue.error("Drive scan failed".into(), err.to_string());
                     self.ui.set_scan_outcome(ui::Outcome::Error);
                     return;
                 }
@@ -90,15 +102,13 @@ impl App {
                 .filter(|path| match path.to_str() {
                     Some(_) => true,
                     None => {
-                        self.toast_queue.push(ui::Toast {
-                            level: ui::ToastLevel::Warning,
-                            message: format!(
+                        self.toast_queue.warning(
+                            "Non-unicode drive path".into(),
+                            format!(
                                 "Non-unicode drive paths are not supported. The drive {} will be ignored.",
                                 path.to_string_lossy()
-                            )
-                            .into(),
-                            title: "Non-unicode drive path".into(),
-                        });
+                            ),
+                        );
                         false
                     }
                 })
@@ -127,7 +137,7 @@ impl App {
                 }
             }
         };
-        spawn_local(future.in_current_span()).expect("outside event loop");
+        spawn_local(future.in_current_span()).expect_in_event_loop();
     }
 
     #[instrument(skip(self))]
@@ -180,7 +190,7 @@ impl App {
             );
             self.services.set_device(path, device);
         };
-        spawn_local(future.in_current_span()).expect("outside event loop");
+        spawn_local(future.in_current_span()).expect_in_event_loop();
     }
 
     #[instrument(skip(self))]
@@ -211,7 +221,7 @@ impl App {
                 |device| ui::Device { discovery: discovery, ..device },
             );
         };
-        spawn_local(future.in_current_span()).expect("outside event loop");
+        spawn_local(future.in_current_span()).expect_in_event_loop();
     }
 
     #[instrument(skip(self))]
@@ -223,7 +233,9 @@ impl App {
             let Ok(discovery) = Tper::discover(&*device).await else {
                 return;
             };
-            let spec = Spec::new(discovery);
+            let Some(spec) = Spec::new(discovery) else {
+                return;
+            };
             let Some(ssc) = spec.default_ssc() else {
                 return;
             };
@@ -235,7 +247,7 @@ impl App {
             self.services.set_tper(path.clone(), tper);
             self.query_stack_status(path, true);
         };
-        spawn_local(future.in_current_span()).expect("outside event loop");
+        spawn_local(future.in_current_span()).expect_in_event_loop();
     }
 
     #[instrument(skip(self))]
@@ -256,16 +268,12 @@ impl App {
                 ui::StackStatus { connected: false, ..Default::default() }
             };
             if !silent {
-                self.toast_queue.push(ui::Toast {
-                    level: ui::ToastLevel::Info,
-                    title: "Stack status updated".into(),
-                    ..Default::default()
-                });
+                self.toast_queue.info("Stack status updated".into(), "".into());
             }
             self.devices
                 .update(|device| device.identity.path.as_str() == &path, |old| ui::Device { stack_status, ..old });
         };
-        spawn_local(future.in_current_span()).expect("outside event loop");
+        spawn_local(future.in_current_span()).expect_in_event_loop();
     }
 
     #[instrument(skip(self))]
@@ -273,20 +281,107 @@ impl App {
         let future = async move {
             if let Some(tper) = self.services.get_tper(&path) {
                 match tper.stack_reset(tper.com_id(), tper.com_id_ext()).await {
-                    Ok(_) => self.toast_queue.push(ui::Toast {
-                        level: ui::ToastLevel::Success,
-                        title: "Stack has been reset".into(),
-                        ..Default::default()
-                    }),
-                    Err(err) => self.toast_queue.push(ui::Toast {
-                        level: ui::ToastLevel::Error,
-                        title: "Stack reset failed".into(),
-                        message: err.to_shared_string(),
-                    }),
+                    Ok(_) => self.toast_queue.success("Stack has been reset".into(), "".into()),
+                    Err(err) => self.toast_queue.error("Stack reset failed".into(), err.to_string()),
                 };
             }
         };
-        spawn_local(future.in_current_span()).expect("outside event loop");
+        spawn_local(future.in_current_span()).expect_in_event_loop();
+    }
+
+    #[instrument(skip(self))]
+    fn take_ownership(self: Rc<Self>, path: PathBuf, password: SharedString) {
+        let future = async move {
+            let Some(session) = self.services.get_session(&path) else {
+                return;
+            };
+            let mut session = session.lock().await;
+            let Some(sid_session) = self.clone().get_or_start_sid_session(&path, session.deref_mut()).await else {
+                return;
+            };
+
+            let Some(password) = self.try_convert_password(password.as_str()) else {
+                return;
+            };
+
+            match sid_session.take_owneship(password).await {
+                Ok(_) => self.toast_queue.success("Taken ownership successfully".into(), "".into()),
+                Err(err) => self.toast_queue.error("Taking ownership failed".into(), err.to_string()),
+            };
+        };
+        spawn_local(future.in_current_span()).expect_in_event_loop();
+    }
+
+    #[instrument(skip(self))]
+    fn revert_device(
+        self: Rc<Self>,
+        path: PathBuf,
+        scope: ui::RevertScope,
+        authority: ui::RevertAuthority,
+        password: SharedString,
+    ) {
+        let future = async move {
+            let Some(session) = self.services.get_session(&path) else {
+                return;
+            };
+            let mut session = session.lock().await;
+            let Some(sid_session) = self.clone().get_or_start_sid_session(&path, session.deref_mut()).await else {
+                return;
+            };
+
+            let Some(password) = self.try_convert_password(password.as_str()) else {
+                return;
+            };
+
+            let authority = match authority {
+                ui::RevertAuthority::Sid => sid_session.spec().admin.authorities.sid,
+                ui::RevertAuthority::Psid => sid_session.spec().admin.authorities.psid,
+            };
+
+            let result = match scope {
+                ui::RevertScope::Locking => sid_session.revert_secondary_sp(password).await,
+                ui::RevertScope::Everything => sid_session.revert_tper(authority, password).await,
+            };
+
+            match result {
+                Ok(_) => self.toast_queue.success("Reverted device successfully".into(), "".into()),
+                Err(err) => self.toast_queue.error("Reverting device failed".into(), err.to_string()),
+            };
+        };
+        spawn_local(future.in_current_span()).expect_in_event_loop();
+    }
+
+    async fn get_or_start_sid_session<'s>(
+        self: Rc<Self>,
+        path: &Path,
+        session: &'s mut Session,
+    ) -> Option<&'s SidSession> {
+        match session.start_sid_session_with(|| self.services.get_tper(&path)).await {
+            Some(Ok(sid_session)) => Some(sid_session),
+            Some(Err(err)) => {
+                self.toast_queue.error("Could not open SID session".into(), err.to_string());
+                None
+            }
+            None => {
+                // The UI's flow should prevent us from ever reaching this path.
+                error!("Bug: path should be unreachable from UI");
+                self.toast_queue.error("Not connected".into(), "Not connected to the drive.".into());
+                None
+            }
+        }
+    }
+
+    fn try_convert_password(&self, password: &str) -> Option<MaxBytes<32>> {
+        let byte_password: MaxBytes<32> = password.as_bytes().into();
+        if byte_password.len() == password.as_bytes().len() {
+            Some(byte_password)
+        } else {
+            self.toast_queue.error(
+                "Password too long".into(),
+                "The password cannot be longer than 32 bytes (32 Latin characters)".into(),
+            );
+            None
+        }
     }
 }
 
@@ -294,6 +389,7 @@ impl App {
 struct Service {
     device: Option<Arc<dyn Device>>,
     tper: Option<Arc<Tper>>,
+    session: Arc<async_lock::Mutex<Session>>,
 }
 
 struct Services {
@@ -339,6 +435,41 @@ impl Services {
     pub fn get_tper(&self, path: impl AsRef<Path>) -> Option<Arc<Tper>> {
         self.inner.borrow().get(path.as_ref()).map(|service| service.tper.clone()).flatten()
     }
+
+    pub fn get_session(&self, path: impl AsRef<Path>) -> Option<Arc<async_lock::Mutex<Session>>> {
+        self.inner.borrow().get(path.as_ref()).map(|service| service.session.clone())
+    }
+}
+
+#[derive(Debug, Default)]
+enum Session {
+    #[default]
+    None,
+    Sid(SidSession),
+}
+
+impl Session {
+    pub async fn start_sid_session(&mut self, tper: Arc<Tper>) -> Result<&SidSession, Error> {
+        match self {
+            Self::None => {
+                let sid_session = SidSession::on_primary_ssc(tper).await?;
+                *self = Self::Sid(sid_session);
+                let Self::Sid(sid_session) = self else { unreachable!() };
+                Ok(sid_session)
+            }
+            Self::Sid(sid_session) => Ok(sid_session),
+        }
+    }
+
+    pub async fn start_sid_session_with(
+        &mut self,
+        tper: impl FnOnce() -> Option<Arc<Tper>>,
+    ) -> Option<Result<&SidSession, Error>> {
+        match self {
+            Self::None => Some(self.start_sid_session(tper()?).await),
+            Self::Sid(sid_session) => Some(Ok(sid_session)),
+        }
+    }
 }
 
 pub trait VecModelExt<T> {
@@ -377,5 +508,18 @@ where
         self.iter().enumerate().find(|(_, value)| find(value)).map(|(index, value)| {
             self.set_row_data(index, update(value));
         });
+    }
+}
+
+trait ExpectInEventLoop {
+    type Output;
+
+    fn expect_in_event_loop(self) -> Self::Output;
+}
+
+impl<T> ExpectInEventLoop for Result<T, EventLoopError> {
+    type Output = T;
+    fn expect_in_event_loop(self) -> Self::Output {
+        self.expect("expected to be inside the event loop")
     }
 }

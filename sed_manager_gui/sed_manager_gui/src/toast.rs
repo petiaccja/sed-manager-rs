@@ -38,6 +38,22 @@ impl ToastQueue {
         self.model.push(ui::ToastQueueItem { id, toast });
     }
 
+    pub fn error(&self, title: String, message: String) {
+        self.push(ui::Toast { title: title.into(), message: message.into(), level: ui::ToastLevel::Error });
+    }
+
+    pub fn warning(&self, title: String, message: String) {
+        self.push(ui::Toast { title: title.into(), message: message.into(), level: ui::ToastLevel::Warning });
+    }
+
+    pub fn info(&self, title: String, message: String) {
+        self.push(ui::Toast { title: title.into(), message: message.into(), level: ui::ToastLevel::Info });
+    }
+
+    pub fn success(&self, title: String, message: String) {
+        self.push(ui::Toast { title: title.into(), message: message.into(), level: ui::ToastLevel::Success });
+    }
+
     pub fn dismiss(&self, id: i32) {
         self.model
             .iter()

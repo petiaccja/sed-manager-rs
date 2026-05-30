@@ -2,7 +2,7 @@ import { PasswordForm } from "../password_form.slint";
 import { Button } from "std-widgets.slint";
 
 export component TakeOwnershipView {
-    callback take-ownership();
+    callback take-ownership(password: string);
 
     VerticalLayout {
         spacing: 0.6rem;
@@ -15,7 +15,7 @@ export component TakeOwnershipView {
             primary: true;
             enabled: form.matches;
             clicked => {
-                take-ownership()
+                take-ownership(form.password)
             }
         }
 

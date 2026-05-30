@@ -1,4 +1,10 @@
-import { Device, Identity, Outcome } from "../data/lib.slint";
+import {
+    Device,
+    Identity,
+    Outcome,
+    RevertScope,
+    RevertAuthority,
+} from "../data/lib.slint";
 import {
     Island,
     PaletteExtra,
@@ -186,10 +192,10 @@ component Header inherits Island {
 export component DeviceView {
     in property <Device> device;
 
-    callback take-owneship();
+    callback take-owneship(password: string);
     callback activate-locking();
     callback change-password();
-    callback revert-device();
+    callback revert-device(scope: RevertScope, authority: RevertAuthority, password: string);
     callback query-stack-status();
     callback reset-stack();
 
@@ -221,10 +227,10 @@ export component DeviceView {
                 horizontal-stretch: 1.0;
                 alignment: center;
 
-                TakeOwnershipView {
+                ownership-view := TakeOwnershipView {
                     preferred-width: 16rem;
-                    take-ownership => {
-                        take-owneship()
+                    take-ownership(password) => {
+                        take-owneship(password)
                     }
                 }
             }
@@ -268,8 +274,8 @@ export component DeviceView {
 
                     RevertDeviceView {
                         preferred-width: 16rem;
-                        revert-device => {
-                            revert-device()
+                        revert-device(scope, authority, password) => {
+                            revert-device(scope, authority, password)
                         }
                     }
                 }

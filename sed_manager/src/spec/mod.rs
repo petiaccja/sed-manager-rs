@@ -11,9 +11,10 @@ use sed_spec::{objects::SecurityProviderRef, preconfig::psid};
 
 use crate::spec::admin::{AuthorityTable, CPinTable};
 
+#[derive(Debug)]
 pub struct Spec {
     /// The specification of the Admin SP of the TPer's SSC.
-    pub admin: Option<Admin>,
+    pub admin: Admin,
     /// The specification of the Locking SP of the TPer's SSC.
     pub locking: Option<Locking>,
     /// The specification of the KPIO SP of the TPer's SSC.
@@ -22,14 +23,17 @@ pub struct Spec {
 }
 
 impl Spec {
-    pub fn new(mut discovery: Discovery) -> Self {
+    pub fn new(mut discovery: Discovery) -> Option<Self> {
         discovery.feature_descriptors.sort_by_key(feature_priority);
         let ssc = discovery.feature_descriptors.iter().find(|feature| feature.as_ssc().is_some());
         let (admin, locking, kpio) = match ssc {
             Some(feature) => ssc_spec(feature),
             None => (None, None, None),
         };
-        Self { admin, locking, kpio, discovery }
+        match admin {
+            Some(admin) => Some(Self { admin, locking, kpio, discovery }),
+            None => None,
+        }
     }
 
     pub fn default_ssc(&self) -> Option<&dyn SecuritySubsystemClass> {

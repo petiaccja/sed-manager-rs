@@ -1,8 +1,9 @@
 import { ComboBox, LineEdit, Button } from "std-widgets.slint";
 import { ToastCard, ToastLevel } from "../../widgets/lib.slint";
+import { RevertScope, RevertAuthority } from "../../data/lib.slint";
 
 export component RevertDeviceView {
-    callback revert-device();
+    callback revert-device(scope: RevertScope, authority: RevertAuthority, password: string);
 
     VerticalLayout {
         spacing: 0.5rem;
@@ -37,7 +38,9 @@ export component RevertDeviceView {
             text: "Password:";
         }
 
-        LineEdit { }
+        password := LineEdit {
+            input-type: InputType.password;
+        }
 
         ToastCard {
             has-icon: true;
@@ -52,7 +55,10 @@ export component RevertDeviceView {
             text: scope.current-index == 0 ? "Revert locking" : "Revert everything";
             primary: true;
             clicked => {
-                revert-device()
+                revert-device(
+                    scope.current-index == 0 ? RevertScope.locking : RevertScope.everything,
+                    authority.current-index == 0 ? RevertAuthority.sid : RevertAuthority.psid,
+                    password.text)
             }
         }
     }

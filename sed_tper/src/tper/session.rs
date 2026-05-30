@@ -1,4 +1,5 @@
 use std::ops::RangeBounds;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use sed_packet::session_id::SessionId;
 use sed_packet::token::{Command, Detokenize, Detokenizer, FromTokens, ToTokens, Tokenize};
@@ -34,9 +35,10 @@ use crate::protocol::Controller;
 /// [`Protocol`]: crate::protocol::Protocol
 #[derive(Debug)]
 pub struct Session {
+    security_provider: SecurityProviderRef,
     session_id: SessionId,
     controller: Controller,
-    eos_sent: bool,
+    eos_sent: AtomicBool,
 }
 
 impl Session {
@@ -82,7 +84,7 @@ impl Session {
         if result.status == MethodStatus::Success {
             let tper_session_id = result.parameters.sp_session_id;
             let session_id = SessionId { hsn: host_session_number, tsn: tper_session_id };
-            Ok(Self::from_started(session_id, controller))
+            Ok(Self::from_started(sp, session_id, controller))
         } else {
             Err(result.status.into())
         }
@@ -99,8 +101,8 @@ impl Session {
     ///
     /// If the preconditions are not met, requests will be dropped or will time
     /// out.
-    pub fn from_started(session_id: SessionId, controller: Controller) -> Self {
-        Self { session_id, controller, eos_sent: false }
+    pub fn from_started(security_provider: SecurityProviderRef, session_id: SessionId, controller: Controller) -> Self {
+        Self { security_provider, session_id, controller, eos_sent: false.into() }
     }
 
     /// Execute a procedure using this session and then close the session.
@@ -342,14 +344,27 @@ impl Session {
             .call(self.session_id, call.to_tokens().expect("invalid method call"))
             .await
             .map_err(|_| Error::Closed)??;
-        let _result = Revert::result_from_tokens(&result_tokens)??;
-        Ok(())
+        let result = Revert::result_from_tokens(&result_tokens)?;
+        match result {
+            Ok(_) => {
+                // If we revert the SP on which this session is running, this (and all
+                // other sessions on the SP) will be terminated. After that, all methods,
+                // including `close`, will time out, so let's not send and EOS.
+                // Note that `revert` can only be called from an Admin SP session, so
+                // a successful revert on the secondary SP will never terminate this session.
+                if sp == self.security_provider {
+                    self.eos_sent.store(true, Ordering::Relaxed);
+                }
+                Ok(())
+            }
+            Err(err) => Err(err.into()),
+        }
     }
 
     /// Revert the security provider to its factory original state.
     ///
     /// After reverting the SP, the session is immediately aborted.
-    pub async fn revert_sp(mut self, keep_global_range_key: Option<bool>) -> Result<(), (Self, Error)> {
+    pub async fn revert_sp(self, keep_global_range_key: Option<bool>) -> Result<(), (Self, Error)> {
         #[instrument(level = "info", skip(self_), ret, err)]
         async fn do_revert_sp(self_: &Session, keep_global_range_key: Option<bool>) -> Result<(), Error> {
             let parameters = RevertSp { keep_global_range_key };
@@ -367,7 +382,7 @@ impl Session {
             Ok(_) => {
                 // The revert function succeeded, meaning the session is aborted. No need
                 // to send an EOS on drop.
-                self.eos_sent = true;
+                self.eos_sent.store(true, Ordering::Relaxed);
                 Ok(())
             }
             Err(err) => {
@@ -459,17 +474,21 @@ impl Session {
     /// timing issues, and TPer might reply that it's busy when you start
     /// another session.
     #[instrument(level = "info", skip(self), ret, err)]
-    pub async fn close(mut self) -> Result<(), Error> {
-        self.eos_sent = true;
-        let result_tokens = self
-            .controller
-            .call(self.session_id, Command::EndOfSession.to_tokens().expect("invalid token"))
-            .await
-            .map_err(|_| Error::Closed)??;
-        let result = Command::from_tokens(&result_tokens)?;
-        match result {
-            Command::EndOfSession => Ok(()),
-            _ => Err(Error::EndOfSessionExpected),
+    pub async fn close(self) -> Result<(), Error> {
+        let eos_sent = self.eos_sent.swap(true, Ordering::Relaxed);
+        if !eos_sent {
+            let result_tokens = self
+                .controller
+                .call(self.session_id, Command::EndOfSession.to_tokens().expect("invalid token"))
+                .await
+                .map_err(|_| Error::Closed)??;
+            let result = Command::from_tokens(&result_tokens)?;
+            match result {
+                Command::EndOfSession => Ok(()),
+                _ => Err(Error::EndOfSessionExpected),
+            }
+        } else {
+            Ok(())
         }
     }
 }
@@ -482,7 +501,8 @@ impl Session {
 /// closing the previous one.
 impl Drop for Session {
     fn drop(&mut self) {
-        if !self.eos_sent {
+        let eos_sent = self.eos_sent.swap(true, Ordering::Relaxed);
+        if !eos_sent {
             let _ = self.controller.call(self.session_id, Command::EndOfSession.to_tokens().expect("invalid token"));
         }
     }

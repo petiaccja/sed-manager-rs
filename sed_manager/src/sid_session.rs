@@ -12,6 +12,7 @@ use tracing::instrument;
 
 use crate::{error::Error, spec::Spec};
 
+#[derive(Debug)]
 pub struct SidSession {
     tper: Arc<Tper>,
     spec: Spec,
@@ -24,8 +25,12 @@ impl SidSession {
 
     pub async fn on_primary_ssc(tper: Arc<Tper>) -> Result<Self, Error> {
         let discovery = tper.discover_current().await?;
-        let spec = Spec::new(discovery);
+        let spec = Spec::new(discovery).ok_or(Error::NoSscAvailable)?;
         Ok(Self::new(tper, spec))
+    }
+
+    pub fn spec(&self) -> &Spec {
+        &self.spec
     }
 
     /// Take ownership of the device by changing the SID password.
@@ -39,7 +44,7 @@ impl SidSession {
     /// The method may also fail due to any common Tper RPC errors.
     #[instrument(level = "info", skip(self, new_sid_password), ret, err)]
     pub async fn take_owneship(&self, new_sid_password: MaxBytes<32>) -> Result<(), Error> {
-        let admin = self.spec.admin.as_ref().ok_or(Error::NoSscSupported)?;
+        let admin = &self.spec.admin;
 
         // Get the MSID password.
         let initial_password = self
@@ -76,7 +81,7 @@ impl SidSession {
     /// [`Manufactured`]: LifeCycleState::Manufactured
     #[instrument(level = "info", skip(self, sid_password), ret, err)]
     pub async fn activate_secondary_sp(&self, sid_password: MaxBytes<32>) -> Result<(), Error> {
-        let admin = self.spec.admin.as_ref().ok_or(Error::NoSscSupported)?;
+        let admin = &self.spec.admin;
         let secondary_sp_uid = self
             .spec
             .locking
@@ -113,7 +118,7 @@ impl SidSession {
     /// - `password`: the password of the `authority`.
     #[instrument(level = "info", skip(self, password), ret, err)]
     pub async fn revert_tper(&self, authority: AuthorityRef, password: MaxBytes<32>) -> Result<(), Error> {
-        let admin = self.spec.admin.as_ref().ok_or(Error::NoSscSupported)?;
+        let admin = &self.spec.admin;
 
         self.tper
             .start_session(admin.uid, Some(authority), Some(password))
@@ -130,7 +135,7 @@ impl SidSession {
     /// Only the secondary SP will be reverted, the Admin SP is unaffected.
     #[instrument(level = "info", skip(self, sid_password), ret, err)]
     pub async fn revert_secondary_sp(&self, sid_password: MaxBytes<32>) -> Result<(), Error> {
-        let admin = self.spec.admin.as_ref().ok_or(Error::NoSscSupported)?;
+        let admin = &self.spec.admin;
         let secondary_sp_uid = self.spec.secondary_sp_uid().ok_or(Error::IncompatibleSsc)?;
 
         self.tper
