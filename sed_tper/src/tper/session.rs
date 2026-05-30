@@ -38,7 +38,7 @@ pub struct Session {
     security_provider: SecurityProviderRef,
     session_id: SessionId,
     controller: Controller,
-    eos_sent: AtomicBool,
+    needs_eos: AtomicBool,
 }
 
 impl Session {
@@ -102,7 +102,7 @@ impl Session {
     /// If the preconditions are not met, requests will be dropped or will time
     /// out.
     pub fn from_started(security_provider: SecurityProviderRef, session_id: SessionId, controller: Controller) -> Self {
-        Self { security_provider, session_id, controller, eos_sent: false.into() }
+        Self { security_provider, session_id, controller, needs_eos: true.into() }
     }
 
     /// Execute a procedure using this session and then close the session.
@@ -353,7 +353,7 @@ impl Session {
                 // Note that `revert` can only be called from an Admin SP session, so
                 // a successful revert on the secondary SP will never terminate this session.
                 if sp == self.security_provider {
-                    self.eos_sent.store(true, Ordering::Relaxed);
+                    self.needs_eos.store(false, Ordering::Relaxed);
                 }
                 Ok(())
             }
@@ -382,7 +382,7 @@ impl Session {
             Ok(_) => {
                 // The revert function succeeded, meaning the session is aborted. No need
                 // to send an EOS on drop.
-                self.eos_sent.store(true, Ordering::Relaxed);
+                self.needs_eos.store(false, Ordering::Relaxed);
                 Ok(())
             }
             Err(err) => {
@@ -475,8 +475,8 @@ impl Session {
     /// another session.
     #[instrument(level = "info", skip(self), ret, err)]
     pub async fn close(self) -> Result<(), Error> {
-        let eos_sent = self.eos_sent.swap(true, Ordering::Relaxed);
-        if !eos_sent {
+        let needs_eos = self.needs_eos.swap(false, Ordering::Relaxed);
+        if needs_eos {
             let result_tokens = self
                 .controller
                 .call(self.session_id, Command::EndOfSession.to_tokens().expect("invalid token"))
@@ -501,8 +501,8 @@ impl Session {
 /// closing the previous one.
 impl Drop for Session {
     fn drop(&mut self) {
-        let eos_sent = self.eos_sent.swap(true, Ordering::Relaxed);
-        if !eos_sent {
+        let needs_eos = self.needs_eos.swap(false, Ordering::Relaxed);
+        if needs_eos {
             let _ = self.controller.call(self.session_id, Command::EndOfSession.to_tokens().expect("invalid token"));
         }
     }
