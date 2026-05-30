@@ -14,7 +14,7 @@ use tracing::{Span, instrument};
 
 use crate::error::Error;
 use crate::protocol::message::{
-    CommitBatch, Delete, Message, MethodResponse, PacketReceived, SendMethod, SendPacket, SendPacketDone,
+    CommitBatch, Delete, Message, MethodResponse, PacketReceived, ReportAborted, SendMethod, SendPacket, SendPacketDone,
 };
 use crate::protocol::method::{AnyMethodResult, RecvQueuedMethod, WriteQueuedMethod, retain_alive};
 use crate::protocol::protocol::{Address, Context};
@@ -198,12 +198,17 @@ impl Session {
                     ..Default::default()
                 });
                 context.send(
-                    self.address(),
+                    Address::DeviceSession,
                     Message::SendPacket(SendPacket { sender: self.address(), packet, methods: vec![] }),
                 );
             }
             _ => (),
         };
+        self.shutdown(context);
+    }
+
+    #[instrument(level = "debug", skip_all)]
+    pub fn report_aborted(&mut self, context: Context, _message: ReportAborted) {
         self.shutdown(context);
     }
 
@@ -526,6 +531,51 @@ mod tests {
         assert_that!(message, matches_pattern!(&Message::Delete(_)));
         assert!(queue.is_empty());
         assert_that!(rx.try_recv(), eq(&Ok(Ok(reply.to_tokens().unwrap()))));
+        assert_that!(session.state, matches_pattern!(State::Closed));
+    }
+
+    #[test]
+    fn abort_sends_eos() {
+        let session_id = SessionId { hsn: 1, tsn: 2 };
+        let mut session = Session::new(session_id, Properties::ASSUMED);
+        let (context, queue) = Context::mock();
+
+        session.abort(context);
+
+        // Check if EOS (SendPacket) was sent out.
+        let DispatchMessage { address, message, .. } = queue.try_recv().unwrap();
+        assert_that!(address, eq(&Address::DeviceSession));
+        let Message::SendPacket(SendPacket { packet, .. }) = message else {
+            panic!("expected SendPacket, got {:?}", message);
+        };
+        let payload = packet.payload.into_iter().next().unwrap().payload;
+        assert_that!(payload, eq(&Command::EndOfSession.to_tokens().unwrap()));
+
+        // Check if Delete was sent to control.
+        let DispatchMessage { address, message, .. } = queue.try_recv().unwrap();
+        assert_that!(address, eq(&Address::Control));
+        assert_that!(message, matches_pattern!(Message::Delete(_)));
+
+        // Check if no more messages.
+        assert!(queue.is_empty());
+        assert_that!(session.state, matches_pattern!(State::Closed));
+    }
+
+    #[test]
+    fn report_aborted_omits_eos() {
+        let session_id = SessionId { hsn: 1, tsn: 2 };
+        let mut session = Session::new(session_id, Properties::ASSUMED);
+        let (context, queue) = Context::mock();
+
+        session.report_aborted(context, ReportAborted);
+
+        // Check if Delete was sent to control.
+        let DispatchMessage { address, message, .. } = queue.try_recv().unwrap();
+        assert_that!(address, eq(&Address::Control));
+        assert_that!(message, matches_pattern!(Message::Delete(_)));
+
+        // Check if no more messages.
+        assert!(queue.is_empty());
         assert_that!(session.state, matches_pattern!(State::Closed));
     }
 }

@@ -181,6 +181,7 @@ impl Protocol {
                 Message::Timeout(time) => unit.timeout(context, time),
                 Message::PacketReceived(message) => unit.packet_reveived(context, message),
                 Message::Abort(_) => unit.abort(context),
+                Message::ReportAborted(message) => unit.report_aborted(context, message),
                 _ => drop(Span::current().record("dropped", true)),
             }
         } else {

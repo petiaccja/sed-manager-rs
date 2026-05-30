@@ -19,7 +19,9 @@ pub enum Message {
     SendMethod(SendMethod),
     SendComRequest(SendComRequest),
     CommitBatch(CommitBatch),
+    #[allow(unused, reason = "no abort is currently requested from the host, but it may be in the future")]
     Abort(Abort),
+    ReportAborted(ReportAborted),
     Spawn(Spawn),
     Delete(Delete),
     SendPacket(SendPacket),
@@ -61,6 +63,13 @@ pub struct CommitBatch;
 /// should be aborted.
 #[derive(Debug)]
 pub struct Abort;
+
+/// Notify the session that it has been aborted by the remote.
+///
+/// At this point, the session is considered closed by the remote, so only local
+/// cleanup is necessary. No need to send an EOS.
+#[derive(Debug)]
+pub struct ReportAborted;
 
 /// Spawn a new session by creating its data structure.
 #[derive(Debug, PartialEq, Eq)]

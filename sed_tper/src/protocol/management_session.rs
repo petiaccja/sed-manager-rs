@@ -14,7 +14,7 @@ use sed_spec::methods::{
 use tracing::{debug_span, instrument};
 
 use crate::error::Error;
-use crate::protocol::message::{Abort, Message, PacketReceived, SendMethod, SendPacket, SendPacketDone, Spawn};
+use crate::protocol::message::{Message, PacketReceived, ReportAborted, SendMethod, SendPacket, SendPacketDone, Spawn};
 use crate::protocol::method::{MgmtMethodCallSend, RecvQueuedMethod, WriteQueuedMethod, retain_alive};
 use crate::protocol::protocol::{Address, Context};
 
@@ -143,7 +143,7 @@ impl ManagementSession {
                 MgmtMethodCallParams::CloseSession(CloseSession { remote_session_number, local_session_number }) => {
                     context.send(
                         Address::Session(SessionId { hsn: *remote_session_number, tsn: *local_session_number }),
-                        Message::Abort(Abort),
+                        Message::ReportAborted(ReportAborted),
                     );
                 }
                 MgmtMethodCallParams::Properties(properties) => match properties {
