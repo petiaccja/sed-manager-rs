@@ -354,6 +354,7 @@ impl Session {
                 // a successful revert on the secondary SP will never terminate this session.
                 if sp == self.security_provider {
                     self.needs_eos.store(false, Ordering::Relaxed);
+                    self.controller.report_aborted(self.session_id);
                 }
                 Ok(())
             }
@@ -383,6 +384,7 @@ impl Session {
                 // The revert function succeeded, meaning the session is aborted. No need
                 // to send an EOS on drop.
                 self.needs_eos.store(false, Ordering::Relaxed);
+                self.controller.report_aborted(self.session_id);
                 Ok(())
             }
             Err(err) => {

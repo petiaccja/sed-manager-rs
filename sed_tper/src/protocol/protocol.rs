@@ -14,7 +14,7 @@ use tracing::field::Empty;
 use tracing::{Instrument, Span, debug_span, warn};
 
 use crate::protocol::device_session::DeviceSession;
-use crate::protocol::message::{ComResponse, Message, MethodResponse, SendComRequest, SendMethod};
+use crate::protocol::message::{ComResponse, Message, MethodResponse, ReportAborted, SendComRequest, SendMethod};
 use crate::protocol::{com_session::ComSession, management_session::ManagementSession, session::Session};
 
 const MAX_BUFFER_SIZE: usize = 1048576;
@@ -210,6 +210,18 @@ impl Controller {
             .with_root_span(root_span)
             .send(address, Message::SendMethod(SendMethod { method: method_tokens, channel: tx }));
         rx
+    }
+
+    /// Notify the protocol stack that a session has been aborted by the device.
+    ///
+    /// This cleans up the session without sending an EndOfSession, since the
+    /// device has already terminated it.
+    pub fn report_aborted(&self, session_id: SessionId) {
+        let root_span = Span::current();
+        let _span = debug_span!("report_aborted", session_id = debug(&session_id)).entered();
+        self.context
+            .with_root_span(root_span)
+            .send(Address::Session(session_id), Message::ReportAborted(ReportAborted));
     }
 
     /// Send a ComID request to the device.
