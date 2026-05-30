@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod app;
+pub mod associative_model;
 mod display_ui;
 mod toast;
 
