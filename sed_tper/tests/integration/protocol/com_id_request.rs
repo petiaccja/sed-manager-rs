@@ -9,7 +9,7 @@ use tracing::{Instrument, instrument};
 use sed_device::Error as DeviceError;
 use sed_device::mock_device::MockDevice;
 use sed_telemetry::{WithTracing, with_tracing};
-use sed_tper::error::Error;
+use sed_tper::Error;
 use sed_tper::protocol::Protocol;
 
 use crate::utility::{

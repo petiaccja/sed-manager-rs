@@ -12,6 +12,11 @@ sed_manager_gui_slint.workspace = true
 sed_async_runtime.workspace = true
 sed_virtual_device.workspace = true
 sed_telemetry.workspace = true
+pin-project.workspace = true
 slint.workspace = true
 tracing.workspace = true
 async-lock.workspace = true
+futures.workspace = true
+
+[dev-dependencies]
+tokio.workspace = true

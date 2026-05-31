@@ -6,8 +6,8 @@ use sed_spec::{
     objects::{AuthorityRef, CPinRefExt, SecurityProviderRefExt},
     types::LifeCycleState,
 };
+use sed_tper::Error as TperError;
 use sed_tper::Tper;
-use sed_tper::error::Error as TperError;
 use tracing::instrument;
 
 use crate::{error::Error, spec::Spec};
@@ -25,7 +25,7 @@ impl SidSession {
 
     pub async fn on_primary_ssc(tper: Arc<Tper>) -> Result<Self, Error> {
         let discovery = tper.discover_current().await?;
-        let spec = Spec::new(discovery).ok_or(Error::NoSscAvailable)?;
+        let spec = Spec::try_from(discovery).map_err(|_| Error::NoSscAvailable)?;
         Ok(Self::new(tper, spec))
     }
 

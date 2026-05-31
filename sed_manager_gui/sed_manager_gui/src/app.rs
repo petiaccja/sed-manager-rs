@@ -1,5 +1,4 @@
 use std::{
-    cell::RefCell,
     collections::{HashMap, HashSet},
     ops::DerefMut,
     path::{Path, PathBuf},
@@ -7,42 +6,44 @@ use std::{
     sync::Arc,
 };
 
+use async_lock::{Mutex, RwLock};
+use futures::FutureExt;
 use sed_async_runtime::Runtime;
 use sed_device::{Device, list_physical_drives, open_device};
 use sed_manager::{Error, SidSession, Spec};
-use sed_manager_gui_slint as ui;
+use sed_manager_gui_slint::{self as ui};
 use sed_packet::MaxBytes;
 use sed_tper::Tper;
 use sed_virtual_device::{VIRTUAL_DEVICE_PATH, VirtualDevice};
-use slint::{
-    ComponentHandle, EventLoopError, Model, ModelExt, ModelRc, SharedString, ToSharedString, VecModel, spawn_local,
-};
-use tracing::{Instrument, error, instrument};
+use slint::{ComponentHandle, EventLoopError, ModelExt as _, ModelRc, SharedString, ToSharedString, spawn_local};
+use tracing::{Instrument, instrument};
 
-use crate::display_ui::DisplayUi;
-use crate::toast::ToastQueue;
+use crate::{associative_model::AssociativeModel, display_ui::DisplayUi as _, ui_ext::DiscoveryExt};
+use crate::{toast::ToastQueue, ui_ext::DeviceExt as _};
 
 pub struct App {
     ui: ui::MainWindow,
+    device_list: RwLock<DeviceList>,
     toast_queue: Rc<ToastQueue>,
-    devices: Rc<VecModel<ui::Device>>,
-    services: Services,
     runtime: Rc<Runtime>,
 }
 
 impl App {
     pub fn new(ui: ui::MainWindow, notification_queue: Rc<ToastQueue>, runtime: Rc<Runtime>) -> Rc<Self> {
+        let device_list = DeviceList::default();
+        let device_list_ui = device_list.ui.inner();
+
         let view_model = Rc::from(Self {
             ui: ui.clone_strong(),
             toast_queue: notification_queue,
-            devices: VecModel::from(Vec::new()).into(),
-            services: Services::new(),
+            device_list: device_list.into(),
             runtime,
         });
 
+        // Callbacks
         {
             let view_model = view_model.clone();
-            ui.on_scan(move || view_model.clone().scan());
+            ui.on_scan(move || view_model.clone().scan(false));
         }
         {
             let view_model = view_model.clone();
@@ -68,8 +69,10 @@ impl App {
             let view_model = view_model.clone();
             ui.on_reset_stack(move |path| view_model.clone().reset_stack(path.to_string().into()));
         }
+
+        // Device model
         {
-            let sorted = view_model.devices.clone().sort_by(|lhs, rhs| {
+            let sorted = device_list_ui.sort_by(|lhs, rhs| {
                 fn key(identity: &ui::Identity) -> (bool, &SharedString, &SharedString) {
                     (!identity.security_commands, &identity.name, &identity.serial)
                 }
@@ -82,113 +85,111 @@ impl App {
     }
 
     #[instrument(skip(self))]
-    fn scan(self: Rc<Self>) {
+    pub fn scan(self: Rc<Self>, silent: bool) {
+        let app = self.clone();
         let future = async move {
-            self.ui.set_scan_outcome(ui::Outcome::Pending);
-            let new_paths = match list_physical_drives().await {
-                Ok(paths) => paths,
-                Err(err) => {
-                    self.toast_queue.error("Drive scan failed".into(), err.to_string());
-                    self.ui.set_scan_outcome(ui::Outcome::Error);
-                    return;
-                }
-            };
-            self.ui.set_scan_outcome(ui::Outcome::Success);
+            app.ui.set_scan_outcome(ui::Outcome::Pending);
+            let mut new_paths: HashSet<_> = list_physical_drives().await?.into_iter().collect();
 
-            // Discard paths that are not unicode. This is a must because the
-            // paths as strings are used as a unique ID for the devices.
-            let new_paths: HashSet<_> = new_paths
-                .into_iter()
-                .filter(|path| match path.to_str() {
-                    Some(_) => true,
-                    None => {
-                        self.toast_queue.warning(
-                            "Non-unicode drive path".into(),
-                            format!(
-                                "Non-unicode drive paths are not supported. The drive {} will be ignored.",
-                                path.to_string_lossy()
-                            ),
-                        );
-                        false
-                    }
-                })
-                .collect();
+            // The paths must be losslessly converted to Slint string because
+            // they are used as HashMap keys.
+            retain_unicode(&mut new_paths, &app.toast_queue);
 
+            // Insert virtual device in debug mode.
             #[cfg(debug_assertions)]
-            let new_paths = {
-                let mut new_paths = new_paths;
-                new_paths.insert(VIRTUAL_DEVICE_PATH.into());
-                new_paths
-            };
+            new_paths.insert(VIRTUAL_DEVICE_PATH.into());
 
-            self.devices.retain(|device| new_paths.contains(Path::new(device.identity.path.as_str())));
-            self.services.retain(|path, _| new_paths.contains(path));
+            let mut device_list = app.device_list.write().await;
+            device_list.backend.retain(|path, _| new_paths.contains(path));
+            device_list.ui.retain(|path| new_paths.contains(path));
 
             for path in new_paths {
-                if !self.services.contains(&path) {
-                    let path_str = path.to_string_lossy().into_owned().into();
-                    self.services.insert(path.clone());
-                    self.devices.push(ui::Device {
-                        identity: ui::Identity { path: path_str, ..Default::default() },
-                        status: ui::Status { outcome: ui::Outcome::Idle, ..Default::default() },
-                        ..Default::default()
-                    });
-                    self.clone().open(path);
+                if !device_list.backend.contains_key(&path) {
+                    let path_str = path.to_string_lossy().to_shared_string();
+                    device_list.backend.insert(path.clone(), Default::default());
+                    device_list.ui.insert(
+                        path.clone(),
+                        ui::Device {
+                            identity: ui::Identity { path: path_str, ..Default::default() },
+                            status: ui::Status { outcome: ui::Outcome::Idle, ..Default::default() },
+                            ..Default::default()
+                        },
+                    );
+                    app.clone().open(path);
                 }
             }
+
+            Ok::<(), Error>(())
         };
+
+        let app = self.clone();
+        let future = future.then(move |result| async move {
+            app.ui.set_scan_outcome(ui::Outcome::Idle);
+            match result {
+                Ok(_) if !silent => app.toast_queue.success("Device list updated".into(), "".into()),
+                Err(err) => app.toast_queue.success("Could not update device list".into(), err.to_string()),
+                _ => (),
+            }
+        });
+
         spawn_local(future.in_current_span()).expect_in_event_loop();
     }
 
     #[instrument(skip(self))]
     fn close(self: Rc<Self>, path: SharedString) {
-        self.devices.retain(|device| device.identity.path != path);
-        self.services.retain(|path_, _| path.as_str() != path_);
+        let app = self.clone();
+
+        let future = async move {
+            self.ui.set_scan_outcome(ui::Outcome::Pending);
+            let path = PathBuf::from(String::from(path));
+            let mut device_list = self.device_list.write().await;
+            device_list.ui.remove(&path);
+            if let Some(backend) = device_list.backend.remove(&path) {
+                let mut backend = backend.lock().await;
+                backend.session.close().await;
+            }
+        }
+        .then(|_| async move {
+            app.ui.set_scan_outcome(ui::Outcome::Idle);
+        });
+
+        spawn_local(future.in_current_span()).expect_in_event_loop();
     }
 
     #[instrument(skip(self))]
     fn open(self: Rc<Self>, path: PathBuf) {
         let future = async move {
-            self.devices.update(
-                |device| device.identity.path == path.to_string_lossy(),
-                |device| ui::Device {
-                    status: ui::Status { outcome: ui::Outcome::Pending, ..Default::default() },
-                    ..device
-                },
-            );
-
-            let device = if &path != VIRTUAL_DEVICE_PATH {
-                match open_device(&path).await {
-                    Ok(device) => device,
-                    Err(err) => {
-                        self.devices.update(
-                            |device| device.identity.path == path.to_string_lossy(),
-                            |device| ui::Device {
-                                status: ui::Status { outcome: ui::Outcome::Error, message: err.to_shared_string() },
-                                ..device
-                            },
-                        );
-                        return;
-                    }
-                }
-            } else {
-                Box::new(VirtualDevice::new()) as _
+            let device_list = self.device_list.read().await;
+            let Some(backend) = device_list.backend.get(&path) else {
+                return;
             };
 
-            if device.is_security_supported() {
-                self.clone().discover(path.clone());
-                self.clone().connect(path.clone());
-            }
+            device_list.ui.update(&path, |device| device.with_status(ui::Outcome::Pending, "".into()));
 
-            self.devices.update(
-                |device| device.identity.path == path.to_string_lossy(),
-                |old| ui::Device {
-                    status: ui::Status { outcome: ui::Outcome::Success, ..Default::default() },
-                    identity: device.display_ui(),
-                    ..old
-                },
-            );
-            self.services.set_device(path, device);
+            let result = if &path != VIRTUAL_DEVICE_PATH {
+                open_device(&path).await
+            } else {
+                Ok(Box::new(VirtualDevice::new()) as _)
+            };
+
+            match result {
+                Ok(device) => {
+                    let is_security_supported = device.is_security_supported();
+                    let identity = device.display_ui();
+                    let mut backend = backend.lock().await;
+                    backend.device = Some(device.into());
+                    if is_security_supported {
+                        self.clone().discover(path.clone());
+                        self.clone().connect(path.clone());
+                    }
+                    device_list.ui.update(&path, |device| {
+                        device.with_status(ui::Outcome::Success, "".into()).with_identity(identity)
+                    });
+                }
+                Err(err) => {
+                    device_list.ui.update(&path, |device| device.with_status(ui::Outcome::Error, err.to_string()));
+                }
+            };
         };
         spawn_local(future.in_current_span()).expect_in_event_loop();
     }
@@ -196,30 +197,34 @@ impl App {
     #[instrument(skip(self))]
     fn discover(self: Rc<Self>, path: PathBuf) {
         let future = async move {
-            let Some(device) = self.services.get_device(&path) else {
+            let device_list = self.device_list.read().await;
+            let Some(backend) = device_list.backend.get(&path) else {
                 return;
             };
-            self.devices.update(
-                |device| device.identity.path == path.to_string_lossy(),
-                |device| ui::Device {
-                    discovery: ui::Discovery {
-                        status: ui::Status { outcome: ui::Outcome::Pending, ..Default::default() },
-                        ..Default::default()
-                    },
-                    ..device
-                },
-            );
-            let discovery = match Tper::discover(&*device).await {
-                Ok(discovery) => discovery.display_ui(),
-                Err(err) => ui::Discovery {
-                    status: ui::Status { message: err.to_shared_string(), outcome: ui::Outcome::Error },
+            let mut backend = backend.lock().await;
+            let Some(device) = &backend.device else {
+                return;
+            };
+
+            device_list.ui.update(&path, |device| ui::Device {
+                discovery: ui::Discovery {
+                    status: ui::Status { outcome: ui::Outcome::Pending, ..Default::default() },
                     ..Default::default()
                 },
+                ..device
+            });
+
+            match Tper::discover(device.as_ref()).await {
+                Ok(mut discovery) => {
+                    Spec::sort(&mut discovery);
+                    let display = discovery.display_ui();
+                    backend.spec = Spec::try_from(discovery).ok();
+                    device_list.ui.update(&path, |device| device.with_discovery(display));
+                }
+                Err(err) => {
+                    device_list.ui.update(&path, |device| device.with_discovery(ui::Discovery::error(err.to_string())));
+                }
             };
-            self.devices.update(
-                |device| device.identity.path == path.to_string_lossy(),
-                |device| ui::Device { discovery: discovery, ..device },
-            );
         };
         spawn_local(future.in_current_span()).expect_in_event_loop();
     }
@@ -227,13 +232,14 @@ impl App {
     #[instrument(skip(self))]
     fn connect(self: Rc<Self>, path: PathBuf) {
         let future = async move {
-            let Some(device) = self.services.get_device(&path) else {
+            let self_ = self.clone();
+            let device_list = self_.device_list.read().await;
+            let Some(backend) = device_list.backend.get(&path) else {
                 return;
             };
-            let Ok(discovery) = Tper::discover(&*device).await else {
-                return;
-            };
-            let Some(spec) = Spec::new(discovery) else {
+            let mut backend = backend.lock().await;
+            let BackendDevice { device, spec, tper, .. } = backend.deref_mut();
+            let (Some(device), Some(spec)) = (device, spec) else {
                 return;
             };
             let Some(ssc) = spec.default_ssc() else {
@@ -243,8 +249,7 @@ impl App {
                 return;
             };
             let com_id_ext = 0;
-            let tper = Tper::connect(com_id, com_id_ext, device, Some(&self.runtime));
-            self.services.set_tper(path.clone(), tper);
+            *tper = Some(Tper::connect(com_id, com_id_ext, device.clone(), Some(&self.runtime)).into());
             self.query_stack_status(path, true);
         };
         spawn_local(future.in_current_span()).expect_in_event_loop();
@@ -253,25 +258,37 @@ impl App {
     #[instrument(skip(self))]
     fn query_stack_status(self: Rc<Self>, path: PathBuf, silent: bool) {
         let future = async move {
-            let stack_status = if let Some(tper) = self.services.get_tper(&path) {
-                let com_id_status = match tper.verify_com_id_valid(tper.com_id(), tper.com_id_ext()).await {
-                    Ok(status) => status.to_string(),
-                    Err(_) => "query failed".into(),
-                };
-                ui::StackStatus {
-                    com_id: tper.com_id().into(),
-                    com_id_ext: tper.com_id_ext().into(),
-                    com_id_status: com_id_status.into(),
-                    connected: true,
-                }
-            } else {
-                ui::StackStatus { connected: false, ..Default::default() }
+            let device_list = self.device_list.read().await;
+            let backend = device_list.backend.get(&path)?;
+            let backend = backend.lock().await;
+            let tper = backend.tper.as_ref()?;
+            let result = tper.verify_com_id_valid(tper.com_id(), tper.com_id_ext()).await;
+
+            let ui_status_base = ui::StackStatus {
+                com_id: tper.com_id().into(),
+                com_id_ext: tper.com_id_ext().into(),
+                com_id_status: "".into(),
+                connected: true,
             };
-            if !silent {
-                self.toast_queue.info("Stack status updated".into(), "".into());
-            }
-            self.devices
-                .update(|device| device.identity.path.as_str() == &path, |old| ui::Device { stack_status, ..old });
+
+            match result {
+                Ok(status) => {
+                    let ui_status = ui::StackStatus { com_id_status: status.to_shared_string(), ..ui_status_base };
+                    device_list.ui.update(&path, |device| device.with_stack_status(ui_status));
+                    if !silent {
+                        self.toast_queue.success("Stack status updated".into(), "".to_string());
+                    }
+                }
+                Err(err) => {
+                    let ui_status = ui::StackStatus { com_id_status: err.to_shared_string(), ..ui_status_base };
+                    device_list.ui.update(&path, |device| device.with_stack_status(ui_status));
+                    if !silent {
+                        self.toast_queue.error("Could not update stack status".into(), err.to_string());
+                    }
+                }
+            };
+
+            Some(())
         };
         spawn_local(future.in_current_span()).expect_in_event_loop();
     }
@@ -279,12 +296,17 @@ impl App {
     #[instrument(skip(self))]
     fn reset_stack(self: Rc<Self>, path: PathBuf) {
         let future = async move {
-            if let Some(tper) = self.services.get_tper(&path) {
-                match tper.stack_reset(tper.com_id(), tper.com_id_ext()).await {
-                    Ok(_) => self.toast_queue.success("Stack has been reset".into(), "".into()),
-                    Err(err) => self.toast_queue.error("Stack reset failed".into(), err.to_string()),
-                };
-            }
+            let device_list = self.device_list.read().await;
+            let backend = device_list.backend.get(&path)?;
+            let backend = backend.lock().await;
+            let tper = backend.tper.as_ref()?;
+
+            match tper.stack_reset(tper.com_id(), tper.com_id_ext()).await {
+                Ok(_) => self.toast_queue.success("Stack has been reset".into(), "".into()),
+                Err(err) => self.toast_queue.error("Could not reset stack".into(), err.to_string()),
+            };
+
+            Some(())
         };
         spawn_local(future.in_current_span()).expect_in_event_loop();
     }
@@ -292,22 +314,18 @@ impl App {
     #[instrument(skip(self))]
     fn take_ownership(self: Rc<Self>, path: PathBuf, password: SharedString) {
         let future = async move {
-            let Some(session) = self.services.get_session(&path) else {
-                return;
-            };
-            let mut session = session.lock().await;
-            let Some(sid_session) = self.clone().get_or_start_sid_session(&path, session.deref_mut()).await else {
-                return;
-            };
+            let device_list = self.device_list.read().await;
+            let backend = device_list.backend.get(&path)?;
+            let mut backend = backend.lock().await;
+            let sid_session = self.start_sid_session(backend.deref_mut()).await?;
 
-            let Some(password) = self.try_convert_password(password.as_str()) else {
-                return;
-            };
-
+            let password = self.try_convert_password(password.as_str())?;
             match sid_session.take_owneship(password).await {
-                Ok(_) => self.toast_queue.success("Taken ownership successfully".into(), "".into()),
-                Err(err) => self.toast_queue.error("Taking ownership failed".into(), err.to_string()),
+                Ok(_) => self.toast_queue.success("Taken ownership".into(), "".into()),
+                Err(err) => self.toast_queue.error("Could not take ownership".into(), err.to_string()),
             };
+
+            Some(())
         };
         spawn_local(future.in_current_span()).expect_in_event_loop();
     }
@@ -321,23 +339,16 @@ impl App {
         password: SharedString,
     ) {
         let future = async move {
-            let Some(session) = self.services.get_session(&path) else {
-                return;
-            };
-            let mut session = session.lock().await;
-            let Some(sid_session) = self.clone().get_or_start_sid_session(&path, session.deref_mut()).await else {
-                return;
-            };
+            let device_list = self.device_list.read().await;
+            let backend = device_list.backend.get(&path)?;
+            let mut backend = backend.lock().await;
+            let sid_session = self.start_sid_session(backend.deref_mut()).await?;
 
-            let Some(password) = self.try_convert_password(password.as_str()) else {
-                return;
-            };
-
+            let password = self.try_convert_password(password.as_str())?;
             let authority = match authority {
                 ui::RevertAuthority::Sid => sid_session.spec().admin.authorities.sid,
                 ui::RevertAuthority::Psid => sid_session.spec().admin.authorities.psid,
             };
-
             let result = match scope {
                 ui::RevertScope::Locking => sid_session.revert_secondary_sp(password).await,
                 ui::RevertScope::Everything => sid_session.revert_tper(authority, password).await,
@@ -347,28 +358,10 @@ impl App {
                 Ok(_) => self.toast_queue.success("Reverted device successfully".into(), "".into()),
                 Err(err) => self.toast_queue.error("Reverting device failed".into(), err.to_string()),
             };
+
+            Some(())
         };
         spawn_local(future.in_current_span()).expect_in_event_loop();
-    }
-
-    async fn get_or_start_sid_session<'s>(
-        self: Rc<Self>,
-        path: &Path,
-        session: &'s mut Session,
-    ) -> Option<&'s SidSession> {
-        match session.start_sid_session_with(|| self.services.get_tper(&path)).await {
-            Some(Ok(sid_session)) => Some(sid_session),
-            Some(Err(err)) => {
-                self.toast_queue.error("Could not open SID session".into(), err.to_string());
-                None
-            }
-            None => {
-                // The UI's flow should prevent us from ever reaching this path.
-                error!("Bug: path should be unreachable from UI");
-                self.toast_queue.error("Not connected".into(), "Not connected to the drive.".into());
-                None
-            }
-        }
     }
 
     fn try_convert_password(&self, password: &str) -> Option<MaxBytes<32>> {
@@ -383,62 +376,47 @@ impl App {
             None
         }
     }
+
+    async fn start_sid_session<'a>(&self, backend: &'a mut BackendDevice) -> Option<&'a SidSession> {
+        match backend.session.start_sid_session(backend.tper.clone()?).await {
+            Ok(sid_session) => Some(sid_session),
+            Err(err) => {
+                self.toast_queue.error("Could not start SID session".into(), err.to_string());
+                None
+            }
+        }
+    }
+}
+
+fn retain_unicode(paths: &mut HashSet<PathBuf>, toast_queue: &ToastQueue) {
+    fn is_unicode(path: &Path) -> bool {
+        path.to_str().is_some()
+    }
+
+    for path in paths.iter() {
+        if !is_unicode(path) {
+            toast_queue.warning(
+                "Ignoring drive".into(),
+                format!("The drive '{}' has a non-unicode path and will be ignored.", path.to_string_lossy()),
+            )
+        }
+    }
+
+    paths.retain(|path| is_unicode(path));
+}
+
+#[derive(Default)]
+struct DeviceList {
+    ui: AssociativeModel<PathBuf, ui::Device>,
+    backend: HashMap<PathBuf, Mutex<BackendDevice>>,
 }
 
 #[derive(Debug, Default)]
-struct Service {
+struct BackendDevice {
     device: Option<Arc<dyn Device>>,
+    spec: Option<Spec>,
     tper: Option<Arc<Tper>>,
-    session: Arc<async_lock::Mutex<Session>>,
-}
-
-struct Services {
-    inner: RefCell<HashMap<PathBuf, Service>>,
-}
-
-impl Services {
-    pub fn new() -> Self {
-        Self { inner: HashMap::new().into() }
-    }
-
-    pub fn contains(&self, path: &Path) -> bool {
-        self.inner.borrow().contains_key(path)
-    }
-
-    pub fn retain<F>(&self, f: F)
-    where
-        F: FnMut(&PathBuf, &mut Service) -> bool,
-    {
-        self.inner.borrow_mut().retain(f);
-    }
-
-    pub fn insert(&self, path: PathBuf) {
-        self.inner.borrow_mut().insert(path, Service::default());
-    }
-
-    pub fn set_device(&self, path: impl AsRef<Path>, device: Box<dyn Device>) {
-        self.inner.borrow_mut().get_mut(path.as_ref()).map(|service| {
-            service.device = Some(device.into());
-        });
-    }
-
-    pub fn get_device(&self, path: impl AsRef<Path>) -> Option<Arc<dyn Device>> {
-        self.inner.borrow().get(path.as_ref()).map(|service| service.device.clone()).flatten()
-    }
-
-    pub fn set_tper(&self, path: impl AsRef<Path>, tper: Tper) {
-        self.inner.borrow_mut().get_mut(path.as_ref()).map(|service| {
-            service.tper = Some(tper.into());
-        });
-    }
-
-    pub fn get_tper(&self, path: impl AsRef<Path>) -> Option<Arc<Tper>> {
-        self.inner.borrow().get(path.as_ref()).map(|service| service.tper.clone()).flatten()
-    }
-
-    pub fn get_session(&self, path: impl AsRef<Path>) -> Option<Arc<async_lock::Mutex<Session>>> {
-        self.inner.borrow().get(path.as_ref()).map(|service| service.session.clone())
-    }
+    session: Session,
 }
 
 #[derive(Debug, Default)]
@@ -449,6 +427,13 @@ enum Session {
 }
 
 impl Session {
+    pub async fn close(&mut self) {
+        match core::mem::replace(self, Session::None) {
+            Session::None => (),
+            Session::Sid(_sid_session) => (), // Not a persistent session, just drop.
+        }
+    }
+
     pub async fn start_sid_session(&mut self, tper: Arc<Tper>) -> Result<&SidSession, Error> {
         match self {
             Self::None => {
@@ -459,55 +444,6 @@ impl Session {
             }
             Self::Sid(sid_session) => Ok(sid_session),
         }
-    }
-
-    pub async fn start_sid_session_with(
-        &mut self,
-        tper: impl FnOnce() -> Option<Arc<Tper>>,
-    ) -> Option<Result<&SidSession, Error>> {
-        match self {
-            Self::None => Some(self.start_sid_session(tper()?).await),
-            Self::Sid(sid_session) => Some(Ok(sid_session)),
-        }
-    }
-}
-
-pub trait VecModelExt<T> {
-    fn retain<F>(&self, f: F)
-    where
-        F: FnMut(&T) -> bool;
-
-    fn update<F, U>(&self, find: F, update: U)
-    where
-        F: FnMut(&T) -> bool,
-        U: FnOnce(T) -> T;
-}
-
-impl<T> VecModelExt<T> for VecModel<T>
-where
-    T: Clone + 'static,
-{
-    fn retain<F>(&self, mut f: F)
-    where
-        F: FnMut(&T) -> bool,
-    {
-        let mut not_retained: Vec<_> =
-            self.iter().enumerate().filter(|(_, item)| !f(item)).map(|(index, _)| index).collect();
-        not_retained.sort();
-        not_retained.reverse();
-        for index in not_retained {
-            self.remove(index);
-        }
-    }
-
-    fn update<F, U>(&self, mut find: F, update: U)
-    where
-        F: FnMut(&T) -> bool,
-        U: FnOnce(T) -> T,
-    {
-        self.iter().enumerate().find(|(_, value)| find(value)).map(|(index, value)| {
-            self.set_row_data(index, update(value));
-        });
     }
 }
 

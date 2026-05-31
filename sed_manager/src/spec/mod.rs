@@ -23,25 +23,33 @@ pub struct Spec {
 }
 
 impl Spec {
-    pub fn new(mut discovery: Discovery) -> Option<Self> {
-        discovery.feature_descriptors.sort_by_key(feature_priority);
-        let ssc = discovery.feature_descriptors.iter().find(|feature| feature.as_ssc().is_some());
-        let (admin, locking, kpio) = match ssc {
-            Some(feature) => ssc_spec(feature),
-            None => (None, None, None),
-        };
-        match admin {
-            Some(admin) => Some(Self { admin, locking, kpio, discovery }),
-            None => None,
-        }
-    }
-
     pub fn default_ssc(&self) -> Option<&dyn SecuritySubsystemClass> {
         self.discovery.ssc_features().next()
     }
 
     pub fn secondary_sp_uid(&self) -> Option<SecurityProviderRef> {
         self.locking.as_ref().map(|sp| sp.uid).or_else(|| self.kpio.as_ref().map(|sp| sp.uid))
+    }
+
+    pub fn sort(discovery: &mut Discovery) {
+        discovery.feature_descriptors.sort_by_key(feature_priority);
+    }
+}
+
+impl TryFrom<Discovery> for Spec {
+    type Error = Discovery;
+
+    fn try_from(mut discovery: Discovery) -> Result<Self, Self::Error> {
+        Self::sort(&mut discovery);
+        let ssc = discovery.feature_descriptors.iter().find(|feature| feature.as_ssc().is_some());
+        let (admin, locking, kpio) = match ssc {
+            Some(feature) => ssc_spec(feature),
+            None => (None, None, None),
+        };
+        match admin {
+            Some(admin) => Ok(Self { admin, locking, kpio, discovery }),
+            None => Err(discovery),
+        }
     }
 }
 

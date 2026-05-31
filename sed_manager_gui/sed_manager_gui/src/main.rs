@@ -3,7 +3,8 @@
 mod app;
 pub mod associative_model;
 mod display_ui;
-mod toast;
+pub mod toast;
+mod ui_ext;
 
 use std::rc::Rc;
 
@@ -22,8 +23,8 @@ fn main() -> Result<(), Box<dyn core::error::Error>> {
     };
     let ui = ui::MainWindow::new()?;
     let notification_queue = toast::ToastQueue::new(ui.clone_strong());
-    let _main_app = App::new(ui.clone_strong(), notification_queue.clone(), runtime);
-    ui.invoke_scan();
+    let main_app = App::new(ui.clone_strong(), notification_queue.clone(), runtime);
+    main_app.scan(true);
     ui.run()?;
     Ok(())
 }

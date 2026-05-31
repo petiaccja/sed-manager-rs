@@ -7,6 +7,7 @@ edition = "2024"
 sed_tper.workspace = true
 sed_packet.workspace = true
 sed_spec.workspace = true
+sed_device.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 

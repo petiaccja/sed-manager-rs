@@ -14,7 +14,7 @@ use sed_spec::preconfig::core::shared::invoking_id::SESSION_MANAGER;
 use sed_spec::preconfig::core::shared::sm_method_id::{START_SESSION, SYNC_SESSION};
 use sed_spec::preconfig::opal_2::admin::sp;
 use sed_telemetry::{WithTracing, with_tracing};
-use sed_tper::error::Error;
+use sed_tper::Error;
 use sed_tper::protocol::Protocol;
 
 use crate::utility::{

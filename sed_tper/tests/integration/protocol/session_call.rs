@@ -14,7 +14,7 @@ use sed_spec::methods::{MethodCall, MethodResult, MethodStatus, Random, RandomRe
 use sed_spec::preconfig::core::shared::invoking_id::THIS_SP;
 use sed_spec::preconfig::core::shared::method_id::RANDOM;
 use sed_telemetry::{WithTracing, with_tracing};
-use sed_tper::error::Error;
+use sed_tper::Error;
 use sed_tper::protocol::Protocol;
 
 use crate::utility::{

@@ -5,7 +5,7 @@ use sed_packet::{
     discovery::{GeometryDescriptor, LockingDescriptor, TperDescriptor},
 };
 use sed_telemetry::{WithTracing, with_tracing};
-use sed_tper::{Tper, error::Error};
+use sed_tper::{Error, Tper};
 use sed_virtual_device::{BASE_COM_ID, VirtualDevice};
 use tracing::instrument;
 

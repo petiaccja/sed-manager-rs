@@ -91,7 +91,7 @@ impl<K: Eq + Hash, T: Clone + 'static> AssociativeModel<K, T> {
 
     /// Applies `f` to the current element associated with `key` and stores the
     /// result. Returns `true` if the key existed, `false` otherwise.
-    pub fn update<Q, F>(&mut self, key: &Q, f: F) -> bool
+    pub fn update<Q, F>(&self, key: &Q, f: F) -> bool
     where
         K: Borrow<Q>,
         Q: Hash + Eq + ?Sized,
@@ -235,7 +235,7 @@ mod tests {
 
     #[test]
     fn update_returns_false_for_missing_key() {
-        let mut m: AssociativeModel<String, i32> = AssociativeModel::new();
+        let m: AssociativeModel<String, i32> = AssociativeModel::new();
         assert!(!m.update("a", |v| v));
     }
 

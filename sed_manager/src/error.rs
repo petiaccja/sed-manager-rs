@@ -3,10 +3,13 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use sed_tper::error::Error as TperError;
+use sed_device::Error as DeviceError;
+use sed_tper::Error as TperError;
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum Error {
+    #[error("{}", .0)]
+    DeviceError(DeviceError),
     #[error("{}", .0)]
     TperError(TperError),
     #[error("The feature is not supported by the current TCG SSC")]
@@ -34,5 +37,11 @@ pub enum Error {
 impl From<TperError> for Error {
     fn from(value: TperError) -> Self {
         Self::TperError(value)
+    }
+}
+
+impl From<DeviceError> for Error {
+    fn from(value: DeviceError) -> Self {
+        Self::DeviceError(value)
     }
 }
