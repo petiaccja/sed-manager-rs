@@ -18,10 +18,18 @@ use crate::protocol::message::{ComResponse, Message, MethodResponse, ReportAbort
 use crate::protocol::{com_session::ComSession, management_session::ManagementSession, session::Session};
 
 const MAX_BUFFER_SIZE: usize = 1048576;
-#[cfg(not(test))]
-const DEFAULT_TRANS_TIMEOUT: Duration = Duration::from_secs(1);
-#[cfg(test)]
-const DEFAULT_TRANS_TIMEOUT: Duration = Duration::from_secs(15);
+
+/// After the timeout, message sent between the host and device are considered
+/// lost.
+///
+/// When ACK/NAK is not used, the protocol stack will simply use this value to
+/// report a timeout in case the message still hasn't been received. This value
+/// though is not communicated to the remote. I'm not really sure what's agreed
+/// as a timeout in case of no ACK/NAK.
+///
+/// When ACK/NAK is used, messages need to be ACK-ed within the timeout. The
+/// value of the timeout can be communicated in the `StartSession` method.
+const DEFAULT_TRANS_TIMEOUT: Duration = Duration::from_secs(if cfg!(feature = "test-utils") { 1 } else { 15 });
 
 /// The capabilities supported by the protocol stack implementation.
 ///

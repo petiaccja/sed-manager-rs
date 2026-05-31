@@ -4,6 +4,7 @@ pub trait DeviceExt {
     fn with_status(self, outcome: ui::Outcome, message: String) -> Self;
     fn with_identity(self, identity: ui::Identity) -> Self;
     fn with_discovery(self, discovery: ui::Discovery) -> Self;
+    fn with_config(self, discovery: ui::DeviceConfig) -> Self;
     fn with_stack_status(self, stack_status: ui::StackStatus) -> Self;
 }
 
@@ -18,6 +19,10 @@ impl DeviceExt for ui::Device {
 
     fn with_discovery(self, discovery: ui::Discovery) -> Self {
         Self { discovery, ..self }
+    }
+
+    fn with_config(self, config: ui::DeviceConfig) -> Self {
+        Self { config, ..self }
     }
 
     fn with_stack_status(self, stack_status: ui::StackStatus) -> Self {

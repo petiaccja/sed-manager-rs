@@ -521,17 +521,28 @@ impl DisplayUi for FeatureDescriptor {
 }
 
 impl DisplayUi for Discovery {
-    type Ui = ui::Discovery;
+    type Ui = (ui::DeviceConfig, ui::Discovery);
 
     fn display_ui(&self) -> Self::Ui {
         let ssc_features =
             self.feature_descriptors.iter().filter(|desc| desc.as_ssc().is_some()).map(|desc| desc.display_ui());
         let common_features =
             self.feature_descriptors.iter().filter(|desc| desc.as_ssc().is_none()).map(|desc| desc.display_ui());
-        ui::Discovery {
+
+        let mut config = ui::DeviceConfig { sid_msid_pin_differ: true, locking_enabled: false };
+        if let Some(locking) = self.get::<LockingDescriptor>() {
+            config.locking_enabled = locking.locking_enabled;
+        }
+        if let Some(block_sid_auth) = self.get::<BlockSIDAuthDescriptor>() {
+            config.sid_msid_pin_differ = block_sid_auth.sid_msid_pin_differ;
+        }
+
+        let discovery = ui::Discovery {
             common_features: Rc::from(VecModel::from(common_features.collect::<Vec<_>>())).into(),
             ssc_features: Rc::from(VecModel::from(ssc_features.collect::<Vec<_>>())).into(),
             status: ui::Status { outcome: ui::Outcome::Success, ..Default::default() },
-        }
+        };
+
+        (config, discovery)
     }
 }

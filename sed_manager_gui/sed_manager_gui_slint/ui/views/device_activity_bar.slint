@@ -2,9 +2,10 @@ import { ScrollView, Palette, GroupBox } from "std-widgets.slint";
 import { IconButton, TextPlacement } from "../widgets/icon_button.slint";
 import { Icons, Colors } from "../resources/lib.slint";
 import { PaletteExtra } from "../widgets/lib.slint";
+import { DeviceConfig } from "../data/lib.slint";
 
 export enum DeviceActivity {
-    capabilities,
+    discovery,
     take-ownership,
     activate-locking,
     change-password,
@@ -16,11 +17,16 @@ export enum DeviceActivity {
 
 
 export component DeviceActivityBar {
-    property <length> button-height: 2.8rem;
+    in property <DeviceConfig> config;
+    out property <DeviceActivity> selected-activity: discovery;
 
-    out property <DeviceActivity> selected-activity: capabilities;
+    private property <length> button-height: 2.8rem;
 
     callback reset-stack();
+
+    changed config => {
+        selected-activity = DeviceActivity.discovery;
+    }
 
     ScrollView {
         horizontal-scrollbar-policy: always-off;
@@ -32,16 +38,16 @@ export component DeviceActivityBar {
             alignment: start;
 
             IconButton {
-                text: "Capabilities";
+                text: "Discovery";
                 icon: Icons.info;
                 preferred-height: button-height;
                 icon-color: PaletteExtra.info-foreground;
                 text-placement: TextPlacement.right;
                 has-background: true;
                 has-idle-background: false;
-                is-selected: selected-activity == DeviceActivity.capabilities;
+                is-selected: selected-activity == DeviceActivity.discovery;
                 clicked => {
-                    selected-activity = DeviceActivity.capabilities;
+                    selected-activity = DeviceActivity.discovery;
                 }
             }
 
@@ -49,7 +55,7 @@ export component DeviceActivityBar {
                 height: 0.2rem;
             }
 
-            IconButton {
+            if !config.sid-msid-pin-differ: IconButton {
                 text: "Take ownership";
                 icon: Icons.take-ownership;
                 preferred-height: button-height;
@@ -63,7 +69,7 @@ export component DeviceActivityBar {
                 }
             }
 
-            IconButton {
+            if !config.locking-enabled: IconButton {
                 text: "Activate locking";
                 icon: Icons.activate-locking;
                 preferred-height: button-height;
@@ -91,7 +97,7 @@ export component DeviceActivityBar {
                 }
             }
 
-            IconButton {
+            if config.locking-enabled: IconButton {
                 text: "Configure locking";
                 icon: Icons.configure-locking;
                 preferred-height: button-height;

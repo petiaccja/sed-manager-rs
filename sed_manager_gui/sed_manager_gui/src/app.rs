@@ -217,9 +217,9 @@ impl App {
             match Tper::discover(device.as_ref()).await {
                 Ok(mut discovery) => {
                     Spec::sort(&mut discovery);
-                    let display = discovery.display_ui();
+                    let (ui_config, ui_discovery) = discovery.display_ui();
                     backend.spec = Spec::try_from(discovery).ok();
-                    device_list.ui.update(&path, |device| device.with_discovery(display));
+                    device_list.ui.update(&path, |device| device.with_discovery(ui_discovery).with_config(ui_config));
                 }
                 Err(err) => {
                     device_list.ui.update(&path, |device| device.with_discovery(ui::Discovery::error(err.to_string())));
@@ -321,7 +321,10 @@ impl App {
 
             let password = self.try_convert_password(password.as_str())?;
             match sid_session.take_owneship(password).await {
-                Ok(_) => self.toast_queue.success("Taken ownership".into(), "".into()),
+                Ok(_) => {
+                    self.toast_queue.success("Taken ownership".into(), "".into());
+                    self.clone().discover(path);
+                }
                 Err(err) => self.toast_queue.error("Could not take ownership".into(), err.to_string()),
             };
 
@@ -355,7 +358,10 @@ impl App {
             };
 
             match result {
-                Ok(_) => self.toast_queue.success("Reverted device successfully".into(), "".into()),
+                Ok(_) => {
+                    self.toast_queue.success("Reverted device successfully".into(), "".into());
+                    self.clone().discover(path);
+                }
                 Err(err) => self.toast_queue.error("Reverting device failed".into(), err.to_string()),
             };
 

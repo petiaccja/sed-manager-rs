@@ -16,9 +16,9 @@ export struct Discovery {
     ssc-features: [DiscoveryFeature],
 }
 
-export struct DiscoveryExcerpt {
-    owned: bool,
-    activated: bool,
+export struct DeviceConfig {
+    sid-msid-pin-differ: bool,
+    locking-enabled: bool,
 }
 
 export struct Identity {
@@ -27,21 +27,21 @@ export struct Identity {
     path: string,
     firmware: string,
     interface: string,
-    security_commands: bool,
-    is_removable: bool,
+    security-commands: bool,
+    is-removable: bool,
 }
 
 export struct StackStatus {
     connected: bool,
-    com_id: int,
-    com_id_ext: int,
-    com_id_status: string,
+    com-id: int,
+    com-id-ext: int,
+    com-id-status: string,
 }
 
 export struct Device {
     status: Status,
     identity: Identity,
     discovery: Discovery,
-    discovery_excerpt: DiscoveryExcerpt,
+    config: DeviceConfig,
     stack_status: StackStatus,
 }

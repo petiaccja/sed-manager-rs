@@ -211,6 +211,7 @@ export component DeviceView {
             vertical-stretch: 1.0;
 
             activity-bar := DeviceActivityBar {
+                config: device.config;
                 horizontal-stretch: 0.0;
 
                 reset-stack => {
@@ -218,7 +219,7 @@ export component DeviceView {
                 }
             }
 
-            if activity-bar.selected-activity == DeviceActivity.capabilities: DiscoveryView {
+            if activity-bar.selected-activity == DeviceActivity.discovery: DiscoveryView {
                 discovery: device.discovery;
                 horizontal-stretch: 1.0;
             }
