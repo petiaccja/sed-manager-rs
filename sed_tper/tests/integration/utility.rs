@@ -1,6 +1,5 @@
 use std::time::Duration;
 
-use sed_spec::methods::Properties;
 use sorbit::ser_de::ToBytes;
 
 use sed_device::Error as DeviceError;
@@ -9,11 +8,6 @@ use sed_packet::packet::{ComPacket, Packet, SubPacket, SubPacketKind};
 use sed_packet::token::ToTokens;
 
 pub const TEST_TIMEOUT: Duration = Duration::from_secs(5);
-pub const TEST_PROPERTIES: Properties = Properties {
-    trans_timeout: Duration::from_millis(500),
-    def_trans_timeout: Duration::from_millis(500),
-    ..Properties::ASSUMED
-};
 
 pub fn method_call_event(com_id: u16, hsn: u32, tsn: u32, call: impl ToTokens) -> MockEvent {
     MockEvent::Send {

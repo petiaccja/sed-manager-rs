@@ -97,7 +97,7 @@ impl Tper {
             sync_supported: true,
             async_supported: CAPABILITIES.asynchronous,
             ack_nak_supported: CAPABILITIES.ack_nak,
-            buffer_mgmt_supported: CAPABILITIES.buffer_mgmt,
+            buffer_mgmt_supported: false,
             streaming_supported: true,
             com_id_mgmt_supported: false,
         };

@@ -1,6 +1,7 @@
 use core::mem::drop;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
+use std::num::NonZero;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -9,15 +10,13 @@ use sed_device::Device;
 use sed_packet::com_id::ComIdRequest;
 use sed_packet::packet::{COM_PACKET_HEADER_LEN, PACKET_HEADER_LEN, SUB_PACKET_HEADER_LEN};
 use sed_packet::session_id::SessionId;
-use sed_spec::methods::Properties;
+use sed_spec::methods::{Limit, Properties};
 use tracing::field::Empty;
 use tracing::{Instrument, Span, debug_span, warn};
 
 use crate::protocol::device_session::DeviceSession;
 use crate::protocol::message::{ComResponse, Message, MethodResponse, ReportAborted, SendComRequest, SendMethod};
 use crate::protocol::{com_session::ComSession, management_session::ManagementSession, session::Session};
-
-const MAX_BUFFER_SIZE: usize = 1048576;
 
 /// After the timeout, message sent between the host and device are considered
 /// lost.
@@ -29,7 +28,9 @@ const MAX_BUFFER_SIZE: usize = 1048576;
 ///
 /// When ACK/NAK is used, messages need to be ACK-ed within the timeout. The
 /// value of the timeout can be communicated in the `StartSession` method.
-const DEFAULT_TRANS_TIMEOUT: Duration = Duration::from_secs(if cfg!(feature = "test-utils") { 1 } else { 15 });
+const DEF_TRANS_TIMEOUT: Duration = Duration::from_secs(if cfg!(feature = "test-utils") { 1 } else { 15 });
+
+const MAX_GROSS_COM_PACKET_SIZE: usize = 1048576;
 
 /// The capabilities supported by the protocol stack implementation.
 ///
@@ -42,22 +43,35 @@ const DEFAULT_TRANS_TIMEOUT: Duration = Duration::from_secs(if cfg!(feature = "t
 /// plenty of RAM. A sensible limit is still necessary to prevent OOM in case
 /// the device sends insane amounts of data due to a bug.
 pub const CAPABILITIES: Properties = Properties {
-    max_methods: 0,
-    max_subpackets: 0,
-    max_gross_packet_size: MAX_BUFFER_SIZE - COM_PACKET_HEADER_LEN,
-    max_packets: 0,
-    max_gross_compacket_size: MAX_BUFFER_SIZE,
-    max_gross_compacket_response_size: MAX_BUFFER_SIZE,
-    max_ind_token_size: MAX_BUFFER_SIZE - COM_PACKET_HEADER_LEN - PACKET_HEADER_LEN - SUB_PACKET_HEADER_LEN,
-    max_agg_token_size: MAX_BUFFER_SIZE - COM_PACKET_HEADER_LEN - PACKET_HEADER_LEN - SUB_PACKET_HEADER_LEN,
+    max_methods: Limit::Unlimited,
+    max_subpackets: Limit::Unlimited,
+    max_gross_packet_size: Limit::Limited(NonZero::new(MAX_GROSS_COM_PACKET_SIZE - COM_PACKET_HEADER_LEN).unwrap()),
+    max_packets: Limit::Unlimited,
+    max_gross_compacket_size: Limit::Limited(NonZero::new(MAX_GROSS_COM_PACKET_SIZE).unwrap()),
+    max_gross_compacket_response_size: Limit::Limited(NonZero::new(MAX_GROSS_COM_PACKET_SIZE).unwrap()),
+    max_sessions: None,
+    max_read_sessions: None,
+    max_ind_token_size: Limit::Limited(
+        NonZero::new(MAX_GROSS_COM_PACKET_SIZE - COM_PACKET_HEADER_LEN - PACKET_HEADER_LEN - SUB_PACKET_HEADER_LEN)
+            .unwrap(),
+    ),
+    max_agg_token_size: Limit::Limited(
+        NonZero::new(MAX_GROSS_COM_PACKET_SIZE - COM_PACKET_HEADER_LEN - PACKET_HEADER_LEN - SUB_PACKET_HEADER_LEN)
+            .unwrap(),
+    ),
+    max_authentications: None,
+    max_transaction_limit: None,
+    def_session_timeout: None,
+    max_session_timeout: None,
+    min_session_timeout: None,
+    def_trans_timeout: None,
+    max_trans_timeout: None,
+    min_trans_timeout: None,
+    max_com_id_time: None,
     continued_tokens: false,
     seq_numbers: false,
     ack_nak: false,
     asynchronous: false,
-    buffer_mgmt: false,
-    max_retries: 3,
-    trans_timeout: DEFAULT_TRANS_TIMEOUT,
-    def_trans_timeout: DEFAULT_TRANS_TIMEOUT,
 };
 
 /// The full protocol to communicate with the TPer via packets and ComID requests.
@@ -81,9 +95,9 @@ impl Protocol {
         let controller = Controller { context: Context::new(tx) };
         (
             Self {
-                device_session: DeviceSession::new(com_id, com_id_ext, device),
-                com_session: ComSession::new(CAPABILITIES.def_trans_timeout),
-                management_session: ManagementSession::new(CAPABILITIES),
+                device_session: DeviceSession::new(com_id, com_id_ext, device, DEF_TRANS_TIMEOUT),
+                com_session: ComSession::new(DEF_TRANS_TIMEOUT),
+                management_session: ManagementSession::new(CAPABILITIES, DEF_TRANS_TIMEOUT),
                 sessions: HashMap::new(),
                 message_receiver: rx,
             },
@@ -132,7 +146,9 @@ impl Protocol {
                 .entered();
                 match self.sessions.entry(message.id) {
                     Entry::Occupied(_) => drop(span.record("err", "session already exists")),
-                    Entry::Vacant(entry) => drop(entry.insert(Session::new(message.id, message.properties))),
+                    Entry::Vacant(entry) => {
+                        let _ = entry.insert(Session::new(message.id, message.properties, DEF_TRANS_TIMEOUT));
+                    }
                 }
             }
             Message::Delete(message) => {

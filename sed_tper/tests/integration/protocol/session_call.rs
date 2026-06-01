@@ -10,7 +10,7 @@ use sed_device::mock_device::MockDevice;
 use sed_packet::Bytes;
 use sed_packet::session_id::SessionId;
 use sed_packet::token::{Command, ToTokens};
-use sed_spec::methods::{MethodCall, MethodResult, MethodStatus, Random, RandomResult};
+use sed_spec::methods::{MethodCall, MethodResult, MethodStatus, Properties, Random, RandomResult};
 use sed_spec::preconfig::core::shared::invoking_id::THIS_SP;
 use sed_spec::preconfig::core::shared::method_id::RANDOM;
 use sed_telemetry::{WithTracing, with_tracing};
@@ -18,8 +18,7 @@ use sed_tper::Error;
 use sed_tper::protocol::Protocol;
 
 use crate::utility::{
-    TEST_PROPERTIES, TEST_TIMEOUT, method_call_event, method_call_fail_event, method_return_event,
-    method_return_fail_event,
+    TEST_TIMEOUT, method_call_event, method_call_fail_event, method_return_event, method_return_fail_event,
 };
 
 #[instrument]
@@ -47,7 +46,7 @@ async fn send_session_method_success(_with_tracing: WithTracing) {
     let (protocol, controller) = Protocol::new(com_id, 0, device.clone());
     let handle = spawn(protocol.run().in_current_span());
 
-    controller.spawn(session_id, TEST_PROPERTIES);
+    controller.spawn(session_id, Properties::ASSUMED);
     let result = timeout(TEST_TIMEOUT, controller.call(session_id, random_call.to_tokens().unwrap())).await;
     controller.delete(session_id);
 
@@ -85,7 +84,7 @@ async fn send_session_method_iface_send_failed(_with_tracing: WithTracing) {
     let (protocol, controller) = Protocol::new(com_id, 0, device.clone());
     let handle = spawn(protocol.run().in_current_span());
 
-    controller.spawn(session_id, TEST_PROPERTIES);
+    controller.spawn(session_id, Properties::ASSUMED);
     let result = timeout(TEST_TIMEOUT, controller.call(session_id, random_call.to_tokens().unwrap())).await;
     controller.delete(session_id);
 
@@ -120,7 +119,7 @@ async fn send_session_method_iface_recv_failed(_with_tracing: WithTracing) {
     let (protocol, controller) = Protocol::new(com_id, 0, device.clone());
     let handle = spawn(protocol.run().in_current_span());
 
-    controller.spawn(session_id, TEST_PROPERTIES);
+    controller.spawn(session_id, Properties::ASSUMED);
     let result = timeout(TEST_TIMEOUT, controller.call(session_id, random_call.to_tokens().unwrap())).await;
     controller.delete(session_id);
 
@@ -148,7 +147,7 @@ async fn send_session_method_eos(_with_tracing: WithTracing) {
     let (protocol, controller) = Protocol::new(com_id, 0, device.clone());
     let handle = spawn(protocol.run().in_current_span());
 
-    controller.spawn(session_id, TEST_PROPERTIES);
+    controller.spawn(session_id, Properties::ASSUMED);
     let result = timeout(TEST_TIMEOUT, controller.call(session_id, Command::EndOfSession.to_tokens().unwrap())).await;
 
     drop(controller);

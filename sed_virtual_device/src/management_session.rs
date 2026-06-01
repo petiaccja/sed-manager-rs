@@ -1,13 +1,15 @@
 use std::collections::{HashMap, VecDeque};
+use std::num::NonZero;
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::time::Duration;
 
-use sed_packet::packet::{Packet, SubPacket, SubPacketKind};
+use sed_packet::packet::{
+    COM_PACKET_HEADER_LEN, PACKET_HEADER_LEN, Packet, SUB_PACKET_HEADER_LEN, SubPacket, SubPacketKind,
+};
 use sed_packet::session_id::SessionId;
 use sed_packet::token::ToTokens;
 use sed_spec::methods::{
-    ExtractResult, MethodCall, MethodParam, MethodStatus, MgmtMethodCall, MgmtMethodCallParams, Properties,
-    PropertiesMethod, StartSession, SyncSession, extract_method,
+    ExtractResult, Limit, MethodCall, MethodParam, MethodStatus, MgmtMethodCall, MgmtMethodCallParams, OptionalLimit,
+    Properties, PropertiesMethod, StartSession, SyncSession, extract_method,
 };
 use sed_spec::objects::CPinRef;
 use sed_spec::preconfig::core::shared::authority::ANYBODY;
@@ -18,23 +20,39 @@ use crate::internal_error::Expect;
 use crate::session::Session;
 use crate::tper::Tper;
 
+/// Give it a realistic number based on what I've seen on real hardware.
+const MAX_GROSS_COM_PACKET_SIZE: usize = 65536;
+
 pub const CAPABILITIES: Properties = Properties {
-    max_methods: usize::MAX,
-    max_subpackets: usize::MAX,
-    max_packets: usize::MAX,
-    max_gross_packet_size: 65536,
-    max_gross_compacket_size: 65536,
-    max_gross_compacket_response_size: 65536,
-    max_ind_token_size: 65480,
-    max_agg_token_size: 65480,
+    max_methods: Limit::Unlimited,
+    max_subpackets: Limit::Unlimited,
+    max_gross_packet_size: Limit::Limited(NonZero::new(MAX_GROSS_COM_PACKET_SIZE - COM_PACKET_HEADER_LEN).unwrap()),
+    max_packets: Limit::Unlimited,
+    max_gross_compacket_size: Limit::Limited(NonZero::new(MAX_GROSS_COM_PACKET_SIZE).unwrap()),
+    max_gross_compacket_response_size: Limit::Limited(NonZero::new(MAX_GROSS_COM_PACKET_SIZE).unwrap()),
+    max_sessions: Some(Limit::Unlimited),
+    max_read_sessions: Some(Limit::Unlimited),
+    max_ind_token_size: Limit::Limited(
+        NonZero::new(MAX_GROSS_COM_PACKET_SIZE - COM_PACKET_HEADER_LEN - PACKET_HEADER_LEN - SUB_PACKET_HEADER_LEN)
+            .unwrap(),
+    ),
+    max_agg_token_size: Limit::Limited(
+        NonZero::new(MAX_GROSS_COM_PACKET_SIZE - COM_PACKET_HEADER_LEN - PACKET_HEADER_LEN - SUB_PACKET_HEADER_LEN)
+            .unwrap(),
+    ),
+    max_authentications: Some(Limit::Unlimited),
+    max_transaction_limit: Some(Limit::Unlimited),
+    def_session_timeout: Some(Limit::Unlimited),
+    max_session_timeout: Some(Limit::Unlimited),
+    min_session_timeout: Some(OptionalLimit::Unsupported),
+    def_trans_timeout: Some(Limit::Unlimited),
+    max_trans_timeout: Some(Limit::Unlimited),
+    min_trans_timeout: Some(OptionalLimit::Unsupported),
+    max_com_id_time: Some(Limit::Unlimited),
     continued_tokens: false,
     seq_numbers: false,
     ack_nak: false,
-    asynchronous: true,
-    buffer_mgmt: false,
-    max_retries: 3,
-    trans_timeout: Duration::from_secs(10),
-    def_trans_timeout: Duration::from_secs(10),
+    asynchronous: false,
 };
 
 #[derive(Debug)]

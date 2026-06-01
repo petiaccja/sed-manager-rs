@@ -11,7 +11,7 @@ mod token_stream;
 pub use call::{MethodCall, MgmtMethodCall, MgmtMethodCallParams, SessionMethodCall, SessionMethodCallParams};
 pub use cell_block::{ByteCellBlock, CellBlock, ObjectCellBlock};
 pub use method_param::{MethodParam, SessionMethodParam};
-pub use properties::Properties;
+pub use properties::{Limit, OptionalLimit, Properties};
 pub use result::MethodResult;
 pub use session::*;
 pub use session_manager::*;

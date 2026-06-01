@@ -1,6 +1,6 @@
 use std::collections::{HashMap, VecDeque};
 use std::marker::PhantomData;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use sed_async_runtime::{CancelSender, cancel_channel};
 use sed_packet::packet::{PACKET_HEADER_LEN, Packet, SUB_PACKET_HEADER_LEN, SubPacket, SubPacketKind};
@@ -18,10 +18,12 @@ use crate::protocol::message::{Message, PacketReceived, ReportAborted, SendMetho
 use crate::protocol::method::{MgmtMethodCallSend, RecvQueuedMethod, WriteQueuedMethod, retain_alive};
 use crate::protocol::protocol::{Address, Context};
 
-const MAX_METHOD_SIZE: usize = Properties::ASSUMED.max_gross_packet_size - PACKET_HEADER_LEN + SUB_PACKET_HEADER_LEN;
+const MAX_METHOD_SIZE: usize =
+    Properties::ASSUMED.max_gross_packet_size.get() - PACKET_HEADER_LEN + SUB_PACKET_HEADER_LEN;
 
 #[derive(Debug)]
 pub struct ManagementSession {
+    timeout: Duration,
     capabilities: Properties,
     properties: Properties,
     receive_buffer: VecDeque<u8>,
@@ -31,8 +33,9 @@ pub struct ManagementSession {
 impl ManagementSession {
     const ADDRESS: Address = Address::ManagementSession;
 
-    pub fn new(capabilities: Properties) -> Self {
+    pub fn new(capabilities: Properties, timeout: Duration) -> Self {
         Self {
+            timeout,
             capabilities,
             properties: Properties::ASSUMED,
             receive_buffer: VecDeque::new(),
@@ -75,7 +78,7 @@ impl ManagementSession {
                         mgmt_session_meta.expect("SM methods must always have meta data, wrong address?");
                     match mgmt_session_meta.0 {
                         MgmtMethodCallSend::StartSession { hsn } => {
-                            let deadline = Instant::now() + self.capabilities.def_trans_timeout;
+                            let deadline = Instant::now() + self.timeout;
                             let (cancel_token, cancel_sender) = cancel_channel();
                             context.send_timeout(Self::ADDRESS, deadline, Some(cancel_token));
                             self.sync_session_queue.entry(hsn).or_default().push_back(RecvQueuedMethod {
@@ -186,6 +189,8 @@ mod tests {
     use sed_spec::preconfig::core::shared::sm_method_id::{START_SESSION, SYNC_SESSION};
     use sed_spec::preconfig::opal_2::admin::sp;
 
+    const TEST_TIMEOUT: Duration = Duration::from_millis(500);
+
     fn create_request() -> MethodCall<StartSession> {
         MethodCall {
             invoking_id: SESSION_MANAGER,
@@ -228,7 +233,7 @@ mod tests {
 
     #[test]
     fn send_method() {
-        let mut mgmt_session = ManagementSession::new(Properties::ASSUMED);
+        let mut mgmt_session = ManagementSession::new(Properties::ASSUMED, TEST_TIMEOUT);
         let (context, queue) = Context::mock();
         let (tx, rx) = oneshot::channel();
         let method = create_request();
@@ -243,11 +248,7 @@ mod tests {
 
     #[tokio::test]
     async fn send_packet_done_success() {
-        let mut mgmt_session = ManagementSession::new(Properties {
-            trans_timeout: Duration::ZERO,
-            def_trans_timeout: Duration::ZERO,
-            ..Properties::ASSUMED
-        });
+        let mut mgmt_session = ManagementSession::new(Properties::ASSUMED, Duration::ZERO);
         let (context, queue) = Context::mock();
         let (tx, rx) = oneshot::channel();
 
@@ -275,11 +276,7 @@ mod tests {
 
     #[tokio::test]
     async fn send_packet_done_failure() {
-        let mut mgmt_session = ManagementSession::new(Properties {
-            trans_timeout: Duration::ZERO,
-            def_trans_timeout: Duration::ZERO,
-            ..Properties::ASSUMED
-        });
+        let mut mgmt_session = ManagementSession::new(Properties::ASSUMED, Duration::ZERO);
         let (context, queue) = Context::mock();
         let (tx, rx) = oneshot::channel();
 
@@ -304,11 +301,7 @@ mod tests {
 
     #[tokio::test]
     async fn packet_received_timeout() {
-        let mut mgmt_session = ManagementSession::new(Properties {
-            trans_timeout: Duration::ZERO,
-            def_trans_timeout: Duration::ZERO,
-            ..Properties::ASSUMED
-        });
+        let mut mgmt_session = ManagementSession::new(Properties::ASSUMED, Duration::ZERO);
         let (tx, rx) = oneshot::channel();
         let (_cancel_token, cancel_sender) = cancel_channel();
 
@@ -327,11 +320,7 @@ mod tests {
 
     #[tokio::test]
     async fn packet_received_receive() {
-        let mut mgmt_session = ManagementSession::new(Properties {
-            trans_timeout: Duration::ZERO,
-            def_trans_timeout: Duration::ZERO,
-            ..Properties::ASSUMED
-        });
+        let mut mgmt_session = ManagementSession::new(Properties::ASSUMED, Duration::ZERO);
         let (context, queue) = Context::mock();
         let (tx, rx) = oneshot::channel();
         let (_cancel_token, cancel_sender) = cancel_channel();

@@ -1,7 +1,7 @@
 use core::mem::replace;
 use std::collections::VecDeque;
 use std::marker::PhantomData;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use sed_async_runtime::cancel_channel;
 use sed_packet::packet::{PACKET_HEADER_LEN, Packet, SUB_PACKET_HEADER_LEN, SubPacket, SubPacketKind};
@@ -22,14 +22,16 @@ use crate::protocol::protocol::{Address, Context};
 #[derive(Debug)]
 pub struct Session {
     session_id: SessionId,
+    timeout: Duration,
     properties: Properties,
     state: State,
 }
 
 impl Session {
-    pub fn new(session_id: SessionId, properties: Properties) -> Self {
+    pub fn new(session_id: SessionId, properties: Properties, timeout: Duration) -> Self {
         Self {
             session_id,
+            timeout,
             properties,
             state: State::Active {
                 send_method_queue: VecDeque::new(),
@@ -93,7 +95,7 @@ impl Session {
         match &mut self.state {
             State::Active { channel_queue, .. } | State::Closing { channel_queue, .. } => match &status {
                 Ok(_) => {
-                    let deadline = Instant::now() + self.properties.trans_timeout;
+                    let deadline = Instant::now() + self.timeout;
                     let (cancel_token, cancel_sender) = cancel_channel();
                     context.send_timeout(address.clone(), deadline, Some(cancel_token));
                     for WriteQueuedMethod { channel, .. } in methods {
@@ -259,9 +261,10 @@ fn packetize_method_queue(
     properties: &Properties,
     mut send_method_queue: VecDeque<SendMethod>,
 ) -> Vec<(Packet, oneshot::Sender<MethodResponse>)> {
-    let max_method_size = std::cmp::max(PACKET_HEADER_LEN + SUB_PACKET_HEADER_LEN, properties.max_gross_packet_size)
-        - PACKET_HEADER_LEN
-        + SUB_PACKET_HEADER_LEN;
+    let max_method_size =
+        std::cmp::max(PACKET_HEADER_LEN + SUB_PACKET_HEADER_LEN, properties.max_gross_packet_size.get())
+            - PACKET_HEADER_LEN
+            + SUB_PACKET_HEADER_LEN;
     let mut packets = Vec::new();
     while let Some(SendMethod { method, channel }) = send_method_queue.pop_front() {
         if method.len() <= max_method_size {
@@ -302,6 +305,8 @@ mod tests {
     use sed_spec::preconfig::core::shared::method_id::ACTIVATE;
     use sed_spec::preconfig::opal_2::admin::sp;
 
+    const TEST_TIMEOUT: Duration = Duration::from_millis(500);
+
     fn create_request() -> MethodCall<Activate> {
         MethodCall {
             invoking_id: sp::LOCKING.to_uid(),
@@ -318,7 +323,7 @@ mod tests {
     #[test]
     fn send_method_regular() {
         let session_id = SessionId { hsn: 1, tsn: 2 };
-        let mut session = Session::new(session_id, Properties::ASSUMED);
+        let mut session = Session::new(session_id, Properties::ASSUMED, TEST_TIMEOUT);
         let (context, queue) = Context::mock();
         let (tx, rx) = oneshot::channel();
         let method = create_request();
@@ -335,7 +340,7 @@ mod tests {
     #[test]
     fn send_method_eos() {
         let session_id = SessionId { hsn: 1, tsn: 2 };
-        let mut session = Session::new(session_id, Properties::ASSUMED);
+        let mut session = Session::new(session_id, Properties::ASSUMED, TEST_TIMEOUT);
         let (context, queue) = Context::mock();
         let (tx, rx) = oneshot::channel();
         let method = Command::EndOfSession;
@@ -352,7 +357,7 @@ mod tests {
     #[test]
     fn commit_batch() {
         let session_id = SessionId { hsn: 1, tsn: 2 };
-        let mut session = Session::new(session_id, Properties::ASSUMED);
+        let mut session = Session::new(session_id, Properties::ASSUMED, TEST_TIMEOUT);
         let (context, queue) = Context::mock();
         let (tx, rx) = oneshot::channel();
         let method = create_request();
@@ -376,10 +381,7 @@ mod tests {
     #[tokio::test]
     async fn send_packet_done_success() {
         let session_id = SessionId { hsn: 1, tsn: 2 };
-        let mut session = Session::new(
-            session_id,
-            Properties { trans_timeout: Duration::ZERO, def_trans_timeout: Duration::ZERO, ..Properties::ASSUMED },
-        );
+        let mut session = Session::new(session_id, Properties::ASSUMED, Duration::ZERO);
         let (context, queue) = Context::mock();
         let (tx, rx) = oneshot::channel();
 
@@ -405,10 +407,7 @@ mod tests {
     #[tokio::test]
     async fn send_packet_done_failure() {
         let session_id = SessionId { hsn: 1, tsn: 2 };
-        let mut session = Session::new(
-            session_id,
-            Properties { trans_timeout: Duration::ZERO, def_trans_timeout: Duration::ZERO, ..Properties::ASSUMED },
-        );
+        let mut session = Session::new(session_id, Properties::ASSUMED, Duration::ZERO);
         let (context, queue) = Context::mock();
         let (tx, rx) = oneshot::channel();
 
@@ -431,10 +430,7 @@ mod tests {
     #[tokio::test]
     async fn packet_received_timeout() {
         let session_id = SessionId { hsn: 1, tsn: 2 };
-        let mut session = Session::new(
-            session_id,
-            Properties { trans_timeout: Duration::ZERO, def_trans_timeout: Duration::ZERO, ..Properties::ASSUMED },
-        );
+        let mut session = Session::new(session_id, Properties::ASSUMED, Duration::ZERO);
         let (context, _queue) = Context::mock();
         let (tx, rx) = oneshot::channel();
         let (_cancel_token, cancel_sender) = cancel_channel();
@@ -458,10 +454,7 @@ mod tests {
     #[tokio::test]
     async fn packet_received_receive_regular() {
         let session_id = SessionId { hsn: 1, tsn: 2 };
-        let mut session = Session::new(
-            session_id,
-            Properties { trans_timeout: Duration::ZERO, def_trans_timeout: Duration::ZERO, ..Properties::ASSUMED },
-        );
+        let mut session = Session::new(session_id, Properties::ASSUMED, Duration::ZERO);
         let (context, queue) = Context::mock();
         let (tx, rx) = oneshot::channel();
         let (_cancel_token, cancel_sender) = cancel_channel();
@@ -496,10 +489,7 @@ mod tests {
     #[tokio::test]
     async fn packet_received_receive_eos() {
         let session_id = SessionId { hsn: 1, tsn: 2 };
-        let mut session = Session::new(
-            session_id,
-            Properties { trans_timeout: Duration::ZERO, def_trans_timeout: Duration::ZERO, ..Properties::ASSUMED },
-        );
+        let mut session = Session::new(session_id, Properties::ASSUMED, Duration::ZERO);
         let (context, queue) = Context::mock();
         let (tx, rx) = oneshot::channel();
         let (_cancel_token, cancel_sender) = cancel_channel();
@@ -537,7 +527,7 @@ mod tests {
     #[test]
     fn abort_sends_eos() {
         let session_id = SessionId { hsn: 1, tsn: 2 };
-        let mut session = Session::new(session_id, Properties::ASSUMED);
+        let mut session = Session::new(session_id, Properties::ASSUMED, TEST_TIMEOUT);
         let (context, queue) = Context::mock();
 
         session.abort(context);
@@ -564,7 +554,7 @@ mod tests {
     #[test]
     fn report_aborted_omits_eos() {
         let session_id = SessionId { hsn: 1, tsn: 2 };
-        let mut session = Session::new(session_id, Properties::ASSUMED);
+        let mut session = Session::new(session_id, Properties::ASSUMED, TEST_TIMEOUT);
         let (context, queue) = Context::mock();
 
         session.report_aborted(context, ReportAborted);

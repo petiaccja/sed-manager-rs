@@ -1,13 +1,12 @@
 use core::mem::replace;
 use std::cmp::{max, min};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use std::{collections::VecDeque, sync::Arc};
 
 use sed_device::Device;
 use sed_packet::com_id::{COM_ID_RESPONSE_LEN, ComIdResponse, ComIdResponsePayload};
 use sed_packet::packet::ComPacket;
 use sed_packet::session_id::SessionId;
-use sed_spec::methods::Properties;
 use sorbit::ser_de::{FromBytes, ToBytes};
 use tracing::{Instrument as _, debug, debug_span, instrument};
 
@@ -24,6 +23,7 @@ pub struct DeviceSession {
     com_id: u16,
     com_id_ext: u16,
     device: Arc<dyn Device>,
+    timeout: Duration,
     packet_queue: VecDeque<SendPacket>,
     packet_state: PacketProtocolState,
     com_id_queue: VecDeque<SendComRequest>,
@@ -33,11 +33,12 @@ pub struct DeviceSession {
 impl DeviceSession {
     const ADDRESS: Address = Address::DeviceSession;
 
-    pub fn new(com_id: u16, com_id_ext: u16, device: Arc<dyn Device>) -> Self {
+    pub fn new(com_id: u16, com_id_ext: u16, device: Arc<dyn Device>, timeout: Duration) -> Self {
         Self {
             com_id,
             com_id_ext,
             device,
+            timeout,
             packet_queue: VecDeque::new(),
             packet_state: PacketProtocolState::Ready,
             com_id_queue: VecDeque::new(),
@@ -149,7 +150,10 @@ impl DeviceSession {
             PacketProtocolState::Sending { sender, methods } => match result {
                 Ok(_) => {
                     context.send(sender, Message::SendPacketDone(SendPacketDone { status: Ok(()), methods }));
-                    context.send_future(Self::ADDRESS, security_recv_com_packet(self.device.clone(), self.com_id));
+                    context.send_future(
+                        Self::ADDRESS,
+                        security_recv_com_packet(self.device.clone(), self.com_id, self.timeout),
+                    );
                     PacketProtocolState::Receiving
                 }
                 Err(err) => {
@@ -169,7 +173,10 @@ impl DeviceSession {
                 Ok(_) => {
                     let status = Ok(());
                     context.send(sender, Message::SendComRequestDone(SendComRequestDone { status, channel }));
-                    context.send_future(Self::ADDRESS, security_recv_com_id_request(self.device.clone(), self.com_id));
+                    context.send_future(
+                        Self::ADDRESS,
+                        security_recv_com_id_request(self.device.clone(), self.com_id, self.timeout),
+                    );
                     ComIdProtocolState::Receiving
                 }
                 Err(err) => {
@@ -218,10 +225,14 @@ async fn security_send(device: Arc<dyn Device>, protocol: u8, com_id: u16, data:
     Message::SecuritySendDone(SecuritySendDone { protocol, result })
 }
 
-async fn security_recv_com_packet(device: Arc<dyn Device>, com_id: u16) -> Message {
+async fn security_recv_com_packet(device: Arc<dyn Device>, com_id: u16, timeout: Duration) -> Message {
     #[instrument(level = "debug", skip_all)]
-    async fn _security_recv_com_packet(device: Arc<dyn Device>, com_id: u16) -> Result<ComPacket, Error> {
-        let mut retry = Retry::new(Instant::now() + Properties::ASSUMED.def_trans_timeout);
+    async fn _security_recv_com_packet(
+        device: Arc<dyn Device>,
+        com_id: u16,
+        timeout: Duration,
+    ) -> Result<ComPacket, Error> {
+        let mut retry = Retry::new(Instant::now() + timeout);
         let mut transfer_len = 1024;
         let mut merged = ComPacket::default();
         loop {
@@ -238,13 +249,17 @@ async fn security_recv_com_packet(device: Arc<dyn Device>, com_id: u16) -> Messa
             }
         }
     }
-    Message::SecurityRecvDoneComPacket(_security_recv_com_packet(device, com_id).await)
+    Message::SecurityRecvDoneComPacket(_security_recv_com_packet(device, com_id, timeout).await)
 }
 
-async fn security_recv_com_id_request(device: Arc<dyn Device>, com_id: u16) -> Message {
+async fn security_recv_com_id_request(device: Arc<dyn Device>, com_id: u16, timeout: Duration) -> Message {
     #[instrument(level = "debug", skip_all)]
-    async fn _security_recv_com_id_request(device: Arc<dyn Device>, com_id: u16) -> Result<ComIdResponse, Error> {
-        let mut retry = Retry::new(Instant::now() + Properties::ASSUMED.def_trans_timeout);
+    async fn _security_recv_com_id_request(
+        device: Arc<dyn Device>,
+        com_id: u16,
+        timeout: Duration,
+    ) -> Result<ComIdResponse, Error> {
+        let mut retry = Retry::new(Instant::now() + timeout);
         loop {
             let bytes = device.security_recv(0x02, com_id.to_be_bytes(), COM_ID_RESPONSE_LEN).await?;
             let response = ComIdResponse::from_bytes(&bytes).map_err(|err| Error::InvalidComIdResponse(err))?;
@@ -255,7 +270,7 @@ async fn security_recv_com_id_request(device: Arc<dyn Device>, com_id: u16) -> M
             }
         }
     }
-    Message::SecurityRecvDoneComIdRequest(_security_recv_com_id_request(device, com_id).await)
+    Message::SecurityRecvDoneComIdRequest(_security_recv_com_id_request(device, com_id, timeout).await)
 }
 
 #[cfg(test)]
@@ -271,6 +286,8 @@ mod tests {
     use sed_device::mock_device::{MockDevice, MockEvent};
     use sed_packet::com_id::{ComIdRequest, StackResetStatus};
     use sed_packet::packet::{Packet, SubPacket, SubPacketKind};
+
+    const TEST_TIMEOUT: Duration = Duration::from_millis(500);
 
     fn create_request_com_packet() -> ComPacket {
         ComPacket {
@@ -325,7 +342,7 @@ mod tests {
         ];
 
         let device = Arc::new(MockDevice::new(events.into_iter()));
-        let mut device_session = DeviceSession::new(0x0001, 0x0000, device.clone());
+        let mut device_session = DeviceSession::new(0x0001, 0x0000, device.clone(), TEST_TIMEOUT);
         let (context, queue) = Context::mock();
 
         // Issue SendPacket message.
@@ -405,7 +422,7 @@ mod tests {
         }];
 
         let device = Arc::new(MockDevice::new(events.into_iter()));
-        let mut device_session = DeviceSession::new(0x0001, 0x0000, device.clone());
+        let mut device_session = DeviceSession::new(0x0001, 0x0000, device.clone(), TEST_TIMEOUT);
         let (context, queue) = Context::mock();
 
         // Enqueue a packet for sending.
@@ -453,7 +470,7 @@ mod tests {
     async fn send_packet_recv_failure() {
         let events = [];
         let device = Arc::new(MockDevice::new(events.into_iter()));
-        let mut device_session = DeviceSession::new(0x0001, 0x0000, device.clone());
+        let mut device_session = DeviceSession::new(0x0001, 0x0000, device.clone(), TEST_TIMEOUT);
         let (context, queue) = Context::mock();
 
         // Set up state for the test.
@@ -503,7 +520,7 @@ mod tests {
         ];
 
         let device = Arc::new(MockDevice::new(events.into_iter()));
-        let mut device_session = DeviceSession::new(0x0001, 0x0000, device.clone());
+        let mut device_session = DeviceSession::new(0x0001, 0x0000, device.clone(), TEST_TIMEOUT);
         let (channel, _) = oneshot::channel();
         let (context, queue) = Context::mock();
 
@@ -587,7 +604,7 @@ mod tests {
         }];
 
         let device = Arc::new(MockDevice::new(events.into_iter()));
-        let mut device_session = DeviceSession::new(0x0001, 0x0000, device.clone());
+        let mut device_session = DeviceSession::new(0x0001, 0x0000, device.clone(), TEST_TIMEOUT);
         let (channel, _) = oneshot::channel();
         let (context, queue) = Context::mock();
 
@@ -638,7 +655,7 @@ mod tests {
     async fn send_com_id_recv_failure() {
         let events = [];
         let device = Arc::new(MockDevice::new(events.into_iter()));
-        let mut device_session = DeviceSession::new(0x0001, 0x0000, device.clone());
+        let mut device_session = DeviceSession::new(0x0001, 0x0000, device.clone(), TEST_TIMEOUT);
         let (context, queue) = Context::mock();
 
         // Set up state for the test.
