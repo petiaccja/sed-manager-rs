@@ -2,7 +2,7 @@ use std::{
     collections::{HashMap, HashSet},
     ops::DerefMut,
     path::{Path, PathBuf},
-    rc::Rc,
+    rc::{Rc, Weak},
     sync::Arc,
 };
 
@@ -11,14 +11,18 @@ use futures::FutureExt;
 use sed_async::Runtime;
 use sed_device::{Device, list_physical_drives, open_device};
 use sed_manager::{Error, SidSession, Spec};
-use sed_manager_gui_slint::{self as ui};
-use sed_packet::MaxBytes;
-use sed_tper::Tper;
+use sed_manager_gui_slint as ui;
+use sed_packet::{MaxBytes, com_id::ComIdState};
+use sed_tper::{Tper, protocol::ConnectionChanged};
 use sed_virtual_device::{VIRTUAL_DEVICE_PATH, VirtualDevice};
 use slint::{ComponentHandle, EventLoopError, ModelExt as _, ModelRc, SharedString, ToSharedString, spawn_local};
 use tracing::{Instrument, instrument};
 
-use crate::{associative_model::AssociativeModel, display_ui::DisplayUi as _, ui_ext::DiscoveryExt};
+use crate::{
+    associative_model::AssociativeModel,
+    display_ui::{CombinedProperties, DisplayUi as _},
+    ui_ext::{DiscoveryExt, StackStatusExt},
+};
 use crate::{toast::ToastQueue, ui_ext::DeviceExt as _};
 
 pub struct App {
@@ -249,7 +253,17 @@ impl App {
                 return;
             };
             let com_id_ext = 0;
+            let new_tper = Tper::connect(com_id, com_id_ext, device.clone(), Some(&self.runtime));
+            let capabilities = new_tper.capabilities();
+            let connection_changed = new_tper.connection_changed();
             *tper = Some(Tper::connect(com_id, com_id_ext, device.clone(), Some(&self.runtime)).into());
+            let combined_properties = CombinedProperties { host: capabilities, device: None, connection: None };
+            device_list.ui.update(&path, |dev| {
+                let status = dev.stack_status.clone().with_protocol(combined_properties.display_ui());
+                dev.with_stack_status(status)
+            });
+            spawn_local(Self::listen_connection_changed(Rc::downgrade(&self), path.clone(), connection_changed))
+                .expect_in_event_loop();
             self.query_stack_status(path, true);
         };
         spawn_local(future.in_current_span()).expect_in_event_loop();
@@ -264,24 +278,30 @@ impl App {
             let tper = backend.tper.as_ref()?;
             let result = tper.verify_com_id_valid(tper.com_id(), tper.com_id_ext()).await;
 
-            let ui_status_base = ui::StackStatus {
+            let ui_status_base = ui::ComIdStatus {
                 com_id: tper.com_id().into(),
                 com_id_ext: tper.com_id_ext().into(),
-                com_id_status: "".into(),
-                connected: true,
+                ..Default::default()
             };
 
             match result {
-                Ok(status) => {
-                    let ui_status = ui::StackStatus { com_id_status: status.to_shared_string(), ..ui_status_base };
-                    device_list.ui.update(&path, |device| device.with_stack_status(ui_status));
+                Ok(state) => {
+                    let good = [ComIdState::Issued, ComIdState::Associated].contains(&state);
+                    let ui_status = ui::ComIdStatus { status: state.to_shared_string(), good, ..ui_status_base };
+                    device_list.ui.update(&path, |dev| {
+                        let status = dev.stack_status.clone().with_com_id(ui_status);
+                        dev.with_stack_status(status)
+                    });
                     if !silent {
                         self.toast_queue.success("Stack status updated".into(), "".to_string());
                     }
                 }
                 Err(err) => {
-                    let ui_status = ui::StackStatus { com_id_status: err.to_shared_string(), ..ui_status_base };
-                    device_list.ui.update(&path, |device| device.with_stack_status(ui_status));
+                    let ui_status = ui::ComIdStatus { status: err.to_shared_string(), ..ui_status_base };
+                    device_list.ui.update(&path, |dev| {
+                        let status = dev.stack_status.clone().with_com_id(ui_status);
+                        dev.with_stack_status(status)
+                    });
                     if !silent {
                         self.toast_queue.error("Could not update stack status".into(), err.to_string());
                     }
@@ -380,6 +400,44 @@ impl App {
                 "The password cannot be longer than 32 bytes (32 Latin characters)".into(),
             );
             None
+        }
+    }
+
+    async fn listen_connection_changed(
+        self_: Weak<Self>,
+        path: PathBuf,
+        mut event: async_broadcast::Receiver<ConnectionChanged>,
+    ) {
+        async fn update(self_: Rc<App>, path: &Path, value: ConnectionChanged) -> Option<()> {
+            let device_list = self_.device_list.read().await;
+            let backend = device_list.backend.get(path)?;
+            let backend = backend.lock().await;
+            let tper = backend.tper.as_ref()?;
+            let host = tper.capabilities();
+            let combined = CombinedProperties {
+                host,
+                device: Some(value.remote_properties),
+                connection: Some(value.connection_properties),
+            };
+            device_list.ui.update(path, |dev| {
+                let status = dev.stack_status.clone().with_protocol(combined.display_ui());
+                dev.with_stack_status(status)
+            });
+            Some(())
+        }
+
+        loop {
+            match event.recv().await {
+                Ok(value) => {
+                    if let Some(self_) = self_.upgrade() {
+                        update(self_, &path, value).await;
+                    } else {
+                        break;
+                    }
+                }
+                Err(async_broadcast::RecvError::Overflowed(_)) => (),
+                Err(async_broadcast::RecvError::Closed) => break,
+            }
         }
     }
 

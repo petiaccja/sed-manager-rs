@@ -6,7 +6,28 @@ import {
 } from "../../widgets/lib.slint";
 import { StackStatus } from "../../data/lib.slint";
 import { Icons } from "../../resources/lib.slint";
-import { Button } from "std-widgets.slint";
+import { Button, ScrollView } from "std-widgets.slint";
+import { IconButton } from "../../widgets/icon_button.slint";
+
+component Cell {
+    in property <bool> invert-highlighting: false;
+    in property <bool> has-highlighting: true;
+    in property <length> horizontal-padding: 0.6rem;
+    in property <length> vertical-padding: 0.3rem;
+
+    Rectangle {
+        background: (root.row.mod(2) == 1) == invert-highlighting && has-highlighting ? PaletteExtra.accent.with-alpha(0.1) : #00000000;
+        HorizontalLayout {
+            padding-left: horizontal-padding;
+            padding-right: horizontal-padding;
+            padding-top: vertical-padding;
+            padding-bottom: vertical-padding;
+
+            @children
+        }
+    }
+}
+
 
 export component StackStatusView {
     in property <StackStatus> stack-status;
@@ -14,9 +35,10 @@ export component StackStatusView {
     callback query-stack-status();
 
     VerticalLayout {
-        alignment: start;
+        spacing: 1.2rem;
 
         Island {
+            vertical-stretch: 0.0;
             HorizontalLayout {
                 alignment: space-between;
                 padding: 0.4rem;
@@ -32,37 +54,38 @@ export component StackStatusView {
                         spacing: 0.3rem;
 
                         Text {
-                            text: stack-status.connected ? "Connected" : "Not connected";
-                            color: stack-status.connected ? PaletteExtra.success-foreground : PaletteExtra.error-foreground;
+                            text: stack-status.com-id.good ? "Connected" : "Not connected";
+                            color: stack-status.com-id.good ? PaletteExtra.success-foreground : PaletteExtra.error-foreground;
                             font-weight: 600;
+                            overflow: elide;
                         }
 
                         Image {
-                            source: stack-status.connected ? Icons.check : Icons.close;
-                            colorize: stack-status.connected ? PaletteExtra.success-foreground : PaletteExtra.error-foreground;
+                            source: stack-status.com-id.good ? Icons.check : Icons.close;
+                            colorize: stack-status.com-id.good ? PaletteExtra.success-foreground : PaletteExtra.error-foreground;
                             width: 1.2rem;
                             height: 1.2rem;
                         }
                     }
 
-                    for name[index] in ["ComID:", "ComID extension:", "Status:"]: HorizontalLayout {
+                    for name[index] in ["ComID:", "ComID extension:", "Status:"]: Cell {
                         row: index + 1;
                         col: 0;
-                        padding: 0.3rem;
-                        padding-left: 0.6rem;
-                        padding-right: 0.6rem;
+                        has-highlighting: false;
                         Text {
                             text: name;
                             overflow: elide;
                         }
                     }
 
-                    for value[index] in [stack-status.com-id, stack-status.com-id-ext, stack-status.com-id-status]: HorizontalLayout {
+                    for value[index] in [
+                        stack-status.com-id.com-id,
+                        stack-status.com-id.com-id-ext,
+                        stack-status.com-id.status
+                    ]: Cell {
                         row: index + 1;
                         col: 1;
-                        padding: 0.3rem;
-                        padding-left: 0.6rem;
-                        padding-right: 0.6rem;
+                        has-highlighting: false;
                         Text {
                             text: value;
                             overflow: elide;
@@ -72,11 +95,87 @@ export component StackStatusView {
                 }
 
                 VerticalLayout {
-                    alignment: end;
+                    alignment: start;
                     Button {
                         text: "Refresh";
                         clicked => {
                             query-stack-status()
+                        }
+                    }
+                }
+            }
+        }
+
+        Island {
+            vertical-stretch: 1.0;
+            min-height: 4rem;
+            clip: true;
+
+            ScrollView {
+                horizontal-scrollbar-policy: always-off;
+                VerticalLayout {
+                    alignment: start;
+
+                    GridLayout {
+                        for name[index] in ["Property", "Host", "Device", "Connection"]: Rectangle {
+                            background: PaletteExtra.accented-background;
+                            row: 0;
+                            col: index;
+                            HorizontalLayout {
+                                padding: 0.3rem;
+                                padding-left: 1.0rem;
+                                padding-right: 1.0rem;
+
+                                Text {
+                                    text: name;
+                                    overflow: elide;
+                                    font-weight: 600;
+                                }
+                            }
+                        }
+
+                        for property[index] in stack-status.protocol: Cell {
+                            row: index + 1;
+                            col: 0;
+                            horizontal-padding: 1rem;
+
+                            Text {
+                                text: property.name;
+                                overflow: elide;
+                            }
+                        }
+
+                        for property[index] in stack-status.protocol: Cell {
+                            row: index + 1;
+                            col: 1;
+                            horizontal-padding: 1rem;
+
+                            Text {
+                                text: property.host;
+                                overflow: elide;
+                            }
+                        }
+
+                        for property[index] in stack-status.protocol: Cell {
+                            row: index + 1;
+                            col: 2;
+                            horizontal-padding: 1rem;
+
+                            Text {
+                                text: property.device;
+                                overflow: elide;
+                            }
+                        }
+
+                        for property[index] in stack-status.protocol: Cell {
+                            row: index + 1;
+                            col: 3;
+                            horizontal-padding: 1rem;
+
+                            Text {
+                                text: property.connection;
+                                overflow: elide;
+                            }
                         }
                     }
                 }

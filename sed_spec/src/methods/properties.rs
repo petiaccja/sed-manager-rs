@@ -142,6 +142,7 @@ impl Default for Properties {
 }
 
 #[rustfmt::skip]
+#[macro_export]
 macro_rules! property_name {
     (max_methods) => { "MaxMethods" };
     (max_subpackets) => { "MaxSubpackets" };

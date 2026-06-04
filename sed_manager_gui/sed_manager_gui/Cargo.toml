@@ -8,6 +8,7 @@ sed_device.workspace = true
 sed_tper.workspace = true
 sed_manager.workspace = true
 sed_packet.workspace = true
+sed_spec.workspace = true
 sed_manager_gui_slint.workspace = true
 sed_async.workspace = true
 sed_virtual_device.workspace = true
@@ -16,6 +17,7 @@ pin-project.workspace = true
 slint.workspace = true
 tracing.workspace = true
 async-lock.workspace = true
+async-broadcast.workspace = true
 futures.workspace = true
 
 [dev-dependencies]

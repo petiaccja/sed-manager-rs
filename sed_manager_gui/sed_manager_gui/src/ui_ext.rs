@@ -1,4 +1,7 @@
+use std::rc::Rc;
+
 use sed_manager_gui_slint as ui;
+use slint::VecModel;
 
 pub trait DeviceExt {
     fn with_status(self, outcome: ui::Outcome, message: String) -> Self;
@@ -37,5 +40,20 @@ pub trait DiscoveryExt {
 impl DiscoveryExt for ui::Discovery {
     fn error(message: String) -> Self {
         Self { status: ui::Status { message: message.into(), outcome: ui::Outcome::Error }, ..Default::default() }
+    }
+}
+
+pub trait StackStatusExt {
+    fn with_com_id(self, com_id: ui::ComIdStatus) -> Self;
+    fn with_protocol(self, com_id: VecModel<ui::ProtocolProperty>) -> Self;
+}
+
+impl StackStatusExt for ui::StackStatus {
+    fn with_com_id(self, com_id: ui::ComIdStatus) -> Self {
+        Self { com_id, ..self }
+    }
+
+    fn with_protocol(self, protocol: VecModel<ui::ProtocolProperty>) -> Self {
+        Self { protocol: Rc::from(protocol).into(), ..self }
     }
 }

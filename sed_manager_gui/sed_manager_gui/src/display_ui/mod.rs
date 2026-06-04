@@ -1,5 +1,9 @@
 mod device;
 mod discovery;
+mod primitives;
+mod properties;
+
+pub use properties::CombinedProperties;
 
 pub trait DisplayUi {
     type Ui;

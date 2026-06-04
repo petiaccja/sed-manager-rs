@@ -31,11 +31,23 @@ export struct Identity {
     is-removable: bool,
 }
 
-export struct StackStatus {
-    connected: bool,
+export struct ComIdStatus {
+    good: bool,
     com-id: int,
     com-id-ext: int,
-    com-id-status: string,
+    status: string,
+}
+
+export struct ProtocolProperty {
+    name: string,
+    host: string,
+    device: string,
+    connection: string,
+}
+
+export struct StackStatus {
+    com-id: ComIdStatus,
+    protocol: [ProtocolProperty],
 }
 
 export struct Device {

@@ -44,10 +44,16 @@ export global TestData {
             },
             config: { sid_msid_pin_differ: true, locking_enabled: false },
             stack-status: {
-                connected: true,
-                com-id: 3072,
-                com-id-ext: 0,
-                com-id-status: "Issued",
+                com-id: {
+                    good: true,
+                    com-id: 3072,
+                    com-id-ext: 0,
+                    status: "Issued",
+                },
+                protocol: [
+                    { name: "MaxMethods", host: "unlimited", device: "1", connection: "1" },
+                    { name: "MaxComPacketSize", host: "1048576", device: "16384", connection: "16384" },
+                ]
             }
         },
         {
