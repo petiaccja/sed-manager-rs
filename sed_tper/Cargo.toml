@@ -15,6 +15,7 @@ sed_spec_macros.workspace = true
 sorbit.workspace = true
 oneshot.workspace = true
 async-channel.workspace = true
+async-broadcast.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 num_enum.workspace = true

@@ -40,9 +40,10 @@ sorbit = { version = "0.1.2", git = "https://github.com/petiaccja/sorbit", rev =
 tokio = { version = "1.51.1", features = ["rt-multi-thread"] }
 oneshot = { version = "0.2.1", features = ["async"] }
 async-channel = { version = "2.5.0" }
+async-broadcast = "0.7.2"
+async-lock = "3.4.2"
 pin-project = "1.1.11"
 async-trait = "0.1.89"
-async-lock = "3.4.2"
 futures = "0.3.32"
 
 # -- Data structures
