@@ -8,7 +8,7 @@ mod ui_ext;
 
 use std::rc::Rc;
 
-use sed_async_runtime::Runtime;
+use sed_async::Runtime;
 use sed_manager_gui_slint::{self as ui};
 use sed_telemetry::{create_otlp_provider, init_otlp_subscriber, init_stdout_subscriber};
 use slint::ComponentHandle as _;

@@ -6,7 +6,7 @@
 use core::time::Duration;
 use std::time::Instant;
 
-use sed_async_runtime::yield_now;
+use sed_async::yield_now;
 
 use crate::error::Error;
 
@@ -53,6 +53,6 @@ async fn sleep_until(time: Instant) {
             yield_now().await;
         }
     } else {
-        sed_async_runtime::sleep_until(time).await;
+        sed_async::sleep_until(time).await;
     }
 }

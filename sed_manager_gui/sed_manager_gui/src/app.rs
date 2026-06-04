@@ -8,7 +8,7 @@ use std::{
 
 use async_lock::{Mutex, RwLock};
 use futures::FutureExt;
-use sed_async_runtime::Runtime;
+use sed_async::Runtime;
 use sed_device::{Device, list_physical_drives, open_device};
 use sed_manager::{Error, SidSession, Spec};
 use sed_manager_gui_slint::{self as ui};

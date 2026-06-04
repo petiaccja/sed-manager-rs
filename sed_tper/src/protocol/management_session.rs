@@ -2,7 +2,7 @@ use std::collections::{HashMap, VecDeque};
 use std::marker::PhantomData;
 use std::time::{Duration, Instant};
 
-use sed_async_runtime::{CancelSender, cancel_channel};
+use sed_async::{CancelSender, cancel_channel};
 use sed_packet::packet::{PACKET_HEADER_LEN, Packet, SUB_PACKET_HEADER_LEN, SubPacket, SubPacketKind};
 use sed_packet::session_id::SessionId;
 use sed_packet::token::FromTokens as _;

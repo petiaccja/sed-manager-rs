@@ -5,7 +5,7 @@ use std::num::NonZero;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use sed_async_runtime::{CancelToken, sleep_until, spawn, timeout_at};
+use sed_async::{CancelToken, sleep_until, spawn, timeout_at};
 use sed_device::Device;
 use sed_packet::com_id::ComIdRequest;
 use sed_packet::packet::{COM_PACKET_HEADER_LEN, PACKET_HEADER_LEN, SUB_PACKET_HEADER_LEN};

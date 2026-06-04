@@ -3,7 +3,7 @@ use std::collections::VecDeque;
 use std::marker::PhantomData;
 use std::time::{Duration, Instant};
 
-use sed_async_runtime::cancel_channel;
+use sed_async::cancel_channel;
 use sed_packet::packet::{PACKET_HEADER_LEN, Packet, SUB_PACKET_HEADER_LEN, SubPacket, SubPacketKind};
 use sed_packet::session_id::SessionId;
 use sed_packet::token::{Command, ToTokens as _};

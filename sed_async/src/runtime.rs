@@ -1,10 +1,6 @@
-mod cancellation_token;
-
 use std::pin::Pin;
 use std::task::Poll;
 use std::time::{Duration, Instant};
-
-pub use cancellation_token::{CancelSender, CancelToken, cancel_channel};
 
 pub struct Runtime {
     inner: tokio::runtime::Runtime,

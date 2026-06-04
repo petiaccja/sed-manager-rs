@@ -3,7 +3,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use sed_async_runtime::{CancelSender, cancel_channel};
+use sed_async::{CancelSender, cancel_channel};
 use tracing::instrument;
 
 use crate::{

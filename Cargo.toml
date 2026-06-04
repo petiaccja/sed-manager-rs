@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
-    "sed_async_runtime",
+    "sed_async",
     "sed_device",
     "sed_manager",
     "sed_manager_gui/sed_manager_gui",
@@ -18,7 +18,7 @@ members = [
 [workspace.dependencies]
 
 # Workspace packages.
-sed_async_runtime = { version = "0.1.0", path = "sed_async_runtime" }
+sed_async = { version = "0.1.0", path = "sed_async" }
 sed_device = { version = "0.1.0", path = "sed_device" }
 sed_manager = { version = "0.1.0", path = "sed_manager" }
 sed_manager_gui = { version = "0.1.0", path = "sed_manager_gui/sed_manager_gui" }

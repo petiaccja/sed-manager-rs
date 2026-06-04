@@ -3,7 +3,7 @@ use std::sync::{
     atomic::{AtomicU32, Ordering},
 };
 
-use sed_async_runtime::{Runtime, spawn};
+use sed_async::{Runtime, spawn};
 use sed_device::Device;
 use sed_packet::discovery::Discovery;
 use sed_packet::{

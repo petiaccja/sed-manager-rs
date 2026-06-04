@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 use std::time::Instant;
 
-use sed_async_runtime::CancelSender;
+use sed_async::CancelSender;
 use sed_packet::Ignore;
 use sed_packet::token::{Detokenize, Detokenizer, MessageError};
 use sed_spec::methods::{MethodResult, MgmtMethodCall, MgmtMethodCallParams, Properties};
@@ -80,7 +80,7 @@ pub fn retain_alive(time: Instant, queue: &mut VecDeque<RecvQueuedMethod>) -> us
 mod tests {
     use std::time::Duration;
 
-    use sed_async_runtime::cancel_channel;
+    use sed_async::cancel_channel;
 
     use super::*;
 
