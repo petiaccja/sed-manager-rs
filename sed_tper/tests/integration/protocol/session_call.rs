@@ -46,7 +46,7 @@ async fn send_session_method_success(_with_tracing: WithTracing) {
     let (protocol, controller) = Protocol::new(com_id, 0, device.clone());
     let handle = spawn(protocol.run().in_current_span());
 
-    controller.spawn(session_id, Properties::ASSUMED);
+    controller.spawn(session_id, Properties::INITIAL);
     let result = timeout(TEST_TIMEOUT, controller.call(session_id, random_call.to_tokens().unwrap())).await;
     controller.delete(session_id);
 
@@ -84,7 +84,7 @@ async fn send_session_method_iface_send_failed(_with_tracing: WithTracing) {
     let (protocol, controller) = Protocol::new(com_id, 0, device.clone());
     let handle = spawn(protocol.run().in_current_span());
 
-    controller.spawn(session_id, Properties::ASSUMED);
+    controller.spawn(session_id, Properties::INITIAL);
     let result = timeout(TEST_TIMEOUT, controller.call(session_id, random_call.to_tokens().unwrap())).await;
     controller.delete(session_id);
 
@@ -119,7 +119,7 @@ async fn send_session_method_iface_recv_failed(_with_tracing: WithTracing) {
     let (protocol, controller) = Protocol::new(com_id, 0, device.clone());
     let handle = spawn(protocol.run().in_current_span());
 
-    controller.spawn(session_id, Properties::ASSUMED);
+    controller.spawn(session_id, Properties::INITIAL);
     let result = timeout(TEST_TIMEOUT, controller.call(session_id, random_call.to_tokens().unwrap())).await;
     controller.delete(session_id);
 
@@ -147,7 +147,7 @@ async fn send_session_method_eos(_with_tracing: WithTracing) {
     let (protocol, controller) = Protocol::new(com_id, 0, device.clone());
     let handle = spawn(protocol.run().in_current_span());
 
-    controller.spawn(session_id, Properties::ASSUMED);
+    controller.spawn(session_id, Properties::INITIAL);
     let result = timeout(TEST_TIMEOUT, controller.call(session_id, Command::EndOfSession.to_tokens().unwrap())).await;
 
     drop(controller);

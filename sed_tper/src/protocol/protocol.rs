@@ -15,7 +15,9 @@ use tracing::field::Empty;
 use tracing::{Instrument, Span, debug_span, warn};
 
 use crate::protocol::device_session::DeviceSession;
-use crate::protocol::message::{ComResponse, Message, MethodResponse, ReportAborted, SendComRequest, SendMethod};
+use crate::protocol::message::{
+    ComResponse, ConnectionChanged, Message, MethodResponse, ReportAborted, SendComRequest, SendMethod,
+};
 use crate::protocol::{com_session::ComSession, management_session::ManagementSession, session::Session};
 
 /// After the timeout, message sent between the host and device are considered
@@ -82,6 +84,7 @@ pub struct Protocol {
     management_session: ManagementSession,
     sessions: HashMap<SessionId, Session>,
     message_receiver: async_channel::Receiver<DispatchMessage>,
+    connection_changed: async_broadcast::Sender<ConnectionChanged>,
 }
 
 impl Protocol {
@@ -91,15 +94,18 @@ impl Protocol {
     /// This initializes the protocol stack, but no messages will be delivered
     /// until you call [`run`](Self::run).
     pub fn new(com_id: u16, com_id_ext: u16, device: Arc<dyn Device>) -> (Self, Controller) {
-        let (tx, rx) = async_channel::unbounded();
-        let controller = Controller { context: Context::new(tx) };
+        let (message_tx, message_rx) = async_channel::unbounded();
+        let (mut connection_tx, connection_rx) = async_broadcast::broadcast(1);
+        connection_tx.set_overflow(true); // Using channel as "watch", only latest data should be cached.
+        let controller = Controller { context: Context::new(message_tx), connection_changed: connection_rx };
         (
             Self {
                 device_session: DeviceSession::new(com_id, com_id_ext, device, DEF_TRANS_TIMEOUT),
                 com_session: ComSession::new(DEF_TRANS_TIMEOUT),
                 management_session: ManagementSession::new(CAPABILITIES, DEF_TRANS_TIMEOUT),
                 sessions: HashMap::new(),
-                message_receiver: rx,
+                message_receiver: message_rx,
+                connection_changed: connection_tx,
             },
             controller,
         )
@@ -156,6 +162,9 @@ impl Protocol {
                 if self.sessions.remove(&message.0).is_none() {
                     span.record("err", "session not found");
                 }
+            }
+            Message::ConnectionChanged(message) => {
+                assert!(self.connection_changed.try_broadcast(message).is_ok(), "overflow mode disabled");
             }
             _ => warn!(message = debug(message), "message dropped"),
         }
@@ -218,6 +227,7 @@ impl Protocol {
 #[derive(Debug, Clone)]
 pub struct Controller {
     context: Context,
+    connection_changed: async_broadcast::Receiver<ConnectionChanged>,
 }
 
 impl Controller {
@@ -285,6 +295,18 @@ impl Controller {
 
         let address = Address::Control;
         self.context.with_root_span(root_span).send(address, Message::Delete(Delete(session_id)));
+    }
+
+    /// Listen to changes in connection properties.
+    ///
+    /// The protocol manages the properties of the communication with the
+    /// remote. When the properties change, an event is emitted on the channel.
+    /// This typically only happens once at the beginning of the session, as
+    /// it's enough to negotiate properties once. If no event comes on the
+    /// channel, it means that the device did not respond to the request to
+    /// negotiate properties.
+    pub fn connection_changed(&self) -> async_broadcast::Receiver<ConnectionChanged> {
+        self.connection_changed.clone()
     }
 }
 

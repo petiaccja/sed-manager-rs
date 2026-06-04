@@ -72,7 +72,7 @@ impl Properties {
     /// The initial assumption about the other end's capabilities. The protocol
     /// must stick to these values before exchanging properties and upping the
     /// levels.
-    pub const ASSUMED: Properties = Properties {
+    pub const INITIAL: Properties = Properties {
         max_methods: Limit::Limited(NonZero::new(1).unwrap()),
         max_subpackets: Limit::Limited(NonZero::new(1).unwrap()),
         max_gross_packet_size: Limit::Limited(NonZero::new(1004).unwrap()),
@@ -137,7 +137,7 @@ impl Properties {
 
 impl Default for Properties {
     fn default() -> Self {
-        Properties::ASSUMED
+        Properties::INITIAL
     }
 }
 

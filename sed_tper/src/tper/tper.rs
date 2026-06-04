@@ -10,14 +10,16 @@ use sed_packet::{
     MaxBytes,
     com_id::{ComIdRequest, ComIdResponsePayload, ComIdState, StackResetStatus},
 };
-use sed_spec::objects::{AuthorityRef, SecurityProviderRef};
+use sed_spec::{
+    methods::Properties,
+    objects::{AuthorityRef, SecurityProviderRef},
+};
 use sorbit::ser_de::FromBytes;
 use tracing::instrument;
 
 use crate::{
-    Session,
-    error::Error,
-    protocol::{Controller, Protocol},
+    Error, Session,
+    protocol::{CAPABILITIES, ConnectionChanged, Controller, Protocol},
 };
 
 /// A connection to the storage device using a particular ComID/ComIDExt pair.
@@ -48,6 +50,24 @@ impl Tper {
     /// The ComID extension on which the `Tper` is connected.
     pub fn com_id_ext(&self) -> u16 {
         self.com_id_ext
+    }
+
+    /// Get the communication capabilities of the host. These properties
+    /// reflect how this library implements the TCG protocol stack.
+    pub fn capabilities(&self) -> Properties {
+        CAPABILITIES
+    }
+
+    /// Listen to changes in the connection properties.
+    ///
+    /// Unlike the capabilities of the host or the device, the connection's
+    /// properties are dynamic. The connection properties are negotiated between
+    /// the host and the device to limits that both parties can meet.
+    ///
+    /// When the communication properties change, an event is emitted. The
+    /// device's capabilities are also returned.
+    pub fn connection_changed(&self) -> async_broadcast::Receiver<ConnectionChanged> {
+        self.controller.connection_changed()
     }
 
     /// Connect to a device on the specified ComID and ComID extension.

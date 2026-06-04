@@ -33,6 +33,7 @@ pub enum Message {
     SecuritySendDone(SecuritySendDone),
     SecurityRecvDoneComPacket(Result<ComPacket, Error>),
     SecurityRecvDoneComIdRequest(Result<ComIdResponse, Error>),
+    ConnectionChanged(ConnectionChanged),
 }
 
 /// Initiate an RPC method call to the device.
@@ -125,4 +126,10 @@ pub struct ComResponseReceived {
 pub struct SecuritySendDone {
     pub protocol: u8,
     pub result: Result<(), DeviceError>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConnectionChanged {
+    pub remote_properties: Properties,
+    pub connection_properties: Properties,
 }

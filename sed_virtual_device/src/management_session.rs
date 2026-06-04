@@ -64,7 +64,7 @@ pub struct ManagementSession {
 
 impl ManagementSession {
     pub fn new() -> Self {
-        Self { next_tsn: 1000.into(), properties: Properties::ASSUMED, recv_buffer: VecDeque::new() }
+        Self { next_tsn: 1000.into(), properties: Properties::INITIAL, recv_buffer: VecDeque::new() }
     }
 
     pub fn next_tsn(&self) -> u32 {
@@ -218,7 +218,7 @@ impl ManagementSession {
             PropertiesMethod::Host { host_properties } => host_properties.as_ref(),
             PropertiesMethod::TPer { host_properties, .. } => host_properties.as_ref(),
         };
-        let common = Properties::common(host_properties.unwrap_or(&Properties::ASSUMED), &CAPABILITIES);
+        let common = Properties::common(host_properties.unwrap_or(&Properties::INITIAL), &CAPABILITIES);
         self.properties = common.clone();
         MethodCall {
             invoking_id: SESSION_MANAGER,

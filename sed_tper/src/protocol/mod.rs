@@ -7,4 +7,5 @@ mod protocol;
 mod retry;
 mod session;
 
-pub use protocol::{Controller, Protocol};
+pub use message::ConnectionChanged;
+pub use protocol::{CAPABILITIES, Controller, Protocol};

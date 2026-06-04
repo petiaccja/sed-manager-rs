@@ -14,18 +14,19 @@ use sed_spec::methods::{
 use tracing::{debug_span, instrument};
 
 use crate::error::Error;
+use crate::protocol::ConnectionChanged;
 use crate::protocol::message::{Message, PacketReceived, ReportAborted, SendMethod, SendPacket, SendPacketDone, Spawn};
 use crate::protocol::method::{MgmtMethodCallSend, RecvQueuedMethod, WriteQueuedMethod, retain_alive};
 use crate::protocol::protocol::{Address, Context};
 
 const MAX_METHOD_SIZE: usize =
-    Properties::ASSUMED.max_gross_packet_size.get() - PACKET_HEADER_LEN + SUB_PACKET_HEADER_LEN;
+    Properties::INITIAL.max_gross_packet_size.get() - PACKET_HEADER_LEN + SUB_PACKET_HEADER_LEN;
 
 #[derive(Debug)]
 pub struct ManagementSession {
     timeout: Duration,
     capabilities: Properties,
-    properties: Properties,
+    connection_properties: Properties,
     receive_buffer: VecDeque<u8>,
     sync_session_queue: HashMap<u32, VecDeque<RecvQueuedMethod>>,
 }
@@ -37,7 +38,7 @@ impl ManagementSession {
         Self {
             timeout,
             capabilities,
-            properties: Properties::ASSUMED,
+            connection_properties: Properties::INITIAL,
             receive_buffer: VecDeque::new(),
             sync_session_queue: HashMap::new(),
         }
@@ -59,7 +60,7 @@ impl ManagementSession {
                     packet,
                     methods: vec![WriteQueuedMethod {
                         channel,
-                        mgmt_session_meta: Some((call, self.properties.clone()).into()),
+                        mgmt_session_meta: Some((call, self.connection_properties.clone()).into()),
                     }],
                 }),
             );
@@ -152,7 +153,14 @@ impl ManagementSession {
                 MgmtMethodCallParams::Properties(properties) => match properties {
                     PropertiesMethod::Host { .. } => (),
                     PropertiesMethod::TPer { properties, .. } => {
-                        self.properties = Properties::common(&self.capabilities, properties)
+                        self.connection_properties = Properties::common(&self.capabilities, properties);
+                        context.send(
+                            Address::Control,
+                            Message::ConnectionChanged(ConnectionChanged {
+                                remote_properties: properties.clone(),
+                                connection_properties: self.connection_properties.clone(),
+                            }),
+                        );
                     }
                 },
                 _ => (),
@@ -233,7 +241,7 @@ mod tests {
 
     #[test]
     fn send_method() {
-        let mut mgmt_session = ManagementSession::new(Properties::ASSUMED, TEST_TIMEOUT);
+        let mut mgmt_session = ManagementSession::new(Properties::INITIAL, TEST_TIMEOUT);
         let (context, queue) = Context::mock();
         let (tx, rx) = oneshot::channel();
         let method = create_request();
@@ -248,7 +256,7 @@ mod tests {
 
     #[tokio::test]
     async fn send_packet_done_success() {
-        let mut mgmt_session = ManagementSession::new(Properties::ASSUMED, Duration::ZERO);
+        let mut mgmt_session = ManagementSession::new(Properties::INITIAL, Duration::ZERO);
         let (context, queue) = Context::mock();
         let (tx, rx) = oneshot::channel();
 
@@ -258,7 +266,7 @@ mod tests {
                 status: Ok(()),
                 methods: vec![WriteQueuedMethod {
                     channel: tx,
-                    mgmt_session_meta: Some((MgmtMethodCallSend::StartSession { hsn: 1 }, Properties::ASSUMED).into()),
+                    mgmt_session_meta: Some((MgmtMethodCallSend::StartSession { hsn: 1 }, Properties::INITIAL).into()),
                 }],
             },
         );
@@ -276,7 +284,7 @@ mod tests {
 
     #[tokio::test]
     async fn send_packet_done_failure() {
-        let mut mgmt_session = ManagementSession::new(Properties::ASSUMED, Duration::ZERO);
+        let mut mgmt_session = ManagementSession::new(Properties::INITIAL, Duration::ZERO);
         let (context, queue) = Context::mock();
         let (tx, rx) = oneshot::channel();
 
@@ -286,7 +294,7 @@ mod tests {
                 status: Err(Error::NotSupported),
                 methods: vec![WriteQueuedMethod {
                     channel: tx,
-                    mgmt_session_meta: Some((MgmtMethodCallSend::StartSession { hsn: 1 }, Properties::ASSUMED).into()),
+                    mgmt_session_meta: Some((MgmtMethodCallSend::StartSession { hsn: 1 }, Properties::INITIAL).into()),
                 }],
             },
         );
@@ -301,7 +309,7 @@ mod tests {
 
     #[tokio::test]
     async fn packet_received_timeout() {
-        let mut mgmt_session = ManagementSession::new(Properties::ASSUMED, Duration::ZERO);
+        let mut mgmt_session = ManagementSession::new(Properties::INITIAL, Duration::ZERO);
         let (tx, rx) = oneshot::channel();
         let (_cancel_token, cancel_sender) = cancel_channel();
 
@@ -309,7 +317,7 @@ mod tests {
             channel: tx,
             deadline: Instant::now(),
             cancel_sender: Some(cancel_sender),
-            mgmt_session_meta: Some(Properties::ASSUMED.into()),
+            mgmt_session_meta: Some(Properties::INITIAL.into()),
         });
 
         mgmt_session.timeout(Instant::now() + Duration::from_secs(1000));
@@ -320,7 +328,7 @@ mod tests {
 
     #[tokio::test]
     async fn packet_received_receive() {
-        let mut mgmt_session = ManagementSession::new(Properties::ASSUMED, Duration::ZERO);
+        let mut mgmt_session = ManagementSession::new(Properties::INITIAL, Duration::ZERO);
         let (context, queue) = Context::mock();
         let (tx, rx) = oneshot::channel();
         let (_cancel_token, cancel_sender) = cancel_channel();
@@ -339,7 +347,7 @@ mod tests {
             channel: tx,
             deadline: Instant::now(),
             cancel_sender: Some(cancel_sender),
-            mgmt_session_meta: Some(Properties::ASSUMED.into()),
+            mgmt_session_meta: Some(Properties::INITIAL.into()),
         });
 
         mgmt_session.packet_received(context, PacketReceived { packet });

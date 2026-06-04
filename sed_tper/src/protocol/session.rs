@@ -323,7 +323,7 @@ mod tests {
     #[test]
     fn send_method_regular() {
         let session_id = SessionId { hsn: 1, tsn: 2 };
-        let mut session = Session::new(session_id, Properties::ASSUMED, TEST_TIMEOUT);
+        let mut session = Session::new(session_id, Properties::INITIAL, TEST_TIMEOUT);
         let (context, queue) = Context::mock();
         let (tx, rx) = oneshot::channel();
         let method = create_request();
@@ -340,7 +340,7 @@ mod tests {
     #[test]
     fn send_method_eos() {
         let session_id = SessionId { hsn: 1, tsn: 2 };
-        let mut session = Session::new(session_id, Properties::ASSUMED, TEST_TIMEOUT);
+        let mut session = Session::new(session_id, Properties::INITIAL, TEST_TIMEOUT);
         let (context, queue) = Context::mock();
         let (tx, rx) = oneshot::channel();
         let method = Command::EndOfSession;
@@ -357,7 +357,7 @@ mod tests {
     #[test]
     fn commit_batch() {
         let session_id = SessionId { hsn: 1, tsn: 2 };
-        let mut session = Session::new(session_id, Properties::ASSUMED, TEST_TIMEOUT);
+        let mut session = Session::new(session_id, Properties::INITIAL, TEST_TIMEOUT);
         let (context, queue) = Context::mock();
         let (tx, rx) = oneshot::channel();
         let method = create_request();
@@ -381,7 +381,7 @@ mod tests {
     #[tokio::test]
     async fn send_packet_done_success() {
         let session_id = SessionId { hsn: 1, tsn: 2 };
-        let mut session = Session::new(session_id, Properties::ASSUMED, Duration::ZERO);
+        let mut session = Session::new(session_id, Properties::INITIAL, Duration::ZERO);
         let (context, queue) = Context::mock();
         let (tx, rx) = oneshot::channel();
 
@@ -407,7 +407,7 @@ mod tests {
     #[tokio::test]
     async fn send_packet_done_failure() {
         let session_id = SessionId { hsn: 1, tsn: 2 };
-        let mut session = Session::new(session_id, Properties::ASSUMED, Duration::ZERO);
+        let mut session = Session::new(session_id, Properties::INITIAL, Duration::ZERO);
         let (context, queue) = Context::mock();
         let (tx, rx) = oneshot::channel();
 
@@ -430,7 +430,7 @@ mod tests {
     #[tokio::test]
     async fn packet_received_timeout() {
         let session_id = SessionId { hsn: 1, tsn: 2 };
-        let mut session = Session::new(session_id, Properties::ASSUMED, Duration::ZERO);
+        let mut session = Session::new(session_id, Properties::INITIAL, Duration::ZERO);
         let (context, _queue) = Context::mock();
         let (tx, rx) = oneshot::channel();
         let (_cancel_token, cancel_sender) = cancel_channel();
@@ -454,7 +454,7 @@ mod tests {
     #[tokio::test]
     async fn packet_received_receive_regular() {
         let session_id = SessionId { hsn: 1, tsn: 2 };
-        let mut session = Session::new(session_id, Properties::ASSUMED, Duration::ZERO);
+        let mut session = Session::new(session_id, Properties::INITIAL, Duration::ZERO);
         let (context, queue) = Context::mock();
         let (tx, rx) = oneshot::channel();
         let (_cancel_token, cancel_sender) = cancel_channel();
@@ -489,7 +489,7 @@ mod tests {
     #[tokio::test]
     async fn packet_received_receive_eos() {
         let session_id = SessionId { hsn: 1, tsn: 2 };
-        let mut session = Session::new(session_id, Properties::ASSUMED, Duration::ZERO);
+        let mut session = Session::new(session_id, Properties::INITIAL, Duration::ZERO);
         let (context, queue) = Context::mock();
         let (tx, rx) = oneshot::channel();
         let (_cancel_token, cancel_sender) = cancel_channel();
@@ -527,7 +527,7 @@ mod tests {
     #[test]
     fn abort_sends_eos() {
         let session_id = SessionId { hsn: 1, tsn: 2 };
-        let mut session = Session::new(session_id, Properties::ASSUMED, TEST_TIMEOUT);
+        let mut session = Session::new(session_id, Properties::INITIAL, TEST_TIMEOUT);
         let (context, queue) = Context::mock();
 
         session.abort(context);
@@ -554,7 +554,7 @@ mod tests {
     #[test]
     fn report_aborted_omits_eos() {
         let session_id = SessionId { hsn: 1, tsn: 2 };
-        let mut session = Session::new(session_id, Properties::ASSUMED, TEST_TIMEOUT);
+        let mut session = Session::new(session_id, Properties::INITIAL, TEST_TIMEOUT);
         let (context, queue) = Context::mock();
 
         session.report_aborted(context, ReportAborted);
