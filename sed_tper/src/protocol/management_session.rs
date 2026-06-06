@@ -166,7 +166,7 @@ impl ManagementSession {
                 _ => (),
             },
             ExtractResult::NeedMoreTokens => (),
-            ExtractResult::EndOfStream => self.reset(),
+            ExtractResult::EndOfSession => self.reset(),
             ExtractResult::InvalidTokens(_) => self.reset(),
         };
     }

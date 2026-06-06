@@ -74,7 +74,7 @@ impl Session {
             .into_iter()
             .filter_map(|extract_result| match extract_result {
                 ExtractResult::Ok { value, .. } => self.call(tper, value),
-                ExtractResult::EndOfStream => self.close().map(|packet| (packet, vec![])),
+                ExtractResult::EndOfSession => self.close().map(|packet| (packet, vec![])),
                 ExtractResult::NeedMoreTokens => None,
                 ExtractResult::InvalidTokens(_) => self.abort().map(|packet| (packet, vec![])),
             })

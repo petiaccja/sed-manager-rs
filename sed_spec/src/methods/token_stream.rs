@@ -17,7 +17,7 @@ pub enum ExtractResult<Method> {
         tokens: Vec<u8>,
     },
     /// Instead of the requested method, the token stream being with an EOS command.
-    EndOfStream,
+    EndOfSession,
     /// The extraction failed due to not enough tokens, but could succeed if
     /// more tokens were to come.
     NeedMoreTokens,
@@ -37,7 +37,7 @@ where
     Method: Detokenize,
 {
     if extract_end_of_session(token_stream).is_some() {
-        ExtractResult::EndOfStream
+        ExtractResult::EndOfSession
     } else {
         let bytes = token_stream.make_contiguous() as &[u8];
         let mut detokenizer = create_detokenizer(bytes);
@@ -87,7 +87,7 @@ mod tests {
     #[case(VecDeque::from([0xF0, 1, 2, 0xF1, 0xFA]), ExtractResult::Ok { value: vec![1, 2], tokens: vec![0xF0, 1, 2, 0xF1] }, VecDeque::from([0xFA]))]
     #[case(VecDeque::from([0xF0, 1]), ExtractResult::NeedMoreTokens, VecDeque::from([0xF0, 1]))]
     #[case(VecDeque::from([0xF0, 0xF2, 0xF1]), ExtractResult::InvalidTokens(TokenError::CanNotConvert{ from: "named", to: "u8" }), VecDeque::from([0xF0, 0xF2, 0xF1]))]
-    #[case(VecDeque::from([0xFA, 0xF0, 0xF1]), ExtractResult::EndOfStream, VecDeque::from([0xF0, 0xF1]))]
+    #[case(VecDeque::from([0xFA, 0xF0, 0xF1]), ExtractResult::EndOfSession, VecDeque::from([0xF0, 0xF1]))]
     fn extract_method_(
         #[case] mut token_stream: VecDeque<u8>,
         #[case] result: ExtractResult<Vec<u8>>,

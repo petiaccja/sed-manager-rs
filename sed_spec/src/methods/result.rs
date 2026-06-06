@@ -64,11 +64,15 @@ where
             }
             Err(param_err) => {
                 // Consume the token stream all the way to the EOD command, if any.
-                let _eod = detokenizer.detokenize_until(|detokenizer| match Command::detokenize(detokenizer) {
+                let eod_result = detokenizer.detokenize_until(|detokenizer| match Command::detokenize(detokenizer) {
                     result @ Ok(Command::EndOfData) => result,
                     Ok(_) => Err(D::Error::message("expected an END_OF_DATA token")),
                     result => result,
-                })?;
+                });
+
+                if eod_result.is_err() {
+                    return Err(param_err);
+                }
 
                 let status = Vec::<MethodStatus>::detokenize(detokenizer)?;
                 let Some(status) = status.first().cloned() else {
@@ -111,6 +115,7 @@ mod tests {
     #[case::valid_param_list_fail(Ok(MethodResult(Err(MethodStatus::Fail))), &[0xF0, 0x01, 0xF1, 0xF9, 0xF0, 0x3F, 0x00, 0x00, 0xF1])]
     #[case::empty_param_list_success(Err(TokenError::Custom("mandatory field a missing".into())), &[0xF0, 0xF1, 0xF9, 0xF0, 0x00, 0x00, 0x00, 0xF1])]
     #[case::invalid_param_list(Err(TokenError::CanNotConvert{ from: "control", to: "u8" }), &[0xF0, 0xFF, 0xF1, 0xF9, 0xF0, 0x00, 0x00, 0x00, 0xF1])]
+    #[case::failed_and_eod_not_found(Err(TokenError::CanNotConvert{ from: "control", to: "u8" }), &[0xF0, 0xFF, 0xF1, 0xF0, 0x00, 0x00, 0x00, 0xF1])]
     fn detokenize_edge_cases(#[case] value: Result<MethodResult<ParamList>, TokenError>, #[case] bytes: &[u8]) {
         assert_eq!(<MethodResult<ParamList>>::from_tokens(bytes), value);
     }

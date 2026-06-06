@@ -167,7 +167,7 @@ impl Session {
                         }
                     }
                     ExtractResult::NeedMoreTokens => (),
-                    ExtractResult::EndOfStream => {
+                    ExtractResult::EndOfSession => {
                         if let Some(RecvQueuedMethod { channel, cancel_sender, .. }) = channel_queue.pop_front() {
                             cancel_sender.map(|cancel_sender| cancel_sender.cancel());
                             let _ = channel.send(Ok(Command::EndOfSession.to_tokens().unwrap()));

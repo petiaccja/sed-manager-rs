@@ -86,7 +86,7 @@ impl ManagementSession {
                     let packet = self.call(tper, sessions, value);
                     response.extend(packet);
                 }
-                ExtractResult::EndOfStream => self.reset(),
+                ExtractResult::EndOfSession => self.reset(),
                 ExtractResult::NeedMoreTokens => break,
                 ExtractResult::InvalidTokens(_) => self.reset(),
             }
