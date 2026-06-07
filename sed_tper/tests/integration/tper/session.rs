@@ -14,7 +14,7 @@ use sed_spec::{
     },
 };
 use sed_telemetry::{WithTracing, with_tracing};
-use sed_tper::{Error, Session, Tper, protocol::Protocol};
+use sed_tper::{Error, Session, Tper, protocol_sans_io::Protocol};
 use sed_virtual_device::{BASE_COM_ID, INITIAL_SID_PASSWORD, VirtualDevice};
 use tracing::instrument;
 

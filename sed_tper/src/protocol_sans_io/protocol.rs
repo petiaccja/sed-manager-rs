@@ -114,6 +114,11 @@ impl Protocol {
         self.rpc_session.handle_session_aborted(session_id);
     }
 
+    #[cfg(feature = "test-utils")]
+    pub fn handle_spawn_session(&mut self, session_id: SessionId, properties: Properties) {
+        self.rpc_session.handle_spawn_session(session_id, properties);
+    }
+
     pub fn handle_com_request(&mut self, request: ComIdRequest, sender: Sender<Result<ComIdResponse, Error>>) {
         self.com_id_session.handle_com_request(request, sender);
     }

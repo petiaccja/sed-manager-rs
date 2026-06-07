@@ -13,7 +13,7 @@ use sed_device::{Device, list_physical_drives, open_device};
 use sed_manager::{Error, SidSession, Spec};
 use sed_manager_gui_slint as ui;
 use sed_packet::{MaxBytes, com_id::ComIdState};
-use sed_tper::{Tper, protocol::ConnectionChanged};
+use sed_tper::{ConnectionChanged, Tper};
 use sed_virtual_device::{VIRTUAL_DEVICE_PATH, VirtualDevice};
 use slint::{ComponentHandle, EventLoopError, ModelExt as _, ModelRc, SharedString, ToSharedString, spawn_local};
 use tracing::{Instrument, instrument};

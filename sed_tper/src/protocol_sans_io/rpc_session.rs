@@ -58,6 +58,11 @@ impl RpcSession {
         }
     }
 
+    #[cfg(feature = "test-utils")]
+    pub fn handle_spawn_session(&mut self, session_id: SessionId, properties: Properties) {
+        self.sessions.entry(session_id).or_insert(Session::new(session_id, self.timeout, properties));
+    }
+
     pub fn handle_iface_send_done(
         &mut self,
         time: Instant,

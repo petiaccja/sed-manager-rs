@@ -19,7 +19,7 @@ use tracing::instrument;
 
 use crate::{
     Error, Session,
-    protocol::{CAPABILITIES, ConnectionChanged, Controller, Protocol},
+    protocol_sans_io::{CAPABILITIES, ConnectionChanged, Controller, Protocol},
 };
 
 /// A connection to the storage device using a particular ComID/ComIDExt pair.
@@ -67,7 +67,7 @@ impl Tper {
     /// When the communication properties change, an event is emitted. The
     /// device's capabilities are also returned.
     pub fn connection_changed(&self) -> async_broadcast::Receiver<ConnectionChanged> {
-        self.controller.connection_changed()
+        self.controller.connection_properties()
     }
 
     /// Connect to a device on the specified ComID and ComID extension.

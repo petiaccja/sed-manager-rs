@@ -14,26 +14,25 @@ use crate::{
     protocol_sans_io::{protocol::Protocol, shared::Action},
 };
 
-pub fn run(com_id: u16, com_id_ext: u16, device: Arc<dyn Device>) -> (Controller, impl Future<Output = ()>) {
-    let (tx, rx) = async_channel::unbounded();
-    let (_conn_tx, conn_rx) = async_broadcast::broadcast(1);
+pub async fn run(
+    com_id: u16,
+    com_id_ext: u16,
+    device: Arc<dyn Device>,
+    command_rx: async_channel::Receiver<Command>,
+    _conn_tx: async_broadcast::Sender<ConnectionProperties>,
+) {
+    let mut protocol = Protocol::new(com_id, com_id_ext);
 
-    let future = async move {
-        let mut protocol = Protocol::new(com_id, com_id_ext);
-
-        loop {
-            let action = protocol.poll_action(Instant::now());
-            let is_idle = matches!(action, Action::None);
-            let command = perform_action_or_recv(&*device, com_id, &mut protocol, &rx, action).await;
-            if let Some(command) = command {
-                inject_command(&mut protocol, command);
-            } else if is_idle {
-                break;
-            }
+    loop {
+        let action = protocol.poll_action(Instant::now());
+        let is_idle = matches!(action, Action::None);
+        let command = perform_action_or_recv(&*device, com_id, &mut protocol, &command_rx, action).await;
+        if let Some(command) = command {
+            inject_command(&mut protocol, command);
+        } else if is_idle {
+            break;
         }
-    };
-
-    (Controller { tx, conn_rx }, future)
+    }
 }
 
 fn inject_command(protocol: &mut Protocol, command: Command) {
@@ -41,6 +40,8 @@ fn inject_command(protocol: &mut Protocol, command: Command) {
         Command::MethodCall { session_id, call, sender } => protocol.handle_method_call(session_id, call, sender),
         Command::ComRequest { request, sender } => protocol.handle_com_request(request, sender),
         Command::ReportAborted { session_id } => protocol.handle_session_aborted(session_id),
+        #[cfg(feature = "test-utils")]
+        Command::Spawn { session_id, properties } => protocol.handle_spawn_session(session_id, properties),
     }
 }
 
@@ -77,15 +78,22 @@ async fn perform_action_or_recv(
 
 #[derive(Debug, Clone)]
 pub struct Controller {
-    tx: async_channel::Sender<Command>,
+    command_tx: async_channel::Sender<Command>,
     conn_rx: async_broadcast::Receiver<ConnectionProperties>,
 }
 
 impl Controller {
+    pub(crate) fn new(
+        command_tx: async_channel::Sender<Command>,
+        conn_rx: async_broadcast::Receiver<ConnectionProperties>,
+    ) -> Self {
+        Self { command_tx, conn_rx }
+    }
+
     /// Perform an remote procedure call using tokenized methods.
     pub fn call(&self, session_id: SessionId, call: Vec<u8>) -> oneshot::Receiver<Result<Vec<u8>, Error>> {
         let (tx, rx) = oneshot::channel();
-        let _ = self.tx.try_send(Command::MethodCall { session_id, call, sender: tx });
+        let _ = self.command_tx.try_send(Command::MethodCall { session_id, call, sender: tx });
         rx
     }
 
@@ -94,13 +102,13 @@ impl Controller {
     /// This cleans up the session without sending an EndOfSession, since the
     /// device has already terminated it.
     pub fn report_aborted(&self, session_id: SessionId) {
-        let _ = self.tx.try_send(Command::ReportAborted { session_id });
+        let _ = self.command_tx.try_send(Command::ReportAborted { session_id });
     }
 
     /// Send a ComID request to the device.
     pub fn com_id_request(&self, request: ComIdRequest) -> oneshot::Receiver<Result<ComIdResponse, Error>> {
         let (tx, rx) = oneshot::channel();
-        let _ = self.tx.try_send(Command::ComRequest { request, sender: tx });
+        let _ = self.command_tx.try_send(Command::ComRequest { request, sender: tx });
         rx
     }
 
@@ -115,13 +123,22 @@ impl Controller {
     pub fn connection_properties(&self) -> async_broadcast::Receiver<ConnectionProperties> {
         self.conn_rx.clone()
     }
+
+    /// Spawn a new session with the given ID and properties.
+    #[cfg(feature = "test-utils")]
+    pub fn spawn(&self, session_id: SessionId, properties: Properties) {
+        let _ = self.command_tx.try_send(Command::Spawn { session_id, properties });
+    }
 }
 
 #[derive(Debug)]
-enum Command {
+#[rustfmt::skip] // Puts everything on a new line with the #[cfg].
+pub enum Command {
     MethodCall { session_id: SessionId, call: Vec<u8>, sender: oneshot::Sender<Result<Vec<u8>, Error>> },
     ComRequest { request: ComIdRequest, sender: oneshot::Sender<Result<ComIdResponse, Error>> },
     ReportAborted { session_id: SessionId },
+    #[cfg(feature = "test-utils")]
+    Spawn { session_id: SessionId, properties: Properties },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -199,8 +216,10 @@ mod tests {
         ];
 
         let device = MockDevice::new(scenario.into_iter());
-        let (controller, future) = run(1, 0, Arc::new(device));
-        let task = tokio::spawn(future);
+        let (command_tx, command_rx) = async_channel::unbounded();
+        let (conn_tx, conn_rx) = async_broadcast::broadcast(1);
+        let controller = Controller::new(command_tx, conn_rx);
+        let task = tokio::spawn(run(1, 0, Arc::new(device), command_rx, conn_tx));
 
         let response_rx = controller.call(SessionId::MANAGEMENT, call);
         let response_result = tokio::time::timeout(Duration::from_secs(5), response_rx).await;
