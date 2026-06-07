@@ -93,6 +93,7 @@ pub struct Protocol {
     rpc_protocol: SynchronousProtocol<ComPacket, ComPacket>,
     com_id_protocol: SynchronousProtocol<ComIdRequest, ComIdResponse>,
     com_packets_sending: VecDeque<ComPacketSendingRecord>,
+    stop_requested: bool,
 }
 
 impl Protocol {
@@ -106,6 +107,7 @@ impl Protocol {
             rpc_protocol: SynchronousProtocol::new(PACKETIZED_PROTOCOL, max_transfer_len),
             com_id_protocol: SynchronousProtocol::new(COM_ID_PROTOCOL, COM_ID_RESPONSE_LEN),
             com_packets_sending: VecDeque::new(),
+            stop_requested: false,
         }
     }
 
@@ -140,6 +142,10 @@ impl Protocol {
             PACKETIZED_PROTOCOL => self.handle_iface_com_packet_recv_done(time, result),
             _ => (),
         }
+    }
+
+    pub fn request_stop(&mut self) {
+        self.stop_requested = true;
     }
 
     pub fn poll_action(&mut self, time: Instant) -> Action {
@@ -191,6 +197,13 @@ impl Protocol {
             action @ Action::Recover => {
                 self.com_id_protocol.handle_reset();
                 self.com_id_session.handle_reset();
+                // Unless gated behind a `stop` flag, this can cause an infinite
+                // loop of failed STACK_RESETs. This would keep the protocol
+                // from becoming "idle" and letting the runner shut down.
+                if !self.stop_requested {
+                    let stack_reset_request = ComIdRequest::stack_reset(self.com_id, self.com_id_ext);
+                    self.com_id_session.handle_com_request(stack_reset_request, oneshot::channel().0);
+                }
                 return action;
             }
         }
@@ -201,7 +214,8 @@ impl Protocol {
             action @ Action::Send { .. } => return action,
             action @ Action::Recv { .. } => return action,
             action @ Action::Recover => {
-                self.com_id_protocol.handle_send(ComIdRequest::stack_reset(self.com_id, self.com_id_ext));
+                let stack_reset_request = ComIdRequest::stack_reset(self.com_id, self.com_id_ext);
+                self.com_id_session.handle_com_request(stack_reset_request, oneshot::channel().0);
                 return action;
             }
         }
@@ -236,6 +250,7 @@ impl Protocol {
             {
                 self.rpc_protocol.handle_reset();
                 self.rpc_session.handle_reset();
+                self.com_packets_sending.clear();
             }
             self.com_id_session.handle_iface_recv_done(response);
         }

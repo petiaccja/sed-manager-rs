@@ -32,6 +32,9 @@ pub async fn run(
         } else if is_idle {
             break;
         }
+        if command_rx.is_closed() {
+            protocol.request_stop();
+        }
     }
 }
 

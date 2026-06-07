@@ -124,9 +124,9 @@ where
             Phase::Receive { backoff, transfer_len, .. }
             | Phase::ReceiveAfter { backoff, transfer_len, .. }
             | Phase::Receiving { backoff, transfer_len } => {
-                let recv_attemp = self.recv_attempt;
+                let recv_attempt = self.recv_attempt;
                 self.recv_attempt += 1;
-                if recv_attemp == 0 {
+                if recv_attempt == 0 {
                     Phase::Receive { transfer_len, backoff }
                 } else {
                     Phase::ReceiveAfter { after: time + RECV_FAILURE_BACKOFF, transfer_len, backoff }
@@ -159,10 +159,8 @@ where
                     // idea when and if responses to our packets will arrive.
                     // The only option we have is to issue a stack reset, assume
                     // that we're now in the sending phase, and hope for the
-                    // best. Issueing a stack reset for failed ComID protocol
-                    // IF-RECV will reset the token stream protocol too, but
-                    // given that something has seriously gone wrong this is
-                    // probably desired.
+                    // best. Request a recovery and let the higher level protocol
+                    // issue the stack reset.
                     self.recv_attempt = 0;
                     (Action::Recover, Phase::Recovering)
                 }
