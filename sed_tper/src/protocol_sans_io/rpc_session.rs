@@ -58,6 +58,14 @@ impl RpcSession {
         }
     }
 
+    pub fn handle_reset(&mut self) {
+        self.packets_to_send.clear();
+        self.management.handle_reset();
+        for (_, mut session) in self.sessions.drain() {
+            session.handle_aborted();
+        }
+    }
+
     #[cfg(feature = "test-utils")]
     pub fn handle_spawn_session(&mut self, session_id: SessionId, properties: Properties) {
         self.sessions.entry(session_id).or_insert(Session::new(session_id, self.timeout, properties));

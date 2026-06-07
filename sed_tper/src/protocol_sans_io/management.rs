@@ -71,6 +71,23 @@ impl Management {
         self.start_session_calls_sending.retain(|_, queue| !queue.is_empty());
     }
 
+    pub fn handle_reset(&mut self) {
+        for MethodCallRecord { sender, .. } in self.method_calls.drain(..) {
+            let _ = sender.send(Err(Error::Aborted));
+        }
+        for (_, queue) in self.start_session_calls_sending.drain() {
+            for MethodSendingRecord { sender, .. } in queue {
+                let _ = sender.send(Err(Error::Aborted));
+            }
+        }
+        for (_, queue) in self.start_session_calls_receiving.drain() {
+            for MethodReceivingRecord { sender, .. } in queue {
+                let _ = sender.send(Err(Error::Aborted));
+            }
+        }
+        self.received_tokens.clear();
+    }
+
     #[must_use]
     pub fn handle_tokens(&mut self, tokens: Vec<u8>) -> Vec<StackAction> {
         let mut actions = Vec::new();

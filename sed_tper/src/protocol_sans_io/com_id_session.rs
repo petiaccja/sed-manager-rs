@@ -41,6 +41,18 @@ impl ComIdSession {
         }
     }
 
+    pub fn handle_reset(&mut self) {
+        for RequestRecord { sender, .. } in self.requests.drain(..) {
+            let _ = sender.send(Err(Error::Aborted));
+        }
+        if let Some(RequestSendingRecord { sender }) = self.request_sending.take() {
+            let _ = sender.send(Err(Error::Aborted));
+        }
+        if let Some(RequestReceivingRecord { sender, .. }) = self.request_receiving.take() {
+            let _ = sender.send(Err(Error::Aborted));
+        }
+    }
+
     pub fn poll_action(&mut self, time: Instant) -> ComIdAction {
         // Remove timed out entires.
         while let Some(record) = self.request_receiving.take_if(|record| record.deadline < time) {

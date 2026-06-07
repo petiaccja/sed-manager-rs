@@ -33,6 +33,7 @@ pub enum Action {
     Send { protocol: u8, data: Vec<u8> },
     Recv { protocol: u8, transfer_len: usize },
     Sleep { until: Instant },
+    Recover,
 }
 
 #[cfg(test)]

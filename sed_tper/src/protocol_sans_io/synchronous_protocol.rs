@@ -6,7 +6,7 @@ use std::{
 };
 
 use sed_packet::{
-    com_id::{COM_ID_PROTOCOL, COM_ID_RESPONSE_LEN, ComIdRequest, ComIdResponse, ComIdResponsePayload},
+    com_id::{COM_ID_RESPONSE_LEN, ComIdRequest, ComIdResponse, ComIdResponsePayload},
     packet::ComPacket,
 };
 use sorbit::{error::Error as SorbitError, ser_de::ToBytes};
@@ -15,6 +15,7 @@ use std::time::Instant;
 use crate::{Error, protocol_sans_io::shared::Action};
 
 const MAX_BACKOFF: Duration = Duration::from_millis(500);
+const RECV_FAILURE_BACKOFF: Duration = Duration::from_millis(500);
 const INITIAL_BACKOFF: Duration = Duration::from_millis(1);
 const MAX_RECV_ATTEMPTS: u64 = 3;
 
@@ -38,8 +39,6 @@ where
     SendMessage: InterfaceMessage + core::fmt::Debug,
     RecvMessage: InterfaceMessage + core::fmt::Debug,
 {
-    com_id: u16,
-    com_id_ext: u16,
     protocol: u8,
     max_transfer_len: usize,
     queue: VecDeque<SendMessage>,
@@ -53,10 +52,8 @@ where
     SendMessage: InterfaceMessage + core::fmt::Debug,
     RecvMessage: InterfaceMessage + core::fmt::Debug,
 {
-    pub fn new(com_id: u16, com_id_ext: u16, protocol: u8, max_transfer_len: usize) -> Self {
+    pub fn new(protocol: u8, max_transfer_len: usize) -> Self {
         Self {
-            com_id,
-            com_id_ext,
             protocol,
             max_transfer_len,
             queue: VecDeque::new(),
@@ -73,8 +70,14 @@ where
     pub fn handle_recv(&mut self, time: Instant, result: Result<&RecvMessage, &Error>) {
         match result {
             Ok(message) => self.handle_recv_ok(time, message),
-            Err(_) => self.handle_recv_error(),
+            Err(_) => self.handle_recv_error(time),
         }
+    }
+
+    pub fn handle_reset(&mut self) {
+        self.queue.clear();
+        self.recv_attempt = 0;
+        self.phase = Phase::Send;
     }
 
     fn handle_recv_ok(&mut self, time: Instant, message: &RecvMessage) {
@@ -109,20 +112,27 @@ where
                     Phase::ReceiveAfter { after, transfer_len: next_transfer_len, backoff }
                 }
             }
+            Phase::Recovering => Phase::Recovering,
         };
 
         self.phase = new_phase;
     }
 
-    fn handle_recv_error(&mut self) {
+    fn handle_recv_error(&mut self, time: Instant) {
         let new_phase = match self.phase.clone() {
             Phase::Send => Phase::Send,
             Phase::Receive { backoff, transfer_len, .. }
             | Phase::ReceiveAfter { backoff, transfer_len, .. }
             | Phase::Receiving { backoff, transfer_len } => {
+                let recv_attemp = self.recv_attempt;
                 self.recv_attempt += 1;
-                Phase::Receive { transfer_len, backoff }
+                if recv_attemp == 0 {
+                    Phase::Receive { transfer_len, backoff }
+                } else {
+                    Phase::ReceiveAfter { after: time + RECV_FAILURE_BACKOFF, transfer_len, backoff }
+                }
             }
+            Phase::Recovering => Phase::Recovering,
         };
 
         self.phase = new_phase;
@@ -154,25 +164,26 @@ where
                     // given that something has seriously gone wrong this is
                     // probably desired.
                     self.recv_attempt = 0;
-                    (
-                        Action::Send {
-                            protocol: COM_ID_PROTOCOL,
-                            data: ComIdRequest::stack_reset(self.com_id, self.com_id_ext)
-                                .to_bytes()
-                                .expect("can not serialize ComID request"),
-                        },
-                        Phase::Send,
-                    )
+                    (Action::Recover, Phase::Recovering)
                 }
             }
             Phase::Receiving { transfer_len, backoff } => (Action::None, Phase::Receiving { transfer_len, backoff }),
             Phase::ReceiveAfter { after, transfer_len, backoff } => {
-                if after <= time {
-                    (Action::Recv { protocol: self.protocol, transfer_len }, Phase::Receiving { transfer_len, backoff })
+                if self.recv_attempt < MAX_RECV_ATTEMPTS {
+                    if after <= time {
+                        (
+                            Action::Recv { protocol: self.protocol, transfer_len },
+                            Phase::Receiving { transfer_len, backoff },
+                        )
+                    } else {
+                        (Action::Sleep { until: after }, Phase::ReceiveAfter { after, transfer_len, backoff })
+                    }
                 } else {
-                    (Action::Sleep { until: after }, Phase::ReceiveAfter { after, transfer_len, backoff })
+                    self.recv_attempt = 0;
+                    (Action::Recover, Phase::Recovering)
                 }
             }
+            Phase::Recovering => (Action::None, Phase::Recovering),
         };
 
         self.phase = new_phase;
@@ -191,6 +202,8 @@ enum Phase {
     /// The next action will be receive in the future, but first we need to
     /// sleep.
     ReceiveAfter { after: Instant, transfer_len: usize, backoff: Duration },
+    /// When too many failed IF-RECVs get the protocol stack unstable/unknown.
+    Recovering,
 }
 
 pub trait InterfaceMessage {
@@ -305,7 +318,7 @@ mod tests {
             payload: ComIdResponsePayload::StackReset { available_data_length: 4, status: StackResetStatus::Success },
         };
 
-        let mut protocol = SynchronousProtocol::new(COM_ID, COM_ID_EXT, COM_ID_PROTOCOL, 512);
+        let mut protocol = SynchronousProtocol::new(COM_ID_PROTOCOL, 512);
         let time_0 = Instant::now();
 
         let sequence = [
@@ -341,7 +354,7 @@ mod tests {
             },
         };
 
-        let mut protocol = SynchronousProtocol::new(COM_ID, COM_ID_EXT, COM_ID_PROTOCOL, 512);
+        let mut protocol = SynchronousProtocol::new(COM_ID_PROTOCOL, 512);
         let time_0 = Instant::now();
 
         // The reponse for "verify ComID valid" is always returned immediately.
@@ -364,7 +377,7 @@ mod tests {
             payload: ComIdResponsePayload::NoResponseAvailable { available_data_length: 0 },
         };
 
-        let mut protocol = SynchronousProtocol::new(COM_ID, COM_ID_EXT, COM_ID_PROTOCOL, 512);
+        let mut protocol = SynchronousProtocol::new(COM_ID_PROTOCOL, 512);
         let time_0 = Instant::now();
 
         // The reponse for "verify ComID valid" is always returned immediately.
@@ -401,7 +414,7 @@ mod tests {
             (time_0 + 3 * INITIAL_BACKOFF, Action::None, None),
         ];
 
-        let mut protocol = SynchronousProtocol::new(COM_ID, COM_ID_EXT, protocol, 16384);
+        let mut protocol = SynchronousProtocol::new(protocol, 16384);
         run_sequence(&mut protocol, time_0, request, &sequence);
     }
 
@@ -428,7 +441,7 @@ mod tests {
             (time_0, Action::None, None),
         ];
 
-        let mut protocol = SynchronousProtocol::new(COM_ID, COM_ID_EXT, protocol, 16384);
+        let mut protocol = SynchronousProtocol::new(protocol, 16384);
         run_sequence(&mut protocol, time_0, request, &sequence);
     }
 
@@ -449,7 +462,7 @@ mod tests {
             (time_0, Action::None, None),
         ];
 
-        let mut protocol = SynchronousProtocol::new(COM_ID, COM_ID_EXT, protocol, 16384);
+        let mut protocol = SynchronousProtocol::new(protocol, 16384);
         run_sequence(&mut protocol, time_0, request, &sequence);
     }
 
@@ -460,6 +473,7 @@ mod tests {
         let response = ComPacket { outstanding_data: 0, min_transfer: 0, ..Default::default() };
         let protocol = PACKETIZED_PROTOCOL;
         let time_0 = Instant::now();
+        let delay = RECV_FAILURE_BACKOFF * 2;
 
         let sequence = [
             (time_0, Action::Send { protocol, data: request.to_bytes().unwrap() }, None),
@@ -467,15 +481,16 @@ mod tests {
             (time_0, Action::Recv { protocol, transfer_len: 512 }, None),
             (time_0, Action::None, Some(Err(Error::Unspecified))),
             // Attempt 1
-            (time_0, Action::Recv { protocol, transfer_len: 512 }, None),
-            (time_0, Action::None, Some(Err(Error::Unspecified))),
+            (time_0 + 1 * delay, Action::Recv { protocol, transfer_len: 512 }, None),
+            (time_0 + 1 * delay, Action::None, Some(Err(Error::Unspecified))),
+            (time_0 + 1 * delay, Action::Sleep { until: time_0 + 1 * delay + RECV_FAILURE_BACKOFF }, None),
             // Attempt 2
-            (time_0, Action::Recv { protocol, transfer_len: 512 }, None),
-            (time_0, Action::None, Some(Ok(response))),
-            (time_0, Action::None, None),
+            (time_0 + 2 * delay, Action::Recv { protocol, transfer_len: 512 }, None),
+            (time_0 + 2 * delay, Action::None, Some(Ok(response))),
+            (time_0 + 2 * delay, Action::None, None),
         ];
 
-        let mut protocol = SynchronousProtocol::new(COM_ID, COM_ID_EXT, protocol, 16384);
+        let mut protocol = SynchronousProtocol::new(protocol, 16384);
         run_sequence(&mut protocol, time_0, request, &sequence);
         assert_that!(protocol.phase, pat!(Phase::Send));
     }
@@ -486,8 +501,7 @@ mod tests {
         let request = ComPacket::default();
         let protocol = PACKETIZED_PROTOCOL;
         let time_0 = Instant::now();
-
-        let stack_reset = ComIdRequest::stack_reset(COM_ID, COM_ID_EXT).to_bytes().unwrap();
+        let delay = RECV_FAILURE_BACKOFF * 2;
 
         let sequence = [
             (time_0, Action::Send { protocol, data: request.to_bytes().unwrap() }, None),
@@ -495,19 +509,20 @@ mod tests {
             (time_0, Action::Recv { protocol, transfer_len: 512 }, None),
             (time_0, Action::None, Some(Err::<ComPacket, _>(Error::Unspecified))),
             // Attempt 1
-            (time_0, Action::Recv { protocol, transfer_len: 512 }, None),
-            (time_0, Action::None, Some(Err(Error::Unspecified))),
+            (time_0 + 1 * delay, Action::Recv { protocol, transfer_len: 512 }, None),
+            (time_0 + 1 * delay, Action::None, Some(Err(Error::Unspecified))),
+            (time_0 + 1 * delay, Action::Sleep { until: time_0 + 1 * delay + RECV_FAILURE_BACKOFF }, None),
             // Attempt 2
-            (time_0, Action::Recv { protocol, transfer_len: 512 }, None),
-            (time_0, Action::None, Some(Err(Error::Unspecified))),
-            // Stack reset
-            (time_0, Action::Send { protocol: COM_ID_PROTOCOL, data: stack_reset }, None),
-            (time_0, Action::None, None),
+            (time_0 + 2 * delay, Action::Recv { protocol, transfer_len: 512 }, None),
+            (time_0 + 2 * delay, Action::None, Some(Err(Error::Unspecified))),
+            // Failed
+            (time_0 + 3 * delay, Action::Recover, None),
+            (time_0 + 3 * delay, Action::None, None),
         ];
 
-        let mut protocol = SynchronousProtocol::new(COM_ID, COM_ID_EXT, protocol, 16384);
+        let mut protocol = SynchronousProtocol::new(protocol, 16384);
         run_sequence(&mut protocol, time_0, request, &sequence);
-        assert_that!(protocol.phase, pat!(Phase::Send));
+        assert_that!(protocol.phase, pat!(Phase::Recovering));
     }
 
     fn run_sequence<SendMessage, RecvMessage>(

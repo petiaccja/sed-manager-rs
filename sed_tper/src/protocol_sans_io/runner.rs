@@ -73,6 +73,7 @@ async fn perform_action_or_recv(
                 Err(()) => None,
             }
         }
+        Action::Recover => None,
     }
 }
 

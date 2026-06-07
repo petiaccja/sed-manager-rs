@@ -6,7 +6,9 @@ use std::{
 
 use oneshot::Sender;
 use sed_packet::{
-    com_id::{COM_ID_PROTOCOL, COM_ID_RESPONSE_LEN, ComIdRequest, ComIdResponse},
+    com_id::{
+        COM_ID_PROTOCOL, COM_ID_RESPONSE_LEN, ComIdRequest, ComIdResponse, ComIdResponsePayload, StackResetStatus,
+    },
     packet::{COM_PACKET_HEADER_LEN, ComPacket, PACKET_HEADER_LEN, PACKETIZED_PROTOCOL, SUB_PACKET_HEADER_LEN},
     session_id::SessionId,
 };
@@ -101,8 +103,8 @@ impl Protocol {
             com_id_ext,
             rpc_session: RpcSession::new(DEF_TRANS_TIMEOUT, CAPABILITIES),
             com_id_session: ComIdSession::new(DEF_TRANS_TIMEOUT),
-            rpc_protocol: SynchronousProtocol::new(com_id, com_id_ext, PACKETIZED_PROTOCOL, max_transfer_len),
-            com_id_protocol: SynchronousProtocol::new(com_id, com_id_ext, COM_ID_PROTOCOL, COM_ID_RESPONSE_LEN),
+            rpc_protocol: SynchronousProtocol::new(PACKETIZED_PROTOCOL, max_transfer_len),
+            com_id_protocol: SynchronousProtocol::new(COM_ID_PROTOCOL, COM_ID_RESPONSE_LEN),
             com_packets_sending: VecDeque::new(),
         }
     }
@@ -186,6 +188,11 @@ impl Protocol {
             Action::Sleep { until } => deadline = min_deadline(deadline, Some(until)),
             action @ Action::Send { .. } => return action,
             action @ Action::Recv { .. } => return action,
+            action @ Action::Recover => {
+                self.com_id_protocol.handle_reset();
+                self.com_id_session.handle_reset();
+                return action;
+            }
         }
 
         match self.rpc_protocol.poll_action(time) {
@@ -193,6 +200,10 @@ impl Protocol {
             Action::Sleep { until } => deadline = min_deadline(deadline, Some(until)),
             action @ Action::Send { .. } => return action,
             action @ Action::Recv { .. } => return action,
+            action @ Action::Recover => {
+                self.com_id_protocol.handle_send(ComIdRequest::stack_reset(self.com_id, self.com_id_ext));
+                return action;
+            }
         }
 
         deadline.map(|deadline| Action::Sleep { until: deadline }).unwrap_or(Action::None)
@@ -211,20 +222,27 @@ impl Protocol {
     }
 
     fn handle_iface_com_request_recv_done(&mut self, time: Instant, result: Result<Vec<u8>, Error>) {
-        let response = result
-            .map(|bytes| ComIdResponse::from_bytes(&bytes).map_err(|err| Error::InvalidComIdResponse(err)))
-            .flatten();
+        let response =
+            result.map(|bytes| ComIdResponse::from_bytes(&bytes).map_err(Error::InvalidComIdResponse)).flatten();
 
         self.com_id_protocol.handle_recv(time, response.as_ref());
         if let Ok(response) = response {
+            if response.com_id == self.com_id
+                && response.com_id_ext == self.com_id_ext
+                && matches!(
+                    &response.payload,
+                    ComIdResponsePayload::StackReset { available_data_length: 4.., status: StackResetStatus::Success }
+                )
+            {
+                self.rpc_protocol.handle_reset();
+                self.rpc_session.handle_reset();
+            }
             self.com_id_session.handle_iface_recv_done(response);
         }
     }
 
     fn handle_iface_com_packet_recv_done(&mut self, time: Instant, result: Result<Vec<u8>, Error>) {
-        let com_packet = result
-            .map(|bytes| ComPacket::from_bytes(&bytes).map_err(|err| Error::InvalidComPacket(err)))
-            .flatten();
+        let com_packet = result.map(|bytes| ComPacket::from_bytes(&bytes).map_err(Error::InvalidComPacket)).flatten();
 
         self.rpc_protocol.handle_recv(time, com_packet.as_ref());
 
