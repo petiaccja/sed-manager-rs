@@ -95,13 +95,14 @@ pub struct Protocol {
 
 impl Protocol {
     pub fn new(com_id: u16, com_id_ext: u16) -> Self {
+        let max_transfer_len = CAPABILITIES.max_gross_compacket_size.get();
         Self {
             com_id,
             com_id_ext,
             rpc_session: RpcSession::new(DEF_TRANS_TIMEOUT, CAPABILITIES),
             com_id_session: ComIdSession::new(DEF_TRANS_TIMEOUT),
-            rpc_protocol: SynchronousProtocol::new(PACKETIZED_PROTOCOL, CAPABILITIES.max_gross_compacket_size.get()),
-            com_id_protocol: SynchronousProtocol::new(COM_ID_PROTOCOL, COM_ID_RESPONSE_LEN),
+            rpc_protocol: SynchronousProtocol::new(com_id, com_id_ext, PACKETIZED_PROTOCOL, max_transfer_len),
+            com_id_protocol: SynchronousProtocol::new(com_id, com_id_ext, COM_ID_PROTOCOL, COM_ID_RESPONSE_LEN),
             com_packets_sending: VecDeque::new(),
         }
     }
@@ -210,30 +211,27 @@ impl Protocol {
     }
 
     fn handle_iface_com_request_recv_done(&mut self, time: Instant, result: Result<Vec<u8>, Error>) {
-        let Ok(data) = result else {
-            return;
-        };
-        match ComIdResponse::from_bytes(&data) {
-            Ok(response) => {
-                self.com_id_protocol.handle_recv(time, &response);
-                self.com_id_session.handle_iface_recv_done(response);
-            }
-            Err(_) => (), // Discard received blob.
+        let response = result
+            .map(|bytes| ComIdResponse::from_bytes(&bytes).map_err(|err| Error::InvalidComIdResponse(err)))
+            .flatten();
+
+        self.com_id_protocol.handle_recv(time, response.as_ref());
+        if let Ok(response) = response {
+            self.com_id_session.handle_iface_recv_done(response);
         }
     }
 
     fn handle_iface_com_packet_recv_done(&mut self, time: Instant, result: Result<Vec<u8>, Error>) {
-        let Ok(data) = result else {
-            return;
-        };
-        match ComPacket::from_bytes(&data) {
-            Ok(com_packet) => {
-                self.rpc_protocol.handle_recv(time, &com_packet);
-                for packet in com_packet.payload {
-                    self.rpc_session.handle_packet(packet);
-                }
+        let com_packet = result
+            .map(|bytes| ComPacket::from_bytes(&bytes).map_err(|err| Error::InvalidComPacket(err)))
+            .flatten();
+
+        self.rpc_protocol.handle_recv(time, com_packet.as_ref());
+
+        if let Ok(com_packet) = com_packet {
+            for packet in com_packet.payload {
+                self.rpc_session.handle_packet(packet);
             }
-            Err(_) => (), // Discard received blob.
         }
     }
 }
