@@ -6,7 +6,7 @@ use sed_packet::{
     token::{Command, ToTokens as _},
 };
 
-use crate::protocol_sans_io::sequence_number::SequenceNumber;
+use crate::protocol::sequence_number::SequenceNumber;
 
 pub fn packetize_one(session_id: SessionId, sn: SequenceNumber, call: Vec<u8>) -> Packet {
     let sub_packet = SubPacket { kind: SubPacketKind::Data, length: PhantomData, payload: call };

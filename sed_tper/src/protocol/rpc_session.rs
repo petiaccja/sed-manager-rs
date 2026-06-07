@@ -12,9 +12,7 @@ use sed_spec::methods::Properties;
 
 use crate::{
     Error,
-    protocol_sans_io::{
-        management::Management, sequence_number::SequenceNumber, session::Session, shared::min_deadline,
-    },
+    protocol::{management::Management, sequence_number::SequenceNumber, session::Session, shared::min_deadline},
 };
 
 use super::{
@@ -182,9 +180,9 @@ mod tests {
     use oneshot::channel;
     use sed_spec::methods::MethodStatus;
 
-    use crate::protocol_sans_io::shared::eos;
-    use crate::protocol_sans_io::shared::packetize_one;
-    use crate::protocol_sans_io::shared::tests::*;
+    use crate::protocol::shared::eos;
+    use crate::protocol::shared::packetize_one;
+    use crate::protocol::shared::tests::*;
 
     use super::*;
 

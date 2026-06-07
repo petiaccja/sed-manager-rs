@@ -11,7 +11,7 @@ use sed_spec::methods::Properties;
 
 use crate::{
     Error,
-    protocol_sans_io::{protocol::Protocol, shared::Action},
+    protocol::{protocol::Protocol, shared::Action},
 };
 
 pub async fn run(
@@ -164,7 +164,7 @@ mod tests {
     use sed_spec::methods::MethodStatus;
     use sorbit::ser_de::ToBytes as _;
 
-    use crate::protocol_sans_io::{
+    use crate::protocol::{
         sequence_number::SequenceNumber,
         shared::{
             packetize_one,

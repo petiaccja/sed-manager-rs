@@ -1,240 +1,170 @@
-use core::mem::replace;
-use std::collections::VecDeque;
-use std::marker::PhantomData;
-use std::time::{Duration, Instant};
-
-use sed_async::cancel_channel;
-use sed_packet::packet::{PACKET_HEADER_LEN, Packet, SUB_PACKET_HEADER_LEN, SubPacket, SubPacketKind};
-use sed_packet::session_id::SessionId;
-use sed_packet::token::{Command, ToTokens as _};
-use sed_spec::methods::{ExtractResult, Properties, extract_method};
-
-use tracing::field::debug;
-use tracing::{Span, instrument};
-
-use crate::error::Error;
-use crate::protocol::message::{
-    CommitBatch, Delete, Message, MethodResponse, PacketReceived, ReportAborted, SendMethod, SendPacket, SendPacketDone,
+use std::{
+    collections::VecDeque,
+    time::{Duration, Instant},
 };
-use crate::protocol::method::{AnyMethodResult, RecvQueuedMethod, WriteQueuedMethod, retain_alive};
-use crate::protocol::protocol::{Address, Context};
+
+use oneshot::Sender;
+use sed_packet::{
+    Ignore,
+    packet::{PACKET_HEADER_LEN, Packet, SUB_PACKET_HEADER_LEN},
+    session_id::SessionId,
+};
+use sed_spec::methods::{ExtractResult, MethodResult, Properties, extract_method};
+
+use crate::{
+    Error,
+    protocol::{
+        sequence_number::SequenceNumber,
+        shared::{eos, packetize_one},
+    },
+};
 
 #[derive(Debug)]
 pub struct Session {
     session_id: SessionId,
     timeout: Duration,
     properties: Properties,
+    sequence_number: SequenceNumber,
     state: State,
 }
 
 impl Session {
-    pub fn new(session_id: SessionId, properties: Properties, timeout: Duration) -> Self {
+    pub fn new(session_id: SessionId, timeout: Duration, properties: Properties) -> Self {
         Self {
             session_id,
             timeout,
             properties,
+            sequence_number: SequenceNumber::initial(),
             state: State::Active {
-                send_method_queue: VecDeque::new(),
-                receive_buffer: VecDeque::new(),
-                channel_queue: VecDeque::new(),
+                method_calls: VecDeque::new(),
+                method_calls_sending: VecDeque::new(),
+                method_calls_receiving: VecDeque::new(),
+                received_tokens: VecDeque::new(),
             },
         }
     }
 
-    fn address(&self) -> Address {
-        Address::Session(self.session_id)
-    }
-
-    #[instrument(level = "debug", skip_all)]
-    pub fn send_method(&mut self, context: Context, SendMethod { method, channel }: SendMethod) {
-        let address = self.address();
-        self.state = match replace(&mut self.state, State::Closed) {
-            State::Active { mut send_method_queue, receive_buffer, channel_queue } => {
-                let is_end_of_session = is_end_of_session(&method);
-
-                let send_commit_batch = send_method_queue.is_empty();
-                send_method_queue.push_back(SendMethod { method, channel });
-
-                if !is_end_of_session {
-                    if send_commit_batch {
-                        context.send(address, Message::CommitBatch(CommitBatch));
-                    }
-                    State::Active { send_method_queue, receive_buffer, channel_queue }
-                } else {
-                    let packets = packetize_method_queue(&self.properties, send_method_queue);
-                    send_packets(self.session_id, context, packets);
-                    State::Closing { receive_buffer, channel_queue }
+    pub fn handle_method_call(&mut self, call: Vec<u8>, sender: Sender<Result<Vec<u8>, Error>>) {
+        if call.len() > self.properties.max_gross_packet_size.get() - PACKET_HEADER_LEN - SUB_PACKET_HEADER_LEN {
+            let _ = sender.send(Err(Error::MethodTooLarge));
+        } else {
+            match &mut self.state {
+                State::Active { method_calls, .. } => {
+                    method_calls.push_back(MethodCallRecord { call, sender });
+                }
+                State::Closed | State::Aborting => {
+                    let _ = sender.send(Err(Error::Closed));
                 }
             }
-            state @ State::Closing { .. } => {
-                let _ = channel.send(Err(Error::Closed));
-                state
-            }
-            state @ State::Closed => {
-                let _ = channel.send(Err(Error::Closed));
-                state
-            }
         }
     }
 
-    #[instrument(level = "debug", skip_all)]
-    pub fn commit_batch(&mut self, context: Context, _message: CommitBatch) {
-        match &mut self.state {
-            State::Active { send_method_queue, .. } => {
-                let packets = packetize_method_queue(&self.properties, replace(send_method_queue, VecDeque::new()));
-                send_packets(self.session_id, context, packets);
-            }
-            State::Closing { .. } => (),
-            State::Closed => (),
-        }
+    pub fn handle_aborted(&mut self) {
+        self.flush(Error::Aborted);
+        self.state = State::Closed;
     }
 
-    #[instrument(level = "debug", skip_all)]
-    pub fn send_packet_done(&mut self, context: Context, SendPacketDone { status, methods }: SendPacketDone) {
-        let address = self.address();
-        match &mut self.state {
-            State::Active { channel_queue, .. } | State::Closing { channel_queue, .. } => match &status {
+    pub fn handle_iface_send_done(&mut self, time: Instant, sn: SequenceNumber, result: Result<(), Error>) {
+        let State::Active { method_calls_sending, method_calls_receiving, .. } = &mut self.state else {
+            return;
+        };
+        while let Some(record) = method_calls_sending.pop_front_if(|record| record.sequence_number <= sn) {
+            let deadline = time + self.timeout;
+            match &result {
                 Ok(_) => {
-                    let deadline = Instant::now() + self.timeout;
-                    let (cancel_token, cancel_sender) = cancel_channel();
-                    context.send_timeout(address.clone(), deadline, Some(cancel_token));
-                    for WriteQueuedMethod { channel, .. } in methods {
-                        channel_queue.push_back(RecvQueuedMethod {
-                            channel,
-                            deadline,
-                            cancel_sender: None,
-                            mgmt_session_meta: None,
-                        });
-                    }
-                    // The cancel sender must be added to the last method in this batch.
-                    // Otherwise, the first method could complete, cancel the timeout, and
-                    // leave the last method to wait forever.
-                    channel_queue.back_mut().map(|recv_queued_method| {
-                        recv_queued_method.cancel_sender = Some(cancel_sender);
-                    });
+                    let record = MethodReceivingRecord { deadline, sender: record.sender };
+                    method_calls_receiving.push_back(record);
                 }
                 Err(err) => {
-                    for WriteQueuedMethod { channel, .. } in methods {
-                        let _ = channel.send(Err(err.clone()));
-                    }
-                }
-            },
-            State::Closed => {
-                for WriteQueuedMethod { channel, .. } in methods {
-                    let _ = channel.send(Err(Error::Closed));
+                    let _ = record.sender.send(Err(err.clone()));
                 }
             }
         }
     }
 
-    #[instrument(level = "debug", skip(self, context))]
-    pub fn timeout(&mut self, context: Context, time: Instant) {
-        match &mut self.state {
-            State::Active { channel_queue, .. } | State::Closing { channel_queue, .. } => {
-                if retain_alive(time, channel_queue) > 0 {
-                    self.abort(context);
-                }
-            }
-            State::Closed => (),
-        }
-    }
-
-    #[instrument(level = "debug", skip_all, fields(error, tokens))]
-    pub fn packet_reveived(&mut self, context: Context, PacketReceived { packet }: PacketReceived) {
-        match &mut self.state {
-            State::Active { receive_buffer, channel_queue, .. }
-            | State::Closing { receive_buffer, channel_queue, .. } => {
-                assert_eq!(SessionId::of(&packet), self.session_id, "received packet with incorrect HSN/TSN");
-
-                for SubPacket { kind, payload, .. } in packet.payload {
-                    if kind == SubPacketKind::Data {
-                        receive_buffer.extend(payload);
-                    }
-                }
-
-                match extract_method::<AnyMethodResult>(receive_buffer) {
-                    ExtractResult::Ok { value: _, tokens } => {
-                        if let Some(RecvQueuedMethod { channel, cancel_sender, .. }) = channel_queue.pop_front() {
-                            cancel_sender.map(|cancel_sender| cancel_sender.cancel());
-                            Span::current().record("tokens", debug(&tokens));
-                            let _ = channel.send(Ok(tokens));
-                        } else {
-                            // Either the device sent too much stuff, or there is a packet distribution bug.
-                            Span::current()
-                                .record("error", "too many methods received from device, or protocol routing bug")
-                                .record("tokens", debug(&tokens));
-                            self.abort(context);
-                        }
-                    }
-                    ExtractResult::NeedMoreTokens => (),
-                    ExtractResult::EndOfSession => {
-                        if let Some(RecvQueuedMethod { channel, cancel_sender, .. }) = channel_queue.pop_front() {
-                            cancel_sender.map(|cancel_sender| cancel_sender.cancel());
-                            let _ = channel.send(Ok(Command::EndOfSession.to_tokens().unwrap()));
-                        }
-                        self.shutdown(context)
-                    }
-                    ExtractResult::InvalidTokens(err) => {
-                        Span::current()
-                            .record("error", tracing::field::debug(&err))
-                            .record("tokens", debug(receive_buffer));
-                        self.abort(context)
-                    }
-                };
-            }
-            State::Closed => (),
-        }
-    }
-
-    #[instrument(level = "debug", skip_all)]
-    pub fn abort(&mut self, context: Context) {
-        match &self.state {
-            State::Active { .. } => {
-                // Send an END_OF_SESSION to the TPer.
-                let packet = self.session_id.assign(Packet {
-                    payload: vec![SubPacket {
-                        kind: SubPacketKind::Data,
-                        length: PhantomData,
-                        payload: Command::EndOfSession.to_tokens().expect("serializing a command should never fail"),
-                    }],
-                    ..Default::default()
-                });
-                context.send(
-                    Address::DeviceSession,
-                    Message::SendPacket(SendPacket { sender: self.address(), packet, methods: vec![] }),
-                );
-            }
-            _ => (),
+    pub fn handle_tokens(&mut self, tokens: Vec<u8>) {
+        let State::Active { method_calls_receiving, received_tokens, .. } = &mut self.state else {
+            return;
         };
-        self.shutdown(context);
-    }
-
-    #[instrument(level = "debug", skip_all)]
-    pub fn report_aborted(&mut self, context: Context, _message: ReportAborted) {
-        self.shutdown(context);
-    }
-
-    fn shutdown(&mut self, context: Context) {
-        self.abort_pending_methods();
-        context.send(Address::Control, Message::Delete(Delete(self.session_id)));
-    }
-
-    fn abort_pending_methods(&mut self) {
-        match replace(&mut self.state, State::Closed) {
-            State::Active { send_method_queue, channel_queue, .. } => {
-                for SendMethod { channel, .. } in send_method_queue {
-                    let _ = channel.send(Err(Error::Aborted));
+        received_tokens.extend(tokens);
+        loop {
+            match extract_method::<MethodResult<Vec<Ignore>>>(received_tokens) {
+                ExtractResult::Ok { value: _, tokens } => {
+                    if let Some(record) = method_calls_receiving.pop_front() {
+                        let _ = record.sender.send(Ok(tokens));
+                    } else {
+                        self.flush(Error::Aborted);
+                        self.state = State::Aborting;
+                        break;
+                    }
                 }
-                for RecvQueuedMethod { channel, .. } in channel_queue {
-                    let _ = channel.send(Err(Error::Aborted));
+                ExtractResult::EndOfSession => {
+                    if let Some(record) = method_calls_receiving.pop_front() {
+                        let _ = record.sender.send(Ok(eos()));
+                    }
+                    self.state = State::Closed;
+                    break;
+                }
+                ExtractResult::NeedMoreTokens => break,
+                ExtractResult::InvalidTokens(error) => {
+                    self.flush(error.into());
+                    self.state = State::Aborting;
+
+                    break;
+                }
+            };
+        }
+    }
+
+    pub fn poll_action(&mut self, time: Instant) -> Action {
+        match &mut self.state {
+            State::Active { method_calls, method_calls_sending, method_calls_receiving, .. } => {
+                // Remove timed out calls.
+                while let Some(record) = method_calls_receiving.pop_front_if(|record| record.deadline <= time) {
+                    let _ = record.sender.send(Err(Error::TimedOut));
+                }
+
+                // Collect packets ready to be sent.
+                let mut packets = Vec::new();
+                if let Some(MethodCallRecord { call, sender }) = method_calls.pop_front() {
+                    let sn = self.sequence_number.fetch_add();
+                    let packet = packetize_one(self.session_id, sn, call);
+                    packets.push(packet);
+                    method_calls_sending.push_back(MethodSendingRecord { sequence_number: sn, sender });
+                }
+
+                // Return next action.
+                if !packets.is_empty() {
+                    Action::Send(packets)
+                } else if let Some(record) = method_calls_receiving.front() {
+                    Action::Sleep { until: record.deadline }
+                } else {
+                    Action::None
                 }
             }
-            State::Closing { channel_queue, .. } => {
-                for RecvQueuedMethod { channel, .. } in channel_queue {
-                    let _ = channel.send(Err(Error::Aborted));
-                }
+            State::Aborting => {
+                self.state = State::Closed;
+                let eos_packet = packetize_one(self.session_id, self.sequence_number.fetch_add(), eos());
+                Action::Send(vec![eos_packet])
             }
-            State::Closed => (),
+            State::Closed => Action::Delete,
+        }
+    }
+
+    fn flush(&mut self, error: Error) {
+        if let State::Active { method_calls, method_calls_receiving, method_calls_sending, received_tokens } =
+            &mut self.state
+        {
+            received_tokens.clear();
+            method_calls.drain(..).for_each(|record| {
+                let _ = record.sender.send(Err(error.clone()));
+            });
+            method_calls_sending.drain(..).for_each(|record| {
+                let _ = record.sender.send(Err(error.clone()));
+            });
+            method_calls_receiving.drain(..).for_each(|record| {
+                let _ = record.sender.send(Err(error.clone()));
+            });
         };
     }
 }
@@ -242,330 +172,311 @@ impl Session {
 #[derive(Debug)]
 enum State {
     Active {
-        send_method_queue: VecDeque<SendMethod>,
-        receive_buffer: VecDeque<u8>,
-        channel_queue: VecDeque<RecvQueuedMethod>,
+        method_calls: VecDeque<MethodCallRecord>,
+        /// Method calls that are queued for IF-SEND.
+        method_calls_sending: VecDeque<MethodSendingRecord>,
+        /// Method calls that are queued for IF-RECV.
+        method_calls_receiving: VecDeque<MethodReceivingRecord>,
+        received_tokens: VecDeque<u8>,
     },
-    Closing {
-        receive_buffer: VecDeque<u8>,
-        channel_queue: VecDeque<RecvQueuedMethod>,
-    },
+    Aborting,
     Closed,
 }
 
-fn is_end_of_session(bytes: &[u8]) -> bool {
-    bytes.first() == Command::EndOfSession.to_tokens().expect("tokenization of commands should never fail").first()
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[must_use]
+pub enum Action {
+    None,
+    Sleep { until: Instant },
+    Send(Vec<Packet>),
+    Delete,
 }
 
-fn packetize_method_queue(
-    properties: &Properties,
-    mut send_method_queue: VecDeque<SendMethod>,
-) -> Vec<(Packet, oneshot::Sender<MethodResponse>)> {
-    let max_method_size =
-        std::cmp::max(PACKET_HEADER_LEN + SUB_PACKET_HEADER_LEN, properties.max_gross_packet_size.get())
-            - PACKET_HEADER_LEN
-            + SUB_PACKET_HEADER_LEN;
-    let mut packets = Vec::new();
-    while let Some(SendMethod { method, channel }) = send_method_queue.pop_front() {
-        if method.len() <= max_method_size {
-            let sub_packet = SubPacket { kind: SubPacketKind::Data, length: PhantomData, payload: method };
-            let packet = Packet { payload: vec![sub_packet], ..Default::default() };
-            packets.push((packet, channel));
-        } else {
-            let _ = channel.send(Err(Error::MethodTooLarge));
-        }
-    }
-    packets
+#[derive(Debug)]
+pub struct MethodCallRecord {
+    call: Vec<u8>,
+    sender: Sender<Result<Vec<u8>, Error>>,
 }
 
-fn send_packets(session_id: SessionId, context: Context, packets: Vec<(Packet, oneshot::Sender<MethodResponse>)>) {
-    for (packet, channel) in packets {
-        context.send(
-            Address::DeviceSession,
-            Message::SendPacket(SendPacket {
-                sender: session_id.into(),
-                packet: session_id.assign(packet),
-                methods: vec![WriteQueuedMethod { channel, mgmt_session_meta: None }],
-            }),
-        );
-    }
+#[derive(Debug)]
+struct MethodSendingRecord {
+    /// The sequence number of the packet in which the method is being sent.
+    sequence_number: SequenceNumber,
+    sender: Sender<Result<Vec<u8>, Error>>,
+}
+
+#[derive(Debug)]
+struct MethodReceivingRecord {
+    /// The time when the message times out.
+    deadline: Instant,
+    sender: Sender<Result<Vec<u8>, Error>>,
 }
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
+    use std::marker::PhantomData;
 
-    use crate::protocol::protocol::DispatchMessage;
+    use googletest::assert_that;
+    use googletest::matchers::*;
+    use oneshot::TryRecvError;
+    use oneshot::channel;
+    use sed_packet::packet::{SubPacket, SubPacketKind};
 
     use super::*;
+    use crate::protocol::shared::tests::*;
 
-    use googletest::{assert_that, prelude::*};
-    use sed_packet::token::ToTokens;
-    use sed_spec::methods::{Activate, ActivateResult, MethodCall, MethodResult, MethodStatus};
-    use sed_spec::preconfig::core::shared::method_id::ACTIVATE;
-    use sed_spec::preconfig::opal_2::admin::sp;
-
-    const TEST_TIMEOUT: Duration = Duration::from_millis(500);
-
-    fn create_request() -> MethodCall<Activate> {
-        MethodCall {
-            invoking_id: sp::LOCKING.to_uid(),
-            method_id: ACTIVATE.to_uid(),
-            parameters: Activate,
-            status: MethodStatus::Success,
-        }
-    }
-
-    fn create_response() -> MethodResult<ActivateResult> {
-        MethodResult(Ok(ActivateResult))
-    }
+    const SESSION_ID: SessionId = SessionId { hsn: 1, tsn: 2 };
+    const TIMEOUT: Duration = Duration::from_secs(1);
+    const PROPERTIES: Properties = Properties::INITIAL;
 
     #[test]
-    fn send_method_regular() {
-        let session_id = SessionId { hsn: 1, tsn: 2 };
-        let mut session = Session::new(session_id, Properties::INITIAL, TEST_TIMEOUT);
-        let (context, queue) = Context::mock();
-        let (tx, rx) = oneshot::channel();
-        let method = create_request();
-        session.send_method(context, SendMethod { method: method.to_tokens().unwrap(), channel: tx });
+    fn method_completed_successfully() {
+        let mut session = Session::new(SESSION_ID, TIMEOUT, PROPERTIES);
+        let time = Instant::now();
+        let (sender, receiver) = channel();
 
-        let DispatchMessage { address, message, .. } = queue.try_recv().unwrap();
-        assert_that!(address, eq(&Address::Session(session_id)));
-        assert_that!(message, matches_pattern!(Message::CommitBatch(_)));
-        assert!(queue.is_empty());
-        assert_that!(session.state, field!(State::Active.send_method_queue, len(eq(1))));
-        assert_that!(rx.has_message(), eq(false));
-    }
-
-    #[test]
-    fn send_method_eos() {
-        let session_id = SessionId { hsn: 1, tsn: 2 };
-        let mut session = Session::new(session_id, Properties::INITIAL, TEST_TIMEOUT);
-        let (context, queue) = Context::mock();
-        let (tx, rx) = oneshot::channel();
-        let method = Command::EndOfSession;
-        session.send_method(context, SendMethod { method: method.to_tokens().unwrap(), channel: tx });
-
-        let DispatchMessage { address, message, .. } = queue.try_recv().unwrap();
-        assert_that!(address, eq(&Address::DeviceSession));
-        assert_that!(message, matches_pattern!(Message::SendPacket(_)));
-        assert!(queue.is_empty());
-        assert_that!(session.state, matches_pattern!(State::Closing { .. }));
-        assert_that!(rx.has_message(), eq(false));
-    }
-
-    #[test]
-    fn commit_batch() {
-        let session_id = SessionId { hsn: 1, tsn: 2 };
-        let mut session = Session::new(session_id, Properties::INITIAL, TEST_TIMEOUT);
-        let (context, queue) = Context::mock();
-        let (tx, rx) = oneshot::channel();
-        let method = create_request();
-        match &mut session.state {
-            State::Active { send_method_queue, .. } => {
-                send_method_queue.push_back(SendMethod { method: method.to_tokens().unwrap(), channel: tx })
-            }
-            _ => panic!("session started in the wrong state: {:?}", session.state),
-        }
-
-        session.commit_batch(context, CommitBatch);
-
-        let DispatchMessage { address, message, .. } = queue.try_recv().unwrap();
-        assert_that!(address, eq(&Address::DeviceSession));
-        assert_that!(message, matches_pattern!(Message::SendPacket(_)));
-        assert!(queue.is_empty());
-        assert_that!(session.state, field!(State::Active.send_method_queue, is_empty()));
-        assert_that!(rx.has_message(), eq(false));
-    }
-
-    #[tokio::test]
-    async fn send_packet_done_success() {
-        let session_id = SessionId { hsn: 1, tsn: 2 };
-        let mut session = Session::new(session_id, Properties::INITIAL, Duration::ZERO);
-        let (context, queue) = Context::mock();
-        let (tx, rx) = oneshot::channel();
-
-        session.send_packet_done(
-            context,
-            SendPacketDone {
-                status: Ok(()),
-                methods: vec![WriteQueuedMethod { channel: tx, mgmt_session_meta: None }],
-            },
+        session.handle_method_call(method_call(), sender);
+        assert_that!(
+            session.poll_action(time),
+            matches_pattern!(Action::Send(eq(&vec![Packet {
+                tper_session_number: 2,
+                host_session_number: 1,
+                sequence_number: 1,
+                payload: vec![SubPacket { kind: SubPacketKind::Data, length: PhantomData, payload: method_call() }],
+                ..Default::default()
+            }])))
         );
 
-        // Let the timeout task run.
-        tokio::task::yield_now().await;
+        session.handle_iface_send_done(time, SequenceNumber(1), Ok(()));
+        assert_that!(session.poll_action(time), matches_pattern!(&Action::Sleep { until: eq(time + TIMEOUT) }));
 
-        let DispatchMessage { address, message, .. } = queue.try_recv().unwrap();
-        assert_that!(address, eq(&Address::Session(session_id)));
-        assert_that!(message, matches_pattern!(Message::Timeout(_)));
-        assert!(queue.is_empty());
-        assert_that!(session.state, field!(State::Active.channel_queue, len(eq(1))));
-        assert_that!(rx.has_message(), eq(false));
+        session.handle_tokens(method_response());
+        assert_that!(session.poll_action(time), matches_pattern!(&Action::None));
+        assert_that!(receiver.try_recv(), ok(ok(eq(&method_response()))));
     }
 
-    #[tokio::test]
-    async fn send_packet_done_failure() {
-        let session_id = SessionId { hsn: 1, tsn: 2 };
-        let mut session = Session::new(session_id, Properties::INITIAL, Duration::ZERO);
-        let (context, queue) = Context::mock();
-        let (tx, rx) = oneshot::channel();
+    #[test]
+    fn overlapped_methods_completed_successfully() {
+        let mut session = Session::new(SESSION_ID, TIMEOUT, PROPERTIES);
+        let time = Instant::now();
+        let delay = TIMEOUT / 10;
+        let (sender_1, receiver_1) = channel();
+        let (sender_2, receiver_2) = channel();
 
-        session.send_packet_done(
-            context,
-            SendPacketDone {
-                status: Err(Error::NotSupported),
-                methods: vec![WriteQueuedMethod { channel: tx, mgmt_session_meta: None }],
-            },
+        // Enqueue both methods.
+        session.handle_method_call(method_call(), sender_1);
+        session.handle_method_call(method_call(), sender_2);
+
+        // Dequeue both associated packets.
+        assert_that!(
+            session.poll_action(time + 0 * delay),
+            matches_pattern!(Action::Send(elements_are![field!(&Packet.sequence_number, 1)]))
+        );
+        assert_that!(
+            session.poll_action(time + 1 * delay),
+            matches_pattern!(Action::Send(elements_are![field!(&Packet.sequence_number, 2)]))
         );
 
-        // Let the timeout task run (there shouldn't be any timeout task though).
-        tokio::task::yield_now().await;
+        // Notify IF-SEND done for both packets.
+        session.handle_iface_send_done(time + 2 * delay, SequenceNumber(1), Ok(()));
+        assert_that!(
+            session.poll_action(time + 3 * delay),
+            matches_pattern!(&Action::Sleep { until: eq(time + TIMEOUT + 2 * delay) })
+        );
 
-        assert!(queue.is_empty());
-        assert_that!(rx.try_recv(), eq(&Ok(Err(Error::NotSupported))));
-        assert_that!(session.state, field!(State::Active.channel_queue, is_empty()));
-    }
+        session.handle_iface_send_done(time + 4 * delay, SequenceNumber(2), Ok(()));
+        assert_that!(
+            session.poll_action(time + 5 * delay),
+            matches_pattern!(&Action::Sleep { until: eq(time + TIMEOUT + 2 * delay) })
+        );
 
-    #[tokio::test]
-    async fn packet_received_timeout() {
-        let session_id = SessionId { hsn: 1, tsn: 2 };
-        let mut session = Session::new(session_id, Properties::INITIAL, Duration::ZERO);
-        let (context, _queue) = Context::mock();
-        let (tx, rx) = oneshot::channel();
-        let (_cancel_token, cancel_sender) = cancel_channel();
+        // Notify incoming tokens for both methods.
+        session.handle_tokens(method_response());
+        assert_that!(
+            session.poll_action(time + 6 * delay),
+            matches_pattern!(&Action::Sleep { until: eq(time + TIMEOUT + 4 * delay) })
+        );
+        assert_that!(receiver_1.try_recv(), ok(ok(eq(&method_response()))));
 
-        match &mut session.state {
-            State::Active { channel_queue, .. } => channel_queue.push_back(RecvQueuedMethod {
-                channel: tx,
-                deadline: Instant::now(),
-                cancel_sender: Some(cancel_sender),
-                mgmt_session_meta: None,
-            }),
-            _ => panic!("session started in the wrong state: {:?}", session.state),
-        }
-
-        session.timeout(context, Instant::now() + Duration::from_secs(1000));
-
-        assert_that!(rx.try_recv(), eq(&Ok(Err(Error::TimedOut))));
-        assert_that!(session.state, matches_pattern!(State::Closed));
-    }
-
-    #[tokio::test]
-    async fn packet_received_receive_regular() {
-        let session_id = SessionId { hsn: 1, tsn: 2 };
-        let mut session = Session::new(session_id, Properties::INITIAL, Duration::ZERO);
-        let (context, queue) = Context::mock();
-        let (tx, rx) = oneshot::channel();
-        let (_cancel_token, cancel_sender) = cancel_channel();
-
-        let reply = create_response();
-        let packet = session_id.assign(Packet {
-            payload: vec![SubPacket {
-                kind: SubPacketKind::Data,
-                length: PhantomData,
-                payload: reply.to_tokens().unwrap(),
-            }],
-            ..Default::default()
-        });
-
-        match &mut session.state {
-            State::Active { channel_queue, .. } => channel_queue.push_back(RecvQueuedMethod {
-                channel: tx,
-                deadline: Instant::now(),
-                cancel_sender: Some(cancel_sender),
-                mgmt_session_meta: None,
-            }),
-            _ => panic!("session started in the wrong state: {:?}", session.state),
-        }
-
-        session.packet_reveived(context, PacketReceived { packet });
-
-        assert_that!(rx.try_recv(), eq(&Ok(Ok(reply.to_tokens().unwrap()))));
-        assert_that!(session.state, field!(State::Active.channel_queue, is_empty()));
-        assert!(queue.is_empty());
-    }
-
-    #[tokio::test]
-    async fn packet_received_receive_eos() {
-        let session_id = SessionId { hsn: 1, tsn: 2 };
-        let mut session = Session::new(session_id, Properties::INITIAL, Duration::ZERO);
-        let (context, queue) = Context::mock();
-        let (tx, rx) = oneshot::channel();
-        let (_cancel_token, cancel_sender) = cancel_channel();
-
-        let reply = Command::EndOfSession;
-        let packet = session_id.assign(Packet {
-            payload: vec![SubPacket {
-                kind: SubPacketKind::Data,
-                length: PhantomData,
-                payload: reply.to_tokens().unwrap(),
-            }],
-            ..Default::default()
-        });
-
-        match &mut session.state {
-            State::Active { channel_queue, .. } => channel_queue.push_back(RecvQueuedMethod {
-                channel: tx,
-                deadline: Instant::now(),
-                cancel_sender: Some(cancel_sender),
-                mgmt_session_meta: None,
-            }),
-            _ => panic!("session started in the wrong state: {:?}", session.state),
-        }
-
-        session.packet_reveived(context, PacketReceived { packet });
-
-        let DispatchMessage { address, message, .. } = queue.try_recv().unwrap();
-        assert_that!(address, eq(&Address::Control));
-        assert_that!(message, matches_pattern!(&Message::Delete(_)));
-        assert!(queue.is_empty());
-        assert_that!(rx.try_recv(), eq(&Ok(Ok(reply.to_tokens().unwrap()))));
-        assert_that!(session.state, matches_pattern!(State::Closed));
+        session.handle_tokens(method_response());
+        assert_that!(session.poll_action(time + 7 * delay), eq(&Action::None));
+        assert_that!(receiver_2.try_recv(), ok(ok(eq(&method_response()))));
     }
 
     #[test]
-    fn abort_sends_eos() {
-        let session_id = SessionId { hsn: 1, tsn: 2 };
-        let mut session = Session::new(session_id, Properties::INITIAL, TEST_TIMEOUT);
-        let (context, queue) = Context::mock();
+    fn sequential_methods_completed_successfully() {
+        let mut session = Session::new(SESSION_ID, TIMEOUT, PROPERTIES);
+        let time = Instant::now();
 
-        session.abort(context);
+        for i in 0..1 {
+            let time = time + i * TIMEOUT;
+            let (sender, receiver) = channel();
+            session.handle_method_call(method_call(), sender);
+            assert_that!(
+                session.poll_action(time),
+                matches_pattern!(Action::Send(eq(&vec![Packet {
+                    tper_session_number: 2,
+                    host_session_number: 1,
+                    sequence_number: 1,
+                    payload: vec![SubPacket { kind: SubPacketKind::Data, length: PhantomData, payload: method_call() }],
+                    ..Default::default()
+                }])))
+            );
 
-        // Check if EOS (SendPacket) was sent out.
-        let DispatchMessage { address, message, .. } = queue.try_recv().unwrap();
-        assert_that!(address, eq(&Address::DeviceSession));
-        let Message::SendPacket(SendPacket { packet, .. }) = message else {
-            panic!("expected SendPacket, got {:?}", message);
-        };
-        let payload = packet.payload.into_iter().next().unwrap().payload;
-        assert_that!(payload, eq(&Command::EndOfSession.to_tokens().unwrap()));
+            session.handle_iface_send_done(time, SequenceNumber(1), Ok(()));
+            assert_that!(session.poll_action(time), matches_pattern!(&Action::Sleep { until: eq(time + TIMEOUT) }));
 
-        // Check if Delete was sent to control.
-        let DispatchMessage { address, message, .. } = queue.try_recv().unwrap();
-        assert_that!(address, eq(&Address::Control));
-        assert_that!(message, matches_pattern!(Message::Delete(_)));
-
-        // Check if no more messages.
-        assert!(queue.is_empty());
-        assert_that!(session.state, matches_pattern!(State::Closed));
+            session.handle_tokens(method_response());
+            assert_that!(session.poll_action(time), matches_pattern!(&Action::None));
+            assert_that!(receiver.try_recv(), ok(ok(eq(&method_response()))));
+        }
     }
 
     #[test]
-    fn report_aborted_omits_eos() {
-        let session_id = SessionId { hsn: 1, tsn: 2 };
-        let mut session = Session::new(session_id, Properties::INITIAL, TEST_TIMEOUT);
-        let (context, queue) = Context::mock();
+    fn interface_send_failed() {
+        let mut session = Session::new(SESSION_ID, TIMEOUT, PROPERTIES);
+        let time = Instant::now();
+        let (sender, receiver) = channel();
 
-        session.report_aborted(context, ReportAborted);
+        session.handle_method_call(method_call(), sender);
+        assert_that!(session.poll_action(time), pat!(Action::Send(_)));
 
-        // Check if Delete was sent to control.
-        let DispatchMessage { address, message, .. } = queue.try_recv().unwrap();
-        assert_that!(address, eq(&Address::Control));
-        assert_that!(message, matches_pattern!(Message::Delete(_)));
+        session.handle_iface_send_done(time, SequenceNumber(1), Err(Error::NotSupported));
+        assert_that!(session.poll_action(time), pat!(Action::None));
+        assert_that!(receiver.try_recv(), ok(err(eq(&Error::NotSupported))));
+    }
 
-        // Check if no more messages.
-        assert!(queue.is_empty());
-        assert_that!(session.state, matches_pattern!(State::Closed));
+    #[test]
+    fn unexpected_tokens() {
+        let mut session = Session::new(SESSION_ID, TIMEOUT, PROPERTIES);
+        let time = Instant::now();
+
+        session.handle_tokens(method_response());
+        assert_that!(
+            session.poll_action(time),
+            eq(&Action::Send(vec![Packet {
+                tper_session_number: 2,
+                host_session_number: 1,
+                sequence_number: 1,
+                payload: vec![SubPacket { kind: SubPacketKind::Data, length: PhantomData, payload: eos() }],
+                ..Default::default()
+            }]))
+        );
+        assert_that!(session.poll_action(time), eq(&Action::Delete));
+    }
+
+    #[test]
+    fn fragmented_tokens() {
+        let mut session = Session::new(SESSION_ID, TIMEOUT, PROPERTIES);
+        let time = Instant::now();
+        let (sender, receiver) = channel();
+        let mut first_tokens = method_response();
+        let second_tokens = first_tokens.split_off(2);
+
+        session.handle_method_call(method_call(), sender);
+        assert_that!(session.poll_action(time), pat!(&Action::Send(_)));
+
+        session.handle_iface_send_done(time, SequenceNumber(1), Ok(()));
+        assert_that!(session.poll_action(time), pat!(&Action::Sleep { .. }));
+
+        session.handle_tokens(first_tokens);
+        assert_that!(session.poll_action(time), pat!(&Action::Sleep { .. }));
+        assert_that!(receiver.try_recv(), err(eq(&TryRecvError::Empty)));
+
+        session.handle_tokens(second_tokens);
+        assert_that!(session.poll_action(time), eq(&Action::None));
+        assert_that!(receiver.try_recv(), ok(ok(eq(&method_response()))));
+    }
+
+    #[test]
+    fn invalid_tokens() {
+        let mut session = Session::new(SESSION_ID, TIMEOUT, PROPERTIES);
+        let time = Instant::now();
+        let (sender, receiver) = channel();
+        let invalid_tokens = vec![0xFE, 34, 23, 7, 2, 3, 2];
+
+        session.handle_method_call(method_call(), sender);
+        assert_that!(session.poll_action(time), pat!(&Action::Send(_)));
+
+        session.handle_iface_send_done(time, SequenceNumber(1), Ok(()));
+        assert_that!(session.poll_action(time), pat!(&Action::Sleep { .. }));
+
+        session.handle_tokens(invalid_tokens);
+        assert_that!(
+            session.poll_action(time),
+            eq(&Action::Send(vec![Packet {
+                tper_session_number: 2,
+                host_session_number: 1,
+                sequence_number: 2,
+                payload: vec![SubPacket { kind: SubPacketKind::Data, length: PhantomData, payload: eos() }],
+                ..Default::default()
+            }]))
+        );
+        assert_that!(receiver.try_recv(), ok(err(matches_pattern!(&Error::TokenError(_)))));
+        assert_that!(session.poll_action(time), eq(&Action::Delete));
+    }
+
+    #[test]
+    fn end_session() {
+        let mut session = Session::new(SESSION_ID, TIMEOUT, PROPERTIES);
+        let time = Instant::now();
+        let (sender, receiver) = channel();
+
+        session.handle_method_call(eos(), sender);
+        assert_that!(
+            session.poll_action(time),
+            eq(&Action::Send(vec![Packet {
+                tper_session_number: 2,
+                host_session_number: 1,
+                sequence_number: 1,
+                payload: vec![SubPacket { kind: SubPacketKind::Data, length: PhantomData, payload: eos() }],
+                ..Default::default()
+            }]))
+        );
+
+        session.handle_iface_send_done(time, SequenceNumber(1), Ok(()));
+        session.handle_tokens(eos());
+        assert_that!(session.poll_action(time), eq(&Action::Delete));
+        assert_that!(receiver.try_recv(), ok(ok(eq(&eos()))));
+    }
+
+    #[test]
+    fn reject_calls_when_closed() {
+        let mut session = Session::new(SESSION_ID, TIMEOUT, PROPERTIES);
+        let time = Instant::now();
+
+        session.handle_aborted();
+
+        let (sender, receiver) = channel();
+        session.handle_method_call(eos(), sender);
+        assert_that!(session.poll_action(time), eq(&Action::Delete));
+        assert_that!(receiver.try_recv(), ok(err(eq(&Error::Closed))));
+    }
+
+    #[test]
+    fn reject_oversized_calls() {
+        let mut session = Session::new(SESSION_ID, TIMEOUT, PROPERTIES);
+        let time = Instant::now();
+
+        let (sender, receiver) = channel();
+        session.handle_method_call(vec![0; 1025], sender);
+        assert_that!(session.poll_action(time), eq(&Action::None));
+        assert_that!(receiver.try_recv(), ok(err(eq(&Error::MethodTooLarge))));
+    }
+
+    #[test]
+    fn timeout() {
+        let mut session = Session::new(SESSION_ID, TIMEOUT, PROPERTIES);
+        let time = Instant::now();
+        let (sender, receiver) = channel();
+
+        session.handle_method_call(method_call(), sender);
+        assert_that!(session.poll_action(time), matches_pattern!(Action::Send(_)));
+
+        session.handle_iface_send_done(time, SequenceNumber(1), Ok(()));
+        assert_that!(session.poll_action(time), matches_pattern!(&Action::Sleep { until: eq(time + TIMEOUT) }));
+
+        assert_that!(session.poll_action(time + 2 * TIMEOUT), matches_pattern!(&Action::None));
+        assert_that!(receiver.try_recv(), ok(err(eq(&Error::TimedOut))));
     }
 }

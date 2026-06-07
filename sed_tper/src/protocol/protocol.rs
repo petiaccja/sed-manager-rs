@@ -1,24 +1,32 @@
-use core::mem::drop;
-use std::collections::HashMap;
-use std::collections::hash_map::Entry;
-use std::num::NonZero;
-use std::sync::Arc;
-use std::time::{Duration, Instant};
-
-use sed_async::{CancelToken, sleep_until, spawn, timeout_at};
-use sed_device::Device;
-use sed_packet::com_id::ComIdRequest;
-use sed_packet::packet::{COM_PACKET_HEADER_LEN, PACKET_HEADER_LEN, SUB_PACKET_HEADER_LEN};
-use sed_packet::session_id::SessionId;
-use sed_spec::methods::{Limit, Properties};
-use tracing::field::Empty;
-use tracing::{Instrument, Span, debug_span, warn};
-
-use crate::protocol::device_session::DeviceSession;
-use crate::protocol::message::{
-    ComResponse, ConnectionChanged, Message, MethodResponse, ReportAborted, SendComRequest, SendMethod,
+use std::{
+    collections::VecDeque,
+    num::NonZero,
+    time::{Duration, Instant},
 };
-use crate::protocol::{com_session::ComSession, management_session::ManagementSession, session::Session};
+
+use oneshot::Sender;
+use sed_packet::{
+    com_id::{
+        COM_ID_PROTOCOL, COM_ID_RESPONSE_LEN, ComIdRequest, ComIdResponse, ComIdResponsePayload, StackResetStatus,
+    },
+    packet::{COM_PACKET_HEADER_LEN, ComPacket, PACKET_HEADER_LEN, PACKETIZED_PROTOCOL, SUB_PACKET_HEADER_LEN},
+    session_id::SessionId,
+};
+use sed_spec::methods::{Limit, Properties};
+use sorbit::ser_de::FromBytes;
+
+use crate::{
+    Error,
+    protocol::{
+        com_id_session::ComIdSession,
+        rpc_session::RpcSession,
+        sequence_number::SequenceNumber,
+        shared::{Action, min_deadline},
+        synchronous_protocol::SynchronousProtocol,
+    },
+};
+
+use super::{com_id_session::ComIdAction, rpc_session::RpcAction};
 
 /// After the timeout, message sent between the host and device are considered
 /// lost.
@@ -76,333 +84,296 @@ pub const CAPABILITIES: Properties = Properties {
     asynchronous: false,
 };
 
-/// The full protocol to communicate with the TPer via packets and ComID requests.
 #[derive(Debug)]
 pub struct Protocol {
-    device_session: DeviceSession,
-    com_session: ComSession,
-    management_session: ManagementSession,
-    sessions: HashMap<SessionId, Session>,
-    message_receiver: async_channel::Receiver<DispatchMessage>,
-    connection_changed: async_broadcast::Sender<ConnectionChanged>,
+    com_id: u16,
+    com_id_ext: u16,
+    rpc_session: RpcSession,
+    com_id_session: ComIdSession,
+    rpc_protocol: SynchronousProtocol<ComPacket, ComPacket>,
+    com_id_protocol: SynchronousProtocol<ComIdRequest, ComIdResponse>,
+    com_packets_sending: VecDeque<ComPacketSendingRecord>,
+    stop_requested: bool,
 }
 
 impl Protocol {
-    /// Create a new protocol stack for the `device` on the given ComID and
-    /// ComID extension.
-    ///
-    /// This initializes the protocol stack, but no messages will be delivered
-    /// until you call [`run`](Self::run).
-    pub fn new(com_id: u16, com_id_ext: u16, device: Arc<dyn Device>) -> (Self, Controller) {
-        let (message_tx, message_rx) = async_channel::unbounded();
-        let (mut connection_tx, connection_rx) = async_broadcast::broadcast(1);
-        connection_tx.set_overflow(true); // Using channel as "watch", only latest data should be cached.
-        let controller = Controller { context: Context::new(message_tx), connection_changed: connection_rx };
-        (
-            Self {
-                device_session: DeviceSession::new(com_id, com_id_ext, device, DEF_TRANS_TIMEOUT),
-                com_session: ComSession::new(DEF_TRANS_TIMEOUT),
-                management_session: ManagementSession::new(CAPABILITIES, DEF_TRANS_TIMEOUT),
-                sessions: HashMap::new(),
-                message_receiver: message_rx,
-                connection_changed: connection_tx,
-            },
-            controller,
-        )
-    }
-
-    /// Send and receive messages until the protocol stack is shut down.
-    ///
-    /// You typically want to spawn this as a task on an async runtime. While
-    /// executing, the protocol stack will accept commands through
-    /// [`Controller`]s and exchange the message with the device while
-    /// respecting the communication protocols.
-    ///
-    /// To shut down the protocol stack, drop all [`Controller`]s. Once they are
-    /// dropped, the protocol stack will still handle pending messages and
-    /// timeouts to ensure a graceful shutdown. This will leave the protocol
-    /// stack on the device's side ready for a subsequent session, but might
-    /// take a little time.
-    pub async fn run(mut self) {
-        while let Ok(dispatch_message) = self.message_receiver.recv().await {
-            self.dispatch(dispatch_message);
+    pub fn new(com_id: u16, com_id_ext: u16) -> Self {
+        let max_transfer_len = CAPABILITIES.max_gross_compacket_size.get();
+        Self {
+            com_id,
+            com_id_ext,
+            rpc_session: RpcSession::new(DEF_TRANS_TIMEOUT, CAPABILITIES),
+            com_id_session: ComIdSession::new(DEF_TRANS_TIMEOUT),
+            rpc_protocol: SynchronousProtocol::new(PACKETIZED_PROTOCOL, max_transfer_len),
+            com_id_protocol: SynchronousProtocol::new(COM_ID_PROTOCOL, COM_ID_RESPONSE_LEN),
+            com_packets_sending: VecDeque::new(),
+            stop_requested: false,
         }
     }
 
-    fn dispatch(&mut self, DispatchMessage { address, context, message }: DispatchMessage) {
-        let _span = context.root_span.clone().entered();
-        match address {
-            Address::Control => self.dispatch_control(context, message),
-            Address::DeviceSession => self.dispatch_device_session(context, message),
-            Address::ComSession => self.dispatch_com_session(context, message),
-            Address::ManagementSession => self.dispatch_management_session(context, message),
-            Address::Session(session_id) => self.dispatch_session(session_id, context, message),
+    pub fn handle_method_call(&mut self, session_id: SessionId, call: Vec<u8>, sender: Sender<Result<Vec<u8>, Error>>) {
+        self.rpc_session.handle_method_call(session_id, call, sender);
+    }
+
+    pub fn handle_session_aborted(&mut self, session_id: SessionId) {
+        self.rpc_session.handle_session_aborted(session_id);
+    }
+
+    #[cfg(feature = "test-utils")]
+    pub fn handle_spawn_session(&mut self, session_id: SessionId, properties: Properties) {
+        self.rpc_session.handle_spawn_session(session_id, properties);
+    }
+
+    pub fn handle_com_request(&mut self, request: ComIdRequest, sender: Sender<Result<ComIdResponse, Error>>) {
+        self.com_id_session.handle_com_request(request, sender);
+    }
+
+    pub fn handle_iface_send_done(&mut self, time: Instant, protocol: u8, result: Result<(), Error>) {
+        match protocol {
+            COM_ID_PROTOCOL => self.handle_iface_com_request_send_done(time, result),
+            PACKETIZED_PROTOCOL => self.handle_iface_com_packet_send_done(time, result),
+            _ => (),
         }
     }
 
-    fn dispatch_control(&mut self, _context: Context, message: Message) {
-        match message {
-            Message::Spawn(message) => {
-                let span = debug_span!(
-                    "spawn_session",
-                    session_id = debug(&message.id),
-                    properties = debug(&message.properties),
-                    err = Empty
+    pub fn handle_iface_recv_done(&mut self, time: Instant, protocol: u8, result: Result<Vec<u8>, Error>) {
+        match protocol {
+            COM_ID_PROTOCOL => self.handle_iface_com_request_recv_done(time, result),
+            PACKETIZED_PROTOCOL => self.handle_iface_com_packet_recv_done(time, result),
+            _ => (),
+        }
+    }
+
+    pub fn request_stop(&mut self) {
+        self.stop_requested = true;
+    }
+
+    pub fn poll_action(&mut self, time: Instant) -> Action {
+        let mut deadline = None;
+
+        // Poll the ComID and RPC sessions. At this phase, we're not making any
+        // final conclusions about the next action. If they wanna send something,
+        // we just queue it in the synchronous protocols.
+        match self.com_id_session.poll_action(time) {
+            ComIdAction::None => (),
+            ComIdAction::Sleep { until } => deadline = min_deadline(deadline, Some(until)),
+            ComIdAction::Send(com_id_request) => self.com_id_protocol.handle_send(com_id_request),
+        };
+
+        match self.rpc_session.poll_action(time) {
+            RpcAction::None => (),
+            RpcAction::Sleep { until } => deadline = min_deadline(deadline, Some(until)),
+            RpcAction::Send(packets) => {
+                self.com_packets_sending.push_back(ComPacketSendingRecord {
+                    packets: packets
+                        .iter()
+                        .map(|packet| (SessionId::of(packet), SequenceNumber(packet.sequence_number)))
+                        .collect(),
+                });
+                self.rpc_protocol.handle_send(ComPacket {
+                    com_id: self.com_id,
+                    com_id_ext: self.com_id_ext,
+                    payload: packets,
+                    ..Default::default()
+                })
+            }
+        };
+
+        // Poll the ComID and RPC protocol. In case they want to send or receive,
+        // the action is immediately returned. The two protocols are eventually
+        // independent, so a send-receive cycle on the ComID protocol might
+        // overlap with a send-receive cycle on the RPC protocol, and that's
+        // still not a violation of the synchronous protocol.
+        //
+        // Since the ComID protocol (0x02) is polled first, it gets a precedence.
+        // This is important because this way an IF-SEND for stack reset can be
+        // issued before all IF-RECVs complete for the token stream protocol.
+        // This can be used to interrupt pending RPCs on protocol 0x01.
+        match self.com_id_protocol.poll_action(time) {
+            Action::None => (),
+            Action::Sleep { until } => deadline = min_deadline(deadline, Some(until)),
+            action @ Action::Send { .. } => return action,
+            action @ Action::Recv { .. } => return action,
+            action @ Action::Recover => {
+                self.com_id_protocol.handle_reset();
+                self.com_id_session.handle_reset();
+                // Unless gated behind a `stop` flag, this can cause an infinite
+                // loop of failed STACK_RESETs. This would keep the protocol
+                // from becoming "idle" and letting the runner shut down.
+                if !self.stop_requested {
+                    let stack_reset_request = ComIdRequest::stack_reset(self.com_id, self.com_id_ext);
+                    self.com_id_session.handle_com_request(stack_reset_request, oneshot::channel().0);
+                }
+                return action;
+            }
+        }
+
+        match self.rpc_protocol.poll_action(time) {
+            Action::None => (),
+            Action::Sleep { until } => deadline = min_deadline(deadline, Some(until)),
+            action @ Action::Send { .. } => return action,
+            action @ Action::Recv { .. } => return action,
+            action @ Action::Recover => {
+                let stack_reset_request = ComIdRequest::stack_reset(self.com_id, self.com_id_ext);
+                self.com_id_session.handle_com_request(stack_reset_request, oneshot::channel().0);
+                return action;
+            }
+        }
+
+        deadline.map(|deadline| Action::Sleep { until: deadline }).unwrap_or(Action::None)
+    }
+
+    fn handle_iface_com_packet_send_done(&mut self, time: Instant, result: Result<(), Error>) {
+        if let Some(record) = self.com_packets_sending.pop_front() {
+            for (session_id, sn) in record.packets {
+                self.rpc_session.handle_iface_send_done(time, session_id, sn, result.clone());
+            }
+        }
+    }
+
+    fn handle_iface_com_request_send_done(&mut self, time: Instant, result: Result<(), Error>) {
+        self.com_id_session.handle_iface_send_done(time, result);
+    }
+
+    fn handle_iface_com_request_recv_done(&mut self, time: Instant, result: Result<Vec<u8>, Error>) {
+        let response =
+            result.map(|bytes| ComIdResponse::from_bytes(&bytes).map_err(Error::InvalidComIdResponse)).flatten();
+
+        self.com_id_protocol.handle_recv(time, response.as_ref());
+        if let Ok(response) = response {
+            if response.com_id == self.com_id
+                && response.com_id_ext == self.com_id_ext
+                && matches!(
+                    &response.payload,
+                    ComIdResponsePayload::StackReset { available_data_length: 4.., status: StackResetStatus::Success }
                 )
-                .entered();
-                match self.sessions.entry(message.id) {
-                    Entry::Occupied(_) => drop(span.record("err", "session already exists")),
-                    Entry::Vacant(entry) => {
-                        let _ = entry.insert(Session::new(message.id, message.properties, DEF_TRANS_TIMEOUT));
-                    }
-                }
+            {
+                self.rpc_protocol.handle_reset();
+                self.rpc_session.handle_reset();
+                self.com_packets_sending.clear();
             }
-            Message::Delete(message) => {
-                let span = debug_span!("delete_session", session_id = debug(&message.0), err = Empty).entered();
-                if self.sessions.remove(&message.0).is_none() {
-                    span.record("err", "session not found");
-                }
-            }
-            Message::ConnectionChanged(message) => {
-                assert!(self.connection_changed.try_broadcast(message).is_ok(), "overflow mode disabled");
-            }
-            _ => warn!(message = debug(message), "message dropped"),
+            self.com_id_session.handle_iface_recv_done(response);
         }
     }
 
-    fn dispatch_device_session(&mut self, context: Context, message: Message) {
-        let unit = &mut self.device_session;
-        match message {
-            Message::SendComRequest(message) => unit.send_com_request(context, message),
-            Message::CommitBatch(message) => unit.commit_batch(context, message),
-            Message::SendPacket(message) => unit.send_packet(context, message),
-            Message::SecuritySendDone(message) => unit.security_send_done(context, message),
-            Message::SecurityRecvDoneComPacket(message) => unit.security_recv_com_packet_done(context, message),
-            Message::SecurityRecvDoneComIdRequest(message) => unit.security_recv_com_id_request_done(context, message),
-            _ => warn!(message = debug(message), "message dropped"),
-        }
-    }
+    fn handle_iface_com_packet_recv_done(&mut self, time: Instant, result: Result<Vec<u8>, Error>) {
+        let com_packet = result.map(|bytes| ComPacket::from_bytes(&bytes).map_err(Error::InvalidComPacket)).flatten();
 
-    fn dispatch_com_session(&mut self, context: Context, message: Message) {
-        let unit = &mut self.com_session;
-        match message {
-            Message::SendComRequest(message) => unit.send_com_request(context, message),
-            Message::SendComRequestDone(message) => unit.send_com_request_done(context, message),
-            Message::Timeout(time) => unit.timeout(time),
-            Message::ComResponseReceived(message) => unit.com_response_received(message),
-            _ => warn!(message = debug(message), "message dropped"),
-        }
-    }
+        self.rpc_protocol.handle_recv(time, com_packet.as_ref());
 
-    fn dispatch_management_session(&mut self, context: Context, message: Message) {
-        let unit = &mut self.management_session;
-        match message {
-            Message::SendMethod(message) => unit.send_method(context, message),
-            Message::SendPacketDone(message) => unit.send_packet_done(context, message),
-            Message::Timeout(time) => unit.timeout(time),
-            Message::PacketReceived(message) => unit.packet_received(context, message),
-            _ => warn!(message = debug(message), "message dropped"),
-        }
-    }
-
-    fn dispatch_session(&mut self, session_id: SessionId, context: Context, message: Message) {
-        if let Some(unit) = self.sessions.get_mut(&session_id) {
-            match message {
-                Message::SendMethod(message) => unit.send_method(context, message),
-                Message::CommitBatch(message) => unit.commit_batch(context, message),
-                Message::SendPacketDone(message) => unit.send_packet_done(context, message),
-                Message::Timeout(time) => unit.timeout(context, time),
-                Message::PacketReceived(message) => unit.packet_reveived(context, message),
-                Message::Abort(_) => unit.abort(context),
-                Message::ReportAborted(message) => unit.report_aborted(context, message),
-                _ => drop(Span::current().record("dropped", true)),
+        if let Ok(com_packet) = com_packet {
+            for packet in com_packet.payload {
+                self.rpc_session.handle_packet(packet);
             }
-        } else {
-            warn!(session_id = debug(session_id), "session not found");
         }
-    }
-}
-
-/// The interface to interact with a running [`Protocol`] stack.
-#[derive(Debug, Clone)]
-pub struct Controller {
-    context: Context,
-    connection_changed: async_broadcast::Receiver<ConnectionChanged>,
-}
-
-impl Controller {
-    /// Perform an remote procedure call using tokenized methods.
-    pub fn call(&self, session_id: SessionId, method_tokens: Vec<u8>) -> oneshot::Receiver<MethodResponse> {
-        let root_span = Span::current();
-        // TODO: remove sensitive data from traces.
-        let _span =
-            debug_span!("call", session_id = debug(&session_id), method_tokens = debug(&method_tokens)).entered();
-
-        let address = Address::from(session_id);
-        let (tx, rx) = oneshot::channel();
-        self.context
-            .with_root_span(root_span)
-            .send(address, Message::SendMethod(SendMethod { method: method_tokens, channel: tx }));
-        rx
-    }
-
-    /// Notify the protocol stack that a session has been aborted by the device.
-    ///
-    /// This cleans up the session without sending an EndOfSession, since the
-    /// device has already terminated it.
-    pub fn report_aborted(&self, session_id: SessionId) {
-        let root_span = Span::current();
-        let _span = debug_span!("report_aborted", session_id = debug(&session_id)).entered();
-        self.context
-            .with_root_span(root_span)
-            .send(Address::Session(session_id), Message::ReportAborted(ReportAborted));
-    }
-
-    /// Send a ComID request to the device.
-    pub fn com_id_request(&self, request: ComIdRequest) -> oneshot::Receiver<ComResponse> {
-        let root_span = Span::current();
-        let _span = debug_span!("com_id_request", request = debug(&request)).entered();
-
-        let address = Address::ComSession;
-        let (tx, rx) = oneshot::channel();
-        self.context
-            .with_root_span(root_span)
-            .send(address, Message::SendComRequest(SendComRequest { request, channel: tx }));
-        rx
-    }
-
-    /// Spawn a new session with the given ID and properties.
-    #[cfg(feature = "test-utils")]
-    pub fn spawn(&self, session_id: SessionId, properties: Properties) {
-        use crate::protocol::message::Spawn;
-
-        let root_span = Span::current();
-        let _span = debug_span!("spawn", session_id = debug(&session_id), properties = debug(&properties)).entered();
-
-        let address = Address::Control;
-        self.context
-            .with_root_span(root_span)
-            .send(address, Message::Spawn(Spawn { id: session_id, properties }));
-    }
-
-    /// Delete the session with the given ID.
-    #[cfg(feature = "test-utils")]
-    pub fn delete(&self, session_id: SessionId) {
-        use crate::protocol::message::Delete;
-
-        let root_span = Span::current();
-        let _span = debug_span!("delete", session_id = debug(&session_id)).entered();
-
-        let address = Address::Control;
-        self.context.with_root_span(root_span).send(address, Message::Delete(Delete(session_id)));
-    }
-
-    /// Listen to changes in connection properties.
-    ///
-    /// The protocol manages the properties of the communication with the
-    /// remote. When the properties change, an event is emitted on the channel.
-    /// This typically only happens once at the beginning of the session, as
-    /// it's enough to negotiate properties once. If no event comes on the
-    /// channel, it means that the device did not respond to the request to
-    /// negotiate properties.
-    pub fn connection_changed(&self) -> async_broadcast::Receiver<ConnectionChanged> {
-        self.connection_changed.clone()
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct Context {
-    message_queue: async_channel::Sender<DispatchMessage>,
-    root_span: Span,
-}
-
-impl Context {
-    pub fn new(message_queue: async_channel::Sender<DispatchMessage>) -> Self {
-        Self { message_queue, root_span: Span::none() }
-    }
-
-    pub fn send(&self, address: Address, message: Message) {
-        self.message_queue
-            .try_send(DispatchMessage { address, context: self.clone(), message })
-            .expect("bug: not using on unbounded channel or the channel got closed too early");
-    }
-
-    pub fn send_timeout(&self, address: Address, time: Instant, cancel: Option<CancelToken>) {
-        let message_queue = self.message_queue.clone();
-        let context = self.clone();
-        let root_span = context.root_span.clone();
-        spawn(
-            async move {
-                // This check is only necessary for testing with zero timeouts.
-                let cancelled = if Instant::now() < time {
-                    if let Some(cancel) = cancel {
-                        timeout_at(time.clone(), cancel).await.is_ok()
-                    } else {
-                        sleep_until(time.clone()).await;
-                        false
-                    }
-                } else {
-                    false
-                };
-                if !cancelled {
-                    let _ =
-                        message_queue.try_send(DispatchMessage { address, context, message: Message::Timeout(time) });
-                }
-            }
-            .instrument(debug_span!(parent: root_span, "timeout").follows_from(Span::current()).clone()),
-        );
-    }
-
-    pub fn send_future<F>(&self, address: Address, future: F)
-    where
-        F: Future<Output = Message> + Send + 'static,
-    {
-        let message_queue = self.message_queue.clone();
-        let context = self.clone();
-        let root_span = context.root_span.clone();
-        spawn(
-            async move {
-                let message = future.await;
-                // The protocol has already been shut down, but that's okay.
-                let _ = message_queue.try_send(DispatchMessage { address, context, message });
-            }
-            .instrument(debug_span!(parent: root_span, "future").follows_from(Span::current()).clone()),
-        );
-    }
-
-    pub fn with_root_span(&self, root_span: Span) -> Self {
-        Self { message_queue: self.message_queue.clone(), root_span }
-    }
-
-    #[cfg(test)]
-    pub fn mock() -> (Self, async_channel::Receiver<DispatchMessage>) {
-        let (tx, rx) = async_channel::unbounded();
-        (Self { message_queue: tx, root_span: Span::none() }, rx)
     }
 }
 
 #[derive(Debug)]
-pub struct DispatchMessage {
-    pub address: Address,
-    pub context: Context,
-    pub message: Message,
+struct ComPacketSendingRecord {
+    packets: Vec<(SessionId, SequenceNumber)>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum Address {
-    Control,
-    DeviceSession,
-    ComSession,
-    ManagementSession,
-    Session(SessionId),
-}
+#[cfg(test)]
+mod tests {
+    use googletest::assert_that;
+    use googletest::matchers::*;
+    use oneshot::channel;
+    use sed_packet::com_id::ComIdResponsePayload;
+    use sed_packet::com_id::StackResetStatus;
+    use sed_spec::methods::MethodStatus;
+    use sorbit::ser_de::ToBytes;
 
-impl From<SessionId> for Address {
-    fn from(value: SessionId) -> Self {
-        if value == SessionId::MANAGEMENT {
-            Self::ManagementSession
-        } else {
-            Self::Session(value)
-        }
+    use super::*;
+
+    use crate::protocol::shared::packetize_one;
+    use crate::protocol::shared::tests::*;
+
+    const SESSION_ID: SessionId = SessionId { hsn: 1, tsn: 2 };
+
+    #[test]
+    fn com_id_request_completed() {
+        let mut protocol = Protocol::new(1, 0);
+        let (sender, receiver) = channel();
+
+        let request = ComIdRequest::stack_reset(1, 0);
+        let response = ComIdResponse {
+            com_id: 1,
+            com_id_ext: 0,
+            payload: ComIdResponsePayload::StackReset { available_data_length: 4, status: StackResetStatus::Success },
+        };
+
+        // Issue request.
+        protocol.handle_com_request(request.clone(), sender);
+
+        // "Send" call to device.
+        let action = protocol.poll_action(Instant::now());
+        assert_that!(action, eq(&Action::Send { protocol: 0x02, data: request.to_bytes().unwrap() }));
+        protocol.handle_iface_send_done(Instant::now(), 0x02, Ok(()));
+
+        // "Recv" response from device.
+        let action = protocol.poll_action(Instant::now());
+        assert_that!(action, eq(&Action::Recv { protocol: 0x02, transfer_len: 46 }));
+        protocol.handle_iface_recv_done(Instant::now(), 0x02, Ok(response.to_bytes().unwrap()));
+
+        // Poll to completion.
+        let action = protocol.poll_action(Instant::now());
+        assert_that!(action, eq(&Action::None));
+
+        // Check if we received the response to the method call.
+        assert_that!(receiver.try_recv(), ok(ok(eq(&response))));
+    }
+
+    #[test]
+    fn method_call_completed() {
+        let mut protocol = Protocol::new(1, 0);
+        let (sender, receiver) = channel();
+
+        let call = start_session_call(SESSION_ID);
+        let response = sync_session_call(SESSION_ID, MethodStatus::Success);
+        let call_com_packet = ComPacket {
+            com_id: 1,
+            com_id_ext: 0,
+            outstanding_data: 0,
+            min_transfer: 0,
+            length: std::marker::PhantomData,
+            payload: vec![packetize_one(
+                SessionId::MANAGEMENT,
+                SequenceNumber(1),
+                call.clone(),
+            )],
+        };
+        let response_com_packet = ComPacket {
+            com_id: 1,
+            com_id_ext: 0,
+            outstanding_data: 0,
+            min_transfer: 0,
+            length: std::marker::PhantomData,
+            payload: vec![packetize_one(
+                SessionId::MANAGEMENT,
+                SequenceNumber(1),
+                response.clone(),
+            )],
+        };
+
+        // Issue method call.
+        protocol.handle_method_call(SessionId::MANAGEMENT, call, sender);
+
+        // "Send" call to device.
+        let action = protocol.poll_action(Instant::now());
+        assert_that!(action, eq(&Action::Send { protocol: 0x01, data: call_com_packet.to_bytes().unwrap() }));
+        protocol.handle_iface_send_done(Instant::now(), 0x01, Ok(()));
+
+        // "Recv" response from device.
+        let action = protocol.poll_action(Instant::now());
+        assert_that!(action, eq(&Action::Recv { protocol: 0x01, transfer_len: 512 }));
+        protocol.handle_iface_recv_done(Instant::now(), 0x01, Ok(response_com_packet.to_bytes().unwrap()));
+
+        // Poll to completion.
+        let action = protocol.poll_action(Instant::now());
+        assert_that!(action, eq(&Action::None));
+
+        // Check if we received the response to the method call.
+        assert_that!(receiver.try_recv(), ok(ok(eq(&response))));
     }
 }

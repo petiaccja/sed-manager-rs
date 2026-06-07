@@ -17,7 +17,7 @@ use sed_spec_macros::DetokenizeStruct;
 use tracing::instrument;
 
 use crate::error::Error;
-use crate::protocol_sans_io::Controller;
+use crate::protocol::Controller;
 
 /// A session to one of the TPer's security providers.
 ///

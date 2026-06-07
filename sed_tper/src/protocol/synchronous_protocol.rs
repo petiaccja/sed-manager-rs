@@ -12,7 +12,7 @@ use sed_packet::{
 use sorbit::{error::Error as SorbitError, ser_de::ToBytes};
 use std::time::Instant;
 
-use crate::{Error, protocol_sans_io::shared::Action};
+use crate::{Error, protocol::shared::Action};
 
 const MAX_BACKOFF: Duration = Duration::from_millis(500);
 const RECV_FAILURE_BACKOFF: Duration = Duration::from_millis(500);

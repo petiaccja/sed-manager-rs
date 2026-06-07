@@ -16,7 +16,7 @@ use sed_spec::methods::{
 
 use crate::{
     Error,
-    protocol_sans_io::{
+    protocol::{
         sequence_number::SequenceNumber,
         shared::{min_deadline, packetize_one},
     },
@@ -305,7 +305,7 @@ mod tests {
     };
 
     use super::*;
-    use crate::protocol_sans_io::shared::tests::*;
+    use crate::protocol::shared::tests::*;
 
     const SESSION_ID: SessionId = SessionId { hsn: 1, tsn: 2 };
     const TIMEOUT: Duration = Duration::from_secs(1);

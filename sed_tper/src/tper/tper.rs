@@ -19,7 +19,7 @@ use tracing::instrument;
 
 use crate::{
     Error, Session,
-    protocol_sans_io::{CAPABILITIES, ConnectionChanged, Controller, Protocol},
+    protocol::{CAPABILITIES, ConnectionChanged, Controller, Protocol},
 };
 
 /// A connection to the storage device using a particular ComID/ComIDExt pair.
