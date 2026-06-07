@@ -25,6 +25,8 @@ pub enum Error {
     Closed,
     #[error("The RPC message has timed out")]
     TimedOut,
+    #[error("You're not allowed to send this method to the device")]
+    MethodNotAllowed,
 
     // Data-related.
     #[error("Method call exceeds packet size limits")]

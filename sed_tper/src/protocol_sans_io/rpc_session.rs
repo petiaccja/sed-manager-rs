@@ -13,18 +13,19 @@ use sed_spec::methods::Properties;
 use crate::{
     Error,
     protocol_sans_io::{
-        management::Management, sequence_number::SequenceNumber, session::Session, utility::min_deadline,
+        management::Management, sequence_number::SequenceNumber, session::Session, shared::min_deadline,
     },
 };
 
-use super::{management::ManagementAction, session::SessionAction};
+use super::{
+    management::{Action as ManagementAction, StackAction},
+    session::Action as SessionAction,
+};
 
+#[derive(Debug)]
 pub struct RpcSession {
     timeout: Duration,
-    /// Queued packets (for now EOSs from aborted sessions).
-    packets: VecDeque<Packet>,
-    /// Method calls that haven't started through the pipeline yet.
-    method_calls: VecDeque<MethodCallRecord>,
+    packets_to_send: VecDeque<Vec<Packet>>,
     /// `StartSession` methods that are queued for IF-SEND, keyed by HSN.
     management: Management,
     /// Session method calls that are queued for IF-SEND, keyed by session ID.
@@ -35,15 +36,26 @@ impl RpcSession {
     pub fn new(timeout: Duration, capabilities: Properties) -> Self {
         Self {
             timeout,
-            packets: VecDeque::new(),
-            method_calls: VecDeque::new(),
+            packets_to_send: VecDeque::new(),
             management: Management::new(timeout, capabilities),
             sessions: HashMap::new(),
         }
     }
 
     pub fn handle_method_call(&mut self, session_id: SessionId, call: Vec<u8>, sender: Sender<Result<Vec<u8>, Error>>) {
-        self.method_calls.push_back(MethodCallRecord { session_id, call, sender });
+        if session_id == SessionId::MANAGEMENT {
+            self.management.handle_method_call(call, sender);
+        } else if let Some(session) = self.sessions.get_mut(&session_id) {
+            session.handle_method_call(call, sender);
+        } else {
+            let _ = sender.send(Err(Error::Closed));
+        }
+    }
+
+    pub fn handle_session_aborted(&mut self, session_id: SessionId) {
+        if let Some(mut session) = self.sessions.remove(&session_id) {
+            session.handle_aborted();
+        }
     }
 
     pub fn handle_iface_send_done(
@@ -66,80 +78,234 @@ impl RpcSession {
             if session_id == SessionId::MANAGEMENT {
                 for action in self.management.handle_tokens(sub_packet.payload) {
                     match action {
-                        ManagementAction::Spawn { session_id, properties } => {
+                        StackAction::Spawn { session_id, properties } => {
                             self.sessions.insert(session_id, Session::new(session_id, self.timeout, properties));
                         }
-                        ManagementAction::NotifyAbort { session_id } => {
-                            self.sessions.remove(&session_id).map(|mut session| session.notify_abort());
+                        StackAction::NotifyAbort { session_id } => {
+                            self.sessions.remove(&session_id).map(|mut session| session.handle_aborted());
                         }
-                        ManagementAction::Properties { .. } => {
+                        StackAction::Properties { .. } => {
                             // TODO: send out a properties changed event.
                             // Getting this working can wait.
                         }
                     }
                 }
             } else if let Some(session) = self.sessions.get_mut(&session_id) {
-                match session.handle_tokens(sub_packet.payload) {
-                    SessionAction::None => (),
-                    SessionAction::Delete(packet) => {
-                        self.packets.extend(packet);
-                        drop(self.sessions.remove(&session_id));
-                    }
-                }
+                session.handle_tokens(sub_packet.payload);
             }
         }
     }
 
-    pub fn poll_packets(&mut self) -> Vec<Packet> {
-        // One packet at a time for now.
-        if let Some(packet) = self.packets.pop_front() {
-            return vec![packet];
-        };
-        if let Some(MethodCallRecord { session_id, call, sender }) = self.method_calls.pop_front() {
-            if session_id == SessionId::MANAGEMENT {
-                self.management.handle_method_call(call, sender).into_iter().collect()
-            } else if let Some(session) = self.sessions.get_mut(&session_id) {
-                session.handle_method_call(call, sender).into_iter().collect()
-            } else {
-                let _ = sender.send(Err(Error::Closed));
-                Vec::new()
-            }
+    pub fn poll_action(&mut self, time: Instant) -> RpcAction {
+        let management_action = self.management.poll_action(time);
+        let session_actions: Vec<_> = self
+            .sessions
+            .iter_mut()
+            .map(|(session_id, session)| (*session_id, session.poll_action(time)))
+            .collect();
+
+        let (packets_to_send, deleted_sessions, deadline) = reduce_actions(management_action, session_actions);
+
+        for session_id in deleted_sessions {
+            let _ = self.sessions.remove(&session_id);
+        }
+        self.packets_to_send.extend(packets_to_send);
+
+        if let Some(packets) = self.packets_to_send.pop_front() {
+            RpcAction::Send(packets)
+        } else if let Some(deadline) = deadline {
+            RpcAction::Sleep { until: deadline }
         } else {
-            Vec::new()
-        }
-    }
-
-    pub fn poll_timeout(&self) -> Option<Instant> {
-        let mut deadline = self.management.poll_timeout();
-        for (_, session) in &self.sessions {
-            deadline = min_deadline(deadline, session.poll_timeout());
-        }
-        deadline
-    }
-
-    pub fn notify_time(&mut self, time: Instant) {
-        self.management.notify_time(time);
-        let mut actions = Vec::new();
-        for (session_id, session) in &mut self.sessions {
-            let action = session.notify_time(time);
-            if action != SessionAction::None {
-                actions.push((*session_id, action));
-            }
-        }
-        for (session_id, action) in actions {
-            match action {
-                SessionAction::None => (),
-                SessionAction::Delete(packet) => {
-                    self.packets.extend(packet);
-                    self.sessions.remove(&session_id);
-                }
-            }
+            RpcAction::None
         }
     }
 }
 
-struct MethodCallRecord {
-    session_id: SessionId,
-    call: Vec<u8>,
-    sender: Sender<Result<Vec<u8>, Error>>,
+fn reduce_actions(
+    management_action: ManagementAction,
+    session_actions: Vec<(SessionId, SessionAction)>,
+) -> (Vec<Vec<Packet>>, Vec<SessionId>, Option<Instant>) {
+    let mut packets_to_send = Vec::new();
+    let mut deleted_sessions = Vec::new();
+
+    let mut deadline = match management_action {
+        ManagementAction::None => None,
+        ManagementAction::Sleep { until } => Some(until),
+        ManagementAction::Send(packets) => {
+            packets_to_send.push(packets);
+            None
+        }
+    };
+
+    for (session_id, action) in session_actions {
+        let session_deadline = match action {
+            SessionAction::None => None,
+            SessionAction::Sleep { until } => Some(until),
+            SessionAction::Send(packets) => {
+                packets_to_send.push(packets);
+                None
+            }
+            SessionAction::Delete => {
+                deleted_sessions.push(session_id);
+                None
+            }
+        };
+        deadline = min_deadline(deadline, session_deadline);
+    }
+    (packets_to_send, deleted_sessions, deadline)
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum RpcAction {
+    None,
+    Sleep { until: Instant },
+    Send(Vec<Packet>),
+}
+
+#[cfg(test)]
+mod tests {
+    use googletest::assert_that;
+    use googletest::matchers::*;
+    use oneshot::channel;
+    use sed_spec::methods::MethodStatus;
+
+    use crate::protocol_sans_io::shared::eos;
+    use crate::protocol_sans_io::shared::packetize_one;
+    use crate::protocol_sans_io::shared::tests::*;
+
+    use super::*;
+
+    const SESSION_ID_1: SessionId = SessionId { hsn: 1, tsn: 2 };
+    const SESSION_ID_2: SessionId = SessionId { hsn: 4, tsn: 5 };
+    const TIMEOUT: Duration = Duration::from_secs(1);
+    const CAPABILITIES: Properties = Properties::INITIAL;
+
+    fn construct_with_sessions(sessions: &[SessionId]) -> RpcSession {
+        let mut session = RpcSession::new(TIMEOUT, CAPABILITIES);
+        for session_id in sessions {
+            session.sessions.insert(*session_id, Session::new(*session_id, TIMEOUT, Properties::INITIAL));
+        }
+        session
+    }
+
+    #[test]
+    fn start_session_successfully() {
+        let mut session = RpcSession::new(TIMEOUT, CAPABILITIES);
+        let time = Instant::now();
+        let (sender, receiver) = channel();
+
+        let start_call = start_session_call(SESSION_ID_1);
+        let sync_call = sync_session_call(SESSION_ID_1, MethodStatus::Success);
+
+        session.handle_method_call(SessionId::MANAGEMENT, start_call.clone(), sender);
+        assert_that!(
+            session.poll_action(time),
+            pat!(RpcAction::Send(eq(&vec![packetize_one(
+                SessionId::MANAGEMENT,
+                SequenceNumber(1),
+                start_call
+            )])))
+        );
+
+        session.handle_iface_send_done(time, SessionId::MANAGEMENT, SequenceNumber(1), Ok(()));
+        assert_that!(session.poll_action(time), pat!(&RpcAction::Sleep { until: eq(time + TIMEOUT) }));
+
+        session.handle_packet(packetize_one(SessionId::MANAGEMENT, SequenceNumber(1), sync_call.clone()));
+        assert_that!(session.poll_action(time), pat!(&RpcAction::None));
+
+        assert_that!(receiver.try_recv(), ok(ok(eq(&sync_call))));
+        assert!(session.sessions.contains_key(&SESSION_ID_1));
+    }
+
+    #[test]
+    fn send_session_method_successfully() {
+        let mut session = construct_with_sessions(&[SESSION_ID_1]);
+        let time = Instant::now();
+        let (sender, receiver) = channel();
+
+        let call = method_call();
+        let response = method_response();
+
+        session.handle_method_call(SESSION_ID_1, call.clone(), sender);
+        assert_that!(
+            session.poll_action(time),
+            pat!(RpcAction::Send(eq(&vec![packetize_one(SESSION_ID_1, SequenceNumber(1), call)])))
+        );
+
+        session.handle_iface_send_done(time, SESSION_ID_1, SequenceNumber(1), Ok(()));
+        assert_that!(session.poll_action(time), pat!(&RpcAction::Sleep { until: eq(time + TIMEOUT) }));
+
+        session.handle_packet(packetize_one(SESSION_ID_1, SequenceNumber(1), response.clone()));
+        assert_that!(session.poll_action(time), pat!(&RpcAction::None));
+
+        assert_that!(receiver.try_recv(), ok(ok(eq(&response))));
+    }
+
+    #[test]
+    fn send_eos_successfully() {
+        let mut session = construct_with_sessions(&[SESSION_ID_1]);
+        let time = Instant::now();
+        let (sender, receiver) = channel();
+
+        let call = eos();
+        let response = eos();
+
+        session.handle_method_call(SESSION_ID_1, call.clone(), sender);
+        assert_that!(
+            session.poll_action(time),
+            pat!(RpcAction::Send(eq(&vec![packetize_one(SESSION_ID_1, SequenceNumber(1), call)])))
+        );
+
+        session.handle_iface_send_done(time, SESSION_ID_1, SequenceNumber(1), Ok(()));
+        assert_that!(session.poll_action(time), pat!(&RpcAction::Sleep { until: eq(time + TIMEOUT) }));
+
+        session.handle_packet(packetize_one(SESSION_ID_1, SequenceNumber(1), response.clone()));
+        assert_that!(session.poll_action(time), pat!(&RpcAction::None));
+
+        assert_that!(receiver.try_recv(), ok(ok(eq(&response))));
+        assert!(session.sessions.is_empty());
+    }
+
+    #[test]
+    fn receive_close_session() {
+        let mut session = construct_with_sessions(&[SESSION_ID_1]);
+        let time = Instant::now();
+
+        session.handle_packet(packetize_one(
+            SessionId::MANAGEMENT,
+            SequenceNumber(32),
+            close_session_call(SESSION_ID_1),
+        ));
+        assert_that!(session.poll_action(time), pat!(&RpcAction::None));
+
+        assert!(session.sessions.is_empty());
+    }
+
+    #[test]
+    fn reduce_actions_deadline_management_first() {
+        let time = Instant::now();
+        let delay = Duration::from_secs(1);
+        let management_action = ManagementAction::Sleep { until: time };
+        let session_actions = vec![
+            (SESSION_ID_1, SessionAction::Sleep { until: time + delay }),
+            (SESSION_ID_2, SessionAction::Sleep { until: time + 2 * delay }),
+        ];
+
+        let (_, _, deadline) = reduce_actions(management_action, session_actions);
+        assert_eq!(deadline, Some(time));
+    }
+
+    #[test]
+    fn reduce_actions_deadline_session_first() {
+        let time = Instant::now();
+        let delay = Duration::from_secs(1);
+        let management_action = ManagementAction::Sleep { until: time + 2 * delay };
+        let session_actions = vec![
+            (SESSION_ID_1, SessionAction::Sleep { until: time }),
+            (SESSION_ID_2, SessionAction::Sleep { until: time + delay }),
+        ];
+
+        let (_, _, deadline) = reduce_actions(management_action, session_actions);
+        assert_eq!(deadline, Some(time));
+    }
 }

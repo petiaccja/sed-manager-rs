@@ -124,17 +124,17 @@ pub struct Date {
 }
 
 impl Date {
-    pub fn unsupported() -> Self {
+    pub const fn unsupported() -> Self {
         Self { year: 0, month: 0, day: 0, hour: 0, minute: 0, second: 0, millisecond: 0 }
     }
 }
 
 impl ComIdRequest {
-    pub fn verify_com_id_valid(com_id: u16, com_id_ext: u16) -> ComIdRequest {
+    pub const fn verify_com_id_valid(com_id: u16, com_id_ext: u16) -> ComIdRequest {
         ComIdRequest { com_id, com_id_ext, request_code: ComIdRequestCode::Verify }
     }
 
-    pub fn stack_reset(com_id: u16, com_id_ext: u16) -> ComIdRequest {
+    pub const fn stack_reset(com_id: u16, com_id_ext: u16) -> ComIdRequest {
         ComIdRequest { com_id, com_id_ext, request_code: ComIdRequestCode::StackReset }
     }
 }

@@ -8,6 +8,7 @@ use sed_packet::com_id::{ComIdRequest, ComIdResponse};
 
 use crate::Error;
 
+#[derive(Debug)]
 pub struct ComIdSession {
     timeout: Duration,
     requests: VecDeque<RequestRecord>,
@@ -40,38 +41,46 @@ impl ComIdSession {
         }
     }
 
-    pub fn poll_requests(&mut self) -> Option<ComIdRequest> {
-        if self.request_sending.is_none() && self.request_receiving.is_none() {
-            self.requests.pop_front().map(|RequestRecord { request, sender }| {
-                self.request_sending = Some(RequestSendingRecord { sender });
-                request
-            })
-        } else {
-            None
-        }
-    }
-
-    pub fn poll_timeout(&self) -> Option<Instant> {
-        self.request_receiving.as_ref().map(|record| record.deadline)
-    }
-
-    pub fn notify_time(&mut self, time: Instant) {
+    pub fn poll_action(&mut self, time: Instant) -> ComIdAction {
+        // Remove timed out entires.
         while let Some(record) = self.request_receiving.take_if(|record| record.deadline < time) {
             let _ = record.sender.send(Err(Error::TimedOut));
+        }
+
+        // Get next action.
+        if self.request_sending.is_none()
+            && self.request_receiving.is_none()
+            && let Some(RequestRecord { request, sender }) = self.requests.pop_front()
+        {
+            self.request_sending = Some(RequestSendingRecord { sender });
+            ComIdAction::Send(request)
+        } else if let Some(deadline) = self.request_receiving.as_ref().map(|record| record.deadline) {
+            ComIdAction::Sleep { until: deadline }
+        } else {
+            ComIdAction::None
         }
     }
 }
 
+#[derive(Debug)]
 struct RequestRecord {
     request: ComIdRequest,
     sender: Sender<Result<ComIdResponse, Error>>,
 }
 
+#[derive(Debug)]
 struct RequestSendingRecord {
     sender: Sender<Result<ComIdResponse, Error>>,
 }
 
+#[derive(Debug)]
 struct RequestReceivingRecord {
     deadline: Instant,
     sender: Sender<Result<ComIdResponse, Error>>,
+}
+
+pub enum ComIdAction {
+    None,
+    Sleep { until: Instant },
+    Send(ComIdRequest),
 }
