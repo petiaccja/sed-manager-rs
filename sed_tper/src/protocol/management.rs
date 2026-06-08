@@ -37,7 +37,7 @@ pub struct Management {
     start_session_calls_receiving: HashMap<u32, VecDeque<MethodReceivingRecord>>,
     received_tokens: VecDeque<u8>,
     properties_changed_tx: async_broadcast::Sender<PropertiesChanged>,
-    properties_changed_rx: async_broadcast::Receiver<PropertiesChanged>,
+    properties_changed_rx: async_broadcast::InactiveReceiver<PropertiesChanged>,
 }
 
 impl Management {
@@ -53,7 +53,7 @@ impl Management {
             start_session_calls_receiving: HashMap::new(),
             received_tokens: VecDeque::new(),
             properties_changed_tx,
-            properties_changed_rx,
+            properties_changed_rx: properties_changed_rx.deactivate(),
         }
     }
 
@@ -130,7 +130,7 @@ impl Management {
                         Self::handle_close_session(&mut actions, close_session, value.status);
                     }
                     MgmtMethodCallParams::Properties(properties_method) => {
-                        self.handle_properties(&mut actions, properties_method, value.status)
+                        self.handle_properties(properties_method, value.status)
                     }
                 },
                 ExtractResult::EndOfSession => (),
@@ -239,12 +239,7 @@ impl Management {
         }
     }
 
-    fn handle_properties(
-        &mut self,
-        actions: &mut Vec<StackAction>,
-        properties_method: PropertiesMethod,
-        status: MethodStatus,
-    ) {
+    fn handle_properties(&mut self, properties_method: PropertiesMethod, status: MethodStatus) {
         if status == MethodStatus::Success
             && let PropertiesMethod::TPer { properties, host_properties } = properties_method
         {
@@ -257,7 +252,10 @@ impl Management {
             if host_properties.is_some() {
                 self.properties = Properties::common(&self.capabilities, &properties);
             }
-            actions.push(StackAction::Properties { connection: self.properties.clone(), device: properties });
+            let _ = self.properties_changed_tx.try_broadcast(PropertiesChanged {
+                remote_properties: properties,
+                connection_properties: self.properties.clone(),
+            });
         }
     }
 
@@ -280,7 +278,7 @@ impl Management {
     }
 
     pub fn properties_changed(&self) -> async_broadcast::Receiver<PropertiesChanged> {
-        self.properties_changed_rx.clone()
+        self.properties_changed_rx.activate_cloned()
     }
 }
 
@@ -289,7 +287,6 @@ impl Management {
 pub enum StackAction {
     Spawn { session_id: SessionId, properties: Properties },
     NotifyAbort { session_id: SessionId },
-    Properties { connection: Properties, device: Properties },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -589,22 +586,30 @@ mod tests {
     #[test]
     fn properties_received_without_host() {
         let mut mgmt = Management::new(TIMEOUT, HOST_PROPERTIES);
+        let mut event = mgmt.properties_changed();
 
-        let stack_action = mgmt.handle_tokens(properties_device_call(false));
+        let _ = mgmt.handle_tokens(properties_device_call(false));
         assert_that!(
-            stack_action,
-            eq(&vec![StackAction::Properties { connection: Properties::INITIAL, device: DEVICE_PROPERTIES }])
+            event.try_recv(),
+            ok(&eq(&PropertiesChanged {
+                remote_properties: DEVICE_PROPERTIES,
+                connection_properties: Properties::INITIAL
+            }))
         );
     }
 
     #[test]
     fn properties_received_with_host() {
         let mut mgmt = Management::new(TIMEOUT, HOST_PROPERTIES);
+        let mut event = mgmt.properties_changed();
 
-        let stack_action = mgmt.handle_tokens(properties_device_call(true));
+        let _ = mgmt.handle_tokens(properties_device_call(true));
         assert_that!(
-            stack_action,
-            eq(&vec![StackAction::Properties { connection: CONNECTION_PROPERTIES, device: DEVICE_PROPERTIES }])
+            event.try_recv(),
+            ok(&eq(&PropertiesChanged {
+                remote_properties: DEVICE_PROPERTIES,
+                connection_properties: CONNECTION_PROPERTIES
+            }))
         );
     }
 }

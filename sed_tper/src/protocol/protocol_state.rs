@@ -85,7 +85,7 @@ pub const CAPABILITIES: Properties = Properties {
 };
 
 #[derive(Debug)]
-pub struct Protocol {
+pub struct ProtocolState {
     com_id: u16,
     com_id_ext: u16,
     rpc_session: RpcSession,
@@ -96,7 +96,7 @@ pub struct Protocol {
     stop_requested: bool,
 }
 
-impl Protocol {
+impl ProtocolState {
     pub fn new(com_id: u16, com_id_ext: u16) -> Self {
         let max_transfer_len = CAPABILITIES.max_gross_compacket_size.get();
         Self {
@@ -113,6 +113,10 @@ impl Protocol {
 
     pub fn handle_method_call(&mut self, session_id: SessionId, call: Vec<u8>, sender: Sender<Result<Vec<u8>, Error>>) {
         self.rpc_session.handle_method_call(session_id, call, sender);
+    }
+
+    pub fn handle_sync_properties(&mut self) {
+        self.rpc_session.handle_sync_properties();
     }
 
     pub fn handle_session_aborted(&mut self, session_id: SessionId) {
@@ -297,7 +301,7 @@ mod tests {
 
     #[test]
     fn com_id_request_completed() {
-        let mut protocol = Protocol::new(1, 0);
+        let mut protocol = ProtocolState::new(1, 0);
         let (sender, receiver) = channel();
 
         let request = ComIdRequest::stack_reset(1, 0);
@@ -330,7 +334,7 @@ mod tests {
 
     #[test]
     fn method_call_completed() {
-        let mut protocol = Protocol::new(1, 0);
+        let mut protocol = ProtocolState::new(1, 0);
         let (sender, receiver) = channel();
 
         let call = start_session_call(SESSION_ID);

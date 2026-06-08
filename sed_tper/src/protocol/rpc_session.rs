@@ -105,10 +105,6 @@ impl RpcSession {
                         StackAction::NotifyAbort { session_id } => {
                             self.sessions.remove(&session_id).map(|mut session| session.handle_aborted());
                         }
-                        StackAction::Properties { .. } => {
-                            // TODO: send out a properties changed event.
-                            // Getting this working can wait.
-                        }
                     }
                 }
             } else if let Some(session) = self.sessions.get_mut(&session_id) {
