@@ -6,6 +6,7 @@
 use core::cmp::{max, min};
 use core::num::NonZero;
 use core::time::Duration;
+use std::cmp::Ordering;
 
 use sed_packet::{
     Named,
@@ -294,7 +295,7 @@ impl Detokenize for Properties {
 ///   only useful in the context of [`Properties`].
 ///
 /// [`Unlimited`]: Self::Unlimited
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Limit<T> {
     Unlimited,
     Limited(T),
@@ -306,6 +307,28 @@ impl Limit<NonZero<usize>> {
         match self {
             Limit::Unlimited => usize::MAX,
             Limit::Limited(value) => value.get(),
+        }
+    }
+}
+
+impl<T: PartialOrd> PartialOrd for Limit<T> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        match (self, other) {
+            (Limit::Unlimited, Limit::Unlimited) => Some(Ordering::Equal),
+            (Limit::Unlimited, Limit::Limited(_)) => Some(Ordering::Greater),
+            (Limit::Limited(_), Limit::Unlimited) => Some(Ordering::Less),
+            (Limit::Limited(a), Limit::Limited(b)) => a.partial_cmp(b),
+        }
+    }
+}
+
+impl<T: Ord> Ord for Limit<T> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match (self, other) {
+            (Limit::Unlimited, Limit::Unlimited) => Ordering::Equal,
+            (Limit::Unlimited, Limit::Limited(_)) => Ordering::Greater,
+            (Limit::Limited(_), Limit::Unlimited) => Ordering::Less,
+            (Limit::Limited(a), Limit::Limited(b)) => a.cmp(b),
         }
     }
 }
@@ -367,7 +390,7 @@ impl Detokenize for Limit<Duration> {
 /// feature is not supported (e.g. shopping carts carry no people).
 ///
 /// This structure kinda sucks, read about the problems in [`Limit`]'s docs.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum OptionalLimit<T> {
     Unsupported,
     Limited(T),

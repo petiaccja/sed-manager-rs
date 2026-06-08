@@ -36,6 +36,7 @@ pub struct Management {
     start_session_calls_sending: HashMap<u32, VecDeque<MethodSendingRecord>>,
     start_session_calls_receiving: HashMap<u32, VecDeque<MethodReceivingRecord>>,
     received_tokens: VecDeque<u8>,
+    sync_properties_requested: bool,
     properties_changed_tx: async_broadcast::Sender<PropertiesChanged>,
     properties_changed_rx: async_broadcast::InactiveReceiver<PropertiesChanged>,
 }
@@ -52,6 +53,7 @@ impl Management {
             start_session_calls_sending: HashMap::new(),
             start_session_calls_receiving: HashMap::new(),
             received_tokens: VecDeque::new(),
+            sync_properties_requested: false,
             properties_changed_tx,
             properties_changed_rx: properties_changed_rx.deactivate(),
         }
@@ -62,21 +64,7 @@ impl Management {
     }
 
     pub fn handle_sync_properties(&mut self) {
-        let call = MethodCall {
-            invoking_id: SESSION_MANAGER,
-            method_id: PropertiesMethod::METHOD_ID,
-            parameters: PropertiesMethod::Host { host_properties: Some(self.capabilities.clone()) },
-            status: MethodStatus::Success,
-        };
-        if let Ok(call) = call.to_tokens() {
-            // This call is pushed to the FRONT of the queue, NOT to the back.
-            // This is fine, as SM methods are paired with the response by key,
-            // not by order. This gives higher priority to property sync, so the
-            // retrieved properties can be applied sooner.
-            self.method_calls.push_front(MethodCallRecord { call, sender: oneshot::channel().0 });
-        } else {
-            // TODO: we should probably log this, even though it's not critical.
-        }
+        self.sync_properties_requested = true;
     }
 
     pub fn handle_iface_send_done(&mut self, time: Instant, sn: SequenceNumber, result: Result<(), Error>) {
@@ -146,43 +134,7 @@ impl Management {
 
     pub fn poll_action(&mut self, time: Instant) -> Action {
         // Get next packet to send.
-        let packet = if let Some(MethodCallRecord { call, sender }) = self.method_calls.pop_front() {
-            if call.len() > Properties::INITIAL.max_gross_packet_size.get() - PACKET_HEADER_LEN - SUB_PACKET_HEADER_LEN
-            {
-                let _ = sender.send(Err(Error::MethodTooLarge));
-                None
-            } else {
-                match MgmtMethodCall::from_tokens(&call) {
-                    Ok(call_detok) => {
-                        let sequence_number = self.sequence_number.fetch_add();
-                        match call_detok.params {
-                            MgmtMethodCallParams::StartSession(start_session) => {
-                                let hsn = start_session.host_session_id;
-                                let record = MethodSendingRecord { sequence_number, sender };
-                                self.start_session_calls_sending.entry(hsn).or_default().push_back(record);
-                                Some(packetize_one(SessionId::MANAGEMENT, sequence_number, call))
-                            }
-                            MgmtMethodCallParams::SyncSession(_)
-                            | MgmtMethodCallParams::CloseSession(_)
-                            | MgmtMethodCallParams::Properties(_) => {
-                                // You cannot send these method to the device:
-                                // - SyncSession: only sent by the device
-                                // - CloseSession: only sent by the device
-                                // - Properties: could instruct the device to use capabilities that the protcol doesn't have.
-                                let _ = sender.send(Err(Error::MethodNotAllowed));
-                                None
-                            }
-                        }
-                    }
-                    Err(err) => {
-                        let _ = sender.send(Err(err.into()));
-                        None
-                    }
-                }
-            }
-        } else {
-            None
-        };
+        let packet = self.poll_sync_properties().or_else(|| self.poll_method_calls());
 
         // Remove timed out & get next deadline.
         let mut deadline = None;
@@ -203,6 +155,68 @@ impl Management {
             Action::Sleep { until: deadline }
         } else {
             Action::None
+        }
+    }
+
+    fn poll_sync_properties(&mut self) -> Option<Packet> {
+        core::mem::replace(&mut self.sync_properties_requested, false)
+            .then(|| {
+                let call = MethodCall {
+                    invoking_id: SESSION_MANAGER,
+                    method_id: PropertiesMethod::METHOD_ID,
+                    parameters: PropertiesMethod::Host { host_properties: Some(self.capabilities.clone()) },
+                    status: MethodStatus::Success,
+                };
+                if let Ok(call) = call.to_tokens() {
+                    // This call is pushed to the FRONT of the queue, NOT to the back.
+                    // This is fine, as SM methods are paired with the response by key,
+                    // not by order. This gives higher priority to property sync, so the
+                    // retrieved properties can be applied sooner.
+                    Some(packetize_one(SessionId::MANAGEMENT, self.sequence_number.fetch_add(), call))
+                } else {
+                    // TODO: we should probably log this, even though it's not critical.
+                    None
+                }
+            })
+            .flatten()
+    }
+
+    fn poll_method_calls(&mut self) -> Option<Packet> {
+        let Some(MethodCallRecord { call, sender }) = self.method_calls.pop_front() else {
+            return None;
+        };
+
+        if call.len() > Properties::INITIAL.max_gross_packet_size.get() - PACKET_HEADER_LEN - SUB_PACKET_HEADER_LEN {
+            let _ = sender.send(Err(Error::MethodTooLarge));
+            return None;
+        }
+
+        match MgmtMethodCall::from_tokens(&call) {
+            Ok(call_detok) => {
+                let sequence_number = self.sequence_number.fetch_add();
+                match call_detok.params {
+                    MgmtMethodCallParams::StartSession(start_session) => {
+                        let hsn = start_session.host_session_id;
+                        let record = MethodSendingRecord { sequence_number, sender };
+                        self.start_session_calls_sending.entry(hsn).or_default().push_back(record);
+                        Some(packetize_one(SessionId::MANAGEMENT, sequence_number, call))
+                    }
+                    MgmtMethodCallParams::SyncSession(_)
+                    | MgmtMethodCallParams::CloseSession(_)
+                    | MgmtMethodCallParams::Properties(_) => {
+                        // You cannot send these method to the device:
+                        // - SyncSession: only sent by the device
+                        // - CloseSession: only sent by the device
+                        // - Properties: could instruct the device to use capabilities that the protcol doesn't have.
+                        let _ = sender.send(Err(Error::MethodNotAllowed));
+                        None
+                    }
+                }
+            }
+            Err(err) => {
+                let _ = sender.send(Err(err.into()));
+                None
+            }
         }
     }
 
