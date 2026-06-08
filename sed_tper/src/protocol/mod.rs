@@ -20,13 +20,11 @@ use sed_packet::{
 use sed_spec::methods::Properties;
 
 use crate::Error;
-use crate::protocol::{
-    protocol_state::ProtocolState,
-    shared::{Action, PropertiesChanged},
-};
+use protocol_state::ProtocolState;
+use shared::Action;
 
 pub use protocol_state::CAPABILITIES;
-pub use shared::PropertiesChanged as ConnectionChanged;
+pub use shared::PropertiesChanged;
 
 /// The full protocol to communicate with the TPer via packets and ComID requests.
 #[derive(Debug)]
@@ -130,7 +128,7 @@ impl Controller {
     /// it's enough to negotiate properties once. If no event comes on the
     /// channel, it means that the device did not respond to the request to
     /// negotiate properties.
-    pub fn connection_properties(&self) -> async_broadcast::Receiver<PropertiesChanged> {
+    pub fn properties_changed(&self) -> async_broadcast::Receiver<PropertiesChanged> {
         self.conn_rx.clone()
     }
 

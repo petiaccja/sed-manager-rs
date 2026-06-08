@@ -3,5 +3,5 @@ pub mod protocol;
 mod tper;
 
 pub use error::Error;
-pub use protocol::ConnectionChanged;
+pub use protocol::PropertiesChanged;
 pub use tper::{Session, Tper};

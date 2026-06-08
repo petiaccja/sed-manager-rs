@@ -13,7 +13,7 @@ use sed_device::{Device, list_physical_drives, open_device};
 use sed_manager::{Error, SidSession, Spec};
 use sed_manager_gui_slint as ui;
 use sed_packet::{MaxBytes, com_id::ComIdState};
-use sed_tper::{ConnectionChanged, Tper};
+use sed_tper::{PropertiesChanged, Tper};
 use sed_virtual_device::{VIRTUAL_DEVICE_PATH, VirtualDevice};
 use slint::{ComponentHandle, EventLoopError, ModelExt as _, ModelRc, SharedString, ToSharedString, spawn_local};
 use tracing::{Instrument, instrument};
@@ -255,7 +255,7 @@ impl App {
             let com_id_ext = 0;
             let new_tper = Tper::connect(com_id, com_id_ext, device.clone(), Some(&self.runtime));
             let capabilities = new_tper.capabilities();
-            let connection_changed = new_tper.connection_changed();
+            let connection_changed = new_tper.properties_changed();
             *tper = Some(Tper::connect(com_id, com_id_ext, device.clone(), Some(&self.runtime)).into());
             let combined_properties = CombinedProperties { host: capabilities, device: None, connection: None };
             device_list.ui.update(&path, |dev| {
@@ -406,9 +406,9 @@ impl App {
     async fn listen_connection_changed(
         self_: Weak<Self>,
         path: PathBuf,
-        mut event: async_broadcast::Receiver<ConnectionChanged>,
+        mut event: async_broadcast::Receiver<PropertiesChanged>,
     ) {
-        async fn update(self_: Rc<App>, path: &Path, value: ConnectionChanged) -> Option<()> {
+        async fn update(self_: Rc<App>, path: &Path, value: PropertiesChanged) -> Option<()> {
             let device_list = self_.device_list.read().await;
             let backend = device_list.backend.get(path)?;
             let backend = backend.lock().await;
