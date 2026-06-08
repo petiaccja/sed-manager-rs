@@ -85,7 +85,7 @@ impl Management {
                 let _ = sender.send(Err(Error::Aborted));
             }
         }
-        self.received_tokens.clear();
+        *self = Self::new(self.timeout, self.capabilities.clone());
     }
 
     #[must_use]
@@ -247,6 +247,10 @@ impl Management {
                 let _ = record.sender.send(Err(error.clone()));
             }
         }
+    }
+
+    pub fn capabilities(&self) -> &Properties {
+        &self.capabilities
     }
 }
 

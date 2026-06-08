@@ -57,11 +57,12 @@ impl RpcSession {
     }
 
     pub fn handle_reset(&mut self) {
-        self.packets_to_send.clear();
+        let capabilities = self.management.capabilities().clone();
         self.management.handle_reset();
         for (_, mut session) in self.sessions.drain() {
             session.handle_aborted();
         }
+        *self = Self::new(self.timeout, capabilities);
     }
 
     #[cfg(feature = "test-utils")]

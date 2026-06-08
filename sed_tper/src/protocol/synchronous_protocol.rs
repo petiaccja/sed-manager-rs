@@ -75,9 +75,7 @@ where
     }
 
     pub fn handle_reset(&mut self) {
-        self.queue.clear();
-        self.recv_attempt = 0;
-        self.phase = Phase::Send;
+        *self = Self::new(self.protocol, self.max_transfer_len)
     }
 
     fn handle_recv_ok(&mut self, time: Instant, message: &RecvMessage) {

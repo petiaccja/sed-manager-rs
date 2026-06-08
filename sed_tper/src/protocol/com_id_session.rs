@@ -51,6 +51,7 @@ impl ComIdSession {
         if let Some(RequestReceivingRecord { sender, .. }) = self.request_receiving.take() {
             let _ = sender.send(Err(Error::Aborted));
         }
+        *self = Self::new(self.timeout);
     }
 
     pub fn poll_action(&mut self, time: Instant) -> ComIdAction {
