@@ -85,6 +85,7 @@ impl Tper {
     #[instrument(level = "info", skip(runtime))]
     pub fn connect(com_id: u16, com_id_ext: u16, device: Arc<dyn Device>, runtime: Option<&Runtime>) -> Self {
         let (protocol, controller) = Protocol::new(com_id, com_id_ext, device.clone());
+        controller.sync_properties();
         if let Some(runtime) = runtime {
             runtime.spawn(protocol.run());
         } else {
