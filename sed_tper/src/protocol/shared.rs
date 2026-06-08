@@ -5,6 +5,7 @@ use sed_packet::{
     session_id::SessionId,
     token::{Command, ToTokens as _},
 };
+use sed_spec::methods::Properties;
 
 use crate::protocol::sequence_number::SequenceNumber;
 
@@ -34,6 +35,12 @@ pub enum Action {
     Recv { protocol: u8, transfer_len: usize },
     Sleep { until: Instant },
     Recover,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PropertiesChanged {
+    pub remote_properties: Properties,
+    pub connection_properties: Properties,
 }
 
 #[cfg(test)]

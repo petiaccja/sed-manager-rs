@@ -7,18 +7,21 @@ use oneshot::Sender;
 use sed_packet::{
     packet::{PACKET_HEADER_LEN, Packet, SUB_PACKET_HEADER_LEN},
     session_id::SessionId,
-    token::FromTokens,
+    token::{FromTokens, ToTokens},
 };
-use sed_spec::methods::{
-    CloseSession, ExtractResult, MethodStatus, MgmtMethodCall, MgmtMethodCallParams, Properties, PropertiesMethod,
-    SyncSession, extract_method,
+use sed_spec::{
+    methods::{
+        CloseSession, ExtractResult, MethodCall, MethodParam, MethodStatus, MgmtMethodCall, MgmtMethodCallParams,
+        Properties, PropertiesMethod, SyncSession, extract_method,
+    },
+    preconfig::core::shared::invoking_id::SESSION_MANAGER,
 };
 
 use crate::{
     Error,
     protocol::{
         sequence_number::SequenceNumber,
-        shared::{min_deadline, packetize_one},
+        shared::{PropertiesChanged, min_deadline, packetize_one},
     },
 };
 
@@ -33,10 +36,13 @@ pub struct Management {
     start_session_calls_sending: HashMap<u32, VecDeque<MethodSendingRecord>>,
     start_session_calls_receiving: HashMap<u32, VecDeque<MethodReceivingRecord>>,
     received_tokens: VecDeque<u8>,
+    properties_changed_tx: async_broadcast::Sender<PropertiesChanged>,
+    properties_changed_rx: async_broadcast::Receiver<PropertiesChanged>,
 }
 
 impl Management {
     pub fn new(timeout: Duration, capabilities: Properties) -> Self {
+        let (properties_changed_tx, properties_changed_rx) = async_broadcast::broadcast(1);
         Self {
             sequence_number: SequenceNumber::initial(),
             timeout,
@@ -46,11 +52,31 @@ impl Management {
             start_session_calls_sending: HashMap::new(),
             start_session_calls_receiving: HashMap::new(),
             received_tokens: VecDeque::new(),
+            properties_changed_tx,
+            properties_changed_rx,
         }
     }
 
     pub fn handle_method_call(&mut self, call: Vec<u8>, sender: Sender<Result<Vec<u8>, Error>>) {
         self.method_calls.push_back(MethodCallRecord { call, sender });
+    }
+
+    pub fn handle_sync_properties(&mut self) {
+        let call = MethodCall {
+            invoking_id: SESSION_MANAGER,
+            method_id: PropertiesMethod::METHOD_ID,
+            parameters: PropertiesMethod::Host { host_properties: Some(self.capabilities.clone()) },
+            status: MethodStatus::Success,
+        };
+        if let Ok(call) = call.to_tokens() {
+            // This call is pushed to the FRONT of the queue, NOT to the back.
+            // This is fine, as SM methods are paired with the response by key,
+            // not by order. This gives higher priority to property sync, so the
+            // retrieved properties can be applied sooner.
+            self.method_calls.push_front(MethodCallRecord { call, sender: oneshot::channel().0 });
+        } else {
+            // TODO: we should probably log this, even though it's not critical.
+        }
     }
 
     pub fn handle_iface_send_done(&mut self, time: Instant, sn: SequenceNumber, result: Result<(), Error>) {
@@ -251,6 +277,10 @@ impl Management {
 
     pub fn capabilities(&self) -> &Properties {
         &self.capabilities
+    }
+
+    pub fn properties_changed(&self) -> async_broadcast::Receiver<PropertiesChanged> {
+        self.properties_changed_rx.clone()
     }
 }
 

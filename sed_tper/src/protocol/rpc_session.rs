@@ -12,7 +12,12 @@ use sed_spec::methods::Properties;
 
 use crate::{
     Error,
-    protocol::{management::Management, sequence_number::SequenceNumber, session::Session, shared::min_deadline},
+    protocol::{
+        management::Management,
+        sequence_number::SequenceNumber,
+        session::Session,
+        shared::{PropertiesChanged, min_deadline},
+    },
 };
 
 use super::{
@@ -48,6 +53,10 @@ impl RpcSession {
         } else {
             let _ = sender.send(Err(Error::Closed));
         }
+    }
+
+    pub fn handle_sync_properties(&mut self) {
+        self.management.handle_sync_properties();
     }
 
     pub fn handle_session_aborted(&mut self, session_id: SessionId) {
@@ -130,6 +139,10 @@ impl RpcSession {
         } else {
             RpcAction::None
         }
+    }
+
+    pub fn properties_changed(&self) -> async_broadcast::Receiver<PropertiesChanged> {
+        self.management.properties_changed()
     }
 }
 

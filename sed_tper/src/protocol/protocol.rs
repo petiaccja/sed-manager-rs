@@ -21,7 +21,7 @@ use crate::{
         com_id_session::ComIdSession,
         rpc_session::RpcSession,
         sequence_number::SequenceNumber,
-        shared::{Action, min_deadline},
+        shared::{Action, PropertiesChanged, min_deadline},
         synchronous_protocol::SynchronousProtocol,
     },
 };
@@ -266,6 +266,10 @@ impl Protocol {
                 self.rpc_session.handle_packet(packet);
             }
         }
+    }
+
+    pub fn properties_changed(&self) -> async_broadcast::Receiver<PropertiesChanged> {
+        self.rpc_session.properties_changed()
     }
 }
 

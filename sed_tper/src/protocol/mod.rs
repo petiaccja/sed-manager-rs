@@ -12,10 +12,12 @@ use std::sync::Arc;
 
 use sed_device::Device;
 
-use crate::protocol::runner::{Command, ConnectionProperties, run};
+use crate::protocol::runner::{Command, run};
+use shared::PropertiesChanged;
 
 pub use protocol::CAPABILITIES;
-pub use runner::{ConnectionProperties as ConnectionChanged, Controller};
+pub use runner::Controller;
+pub use shared::PropertiesChanged as ConnectionChanged;
 
 /// The full protocol to communicate with the TPer via packets and ComID requests.
 #[derive(Debug)]
@@ -24,7 +26,7 @@ pub struct Protocol {
     com_id_ext: u16,
     device: Arc<dyn Device>,
     command_rx: async_channel::Receiver<Command>,
-    conn_tx: async_broadcast::Sender<ConnectionProperties>,
+    conn_tx: async_broadcast::Sender<PropertiesChanged>,
 }
 
 impl Protocol {
@@ -52,6 +54,6 @@ impl Protocol {
     /// stack on the device's side ready for a subsequent session, but might
     /// take a little time.
     pub fn run(self) -> impl Future<Output = ()> + Send + 'static {
-        run(self.com_id, self.com_id_ext, self.device, self.command_rx, self.conn_tx)
+        run(self.com_id, self.com_id_ext, self.device, self.command_rx)
     }
 }

@@ -11,16 +11,13 @@ use sed_spec::methods::Properties;
 
 use crate::{
     Error,
-    protocol::{protocol::Protocol, shared::Action},
+    protocol::{
+        protocol::Protocol,
+        shared::{Action, PropertiesChanged},
+    },
 };
 
-pub async fn run(
-    com_id: u16,
-    com_id_ext: u16,
-    device: Arc<dyn Device>,
-    command_rx: async_channel::Receiver<Command>,
-    _conn_tx: async_broadcast::Sender<ConnectionProperties>,
-) {
+pub async fn run(com_id: u16, com_id_ext: u16, device: Arc<dyn Device>, command_rx: async_channel::Receiver<Command>) {
     let mut protocol = Protocol::new(com_id, com_id_ext);
 
     loop {
@@ -83,13 +80,13 @@ async fn perform_action_or_recv(
 #[derive(Debug, Clone)]
 pub struct Controller {
     command_tx: async_channel::Sender<Command>,
-    conn_rx: async_broadcast::Receiver<ConnectionProperties>,
+    conn_rx: async_broadcast::Receiver<PropertiesChanged>,
 }
 
 impl Controller {
     pub(crate) fn new(
         command_tx: async_channel::Sender<Command>,
-        conn_rx: async_broadcast::Receiver<ConnectionProperties>,
+        conn_rx: async_broadcast::Receiver<PropertiesChanged>,
     ) -> Self {
         Self { command_tx, conn_rx }
     }
@@ -124,7 +121,7 @@ impl Controller {
     /// it's enough to negotiate properties once. If no event comes on the
     /// channel, it means that the device did not respond to the request to
     /// negotiate properties.
-    pub fn connection_properties(&self) -> async_broadcast::Receiver<ConnectionProperties> {
+    pub fn connection_properties(&self) -> async_broadcast::Receiver<PropertiesChanged> {
         self.conn_rx.clone()
     }
 
@@ -143,12 +140,6 @@ pub enum Command {
     ReportAborted { session_id: SessionId },
     #[cfg(feature = "test-utils")]
     Spawn { session_id: SessionId, properties: Properties },
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ConnectionProperties {
-    pub remote_properties: Properties,
-    pub connection_properties: Properties,
 }
 
 #[cfg(test)]
@@ -223,7 +214,7 @@ mod tests {
         let (command_tx, command_rx) = async_channel::unbounded();
         let (conn_tx, conn_rx) = async_broadcast::broadcast(1);
         let controller = Controller::new(command_tx, conn_rx);
-        let task = tokio::spawn(run(1, 0, Arc::new(device), command_rx, conn_tx));
+        let task = tokio::spawn(run(1, 0, Arc::new(device), command_rx));
 
         let response_rx = controller.call(SessionId::MANAGEMENT, call);
         let response_result = tokio::time::timeout(Duration::from_secs(5), response_rx).await;
