@@ -17,6 +17,7 @@ use sed_packet::{
     com_id::{ComIdRequest, ComIdResponse},
     session_id::SessionId,
 };
+#[cfg(feature = "test-utils")]
 use sed_spec::methods::Properties;
 
 use crate::Error;
