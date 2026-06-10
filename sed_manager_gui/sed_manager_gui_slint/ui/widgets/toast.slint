@@ -1,6 +1,7 @@
 import { PaletteExtra } from "palette_extra.slint";
 import { Button, Palette, ScrollView } from "std-widgets.slint";
 import { Icons } from "../resources/lib.slint";
+import { IconButton } from "icon_button.slint";
 
 export enum ToastLevel {
     success,
@@ -35,6 +36,7 @@ export component ToastCard inherits Rectangle {
 
     in property <Toast> notification;
     in property <bool> has-icon;
+    in property <bool> has-close;
 
     private property <brush> background_brush: {
         if notification.level == ToastLevel.success {
@@ -59,30 +61,30 @@ export component ToastCard inherits Rectangle {
         }
     }
 
-    HorizontalLayout {
+    callback closed();
+
+    VerticalLayout {
         padding: 0.5rem;
         spacing: 0.5rem;
 
-        if has-icon: Image {
-            width: 2rem;
-            source: {
-                if notification.level == ToastLevel.success {
-                    Icons.check
-                } else if notification.level == ToastLevel.info {
-                    Icons.info
-                } else if notification.level == ToastLevel.warning {
-                    Icons.warning
-                } else {
-                    Icons.error
-                }
-            };
-            colorize: foreground_brush;
-        }
+        HorizontalLayout {
+            spacing: 0.4rem;
 
-        VerticalLayout {
-            spacing: 0.2rem;
-            alignment: stretch;
-            horizontal-stretch: 1.0;
+            if has-icon: Image {
+                width: 2rem;
+                source: {
+                    if notification.level == ToastLevel.success {
+                        Icons.check
+                    } else if notification.level == ToastLevel.info {
+                        Icons.info
+                    } else if notification.level == ToastLevel.warning {
+                        Icons.warning
+                    } else {
+                        Icons.error
+                    }
+                };
+                colorize: foreground_brush;
+            }
 
             if !notification.title.is-empty: Text {
                 text: notification.title;
@@ -93,17 +95,30 @@ export component ToastCard inherits Rectangle {
                 vertical-alignment: center;
             }
 
-            if !notification.message.is-empty: ScrollView {
-                vertical-stretch: 1.0;
-                min-height: 1.4rem;
-                preferred-width: text.preferred-width;
-                preferred-height: text.preferred-height;
+            Rectangle {
+                horizontal-stretch: 1;
+            }
 
-                VerticalLayout {
-                    text := Text {
-                        text: notification.message;
-                        wrap: word-wrap;
-                    }
+            if has-close: IconButton {
+                horizontal-stretch: 0;
+                icon: Icons.close;
+                clicked => {
+                    closed()
+                }
+            }
+        }
+
+        if !notification.message.is-empty: ScrollView {
+            vertical-stretch: 1.0;
+            min-height: 1.4rem;
+            preferred-width: text.preferred-width;
+            preferred-height: text.preferred-height;
+            horizontal-scrollbar-policy: always-off;
+
+            VerticalLayout {
+                text := Text {
+                    text: notification.message;
+                    wrap: word-wrap;
                 }
             }
         }
@@ -150,15 +165,15 @@ component ToastInstance {
                 dismiss-timer.restart()
             }
         }
-
-        clicked => {
-            root.dismiss()
-        }
     }
 
     ToastCard {
         notification: toast;
         has-icon: true;
+        has-close: true;
+        closed => {
+            root.dismiss()
+        }
     }
 }
 
@@ -172,4 +187,15 @@ export component ToastArea {
             toast: item.toast;
         }
     }
+}
+
+
+export component TestCard inherits ToastCard {
+    notification: {
+        title: "Success",
+        message: "Operation succeeded successfully.",
+        level: ToastLevel.success,
+    };
+    has-icon: true;
+    has-close: true;
 }
