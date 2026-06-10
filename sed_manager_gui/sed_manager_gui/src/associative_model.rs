@@ -161,6 +161,25 @@ impl<K: Eq + Hash, T: Clone + 'static> AssociativeModel<K, T> {
     }
 }
 
+impl<K, V> core::fmt::Debug for AssociativeModel<K, V>
+where
+    K: core::fmt::Debug,
+    V: Clone + core::fmt::Debug + 'static,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let entries = self
+            .indices
+            .iter()
+            .filter_map(|(name, index)| self.inner.row_data(*index).map(|value| (name, value)));
+        f.debug_map().entries(entries).finish()
+
+        // f.debug_struct("AssociativeModel")
+        //     .field("inner", &self.inner)
+        //     .field("indices", &self.indices)
+        //     .finish()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

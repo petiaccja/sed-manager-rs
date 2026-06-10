@@ -2,11 +2,14 @@
 
 mod app;
 pub mod associative_model;
+mod command;
+mod device_list;
 mod display_ui;
+mod session;
 pub mod toast;
 mod ui_ext;
 
-use std::rc::Rc;
+use std::sync::Arc;
 
 use sed_async::Runtime;
 use sed_manager_gui_slint::{self as ui};
@@ -16,7 +19,7 @@ use slint::ComponentHandle as _;
 use crate::app::App;
 
 fn main() -> Result<(), Box<dyn core::error::Error>> {
-    let runtime = Rc::new(Runtime::new_multi_threaded(Some(1)));
+    let runtime = Arc::new(Runtime::new_multi_threaded(Some(1)));
     let _tracing_guard = match create_otlp_provider() {
         Ok(provider) => init_otlp_subscriber(provider),
         Err(_) => init_stdout_subscriber(),
