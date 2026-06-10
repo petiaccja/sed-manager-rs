@@ -129,8 +129,15 @@ impl App {
                             device_list.ui.insert(
                                 path.clone(),
                                 ui::Device {
-                                    identity: ui::Identity { path: path_str, ..Default::default() },
-                                    status: ui::Status { outcome: ui::Outcome::Idle, ..Default::default() },
+                                    identity: ui::Identity {
+                                        path: path_str,
+                                        status: ui::Status { outcome: ui::Outcome::Idle, ..Default::default() },
+                                        ..Default::default()
+                                    },
+                                    discovery: ui::Discovery {
+                                        status: ui::Status { outcome: ui::Outcome::Idle, ..Default::default() },
+                                        ..Default::default()
+                                    },
                                     ..Default::default()
                                 },
                             );
@@ -205,9 +212,15 @@ impl App {
                         app.clone().discover(path.clone());
                         app.clone().connect(path.clone());
                     }
-                    ui_device.with_status(ui::Outcome::Success, "".into()).with_identity(dev.display_ui())
+                    ui_device.with_identity(dev.display_ui())
                 }
-                Err(err) => ui_device.with_status(ui::Outcome::Error, err.to_string()),
+                Err(err) => {
+                    let identity = ui_device.identity.clone();
+                    ui_device.with_identity(ui::Identity {
+                        status: ui::Status { outcome: ui::Outcome::Error, message: err.to_shared_string() },
+                        ..identity
+                    })
+                }
             })
             .run();
     }

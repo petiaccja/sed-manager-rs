@@ -22,6 +22,7 @@ export struct DeviceConfig {
 }
 
 export struct Identity {
+    status: Status,
     name: string,
     serial: string,
     path: string,
@@ -50,10 +51,15 @@ export struct StackStatus {
     protocol: [ProtocolProperty],
 }
 
+export struct CommandStatus {
+    tper-busy: bool,
+    session-busy: bool,
+}
+
 export struct Device {
-    status: Status,
     identity: Identity,
     discovery: Discovery,
     config: DeviceConfig,
-    stack_status: StackStatus,
+    stack-status: StackStatus,
+    command-status: CommandStatus,
 }

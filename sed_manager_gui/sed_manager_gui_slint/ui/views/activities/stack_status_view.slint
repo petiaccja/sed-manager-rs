@@ -4,7 +4,7 @@ import {
     VerticalSeparator,
     HorizontalSeparator,
 } from "../../widgets/lib.slint";
-import { StackStatus } from "../../data/lib.slint";
+import { StackStatus, CommandStatus } from "../../data/lib.slint";
 import { Icons } from "../../resources/lib.slint";
 import { Button, ScrollView } from "std-widgets.slint";
 import { IconButton } from "../../widgets/icon_button.slint";
@@ -30,6 +30,7 @@ component Cell {
 
 
 export component StackStatusView {
+    in property <CommandStatus> command-status;
     in property <StackStatus> stack-status;
 
     callback query-stack-status();
@@ -95,9 +96,12 @@ export component StackStatusView {
                 }
 
                 VerticalLayout {
-                    alignment: start;
+                    alignment: space-around;
+                    padding-right: 0.6rem;
                     Button {
+                        height: 3.2rem;
                         text: "Refresh";
+                        enabled: !command-status.session-busy && !command-status.tper-busy;
                         clicked => {
                             query-stack-status()
                         }

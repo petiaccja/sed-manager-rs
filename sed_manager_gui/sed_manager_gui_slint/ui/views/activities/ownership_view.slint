@@ -1,7 +1,10 @@
 import { PasswordForm } from "../password_form.slint";
 import { Button } from "std-widgets.slint";
+import { CommandStatus } from "../../data/lib.slint";
 
 export component TakeOwnershipView {
+    in property <CommandStatus> command-status;
+
     callback take-ownership(password: string);
 
     VerticalLayout {
@@ -13,7 +16,7 @@ export component TakeOwnershipView {
         Button {
             text: "Take owneship";
             primary: true;
-            enabled: form.matches;
+            enabled: form.matches && !command-status.session-busy && !command-status.tper-busy;
             clicked => {
                 take-ownership(form.password)
             }

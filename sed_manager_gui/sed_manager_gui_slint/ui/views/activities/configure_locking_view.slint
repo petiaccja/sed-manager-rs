@@ -1,6 +1,9 @@
 import { ToastCard, ToastLevel } from "../../widgets/lib.slint";
+import { CommandStatus } from "../../data/lib.slint";
 
 export component ConfigureLockingView {
+    in property <CommandStatus> command-status;
+
     VerticalLayout {
         alignment: start;
 

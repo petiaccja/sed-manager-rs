@@ -11,6 +11,7 @@ use tracing::Instrument;
 
 use crate::device_list::{Device, DeviceList};
 use crate::session::Session;
+use crate::ui_ext::{CommandStatusExt, DeviceExt};
 
 //------------------------------------------------------------------------------
 // Command initial
@@ -18,20 +19,20 @@ use crate::session::Session;
 
 pub struct Command {
     runtime: Arc<Runtime>,
-    state: Arc<RwLock<DeviceList>>,
+    device_list: Arc<RwLock<DeviceList>>,
 }
 
 impl Command {
-    pub fn new(runtime: Arc<Runtime>, state: Arc<RwLock<DeviceList>>) -> Self {
-        Self { runtime, state }
+    pub fn new(runtime: Arc<Runtime>, device_list: Arc<RwLock<DeviceList>>) -> Self {
+        Self { runtime, device_list }
     }
 
     pub fn on_device_list<RunFn, Output>(self, run_fn: RunFn) -> CommandOnDeviceList<RunFn, Output>
     where
         RunFn: for<'a> AsyncFnOnce(&'a mut DeviceList) -> Output + 'static,
     {
-        let Self { state, .. } = self;
-        CommandOnDeviceList { state, run_fn }
+        let Self { device_list, .. } = self;
+        CommandOnDeviceList { device_list, run_fn }
     }
 
     pub fn on_device<RunFn, RunFnFut, Output>(
@@ -44,8 +45,8 @@ impl Command {
         RunFnFut: Future<Output = Output> + Send,
         Output: Send + 'static,
     {
-        let Self { runtime, state } = self;
-        CommandOnDevice { runtime, state, device_id: device, run_fn }
+        let Self { runtime, device_list } = self;
+        CommandOnDevice { runtime, device_list, device_id: device, run_fn }
     }
 
     pub fn on_tper<RunFn, RunFnFut, Output>(
@@ -58,8 +59,8 @@ impl Command {
         RunFnFut: Future<Output = Output> + Send,
         Output: Send + 'static,
     {
-        let Self { runtime, state } = self;
-        CommandOnTper { runtime, state, device_id, run_fn }
+        let Self { runtime, device_list } = self;
+        CommandOnTper { runtime, device_list, device_id, run_fn }
     }
 
     pub fn on_session<RunFn, RunFnFut, Output>(
@@ -72,8 +73,8 @@ impl Command {
         RunFnFut: Future<Output = Output> + Send,
         Output: Send + 'static,
     {
-        let Self { runtime, state } = self;
-        CommandOnSession { runtime, state, device_id, run_fn }
+        let Self { runtime, device_list } = self;
+        CommandOnSession { runtime, device_list, device_id, run_fn }
     }
 }
 
@@ -85,7 +86,7 @@ pub struct CommandOnDeviceList<RunFn, Output>
 where
     RunFn: for<'a> AsyncFnOnce(&'a mut DeviceList) -> Output + 'static,
 {
-    state: Arc<RwLock<DeviceList>>,
+    device_list: Arc<RwLock<DeviceList>>,
     run_fn: RunFn,
 }
 
@@ -97,8 +98,8 @@ where
     where
         UpdateFn: for<'a> FnOnce(&'a mut DeviceList, Output) + 'static,
     {
-        let Self { state, run_fn, .. } = self;
-        UpdateOnDeviceList { state, run_fn, update_fn }
+        let Self { device_list, run_fn, .. } = self;
+        UpdateOnDeviceList { device_list, run_fn, update_fn }
     }
 }
 
@@ -107,7 +108,7 @@ where
     RunFn: for<'a> AsyncFnOnce(&'a mut DeviceList) -> Output + 'static,
     UpdateFn: for<'a> FnOnce(&'a mut DeviceList, Output) + 'static,
 {
-    state: Arc<RwLock<DeviceList>>,
+    device_list: Arc<RwLock<DeviceList>>,
     run_fn: RunFn,
     update_fn: UpdateFn,
 }
@@ -118,12 +119,12 @@ where
     UpdateFn: for<'a> FnOnce(&'a mut DeviceList, Output) + 'static,
 {
     pub fn run(self) {
-        let Self { state, run_fn, update_fn } = self;
+        let Self { device_list, run_fn, update_fn } = self;
         let _ = slint::spawn_local(
             async move {
-                let mut state = state.write().await;
-                let output = run_fn(state.deref_mut()).await;
-                update_fn(state.deref_mut(), output);
+                let mut device_list = device_list.write().await;
+                let output = run_fn(device_list.deref_mut()).await;
+                update_fn(device_list.deref_mut(), output);
             }
             .in_current_span(),
         );
@@ -141,7 +142,7 @@ where
     Output: Send + 'static,
 {
     runtime: Arc<Runtime>,
-    state: Arc<RwLock<DeviceList>>,
+    device_list: Arc<RwLock<DeviceList>>,
     device_id: PathBuf,
     run_fn: RunFn,
 }
@@ -156,8 +157,8 @@ where
     where
         UpdateFn: FnOnce(ui::Device, Output) -> ui::Device + 'static,
     {
-        let Self { runtime, state, device_id, run_fn } = self;
-        UpdateOnDevice { runtime, state, device_id, run_fn, update_fn }
+        let Self { runtime, device_list, device_id, run_fn } = self;
+        UpdateOnDevice { runtime, device_list, device_id, run_fn, update_fn }
     }
 }
 
@@ -169,7 +170,7 @@ where
     UpdateFn: FnOnce(ui::Device, Output) -> ui::Device + 'static,
 {
     runtime: Arc<Runtime>,
-    state: Arc<RwLock<DeviceList>>,
+    device_list: Arc<RwLock<DeviceList>>,
     device_id: PathBuf,
     run_fn: RunFn,
     update_fn: UpdateFn,
@@ -183,10 +184,10 @@ where
     UpdateFn: FnOnce(ui::Device, Output) -> ui::Device + 'static,
 {
     pub fn run(self) {
-        let Self { runtime, state, device_id, run_fn, update_fn } = self;
+        let Self { runtime, device_list, device_id, run_fn, update_fn } = self;
         slint::spawn_local(
             async move {
-                let state = state.read().await;
+                let state = device_list.read().await;
                 let Some(device) = state.backend.get(&device_id) else { return };
                 let device = device.write_arc().await;
                 let output =
@@ -210,7 +211,7 @@ where
     Output: Send + 'static,
 {
     runtime: Arc<Runtime>,
-    state: Arc<RwLock<DeviceList>>,
+    device_list: Arc<RwLock<DeviceList>>,
     device_id: PathBuf,
     run_fn: RunFn,
 }
@@ -225,8 +226,8 @@ where
     where
         UpdateFn: FnOnce(ui::Device, Output) -> ui::Device + 'static,
     {
-        let Self { runtime, state, device_id, run_fn } = self;
-        UpdateOnTper { runtime, state, device_id, run_fn, update_fn }
+        let Self { runtime, device_list, device_id, run_fn } = self;
+        UpdateOnTper { runtime, device_list, device_id, run_fn, update_fn }
     }
 }
 
@@ -238,7 +239,7 @@ where
     UpdateFn: FnOnce(ui::Device, Output) -> ui::Device + 'static,
 {
     runtime: Arc<Runtime>,
-    state: Arc<RwLock<DeviceList>>,
+    device_list: Arc<RwLock<DeviceList>>,
     device_id: PathBuf,
     run_fn: RunFn,
     update_fn: UpdateFn,
@@ -252,15 +253,30 @@ where
     UpdateFn: FnOnce(ui::Device, Output) -> ui::Device + 'static,
 {
     pub fn run(self) {
-        let Self { runtime, state, device_id: device, run_fn, update_fn } = self;
+        let Self { runtime, device_list, device_id, run_fn, update_fn } = self;
         slint::spawn_local(
             async move {
-                let state = state.read().await;
-                let Some(backend) = state.backend.get(&device) else { return };
+                // Acquire resources.
+                let device_list = device_list.read().await;
+                let Some(backend) = device_list.backend.get(&device_id) else { return };
                 let backend = backend.read().await;
                 let Some(tper) = backend.tper.clone() else { return };
+
+                // Indicate to UI that we're busy on the TPer.
+                device_list.ui.update(&device_id, |value| {
+                    let command_status = value.command_status.clone();
+                    value.with_command_status(command_status.with_tper_busy(true))
+                });
+
+                // Execute command and update results.
                 let output = runtime.spawn(async move { run_fn(tper).await }.in_current_span()).await.unwrap();
-                state.ui.update(&device, move |value| update_fn(value, output));
+                device_list.ui.update(&device_id, move |value| update_fn(value, output));
+
+                // Indicate to UI that we're NO LONGER busy.
+                device_list.ui.update(&device_id, |value| {
+                    let command_status = value.command_status.clone();
+                    value.with_command_status(command_status.with_tper_busy(false))
+                });
             }
             .in_current_span(),
         )
@@ -279,7 +295,7 @@ where
     Output: Send + 'static,
 {
     runtime: Arc<Runtime>,
-    state: Arc<RwLock<DeviceList>>,
+    device_list: Arc<RwLock<DeviceList>>,
     device_id: PathBuf,
     run_fn: RunFn,
 }
@@ -294,8 +310,8 @@ where
     where
         UpdateFn: FnOnce(ui::Device, Output) -> ui::Device + 'static,
     {
-        let Self { runtime, state, device_id, run_fn } = self;
-        UpdateOnSession { runtime, state, device_id, run_fn, update_fn }
+        let Self { runtime, device_list, device_id, run_fn } = self;
+        UpdateOnSession { runtime, device_list, device_id, run_fn, update_fn }
     }
 }
 
@@ -307,7 +323,7 @@ where
     UpdateFn: FnOnce(ui::Device, Output) -> ui::Device + 'static,
 {
     runtime: Arc<Runtime>,
-    state: Arc<RwLock<DeviceList>>,
+    device_list: Arc<RwLock<DeviceList>>,
     device_id: PathBuf,
     run_fn: RunFn,
     update_fn: UpdateFn,
@@ -321,19 +337,34 @@ where
     UpdateFn: FnOnce(ui::Device, Output) -> ui::Device + 'static,
 {
     pub fn run(self) {
-        let Self { runtime, state, device_id: device, run_fn, update_fn } = self;
+        let Self { runtime, device_list, device_id, run_fn, update_fn } = self;
         slint::spawn_local(
             async move {
-                let state = state.read().await;
-                let Some(backend) = state.backend.get(&device) else { return };
+                // Acquire resources.
+                let device_list = device_list.read().await;
+                let Some(backend) = device_list.backend.get(&device_id) else { return };
                 let backend = backend.read().await;
                 let Some(tper) = backend.tper.clone() else { return };
                 let session = backend.session.lock_arc().await;
+
+                // Indicate to UI that we're busy on the session.
+                device_list.ui.update(&device_id, |value| {
+                    let command_status = value.command_status.clone();
+                    value.with_command_status(command_status.with_session_busy(true))
+                });
+
+                // Execute the command and display results.
                 let output = runtime
                     .spawn(async move { run_fn(tper, Mut::Mutex(session)).await }.in_current_span())
                     .await
                     .unwrap();
-                state.ui.update(&device, move |value| update_fn(value, output));
+                device_list.ui.update(&device_id, move |value| update_fn(value, output));
+
+                // Indicate to UI that we're NO LONGER busy.
+                device_list.ui.update(&device_id, |value| {
+                    let command_status = value.command_status.clone();
+                    value.with_command_status(command_status.with_session_busy(false))
+                });
             }
             .in_current_span(),
         )

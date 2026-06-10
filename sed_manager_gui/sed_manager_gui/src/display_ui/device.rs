@@ -13,6 +13,7 @@ impl DisplayUi for dyn Device {
 
     fn display_ui(&self) -> Self::Ui {
         ui::Identity {
+            status: ui::Status::default(),
             name: self.model_number().into(),
             serial: self.serial_number().into(),
             path: self.path().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default().into(),

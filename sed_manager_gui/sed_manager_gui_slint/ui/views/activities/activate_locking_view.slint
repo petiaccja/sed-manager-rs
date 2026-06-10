@@ -1,6 +1,9 @@
 import { LineEdit, Button } from "std-widgets.slint";
+import { CommandStatus } from "../../data/lib.slint";
 
 export component ActivateLockingView {
+    in property <CommandStatus> command-status;
+
     callback activate-locking();
 
     VerticalLayout {
@@ -19,6 +22,7 @@ export component ActivateLockingView {
             clicked => {
                 activate-locking()
             }
+            enabled: !command-status.session-busy && !command-status.tper-busy;
         }
     }
 }

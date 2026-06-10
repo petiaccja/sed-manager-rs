@@ -1,8 +1,14 @@
 import { ComboBox, LineEdit, Button } from "std-widgets.slint";
 import { ToastCard, ToastLevel } from "../../widgets/lib.slint";
-import { RevertScope, RevertAuthority } from "../../data/lib.slint";
+import {
+    RevertScope,
+    RevertAuthority,
+    CommandStatus,
+} from "../../data/lib.slint";
 
 export component RevertDeviceView {
+    in property <CommandStatus> command-status;
+
     callback revert-device(scope: RevertScope, authority: RevertAuthority, password: string);
 
     VerticalLayout {
@@ -54,6 +60,7 @@ export component RevertDeviceView {
         Button {
             text: scope.current-index == 0 ? "Revert locking" : "Revert everything";
             primary: true;
+            enabled: !command-status.session-busy && !command-status.tper-busy;
             clicked => {
                 revert-device(
                     scope.current-index == 0 ? RevertScope.locking : RevertScope.everything,

@@ -4,18 +4,14 @@ use sed_manager_gui_slint as ui;
 use slint::VecModel;
 
 pub trait DeviceExt {
-    fn with_status(self, outcome: ui::Outcome, message: String) -> Self;
     fn with_identity(self, identity: ui::Identity) -> Self;
     fn with_discovery(self, discovery: ui::Discovery) -> Self;
     fn with_config(self, discovery: ui::DeviceConfig) -> Self;
     fn with_stack_status(self, stack_status: ui::StackStatus) -> Self;
+    fn with_command_status(self, command_status: ui::CommandStatus) -> Self;
 }
 
 impl DeviceExt for ui::Device {
-    fn with_status(self, outcome: ui::Outcome, message: String) -> Self {
-        Self { status: ui::Status { outcome, message: message.into() }, ..self }
-    }
-
     fn with_identity(self, identity: ui::Identity) -> Self {
         Self { identity, ..self }
     }
@@ -30,6 +26,10 @@ impl DeviceExt for ui::Device {
 
     fn with_stack_status(self, stack_status: ui::StackStatus) -> Self {
         Self { stack_status, ..self }
+    }
+
+    fn with_command_status(self, command_status: ui::CommandStatus) -> Self {
+        Self { command_status, ..self }
     }
 }
 
@@ -55,5 +55,20 @@ impl StackStatusExt for ui::StackStatus {
 
     fn with_protocol(self, protocol: VecModel<ui::ProtocolProperty>) -> Self {
         Self { protocol: Rc::from(protocol).into(), ..self }
+    }
+}
+
+pub trait CommandStatusExt {
+    fn with_tper_busy(self, tper_busy: bool) -> Self;
+    fn with_session_busy(self, tper_busy: bool) -> Self;
+}
+
+impl CommandStatusExt for ui::CommandStatus {
+    fn with_tper_busy(self, tper_busy: bool) -> Self {
+        Self { tper_busy, ..self }
+    }
+
+    fn with_session_busy(self, session_busy: bool) -> Self {
+        Self { session_busy, ..self }
     }
 }

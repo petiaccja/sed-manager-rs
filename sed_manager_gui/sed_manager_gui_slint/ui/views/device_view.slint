@@ -165,20 +165,20 @@ component Header inherits Island {
                 identity: device.identity;
             }
 
-            if device.status.outcome == Outcome.success: Properties {
+            if device.identity.status.outcome == Outcome.success: Properties {
                 identity: device.identity;
             }
 
-            if device.status.outcome == Outcome.error: ToastCard {
+            if device.identity.status.outcome == Outcome.error: ToastCard {
                 notification: {
                     level: ToastLevel.error,
                     title: "Could not open device",
-                    message: device.status.message,
+                    message: device.identity.status.message,
                 };
                 has-icon: true;
             }
 
-            if device.status.outcome == Outcome.pending: HorizontalLayout {
+            if device.identity.status.outcome == Outcome.pending: HorizontalLayout {
                 alignment: start;
                 Spinner {
                     indeterminate: true;
@@ -211,6 +211,7 @@ export component DeviceView {
             vertical-stretch: 1.0;
 
             activity-bar := DeviceActivityBar {
+                command-status: device.command-status;
                 config: device.config;
                 horizontal-stretch: 0.0;
 
@@ -229,6 +230,7 @@ export component DeviceView {
                 alignment: center;
 
                 ownership-view := TakeOwnershipView {
+                    command-status: device.command-status;
                     preferred-width: 16rem;
                     take-ownership(password) => {
                         take-owneship(password)
@@ -241,6 +243,7 @@ export component DeviceView {
                 alignment: center;
 
                 ActivateLockingView {
+                    command-status: device.command-status;
                     preferred-width: 16rem;
                     activate-locking => {
                         activate-locking()
@@ -255,6 +258,7 @@ export component DeviceView {
                     alignment: center;
 
                     ChangePasswordView {
+                        command-status: device.command-status;
                         preferred-width: 16rem;
                         change-password => {
                             change-password()
@@ -274,6 +278,7 @@ export component DeviceView {
                     alignment: center;
 
                     RevertDeviceView {
+                        command-status: device.command-status;
                         preferred-width: 16rem;
                         revert-device(scope, authority, password) => {
                             revert-device(scope, authority, password)
@@ -283,6 +288,7 @@ export component DeviceView {
             }
 
             if activity-bar.selected-activity == DeviceActivity.stack-status: StackStatusView {
+                command-status: device.command-status;
                 horizontal-stretch: 1.0;
                 stack-status: device.stack-status;
                 query-stack-status => {
@@ -306,7 +312,7 @@ export component DeviceView {
             }
 
             Text {
-                text: "Getting capabilities...";
+                text: "Gathering device information...";
                 font-size: 1.4rem;
                 horizontal-alignment: center;
             }
@@ -346,5 +352,13 @@ export component DeviceView {
                 }
             }
         }
+    }
+
+    if device.command-status.tper-busy || device.command-status.session-busy: Spinner {
+        x: root.width - self.width - 1rem;
+        y: root.height - self.height - 1rem;
+        width: 6rem;
+        height: 6rem;
+        indeterminate: true;
     }
 }

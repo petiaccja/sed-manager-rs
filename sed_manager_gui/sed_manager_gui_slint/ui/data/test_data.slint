@@ -1,11 +1,55 @@
-import { Device } from "device.slint";
+import { Device, Discovery, StackStatus } from "device.slint";
 import { Status, Outcome } from "status.slint";
 
 export global TestData {
+    private property <Discovery> discovery-opal-1:
+        {
+        status: { outcome: Outcome.success },
+        common-features: [
+            {
+                name: "TPer",
+                properties: [
+                    { name: "Sync supported", value: "Yes" },
+                    { name: "Async supported", value: "No" },
+                ],
+            },
+            {
+                name: "Locking",
+                properties: [
+                    { name: "Locked", value: "No" },
+                    { name: "Encryption supported", value: "Yes" },
+                ],
+            },
+        ],
+        ssc-features: [
+            {
+                name: "Opal 1.0",
+                properties: [
+                    { name: "Base ComID", value: "4096" },
+                    { name: "Num ComIDs", value: "1" },
+                    { name: "Initial SID password", value: "MSID" },
+                ],
+            },
+        ],
+    };
+
+    private property <StackStatus> stack-status-normal: {
+        com-id: {
+            good: true,
+            com-id: 3072,
+            com-id-ext: 0,
+            status: "Issued",
+        },
+        protocol: [
+            { name: "MaxMethods", host: "unlimited", device: "1", connection: "1" },
+            { name: "MaxComPacketSize", host: "1048576", device: "16384", connection: "16384" },
+        ]
+    };
+
     out property <[Device]> devices: [
         {
             identity: {
-                name: "Storaginator 1000",
+                name: "Storaginator Idle",
                 serial: "SERIAL#3244",
                 path: "/dev/nvme0",
                 firmware: "FIRMWARE#4543",
@@ -13,52 +57,31 @@ export global TestData {
                 security_commands: true,
                 is_removable: false,
             },
-            discovery: {
-                status: { outcome: Outcome.success },
-                common-features: [
-                    {
-                        name: "TPer",
-                        properties: [
-                            { name: "Sync supported", value: "Yes" },
-                            { name: "Async supported", value: "No" },
-                        ],
-                    },
-                    {
-                        name: "Locking",
-                        properties: [
-                            { name: "Locked", value: "No" },
-                            { name: "Encryption supported", value: "Yes" },
-                        ],
-                    },
-                ],
-                ssc-features: [
-                    {
-                        name: "Opal 1.0",
-                        properties: [
-                            { name: "Base ComID", value: "4096" },
-                            { name: "Num ComIDs", value: "1" },
-                            { name: "Initial SID password", value: "MSID" },
-                        ],
-                    },
-                ],
-            },
+            discovery: discovery-opal-1,
             config: { sid_msid_pin_differ: true, locking_enabled: false },
-            stack-status: {
-                com-id: {
-                    good: true,
-                    com-id: 3072,
-                    com-id-ext: 0,
-                    status: "Issued",
-                },
-                protocol: [
-                    { name: "MaxMethods", host: "unlimited", device: "1", connection: "1" },
-                    { name: "MaxComPacketSize", host: "1048576", device: "16384", connection: "16384" },
-                ]
+            stack-status: stack-status-normal,
+        },
+        {
+            identity: {
+                name: "Storaginator Busy",
+                serial: "SERIAL#3244",
+                path: "/dev/nvme0",
+                firmware: "FIRMWARE#4543",
+                interface: "NVMe",
+                security_commands: true,
+                is_removable: false,
+            },
+            discovery: discovery-opal-1,
+            config: { sid_msid_pin_differ: false, locking_enabled: false },
+            stack-status: stack-status-normal,
+            command-status: {
+                tper-busy: true,
+                session-busy: true,
             }
         },
         {
             identity: {
-                name: "Storaginator 2000",
+                name: "Storaginator DiLoad",
                 serial: "SERIAL#8255",
                 path: "/dev/sda/success/very/long/device/path",
                 firmware: "FIRMWARE#9912",
@@ -72,7 +95,7 @@ export global TestData {
         },
         {
             identity: {
-                name: "Storaginator 3000",
+                name: "Storaginator DiFail",
                 serial: "SERIAL#8255",
                 path: "/dev/sde",
                 firmware: "FIRMWARE#3422",
@@ -85,11 +108,11 @@ export global TestData {
             },
         },
         {
-            status: {
-                outcome: Outcome.error,
-                message: "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua."
-            },
             identity: {
+                status: {
+                    outcome: Outcome.error,
+                    message: "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua."
+                },
                 name: "",
                 serial: "",
                 path: "/dev/sdb/error/very/long/device/path",
@@ -103,8 +126,8 @@ export global TestData {
             },
         },
         {
-            status: { outcome: Outcome.pending },
             identity: {
+                status: { outcome: Outcome.pending },
                 name: "",
                 serial: "",
                 path: "/dev/sdc",
