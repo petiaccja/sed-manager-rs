@@ -86,20 +86,46 @@ impl Management {
     }
 
     pub fn handle_reset(&mut self) {
-        for MethodCallRecord { sender, .. } in self.method_calls.drain(..) {
-            let _ = sender.send(Err(Error::Aborted));
-        }
-        for (_, queue) in self.start_session_calls_sending.drain() {
-            for MethodSendingRecord { sender, .. } in queue {
+        // Create a new instance from scratch.
+        let timeout = self.timeout;
+        let capabilities = self.capabilities.clone();
+        let current = core::mem::replace(self, Self::new(timeout, capabilities));
+
+        // Drop and finalize current resources.
+        let (properties_changed_tx, properties_changed_rx) = {
+            let Self {
+                method_calls,
+                start_session_calls_sending,
+                start_session_calls_receiving,
+                properties_changed_tx,
+                properties_changed_rx,
+                ..
+            } = current;
+            for MethodCallRecord { sender, .. } in method_calls {
                 let _ = sender.send(Err(Error::Aborted));
             }
-        }
-        for (_, queue) in self.start_session_calls_receiving.drain() {
-            for MethodReceivingRecord { sender, .. } in queue {
-                let _ = sender.send(Err(Error::Aborted));
+            for (_, queue) in start_session_calls_sending {
+                for MethodSendingRecord { sender, .. } in queue {
+                    let _ = sender.send(Err(Error::Aborted));
+                }
             }
-        }
-        *self = Self::new(self.timeout, self.capabilities.clone());
+            for (_, queue) in start_session_calls_receiving {
+                for MethodReceivingRecord { sender, .. } in queue {
+                    let _ = sender.send(Err(Error::Aborted));
+                }
+            }
+            (properties_changed_tx, properties_changed_rx)
+        };
+
+        // Save transferable resources.
+        self.properties_changed_tx = properties_changed_tx;
+        self.properties_changed_rx = properties_changed_rx;
+
+        // Inform that properties have been reset.
+        let _ = self.properties_changed_tx.try_broadcast(PropertiesChanged {
+            remote_properties: Properties::INITIAL,
+            connection_properties: Properties::INITIAL,
+        });
     }
 
     #[must_use]

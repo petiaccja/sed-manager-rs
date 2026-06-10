@@ -131,16 +131,20 @@ impl Tper {
     #[instrument(level = "info", skip(self), ret, err)]
     pub async fn stack_reset(&self, com_id: u16, com_id_ext: u16) -> Result<(), Error> {
         use ComIdResponsePayload::*;
+        use StackResetStatus::*;
 
         let request = ComIdRequest::stack_reset(com_id, com_id_ext);
         let response = self.controller.com_id_request(request).await.map_err(|_| Error::Closed)??;
         match response.payload {
-            // TODO: We should loop to avoid this scenario, probably inside the Protocol.
-            StackReset { available_data_length: 0, .. } => Ok(()),
-            StackReset { status: StackResetStatus::Success, available_data_length: 1.. } => Ok(()),
-            StackReset { status: StackResetStatus::Failure, available_data_length: 1.. } => {
+            StackReset { status: Success, available_data_length: 1.. } => {
+                self.controller.sync_properties();
+                Ok(())
+            }
+            StackReset { available_data_length: 0, .. } => {
+                tracing::error!(context = "this event should not escape the protocol", "stack_reset_pending");
                 Err(Error::StackResetFailed)
             }
+            StackReset { status: Failure, available_data_length: 1.. } => Err(Error::StackResetFailed),
             NoResponseAvailable { .. } => Err(Error::TimedOut),
             Verify { .. } => Err(Error::TimedOut),
         }
