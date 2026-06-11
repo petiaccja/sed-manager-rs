@@ -60,6 +60,12 @@ impl App {
         }
         {
             let view_model = view_model.clone();
+            ui.on_activate_locking(move |path, password| {
+                view_model.clone().activate_locking(path.to_string().into(), password)
+            });
+        }
+        {
+            let view_model = view_model.clone();
             ui.on_revert_device(move |path, scope, authority, password| {
                 view_model.clone().revert_device(path.to_string().into(), scope, authority, password)
             });
@@ -91,7 +97,7 @@ impl App {
         Command::new(self.runtime.clone(), self.device_list.clone())
     }
 
-    #[instrument(skip(self))]
+    #[instrument(skip(self, silent))]
     pub fn scan(self: Rc<Self>, silent: bool) {
         self.ui.set_scan_outcome(ui::Outcome::Pending);
 
@@ -284,7 +290,7 @@ impl App {
             .run();
     }
 
-    #[instrument(skip(self))]
+    #[instrument(skip(self, silent))]
     fn query_stack_status(self: Rc<Self>, path: PathBuf, silent: bool) {
         self.command()
             .on_tper(path.clone(), async |tper| {
@@ -330,7 +336,7 @@ impl App {
             .run();
     }
 
-    #[instrument(skip(self))]
+    #[instrument(skip(self, password))]
     fn take_ownership(self: Rc<Self>, path: PathBuf, password: SharedString) {
         let Some(password) = self.try_convert_password(password.as_str()) else {
             return;
@@ -354,7 +360,31 @@ impl App {
             .run();
     }
 
-    #[instrument(skip(self))]
+    #[instrument(skip(self, password))]
+    fn activate_locking(self: Rc<Self>, path: PathBuf, password: SharedString) {
+        let Some(password) = self.try_convert_password(password.as_str()) else {
+            return;
+        };
+
+        self.command()
+            .on_session(path.clone(), async move |tper, mut session| {
+                let sid_session = session.start_sid_session(tper).await?;
+                sid_session.activate_secondary_sp(password).await
+            })
+            .display(move |ui_device, result| {
+                match result {
+                    Ok(_) => {
+                        self.toast_queue.success("Locking activated".into(), "".into());
+                        self.clone().discover(path.clone());
+                    }
+                    Err(err) => self.toast_queue.error("Could not activate locking".into(), err.to_string()),
+                };
+                ui_device
+            })
+            .run();
+    }
+
+    #[instrument(skip(self, password))]
     fn revert_device(
         self: Rc<Self>,
         path: PathBuf,

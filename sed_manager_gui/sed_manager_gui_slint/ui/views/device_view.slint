@@ -193,7 +193,7 @@ export component DeviceView {
     in property <Device> device;
 
     callback take-owneship(password: string);
-    callback activate-locking();
+    callback activate-locking(password: string);
     callback change-password();
     callback revert-device(scope: RevertScope, authority: RevertAuthority, password: string);
     callback query-stack-status();
@@ -245,8 +245,8 @@ export component DeviceView {
                 ActivateLockingView {
                     command-status: device.command-status;
                     preferred-width: 16rem;
-                    activate-locking => {
-                        activate-locking()
+                    activate-locking(password) => {
+                        activate-locking(password)
                     }
                 }
             }

@@ -6,7 +6,7 @@ export component DeviceSwitchView {
     in property <[Device]> devices;
 
     callback take-owneship(device: string, password: string);
-    callback activate-locking(device: string);
+    callback activate-locking(device: string, password: string);
     callback change-password(device: string);
     callback revert-device(device: string, scope: RevertScope, authority: RevertAuthority, password: string);
     callback query-stack-status(device: string);
@@ -30,8 +30,8 @@ export component DeviceSwitchView {
                 take-owneship(password) => {
                     take-owneship(device.identity.path, password)
                 };
-                activate-locking() => {
-                    activate-locking(device.identity.path)
+                activate-locking(password) => {
+                    activate-locking(device.identity.path, password)
                 };
                 change-password() => {
                     change-password(device.identity.path)

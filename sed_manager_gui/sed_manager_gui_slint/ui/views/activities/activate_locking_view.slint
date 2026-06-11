@@ -4,7 +4,7 @@ import { CommandStatus } from "../../data/lib.slint";
 export component ActivateLockingView {
     in property <CommandStatus> command-status;
 
-    callback activate-locking();
+    callback activate-locking(password: string);
 
     VerticalLayout {
         spacing: 0.5rem;
@@ -14,13 +14,13 @@ export component ActivateLockingView {
             text: "Owner (SID) password:";
         }
 
-        LineEdit { }
+        password := LineEdit { }
 
         Button {
             text: "Activate locking";
             primary: true;
             clicked => {
-                activate-locking()
+                activate-locking(password.text)
             }
             enabled: !command-status.session-busy && !command-status.tper-busy;
         }
