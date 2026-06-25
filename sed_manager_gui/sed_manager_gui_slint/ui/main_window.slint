@@ -26,7 +26,7 @@ export component MainWindow inherits Window {
     in property <Outcome> scan-outcome;
 
     callback scan <=> scan-button.clicked;
-    callback close <=> side-bar.close;
+    callback close-device <=> side-bar.close;
     callback take-owneship <=> device-switch-view.take-owneship;
     callback activate-locking <=> device-switch-view.activate-locking;
     callback change-password <=> device-switch-view.change-password;
