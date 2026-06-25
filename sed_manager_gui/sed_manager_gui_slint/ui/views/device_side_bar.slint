@@ -10,7 +10,7 @@ component DeviceSideBarItem inherits IslandButton {
 
     in property <Identity> identity;
 
-    callback close(path: string);
+    callback close-device(path: string);
 
     HorizontalLayout {
         padding-left: 0.8rem;
@@ -43,7 +43,7 @@ component DeviceSideBarItem inherits IslandButton {
             icon: Icons.close;
 
             clicked => {
-                close(identity.path)
+                close-device(identity.path)
             }
         }
     }
@@ -70,7 +70,7 @@ export component DeviceSideBar {
     in property <[Device]> devices;
     in-out property <int> selected;
 
-    callback close(path: string);
+    callback close-device(path: string);
 
     VerticalLayout {
         spacing: 0.2rem;
@@ -95,8 +95,8 @@ export component DeviceSideBar {
                     clicked => {
                         root.selected = index
                     }
-                    close(path) => {
-                        close(path)
+                    close-device(path) => {
+                        close-device(path)
                     }
                 }
             }

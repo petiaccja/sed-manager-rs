@@ -50,7 +50,7 @@ impl App {
         }
         {
             let view_model = view_model.clone();
-            ui.on_close(move |path| view_model.clone().close(path));
+            ui.on_close_device(move |path| view_model.clone().close_device(path));
         }
         {
             let view_model = view_model.clone();
@@ -176,7 +176,7 @@ impl App {
     }
 
     #[instrument(skip(self))]
-    fn close(self: Rc<Self>, path: SharedString) {
+    fn close_device(self: Rc<Self>, path: SharedString) {
         self.ui.set_scan_outcome(ui::Outcome::Pending);
         let path = PathBuf::from(String::from(path));
 

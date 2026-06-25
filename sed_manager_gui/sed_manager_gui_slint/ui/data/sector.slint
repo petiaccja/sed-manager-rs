@@ -7,9 +7,19 @@ export struct Sector {
 }
 
 export global SectorUtil {
-    pure callback to_string(sector: Sector) -> string;
+    pure callback to-string(sector: Sector) -> string;
+    pure callback is-sector(s: string) -> bool;
+    pure callback to-sector(s: string) -> Sector;
 
-    to_string(sector) => {
+    to-string(sector) => {
         sector.value / 1ms
+    }
+
+    is-sector(s) => {
+        s.is-float()
+    }
+
+    to-sector(s) => {
+        { value: 1ms * s.to-float() }
     }
 }

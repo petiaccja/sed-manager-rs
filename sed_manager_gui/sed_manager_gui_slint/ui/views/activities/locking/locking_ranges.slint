@@ -30,7 +30,7 @@ component LockingRangeTable {
     preferred-width: table.preferred-width;
     preferred-height: table.preferred-height;
 
-    in property <[LockingRange]> locking-ranges;
+    in-out property <[LockingRange]> locking-ranges;
 
     viewport := ScrollView {
         GridLayout {
@@ -98,7 +98,7 @@ component LockingRangeTable {
 
                         Cell {
                             TextInput {
-                                text: locking-range.common-name;
+                                text <=> locking-range.common-name;
                             }
                         }
                     }
@@ -110,6 +110,13 @@ component LockingRangeTable {
                         Cell {
                             TextInput {
                                 text: SectorUtil.to_string(locking-range.start);
+                                color: SectorUtil.is-sector(self.text) ? Palette.control-foreground : PaletteExtra.error-foreground;
+
+                                accepted => {
+                                    if SectorUtil.is-sector(self.text) {
+                                        locking-range.start = SectorUtil.to-sector(self.text)
+                                    }
+                                }
                             }
                         }
                     }
@@ -121,6 +128,13 @@ component LockingRangeTable {
                         Cell {
                             TextInput {
                                 text: SectorUtil.to_string(locking-range.end);
+                                color: SectorUtil.is-sector(self.text) ? Palette.control-foreground : PaletteExtra.error-foreground;
+
+                                accepted => {
+                                    if SectorUtil.is-sector(self.text) {
+                                        locking-range.end = SectorUtil.to-sector(self.text)
+                                    }
+                                }
                             }
                         }
                     }
@@ -132,7 +146,7 @@ component LockingRangeTable {
                         Cell {
                             horizontal-alignment: space-around;
                             CheckBox {
-                                checked: locking-range.read-lock-enabled;
+                                checked <=> locking-range.read-lock-enabled;
                             }
                         }
                     }
@@ -144,7 +158,7 @@ component LockingRangeTable {
                         Cell {
                             horizontal-alignment: space-around;
                             CheckBox {
-                                checked: locking-range.write-lock-enabled;
+                                checked <=> locking-range.write-lock-enabled;
                             }
                         }
                     }
@@ -156,7 +170,7 @@ component LockingRangeTable {
                         Cell {
                             horizontal-alignment: space-around;
                             CheckBox {
-                                checked: locking-range.read-locked;
+                                checked <=> locking-range.read-locked;
                             }
                         }
                     }
@@ -168,7 +182,7 @@ component LockingRangeTable {
                         Cell {
                             horizontal-alignment: space-around;
                             CheckBox {
-                                checked: locking-range.write-locked;
+                                checked <=> locking-range.write-locked;
                             }
                         }
                     }
@@ -180,7 +194,7 @@ component LockingRangeTable {
                         Cell {
                             horizontal-alignment: space-around;
                             CheckBox {
-                                checked: locking-range.erase;
+                                checked <=> locking-range.erase;
                             }
                         }
                     }
@@ -238,7 +252,7 @@ component LockingRangeStripe inherits Rectangle {
 }
 
 export component LockingRangesTab {
-    in property <[LockingRange]> locking-ranges;
+    in-out property <[LockingRange]> locking-ranges;
     in property <CommandStatus> command-status;
 
     VerticalLayout {
@@ -246,7 +260,7 @@ export component LockingRangesTab {
         spacing: 1.2rem;
 
         LockingRangeTable {
-            locking-ranges: locking-ranges;
+            locking-ranges <=> locking-ranges;
         }
 
         LockingRangeStripe {

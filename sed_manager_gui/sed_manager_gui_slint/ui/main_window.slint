@@ -22,11 +22,11 @@ export component MainWindow inherits Window {
     preferred-width: 1154px;
     preferred-height: 720px;
 
-    in property <[Device]> devices: TestData.devices;
+    in-out property <[Device]> devices: TestData.devices;
     in property <Outcome> scan-outcome;
 
     callback scan <=> scan-button.clicked;
-    callback close <=> side-bar.close;
+    callback close-device <=> side-bar.close-device;
     callback take-owneship <=> device-switch-view.take-owneship;
     callback activate-locking <=> device-switch-view.activate-locking;
     callback change-password <=> device-switch-view.change-password;
@@ -46,7 +46,7 @@ export component MainWindow inherits Window {
 
         device-switch-view := DeviceSwitchView {
             selected: side-bar.selected;
-            devices: devices;
+            devices <=> devices;
             horizontal-stretch: 1.0;
         }
     }

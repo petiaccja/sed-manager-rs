@@ -37,6 +37,7 @@ export component StackStatusView {
 
     VerticalLayout {
         spacing: 1.2rem;
+        alignment: start;
 
         Island {
             vertical-stretch: 0.0;
@@ -117,7 +118,9 @@ export component StackStatusView {
 
             ScrollView {
                 horizontal-scrollbar-policy: always-off;
-                VerticalLayout {
+                preferred-height: properties-table.min-height;
+
+                properties-table := VerticalLayout {
                     alignment: start;
 
                     GridLayout {

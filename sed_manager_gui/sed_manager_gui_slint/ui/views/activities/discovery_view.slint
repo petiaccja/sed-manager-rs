@@ -88,9 +88,10 @@ export component DiscoveryView {
     HorizontalLayout {
         spacing: 1rem;
 
-        common-features := VerticalLayout {
+        VerticalLayout {
             spacing: 0.4rem;
             horizontal-stretch: 1.0;
+            alignment: start;
 
             Text {
                 text: "Featues";
@@ -102,8 +103,9 @@ export component DiscoveryView {
 
             ScrollView {
                 horizontal-scrollbar-policy: always-off;
+                preferred-height: common-features.min-height;
 
-                VerticalLayout {
+                common-features := VerticalLayout {
                     alignment: start;
                     spacing: 1rem;
 
@@ -114,9 +116,10 @@ export component DiscoveryView {
             }
         }
 
-        ssc-features := VerticalLayout {
+        VerticalLayout {
             spacing: 0.4rem;
             horizontal-stretch: 1.0;
+            alignment: start;
 
             Text {
                 text: "SSCs";
@@ -128,8 +131,9 @@ export component DiscoveryView {
 
             ScrollView {
                 horizontal-scrollbar-policy: always-off;
+                preferred-height: ssc-features.min-height;
 
-                VerticalLayout {
+                ssc-features := VerticalLayout {
                     alignment: start;
                     spacing: 1rem;
 

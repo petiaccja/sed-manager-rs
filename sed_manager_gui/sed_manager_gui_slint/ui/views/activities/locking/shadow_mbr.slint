@@ -12,15 +12,13 @@ import {
     LineEdit,
     ProgressIndicator,
 } from "std-widgets.slint";
-import {
-    PaletteExtra,
-} from "../../../../../../zzz_old/sed_manager_config_ui/ui/widgets/visual.slint";
+import { PaletteExtra } from "../../../widgets/palette_extra.slint";
 import { Icons } from "../../../resources/icons.slint";
 
 
 export component ShadowMbrTab {
     in property <CommandStatus> command-status;
-    in property <Mbr> mbr;
+    in-out property <Mbr> mbr;
 
     VerticalLayout {
         spacing: 0.8rem;
@@ -84,14 +82,14 @@ export component ShadowMbrTab {
                         Switch {
                             row: 2;
                             col: 1;
-                            checked: mbr.enabled;
+                            checked <=> mbr.enabled;
                             enabled: mbr.supported && !command-status.tper-busy && !command-status.session-busy;
                         }
 
                         Switch {
                             row: 3;
                             col: 1;
-                            checked: mbr.done;
+                            checked <=> mbr.done;
                             enabled: mbr.supported && !command-status.tper-busy && !command-status.session-busy;
                         }
                     }

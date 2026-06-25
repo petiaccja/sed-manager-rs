@@ -24,7 +24,9 @@ import {
 } from "../../../widgets/lib.slint";
 
 component UserInformation {
-    in property <User> user;
+    in-out property <string> user-common-name;
+    in-out property <bool> user-enabled;
+    in property <bool> user-is-class;
 
     Rectangle {
         background: PaletteExtra.separator.with-alpha(0.25);
@@ -40,6 +42,7 @@ component UserInformation {
                 "Common name",
                 "Enabled",
                 "Password",
+                "Kind",
             ]: HeaderCell {
                 row: index;
                 col: 0;
@@ -57,7 +60,7 @@ component UserInformation {
                 col: 1;
 
                 TextInput {
-                    text: user.common-name;
+                    text <=> user-common-name;
                 }
             }
 
@@ -69,7 +72,7 @@ component UserInformation {
                     alignment: start;
 
                     CheckBox {
-                        checked: user.enabled;
+                        checked <=> user-enabled;
                     }
                 }
             }
@@ -79,8 +82,16 @@ component UserInformation {
                 col: 1;
 
                 TextInput {
-                    text: user.common-name;
                     input-type: password;
+                }
+            }
+
+            Cell {
+                row: 3;
+                col: 1;
+
+                Text {
+                    text: user-is-class ? "Class" : "Individual";
                 }
             }
         }
@@ -88,7 +99,7 @@ component UserInformation {
 }
 
 component MbrAccessTable {
-    in property <MbrAccess> mbr-access;
+    in-out property <MbrAccess> mbr-access;
 
     Rectangle {
         background: PaletteExtra.separator.with-alpha(0.25);
@@ -110,7 +121,7 @@ component MbrAccessTable {
                 horizontal-stretch: 1.0;
                 HorizontalLayout {
                     allow-unshadow := CheckBox {
-                        checked: mbr-access.set-done;
+                        checked <=> mbr-access.set-done;
                         text: "Allow unshadow";
                     }
                 }
@@ -123,7 +134,7 @@ component LockingRangeAccessTable {
     preferred-width: table.preferred-width;
     preferred-height: table.preferred-height;
 
-    in property <[LockingRangeAccess]> locking-ranges;
+    in-out property <[LockingRangeAccess]> locking-ranges;
 
     viewport := ScrollView {
         GridLayout {
@@ -183,7 +194,7 @@ component LockingRangeAccessTable {
                         Cell {
                             horizontal-alignment: space-around;
                             CheckBox {
-                                checked: locking-range.read-unlock;
+                                checked <=> locking-range.read-unlock;
                             }
                         }
                     }
@@ -195,7 +206,7 @@ component LockingRangeAccessTable {
                         Cell {
                             horizontal-alignment: space-around;
                             CheckBox {
-                                checked: locking-range.write-unlock;
+                                checked <=> locking-range.write-unlock;
                             }
                         }
                     }
@@ -254,9 +265,44 @@ export component UserSideBar {
     }
 }
 
+export component UserPanel {
+    in-out property <User> user;
+    in property <Mbr> mbr;
+
+    VerticalLayout {
+        alignment: start;
+
+        GroupBox {
+            title: "User information";
+
+            UserInformation {
+                user-common-name <=> user.common-name;
+                user-enabled <=> user.enabled;
+            }
+        }
+
+        GroupBox {
+            title: "Access control";
+
+            VerticalLayout {
+                spacing: 1.2rem;
+
+                if mbr.supported: MbrAccessTable {
+                    mbr-access <=> user.mbr-access;
+                }
+
+                LockingRangeAccessTable {
+                    min-height: self.preferred-height;
+                    locking-ranges <=> user.locking-range-access;
+                }
+            }
+        }
+    }
+}
+
 
 export component UsersTab {
-    in property <[User]> users;
+    in-out property <[User]> users;
     in property <CommandStatus> command-status;
     in property <Mbr> mbr;
 
@@ -279,29 +325,13 @@ export component UsersTab {
                 horizontal-scrollbar-policy: always-off;
 
                 content := VerticalLayout {
-                    alignment: start;
-
-                    GroupBox {
-                        title: "User information";
-
-                        UserInformation {
-                            user: users[sidebar.selected];
-                        }
-                    }
-
-                    GroupBox {
-                        title: "Access control";
-
+                    for user[index] in users: Rectangle {
+                        visible: index == sidebar.selected;
+                        preferred-height: index == sidebar.selected ? panel.preferred-height : 0;
+                        min-height: index == sidebar.selected ? panel.min-height : 0;
                         VerticalLayout {
-                            spacing: 1.2rem;
-
-                            if mbr.supported: MbrAccessTable {
-                                mbr-access: users[sidebar.selected].mbr-access;
-                            }
-
-                            LockingRangeAccessTable {
-                                min-height: self.preferred-height;
-                                locking-ranges: users[sidebar.selected].locking-range-access;
+                            panel := UserPanel {
+                                user <=> user;
                             }
                         }
                     }

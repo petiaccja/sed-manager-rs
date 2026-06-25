@@ -24,7 +24,7 @@ import { ShadowMbrTab } from "locking/shadow_mbr.slint";
 
 export component ConfigureLockingView {
     in property <CommandStatus> command-status;
-    in property <SecurityProvider> locking-sp;
+    in-out property <SecurityProvider> locking-sp;
 
     TabWidget {
         Tab {
@@ -35,7 +35,7 @@ export component ConfigureLockingView {
                 padding-top: 1.2rem;
 
                 LockingRangesTab {
-                    locking-ranges: locking-sp.locking-ranges;
+                    locking-ranges <=> locking-sp.locking-ranges;
                     command-status: command-status;
                 }
             }
@@ -49,7 +49,7 @@ export component ConfigureLockingView {
                 padding-top: 1.2rem;
 
                 UsersTab {
-                    users: locking-sp.users;
+                    users <=> locking-sp.users;
                     command-status: command-status;
                     mbr: locking-sp.mbr;
                 }
@@ -65,7 +65,7 @@ export component ConfigureLockingView {
 
                 ShadowMbrTab {
                     command-status: command-status;
-                    mbr: locking-sp.mbr;
+                    mbr <=> locking-sp.mbr;
                 }
             }
         }

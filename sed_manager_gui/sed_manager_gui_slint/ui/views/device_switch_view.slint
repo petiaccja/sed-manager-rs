@@ -3,7 +3,7 @@ import { DeviceView } from "device_view.slint";
 
 export component DeviceSwitchView {
     in property <int> selected;
-    in property <[Device]> devices;
+    in-out property <[Device]> devices;
 
     callback take-owneship(device: string, password: string);
     callback activate-locking(device: string, password: string);
@@ -25,7 +25,7 @@ export component DeviceSwitchView {
             content := DeviceView {
                 width: parent.width;
                 height: index == selected ? parent.height : self.min-height;
-                device: device;
+                device <=> device;
 
                 take-owneship(password) => {
                     take-owneship(device.identity.path, password)
