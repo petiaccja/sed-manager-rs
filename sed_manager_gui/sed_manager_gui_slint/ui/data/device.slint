@@ -1,4 +1,6 @@
 import { Status } from "status.slint";
+import { Uid } from "uid.slint";
+import { Sector } from "sector.slint";
 
 export struct DiscoveryProperty {
     name: string,
@@ -56,10 +58,61 @@ export struct CommandStatus {
     session-busy: bool,
 }
 
+export struct LockingRange {
+    uid: Uid,
+    name: string,
+    common_name: string,
+    start: Sector,
+    end: Sector,
+    read-lock-enabled: bool,
+    write-lock-enabled: bool,
+    read-locked: bool,
+    write-locked: bool,
+    erase: bool,
+}
+
+export struct LockingRangeAccess {
+    uid: Uid,
+    name: string,
+    read-unlock: bool,
+    write-unlock: bool,
+}
+
+export struct MbrAccess {
+    set-done: bool,
+}
+
+export struct User {
+    uid: Uid,
+    name: string,
+    common_name: string,
+    enabled: bool,
+    locking-range-access: [LockingRangeAccess],
+    mbr-access: MbrAccess,
+}
+
+export struct Mbr {
+    supported: bool,
+    size: Sector,
+    enabled: bool,
+    done: bool,
+    upload-progress: float,
+}
+
+export struct SecurityProvider {
+    uid: Uid,
+    name: string,
+    locking_ranges: [LockingRange],
+    users: [User],
+    mbr: Mbr,
+}
+
 export struct Device {
     identity: Identity,
     discovery: Discovery,
     config: DeviceConfig,
     stack-status: StackStatus,
     command-status: CommandStatus,
+    admin-sp: SecurityProvider,
+    locking-sp: SecurityProvider,
 }

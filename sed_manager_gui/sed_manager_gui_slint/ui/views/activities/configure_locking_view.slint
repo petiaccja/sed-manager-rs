@@ -1,23 +1,72 @@
-import { ToastCard, ToastLevel } from "../../widgets/lib.slint";
-import { CommandStatus } from "../../data/lib.slint";
+import {
+    ToastCard,
+    ToastLevel,
+    PaletteExtra,
+} from "../../widgets/lib.slint";
+import {
+    CommandStatus,
+    SecurityProvider,
+    LockingRange,
+} from "../../data/lib.slint";
+import {
+    TabWidget,
+    ScrollView,
+    LineEdit,
+    CheckBox,
+    Palette,
+    Button,
+} from "std-widgets.slint";
+import { Sector, SectorUtil } from "../../data/sector.slint";
+import { LockingRangesTab } from "locking/locking_ranges.slint";
+import { UsersTab } from "locking/users.slint";
+import { ShadowMbrTab } from "locking/shadow_mbr.slint";
+
 
 export component ConfigureLockingView {
     in property <CommandStatus> command-status;
+    in property <SecurityProvider> locking-sp;
 
-    VerticalLayout {
-        alignment: start;
+    TabWidget {
+        Tab {
+            title: "Locking ranges";
 
-        HorizontalLayout {
-            alignment: center;
+            VerticalLayout {
+                alignment: start;
+                padding-top: 1.2rem;
 
-            ToastCard {
-                preferred-width: 16rem;
-                has-icon: true;
-                notification: {
-                    level: ToastLevel.info,
-                    title: "Not available yet",
-                    message: "Configuration of the locking features is not implemented yet.",
-                };
+                LockingRangesTab {
+                    locking-ranges: locking-sp.locking-ranges;
+                    command-status: command-status;
+                }
+            }
+        }
+
+        Tab {
+            title: "Users";
+
+            VerticalLayout {
+                alignment: start;
+                padding-top: 1.2rem;
+
+                UsersTab {
+                    users: locking-sp.users;
+                    command-status: command-status;
+                    mbr: locking-sp.mbr;
+                }
+            }
+        }
+
+        Tab {
+            title: "Shadow MBR";
+
+            VerticalLayout {
+                alignment: start;
+                padding-top: 1.2rem;
+
+                ShadowMbrTab {
+                    command-status: command-status;
+                    mbr: locking-sp.mbr;
+                }
             }
         }
     }

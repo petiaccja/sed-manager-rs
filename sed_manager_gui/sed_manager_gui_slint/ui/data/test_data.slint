@@ -1,4 +1,4 @@
-import { Device, Discovery, StackStatus } from "device.slint";
+import { Device, Discovery, StackStatus, SecurityProvider } from "device.slint";
 import { Status, Outcome } from "status.slint";
 
 export global TestData {
@@ -46,6 +46,131 @@ export global TestData {
         ]
     };
 
+    private property <SecurityProvider> admin-sp-opal-2: {
+        uid: { value: 0ms },
+        name: "Admin",
+        locking_ranges: [],
+        users: [
+            {
+                uid: { value: 0ms },
+                name: "SID",
+                common_name: "",
+                enabled: true,
+            },
+            {
+                uid: { value: 0ms },
+                name: "PSID",
+                common_name: "",
+                enabled: true,
+            }
+        ],
+        mbr: {
+            supported: false,
+        },
+    };
+
+    private property <SecurityProvider> locking-sp-opal-2: {
+        uid: { value: 0ms },
+        name: "Locking",
+        locking_ranges: [
+            {
+                uid: { value: 0ms },
+                name: "GlobalRange",
+                common_name: "",
+                start: { value: 0ms },
+                end: { value: 0ms },
+                read-lock-enabled: false,
+                write-lock-enabled: false,
+                read-locked: false,
+                write-locked: false,
+                erase: false,
+            },
+            {
+                uid: { value: 0ms },
+                name: "Range1",
+                common_name: "",
+                start: { value: 100ms },
+                end: { value: 200ms },
+                read-lock-enabled: true,
+                write-lock-enabled: true,
+                read-locked: false,
+                write-locked: false,
+                erase: false,
+            },
+            {
+                uid: { value: 0ms },
+                name: "Range2",
+                common_name: "",
+                start: { value: 200ms },
+                end: { value: 700ms },
+                read-lock-enabled: true,
+                write-lock-enabled: true,
+                read-locked: false,
+                write-locked: false,
+                erase: false,
+            },
+        ],
+        users: [
+            {
+                uid: { value: 0ms },
+                name: "Admin1",
+                common_name: "",
+                enabled: true,
+                locking-range-access: [
+                    {
+                        uid: { value: 0ms },
+                        name: "GlobalRange",
+                        read-unlock: true,
+                        write-unlock: true,
+                    },
+                    {
+                        uid: { value: 0ms },
+                        name: "Range1",
+                        read-unlock: true,
+                        write-unlock: true,
+                    },
+                    {
+                        uid: { value: 0ms },
+                        name: "Range2",
+                        read-unlock: true,
+                        write-unlock: true,
+                    },
+                ],
+                mbr-access: { set-done: true },
+            },
+            {
+                uid: { value: 0ms },
+                name: "User1",
+                common_name: "",
+                enabled: true,
+                locking-range-access: [
+                    {
+                        uid: { value: 0ms },
+                        name: "GlobalRange",
+                        read-unlock: false,
+                        write-unlock: false,
+                    },
+                    {
+                        uid: { value: 0ms },
+                        name: "Range1",
+                        read-unlock: true,
+                        write-unlock: false,
+                    },
+                    {
+                        uid: { value: 0ms },
+                        name: "Range2",
+                        read-unlock: false,
+                        write-unlock: false,
+                    },
+                ],
+                mbr-access: { set-done: true },
+            }
+        ],
+        mbr: {
+            supported: true,
+        },
+    };
+
     out property <[Device]> devices: [
         {
             identity: {
@@ -58,8 +183,10 @@ export global TestData {
                 is_removable: false,
             },
             discovery: discovery-opal-1,
-            config: { sid_msid_pin_differ: true, locking_enabled: false },
+            config: { sid_msid_pin_differ: true, locking_enabled: true },
             stack-status: stack-status-normal,
+            admin-sp: admin-sp-opal-2,
+            locking-sp: locking-sp-opal-2,
         },
         {
             identity: {
@@ -77,7 +204,9 @@ export global TestData {
             command-status: {
                 tper-busy: true,
                 session-busy: true,
-            }
+            },
+            admin-sp: admin-sp-opal-2,
+            locking-sp: locking-sp-opal-2,
         },
         {
             identity: {

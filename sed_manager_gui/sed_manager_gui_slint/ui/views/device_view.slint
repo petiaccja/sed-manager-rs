@@ -269,6 +269,7 @@ export component DeviceView {
 
             if activity-bar.selected-activity == DeviceActivity.configure-locking: ConfigureLockingView {
                 preferred-width: 16rem;
+                locking-sp: device.locking-sp;
             }
 
             if activity-bar.selected-activity == DeviceActivity.revert-device: ScrollView {

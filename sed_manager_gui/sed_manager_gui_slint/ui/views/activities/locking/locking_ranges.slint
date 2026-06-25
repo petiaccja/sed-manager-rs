@@ -1,0 +1,274 @@
+import { ScrollView, CheckBox, Button, Palette } from "std-widgets.slint";
+import {
+    LockingRange,
+    Sector,
+    SectorUtil,
+    CommandStatus,
+} from "../../../data/lib.slint";
+import {
+    Detached,
+    Cell,
+    HeaderCell,
+    PaletteExtra,
+} from "../../../widgets/lib.slint";
+
+global LockingRangeColor {
+    pure public function foreground(index: int) -> color {
+        PaletteExtra.make-accented(base(index), Palette.foreground, Palette.background)
+    }
+
+    pure public function background(index: int) -> color {
+        PaletteExtra.make-accented(base(index), Palette.background, Palette.foreground).mix(Palette.background, 0.30)
+    }
+
+    pure function base(index: int) -> color {
+        hsv(85 * index, 0.5, 1.0)
+    }
+}
+
+component LockingRangeTable {
+    preferred-width: table.preferred-width;
+    preferred-height: table.preferred-height;
+
+    in property <[LockingRange]> locking-ranges;
+
+    viewport := ScrollView {
+        GridLayout {
+            Rectangle {
+                background: PaletteExtra.separator.with-alpha(0.25);
+                clip: true;
+                border-radius: 0.6rem;
+                border-width: 0.1rem;
+                border-color: self.background;
+
+                table := GridLayout {
+                    spacing: 0.1rem;
+
+                    Detached {
+                        row: 0;
+                        col: 0;
+                        z: 2;
+                        offset-x: -viewport.viewport-x;
+                        offset-y: -viewport.viewport-y;
+                        HeaderCell { }
+                    }
+
+                    for column[index] in [
+                        "Common name",
+                        "Start",
+                        "End",
+                        "Read locking enabled",
+                        "Write locking enabled",
+                        "Read locked",
+                        "Write locked",
+                        "Erase"
+                    ]: Detached {
+                        row: 0;
+                        col: index + 1;
+                        z: 1;
+                        offset-y: -viewport.viewport-y;
+
+                        HeaderCell {
+                            Text {
+                                text: column;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                            }
+                        }
+                    }
+
+                    for locking-range[index] in locking-ranges: Detached {
+                        row: index + 1;
+                        col: 0;
+                        offset-x: -viewport.viewport-x;
+                        z: 1;
+
+                        HeaderCell {
+                            Text {
+                                text: locking-range.name;
+                                color: LockingRangeColor.foreground(index);
+                                vertical-alignment: center;
+                            }
+                        }
+                    }
+
+                    for locking-range[index] in locking-ranges: Detached {
+                        row: index + 1;
+                        col: 1;
+
+                        Cell {
+                            TextInput {
+                                text: locking-range.common-name;
+                            }
+                        }
+                    }
+
+                    for locking-range[index] in locking-ranges: Detached {
+                        row: index + 1;
+                        col: 2;
+
+                        Cell {
+                            TextInput {
+                                text: SectorUtil.to_string(locking-range.start);
+                            }
+                        }
+                    }
+
+                    for locking-range[index] in locking-ranges: Detached {
+                        row: index + 1;
+                        col: 3;
+
+                        Cell {
+                            TextInput {
+                                text: SectorUtil.to_string(locking-range.end);
+                            }
+                        }
+                    }
+
+                    for locking-range[index] in locking-ranges: Detached {
+                        row: index + 1;
+                        col: 4;
+
+                        Cell {
+                            horizontal-alignment: space-around;
+                            CheckBox {
+                                checked: locking-range.read-lock-enabled;
+                            }
+                        }
+                    }
+
+                    for locking-range[index] in locking-ranges: Detached {
+                        row: index + 1;
+                        col: 5;
+
+                        Cell {
+                            horizontal-alignment: space-around;
+                            CheckBox {
+                                checked: locking-range.write-lock-enabled;
+                            }
+                        }
+                    }
+
+                    for locking-range[index] in locking-ranges: Detached {
+                        row: index + 1;
+                        col: 6;
+
+                        Cell {
+                            horizontal-alignment: space-around;
+                            CheckBox {
+                                checked: locking-range.read-locked;
+                            }
+                        }
+                    }
+
+                    for locking-range[index] in locking-ranges: Detached {
+                        row: index + 1;
+                        col: 7;
+
+                        Cell {
+                            horizontal-alignment: space-around;
+                            CheckBox {
+                                checked: locking-range.write-locked;
+                            }
+                        }
+                    }
+
+                    for locking-range[index] in locking-ranges: Detached {
+                        row: index + 1;
+                        col: 8;
+
+                        Cell {
+                            horizontal-alignment: space-around;
+                            CheckBox {
+                                checked: locking-range.erase;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+component LockingRangeStripe inherits Rectangle {
+    min-height: 2.0rem;
+    background: LockingRangeColor.background(0);
+    border-radius: 0.6rem;
+    border-width: 0.2rem;
+    border-color: LockingRangeColor.foreground(0).with-alpha(0.45);
+
+    in property <[LockingRange]> locking-ranges;
+    in property <Sector> capacity: { value: 1000ms };
+
+    function range-x(index: int) -> length {
+        self.width * (0.2 * (index - 1) / (self.locking-ranges.length - 1) + 0.8 * self.locking-ranges[index].start.value / self.capacity.value)
+    }
+
+    function range-width(index: int) -> length {
+        self.width * (0.2 / (self.locking-ranges.length - 1) + 0.8 * ((self.locking-ranges[index].end.value - self.locking-ranges[index].start.value) / self.capacity.value))
+    }
+
+    for locking-range[index] in locking-ranges: Rectangle {
+        if index != 0: Rectangle {
+            x: range-x(index);
+            y: root.x;
+            width: range-width(index);
+            height: root.height;
+
+            background: LockingRangeColor.background(index);
+            border-radius: 0.6rem;
+            border-width: 0.2rem;
+            border-color: LockingRangeColor.foreground(index).with-alpha(0.45);
+
+            HorizontalLayout {
+                width: parent.width;
+                padding-left: 0.3rem;
+                padding-right: 0.3rem;
+
+                Text {
+                    text: locking-range.name;
+                    color: LockingRangeColor.foreground(index);
+                    overflow: elide;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+            }
+        }
+    }
+}
+
+export component LockingRangesTab {
+    in property <[LockingRange]> locking-ranges;
+    in property <CommandStatus> command-status;
+
+    VerticalLayout {
+        alignment: start;
+        spacing: 1.2rem;
+
+        LockingRangeTable {
+            locking-ranges: locking-ranges;
+        }
+
+        LockingRangeStripe {
+            height: 3rem;
+            locking-ranges: locking-ranges;
+        }
+
+        HorizontalLayout {
+            alignment: end;
+            spacing: 0.8rem;
+
+            Button {
+                text: "Save ranges";
+                width: 8rem;
+                primary: true;
+                enabled: !command-status.session-busy && !command-status.session-busy;
+            }
+
+            Button {
+                text: "Discard";
+                width: 8rem;
+            }
+        }
+    }
+}

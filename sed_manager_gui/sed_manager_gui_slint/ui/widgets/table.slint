@@ -1,0 +1,48 @@
+import { Palette } from "std-widgets.slint";
+
+
+export component Detached {
+    in property <length> offset-x;
+    in property <length> offset-y;
+
+    preferred-width: content.preferred-width;
+    preferred-height: content.preferred-height;
+    min-width: content.min-width;
+    min-height: content.min-height;
+    max-width: content.max-width;
+    max-height: content.max-height;
+
+    content := Rectangle {
+        x: offset-x;
+        y: offset-y;
+
+        @children
+    }
+}
+
+export component Cell inherits Rectangle {
+    background: Palette.background;
+
+    in property <brush> cell-background;
+    in property <LayoutAlignment> horizontal-alignment;
+
+    Rectangle {
+        background: cell-background;
+    }
+
+    content := HorizontalLayout {
+        alignment: horizontal-alignment;
+
+        padding: 0.6rem;
+        padding-top: 0.3rem;
+        padding-bottom: 0.3rem;
+
+        @children
+    }
+}
+
+export component HeaderCell inherits Cell {
+    cell-background: Palette.control-background;
+
+    @children
+}

@@ -1,0 +1,15 @@
+// A number of sectors in drives using logically based addresses. Can be used
+// both as an offset (index) or as a size.
+export struct Sector {
+    // Using `duration` as that's the only 64-bit integer type in Slint. This
+    // is a bit of a hack, but perhaps the simplest approach.
+    value: duration,
+}
+
+export global SectorUtil {
+    pure callback to_string(sector: Sector) -> string;
+
+    to_string(sector) => {
+        sector.value / 1ms
+    }
+}

@@ -1,0 +1,5 @@
+export struct Uid {
+    // Using `duration` as that's the only 64-bit integer type in Slint. This
+    // is a bit of a hack, but perhaps the simplest approach.
+    value: duration,
+}
