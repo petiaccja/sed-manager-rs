@@ -50,7 +50,7 @@ impl App {
         }
         {
             let view_model = view_model.clone();
-            ui.on_close(move |path| view_model.clone().close(path));
+            ui.on_close_device(move |path| view_model.clone().close(path));
         }
         {
             let view_model = view_model.clone();
@@ -87,7 +87,7 @@ impl App {
                 }
                 key(&lhs.identity).cmp(&key(&rhs.identity))
             });
-            ui.set_devices(ModelRc::from(Rc::from(sorted)));
+            //ui.set_devices(ModelRc::from(Rc::from(sorted)));
         }
 
         view_model
