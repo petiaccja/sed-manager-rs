@@ -2,6 +2,8 @@ mod device;
 mod discovery;
 mod primitives;
 mod properties;
+mod uid;
+mod user;
 
 pub use properties::CombinedProperties;
 

@@ -18,7 +18,7 @@ impl Session {
         }
     }
 
-    pub async fn start_sid_session(&mut self, tper: Arc<Tper>) -> Result<&SetupSession, Error> {
+    pub async fn start_setup_session(&mut self, tper: Arc<Tper>) -> Result<&SetupSession, Error> {
         match self {
             Self::None => {
                 let sid_session = SetupSession::on_primary_ssc(tper).await?;

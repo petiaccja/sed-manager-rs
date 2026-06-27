@@ -13,13 +13,13 @@ use sed_manager_gui_slint as ui;
 use sed_packet::{MaxBytes, com_id::ComIdState};
 use sed_tper::{PropertiesChanged, Tper};
 use sed_virtual_device::{VIRTUAL_DEVICE_PATH, VirtualDevice};
-use slint::{ComponentHandle, ModelExt as _, ModelRc, SharedString, ToSharedString, spawn_local};
+use slint::{ComponentHandle, ModelExt as _, ModelRc, SharedString, ToSharedString, VecModel, spawn_local};
 use tracing::instrument;
 
 use crate::{
     command::{Command, ExpectInEventLoop},
     device_list::DeviceList,
-    display_ui::{CombinedProperties, DisplayUi as _},
+    display_ui::{CombinedProperties, DisplayUi},
     toast::ToastQueue,
     ui_ext::{DeviceExt as _, DiscoveryExt, StackStatusExt},
 };
@@ -285,6 +285,8 @@ impl App {
                 spawn_local(Self::listen_connection_changed(Rc::downgrade(&self), path.clone(), connection_changed))
                     .expect_in_event_loop();
                 self.clone().query_stack_status(path.clone(), true);
+                self.clone().list_security_providers(path.clone());
+                self.clone().list_admin_authorities(path);
                 ui_device.with_stack_status(status)
             })
             .run();
@@ -322,6 +324,58 @@ impl App {
     }
 
     #[instrument(skip(self))]
+    fn list_security_providers(self: Rc<Self>, path: PathBuf) {
+        self.command()
+            .on_tper(path.clone(), async |tper| {
+                Spec::try_from(tper.discover_current().await?).map_err(|_| Error::NoSscAvailable)
+            })
+            .display(move |mut ui_device, spec| match spec {
+                Ok(spec) => {
+                    ui_device.admin_sp.uid = spec.admin.uid.display_ui();
+                    ui_device.admin_sp.name = spec.admin.uid.to_shared_string();
+                    if let Some(locking_sp) = spec.locking {
+                        ui_device.locking_sp.uid = locking_sp.uid.display_ui();
+                        ui_device.locking_sp.name = locking_sp.uid.to_shared_string();
+                    }
+                    ui_device
+                }
+                Err(err) => {
+                    self.toast_queue.error("Can not list SPs".into(), err.to_string());
+                    ui_device
+                }
+            })
+            .run();
+    }
+
+    #[instrument(skip(self))]
+    fn list_admin_authorities(self: Rc<Self>, path: PathBuf) {
+        self.command()
+            .on_session(path.clone(), async |tper, mut session| {
+                let setup_session = session.start_setup_session(tper).await?;
+                let admin_sp = setup_session.spec().admin.uid;
+                setup_session.list_authorities(admin_sp).await
+            })
+            .display(move |mut ui_device, authorities| match authorities {
+                Ok(authorities) => {
+                    let users: Vec<_> = authorities.iter().map(DisplayUi::display_ui).collect();
+                    let users = Rc::from(VecModel::from(users));
+                    let individual_users = Rc::from(users.clone().filter(|user| !user.is_class && user.enabled));
+                    let individual_users_names = individual_users.clone().map(|user| user.name);
+                    let individual_users_uids = individual_users.clone().map(|user| user.uid);
+                    ui_device.admin_sp.users = users.into();
+                    ui_device.admin_sp.individual_user_names = Rc::from(individual_users_names).into();
+                    ui_device.admin_sp.individual_user_uids = Rc::from(individual_users_uids).into();
+                    ui_device
+                }
+                Err(err) => {
+                    self.toast_queue.error("Can not list users".into(), err.to_string());
+                    ui_device
+                }
+            })
+            .run();
+    }
+
+    #[instrument(skip(self))]
     fn reset_stack(self: Rc<Self>, path: PathBuf) {
         let app = self.clone();
         self.command()
@@ -344,7 +398,7 @@ impl App {
 
         self.command()
             .on_session(path.clone(), async move |tper, mut session| {
-                let sid_session = session.start_sid_session(tper).await?;
+                let sid_session = session.start_setup_session(tper).await?;
                 sid_session.take_owneship(password).await
             })
             .display(move |ui_device, result| {
@@ -368,7 +422,7 @@ impl App {
 
         self.command()
             .on_session(path.clone(), async move |tper, mut session| {
-                let sid_session = session.start_sid_session(tper).await?;
+                let sid_session = session.start_setup_session(tper).await?;
                 sid_session.activate_secondary_sp(password).await
             })
             .display(move |ui_device, result| {
@@ -398,7 +452,7 @@ impl App {
 
         self.command()
             .on_session(path.clone(), async move |tper, mut session| {
-                let sid_session = session.start_sid_session(tper).await?;
+                let sid_session = session.start_setup_session(tper).await?;
                 let authority = match authority {
                     ui::RevertAuthority::Sid => sid_session.spec().admin.authorities.sid,
                     ui::RevertAuthority::Psid => sid_session.spec().admin.authorities.psid,
