@@ -5,13 +5,13 @@
 
 use sed_device::Device;
 
-use crate::display_ui::DisplayUi;
+use crate::ui_conv::IntoUi;
 use sed_manager_gui_slint as ui;
 
-impl DisplayUi for dyn Device {
+impl IntoUi for dyn Device {
     type Ui = ui::Identity;
 
-    fn display_ui(&self) -> Self::Ui {
+    fn into_ui(&self) -> Self::Ui {
         ui::Identity {
             status: ui::Status::default(),
             name: self.model_number().into(),

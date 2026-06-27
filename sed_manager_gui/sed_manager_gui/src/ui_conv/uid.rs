@@ -5,21 +5,21 @@ use sed_packet::{ObjectRef, Uid, discovery::FeatureDescriptor};
 use sed_spec::{objects::SecurityProviderRef, path::Path, preconfig::GLOBAL_LOOKUP};
 use slint::SharedString;
 
-use crate::display_ui::{DisplayUi, DisplayUiName, TryFromUi};
+use crate::ui_conv::{IntoUi, IntoUiName, TryFromUi};
 
-impl DisplayUi for Uid {
+impl IntoUi for Uid {
     type Ui = ui::Uid;
 
-    fn display_ui(&self) -> Self::Ui {
+    fn into_ui(&self) -> Self::Ui {
         ui::Uid { value: self.to_u64().cast_signed() }
     }
 }
 
-impl<const TABLE: u64> DisplayUi for ObjectRef<TABLE> {
+impl<const TABLE: u64> IntoUi for ObjectRef<TABLE> {
     type Ui = ui::Uid;
 
-    fn display_ui(&self) -> Self::Ui {
-        self.to_uid().display_ui()
+    fn into_ui(&self) -> Self::Ui {
+        self.to_uid().into_ui()
     }
 }
 
@@ -45,10 +45,10 @@ impl<'a> TryFromUi<&'a ui::Uid> for Uid {
     }
 }
 
-impl DisplayUiName for Uid {
+impl IntoUiName for Uid {
     type Ui = SharedString;
 
-    fn display_ui_name(&self, features: &[FeatureDescriptor], sp: Option<SecurityProviderRef>) -> Self::Ui {
+    fn into_ui_name(&self, features: &[FeatureDescriptor], sp: Option<SecurityProviderRef>) -> Self::Ui {
         GLOBAL_LOOKUP
             .by_uid(features, *self, sp)
             .map(|name| Path::new(&name).object().to_owned())
@@ -57,11 +57,11 @@ impl DisplayUiName for Uid {
     }
 }
 
-impl<const TABLE: u64> DisplayUiName for ObjectRef<TABLE> {
+impl<const TABLE: u64> IntoUiName for ObjectRef<TABLE> {
     type Ui = SharedString;
 
-    fn display_ui_name(&self, features: &[FeatureDescriptor], sp: Option<SecurityProviderRef>) -> Self::Ui {
-        self.to_uid().display_ui_name(features, sp)
+    fn into_ui_name(&self, features: &[FeatureDescriptor], sp: Option<SecurityProviderRef>) -> Self::Ui {
+        self.to_uid().into_ui_name(features, sp)
     }
 }
 

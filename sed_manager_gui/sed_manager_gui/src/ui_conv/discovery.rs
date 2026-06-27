@@ -13,7 +13,7 @@ use sed_packet::discovery::{
 };
 use slint::VecModel;
 
-use crate::display_ui::DisplayUi;
+use crate::ui_conv::IntoUi;
 use sed_manager_gui_slint as ui;
 
 fn owner_password_state_to_string(value: OwnerPasswordState) -> &'static str {
@@ -42,10 +42,10 @@ fn duration(duration: Duration) -> String {
     }
 }
 
-impl DisplayUi for TperDescriptor {
+impl IntoUi for TperDescriptor {
     type Ui = ui::DiscoveryFeature;
 
-    fn display_ui(&self) -> Self::Ui {
+    fn into_ui(&self) -> Self::Ui {
         let properties = vec![
             ui::DiscoveryProperty { name: "Sync supported".into(), value: yes_or_no(self.sync_supported).into() },
             ui::DiscoveryProperty { name: "Async supported".into(), value: yes_or_no(self.async_supported).into() },
@@ -67,10 +67,10 @@ impl DisplayUi for TperDescriptor {
     }
 }
 
-impl DisplayUi for LockingDescriptor {
+impl IntoUi for LockingDescriptor {
     type Ui = ui::DiscoveryFeature;
 
-    fn display_ui(&self) -> Self::Ui {
+    fn into_ui(&self) -> Self::Ui {
         let properties = vec![
             ui::DiscoveryProperty { name: "Locking supported".into(), value: yes_or_no(self.locking_supported).into() },
             ui::DiscoveryProperty { name: "Locking enabled".into(), value: yes_or_no(self.locking_enabled).into() },
@@ -94,10 +94,10 @@ impl DisplayUi for LockingDescriptor {
     }
 }
 
-impl DisplayUi for GeometryDescriptor {
+impl IntoUi for GeometryDescriptor {
     type Ui = ui::DiscoveryFeature;
 
-    fn display_ui(&self) -> Self::Ui {
+    fn into_ui(&self) -> Self::Ui {
         let properties = vec![
             ui::DiscoveryProperty { name: "Alignment required".into(), value: yes_or_no(self.align).into() },
             ui::DiscoveryProperty {
@@ -117,10 +117,10 @@ impl DisplayUi for GeometryDescriptor {
     }
 }
 
-impl DisplayUi for DataRemovalDescriptor {
+impl IntoUi for DataRemovalDescriptor {
     type Ui = ui::DiscoveryFeature;
 
-    fn display_ui(&self) -> Self::Ui {
+    fn into_ui(&self) -> Self::Ui {
         let properties = vec![
             ui::DiscoveryProperty { name: "Data removal processing".into(), value: yes_or_no(self.processing).into() },
             ui::DiscoveryProperty {
@@ -164,10 +164,10 @@ impl DisplayUi for DataRemovalDescriptor {
     }
 }
 
-impl DisplayUi for BlockSIDAuthDescriptor {
+impl IntoUi for BlockSIDAuthDescriptor {
     type Ui = ui::DiscoveryFeature;
 
-    fn display_ui(&self) -> Self::Ui {
+    fn into_ui(&self) -> Self::Ui {
         let properties = vec![
             ui::DiscoveryProperty {
                 name: "SID & MSID PIN differ".into(),
@@ -191,10 +191,10 @@ impl DisplayUi for BlockSIDAuthDescriptor {
     }
 }
 
-impl DisplayUi for AdditionalDataStoreTablesDescriptor {
+impl IntoUi for AdditionalDataStoreTablesDescriptor {
     type Ui = ui::DiscoveryFeature;
 
-    fn display_ui(&self) -> Self::Ui {
+    fn into_ui(&self) -> Self::Ui {
         let properties = vec![
             ui::DiscoveryProperty {
                 name: "Max number of tables".into(),
@@ -213,10 +213,10 @@ impl DisplayUi for AdditionalDataStoreTablesDescriptor {
     }
 }
 
-impl DisplayUi for EnterpriseDescriptor {
+impl IntoUi for EnterpriseDescriptor {
     type Ui = ui::DiscoveryFeature;
 
-    fn display_ui(&self) -> Self::Ui {
+    fn into_ui(&self) -> Self::Ui {
         let properties = vec![
             ui::DiscoveryProperty { name: "Base ComID".into(), value: self.base_com_id.to_string().into() },
             ui::DiscoveryProperty { name: "Number of ComIDs".into(), value: self.num_com_ids.to_string().into() },
@@ -229,10 +229,10 @@ impl DisplayUi for EnterpriseDescriptor {
     }
 }
 
-impl DisplayUi for OpalV1Descriptor {
+impl IntoUi for OpalV1Descriptor {
     type Ui = ui::DiscoveryFeature;
 
-    fn display_ui(&self) -> Self::Ui {
+    fn into_ui(&self) -> Self::Ui {
         let properties = vec![
             ui::DiscoveryProperty { name: "Base ComID".into(), value: self.base_com_id.to_string().into() },
             ui::DiscoveryProperty { name: "Number of ComIDs".into(), value: self.num_com_ids.to_string().into() },
@@ -245,102 +245,10 @@ impl DisplayUi for OpalV1Descriptor {
     }
 }
 
-impl DisplayUi for OpalV2Descriptor {
+impl IntoUi for OpalV2Descriptor {
     type Ui = ui::DiscoveryFeature;
 
-    fn display_ui(&self) -> Self::Ui {
-        let properties = vec![
-            ui::DiscoveryProperty { name: "Base ComID".into(), value: self.base_com_id.to_string().into() },
-            ui::DiscoveryProperty { name: "Number of ComIDs".into(), value: self.num_com_ids.to_string().into() },
-            ui::DiscoveryProperty {
-                name: "LBA range crossing".into(),
-                value: yes_or_no(!self.no_range_crossing).into(),
-            },
-            ui::DiscoveryProperty {
-                name: "Number of locking admins".into(),
-                value: self.num_locking_admins_supported.to_string().into(),
-            },
-            ui::DiscoveryProperty {
-                name: "Number of locking users".into(),
-                value: self.num_locking_users_supported.to_string().into(),
-            },
-            ui::DiscoveryProperty {
-                name: "Initial SID password".into(),
-                value: owner_password_state_to_string(self.initial_owner_pw).into(),
-            },
-            ui::DiscoveryProperty {
-                name: "Reverted SID password".into(),
-                value: owner_password_state_to_string(self.reverted_owner_pw).into(),
-            },
-        ];
-        ui::DiscoveryFeature { name: self.name().into(), properties: Rc::from(VecModel::from(properties)).into() }
-    }
-}
-
-impl DisplayUi for OpaliteDescriptor {
-    type Ui = ui::DiscoveryFeature;
-
-    fn display_ui(&self) -> Self::Ui {
-        let properties = vec![
-            ui::DiscoveryProperty { name: "Base ComID".into(), value: self.base_com_id.to_string().into() },
-            ui::DiscoveryProperty { name: "Number of ComIDs".into(), value: self.num_com_ids.to_string().into() },
-            ui::DiscoveryProperty {
-                name: "Initial SID password".into(),
-                value: owner_password_state_to_string(self.initial_owner_pw).into(),
-            },
-            ui::DiscoveryProperty {
-                name: "Reverted SID password".into(),
-                value: owner_password_state_to_string(self.reverted_owner_pw).into(),
-            },
-        ];
-        ui::DiscoveryFeature { name: self.name().into(), properties: Rc::from(VecModel::from(properties)).into() }
-    }
-}
-
-impl DisplayUi for PyriteV1Descriptor {
-    type Ui = ui::DiscoveryFeature;
-
-    fn display_ui(&self) -> Self::Ui {
-        let properties = vec![
-            ui::DiscoveryProperty { name: "Base ComID".into(), value: self.base_com_id.to_string().into() },
-            ui::DiscoveryProperty { name: "Number of ComIDs".into(), value: self.num_com_ids.to_string().into() },
-            ui::DiscoveryProperty {
-                name: "Initial SID password".into(),
-                value: owner_password_state_to_string(self.initial_owner_pw).into(),
-            },
-            ui::DiscoveryProperty {
-                name: "Reverted SID password".into(),
-                value: owner_password_state_to_string(self.reverted_owner_pw).into(),
-            },
-        ];
-        ui::DiscoveryFeature { name: self.name().into(), properties: Rc::from(VecModel::from(properties)).into() }
-    }
-}
-
-impl DisplayUi for PyriteV2Descriptor {
-    type Ui = ui::DiscoveryFeature;
-
-    fn display_ui(&self) -> Self::Ui {
-        let properties = vec![
-            ui::DiscoveryProperty { name: "Base ComID".into(), value: self.base_com_id.to_string().into() },
-            ui::DiscoveryProperty { name: "Number of ComIDs".into(), value: self.num_com_ids.to_string().into() },
-            ui::DiscoveryProperty {
-                name: "Initial SID password".into(),
-                value: owner_password_state_to_string(self.initial_owner_pw).into(),
-            },
-            ui::DiscoveryProperty {
-                name: "Reverted SID password".into(),
-                value: owner_password_state_to_string(self.reverted_owner_pw).into(),
-            },
-        ];
-        ui::DiscoveryFeature { name: self.name().into(), properties: Rc::from(VecModel::from(properties)).into() }
-    }
-}
-
-impl DisplayUi for RubyDescriptor {
-    type Ui = ui::DiscoveryFeature;
-
-    fn display_ui(&self) -> Self::Ui {
+    fn into_ui(&self) -> Self::Ui {
         let properties = vec![
             ui::DiscoveryProperty { name: "Base ComID".into(), value: self.base_com_id.to_string().into() },
             ui::DiscoveryProperty { name: "Number of ComIDs".into(), value: self.num_com_ids.to_string().into() },
@@ -369,10 +277,102 @@ impl DisplayUi for RubyDescriptor {
     }
 }
 
-impl DisplayUi for KeyPerIODescriptor {
+impl IntoUi for OpaliteDescriptor {
     type Ui = ui::DiscoveryFeature;
 
-    fn display_ui(&self) -> Self::Ui {
+    fn into_ui(&self) -> Self::Ui {
+        let properties = vec![
+            ui::DiscoveryProperty { name: "Base ComID".into(), value: self.base_com_id.to_string().into() },
+            ui::DiscoveryProperty { name: "Number of ComIDs".into(), value: self.num_com_ids.to_string().into() },
+            ui::DiscoveryProperty {
+                name: "Initial SID password".into(),
+                value: owner_password_state_to_string(self.initial_owner_pw).into(),
+            },
+            ui::DiscoveryProperty {
+                name: "Reverted SID password".into(),
+                value: owner_password_state_to_string(self.reverted_owner_pw).into(),
+            },
+        ];
+        ui::DiscoveryFeature { name: self.name().into(), properties: Rc::from(VecModel::from(properties)).into() }
+    }
+}
+
+impl IntoUi for PyriteV1Descriptor {
+    type Ui = ui::DiscoveryFeature;
+
+    fn into_ui(&self) -> Self::Ui {
+        let properties = vec![
+            ui::DiscoveryProperty { name: "Base ComID".into(), value: self.base_com_id.to_string().into() },
+            ui::DiscoveryProperty { name: "Number of ComIDs".into(), value: self.num_com_ids.to_string().into() },
+            ui::DiscoveryProperty {
+                name: "Initial SID password".into(),
+                value: owner_password_state_to_string(self.initial_owner_pw).into(),
+            },
+            ui::DiscoveryProperty {
+                name: "Reverted SID password".into(),
+                value: owner_password_state_to_string(self.reverted_owner_pw).into(),
+            },
+        ];
+        ui::DiscoveryFeature { name: self.name().into(), properties: Rc::from(VecModel::from(properties)).into() }
+    }
+}
+
+impl IntoUi for PyriteV2Descriptor {
+    type Ui = ui::DiscoveryFeature;
+
+    fn into_ui(&self) -> Self::Ui {
+        let properties = vec![
+            ui::DiscoveryProperty { name: "Base ComID".into(), value: self.base_com_id.to_string().into() },
+            ui::DiscoveryProperty { name: "Number of ComIDs".into(), value: self.num_com_ids.to_string().into() },
+            ui::DiscoveryProperty {
+                name: "Initial SID password".into(),
+                value: owner_password_state_to_string(self.initial_owner_pw).into(),
+            },
+            ui::DiscoveryProperty {
+                name: "Reverted SID password".into(),
+                value: owner_password_state_to_string(self.reverted_owner_pw).into(),
+            },
+        ];
+        ui::DiscoveryFeature { name: self.name().into(), properties: Rc::from(VecModel::from(properties)).into() }
+    }
+}
+
+impl IntoUi for RubyDescriptor {
+    type Ui = ui::DiscoveryFeature;
+
+    fn into_ui(&self) -> Self::Ui {
+        let properties = vec![
+            ui::DiscoveryProperty { name: "Base ComID".into(), value: self.base_com_id.to_string().into() },
+            ui::DiscoveryProperty { name: "Number of ComIDs".into(), value: self.num_com_ids.to_string().into() },
+            ui::DiscoveryProperty {
+                name: "LBA range crossing".into(),
+                value: yes_or_no(!self.no_range_crossing).into(),
+            },
+            ui::DiscoveryProperty {
+                name: "Number of locking admins".into(),
+                value: self.num_locking_admins_supported.to_string().into(),
+            },
+            ui::DiscoveryProperty {
+                name: "Number of locking users".into(),
+                value: self.num_locking_users_supported.to_string().into(),
+            },
+            ui::DiscoveryProperty {
+                name: "Initial SID password".into(),
+                value: owner_password_state_to_string(self.initial_owner_pw).into(),
+            },
+            ui::DiscoveryProperty {
+                name: "Reverted SID password".into(),
+                value: owner_password_state_to_string(self.reverted_owner_pw).into(),
+            },
+        ];
+        ui::DiscoveryFeature { name: self.name().into(), properties: Rc::from(VecModel::from(properties)).into() }
+    }
+}
+
+impl IntoUi for KeyPerIODescriptor {
+    type Ui = ui::DiscoveryFeature;
+
+    fn into_ui(&self) -> Self::Ui {
         let properties = vec![
             ui::DiscoveryProperty {
                 name: "Base ComID on protocol 1".into(),
@@ -482,10 +482,10 @@ impl DisplayUi for KeyPerIODescriptor {
     }
 }
 
-impl DisplayUi for UnrecognizedDescriptor {
+impl IntoUi for UnrecognizedDescriptor {
     type Ui = ui::DiscoveryFeature;
 
-    fn display_ui(&self) -> Self::Ui {
+    fn into_ui(&self) -> Self::Ui {
         let properties = vec![
             ui::DiscoveryProperty { name: "Version".into(), value: self.version.to_string().into() },
             ui::DiscoveryProperty { name: "Length".into(), value: self.length.to_string().into() },
@@ -494,40 +494,40 @@ impl DisplayUi for UnrecognizedDescriptor {
     }
 }
 
-impl DisplayUi for FeatureDescriptor {
+impl IntoUi for FeatureDescriptor {
     type Ui = ui::DiscoveryFeature;
 
-    fn display_ui(&self) -> Self::Ui {
+    fn into_ui(&self) -> Self::Ui {
         match self {
-            FeatureDescriptor::TPer(desc) => desc.display_ui(),
-            FeatureDescriptor::Locking(desc) => desc.display_ui(),
-            FeatureDescriptor::Geometry(desc) => desc.display_ui(),
-            FeatureDescriptor::DataRemoval(desc) => desc.display_ui(),
-            FeatureDescriptor::BlockSIDAuth(desc) => desc.display_ui(),
-            FeatureDescriptor::AdditionalDataStoreTables(desc) => desc.display_ui(),
-            FeatureDescriptor::Enterprise(desc) => desc.display_ui(),
-            FeatureDescriptor::OpalV1(desc) => desc.display_ui(),
-            FeatureDescriptor::OpalV2(desc) => desc.display_ui(),
-            FeatureDescriptor::Opalite(desc) => desc.display_ui(),
-            FeatureDescriptor::PyriteV1(desc) => desc.display_ui(),
-            FeatureDescriptor::PyriteV2(desc) => desc.display_ui(),
-            FeatureDescriptor::Ruby(desc) => desc.display_ui(),
-            FeatureDescriptor::KeyPerIO(desc) => desc.display_ui(),
+            FeatureDescriptor::TPer(desc) => desc.into_ui(),
+            FeatureDescriptor::Locking(desc) => desc.into_ui(),
+            FeatureDescriptor::Geometry(desc) => desc.into_ui(),
+            FeatureDescriptor::DataRemoval(desc) => desc.into_ui(),
+            FeatureDescriptor::BlockSIDAuth(desc) => desc.into_ui(),
+            FeatureDescriptor::AdditionalDataStoreTables(desc) => desc.into_ui(),
+            FeatureDescriptor::Enterprise(desc) => desc.into_ui(),
+            FeatureDescriptor::OpalV1(desc) => desc.into_ui(),
+            FeatureDescriptor::OpalV2(desc) => desc.into_ui(),
+            FeatureDescriptor::Opalite(desc) => desc.into_ui(),
+            FeatureDescriptor::PyriteV1(desc) => desc.into_ui(),
+            FeatureDescriptor::PyriteV2(desc) => desc.into_ui(),
+            FeatureDescriptor::Ruby(desc) => desc.into_ui(),
+            FeatureDescriptor::KeyPerIO(desc) => desc.into_ui(),
             FeatureDescriptor::Unrecognized(code, desc) => {
-                ui::DiscoveryFeature { name: format!("Unrecognized (0x{code:02x})").into(), ..desc.display_ui() }
+                ui::DiscoveryFeature { name: format!("Unrecognized (0x{code:02x})").into(), ..desc.into_ui() }
             }
         }
     }
 }
 
-impl DisplayUi for Discovery {
+impl IntoUi for Discovery {
     type Ui = (ui::DeviceConfig, ui::Discovery);
 
-    fn display_ui(&self) -> Self::Ui {
+    fn into_ui(&self) -> Self::Ui {
         let ssc_features =
-            self.feature_descriptors.iter().filter(|desc| desc.as_ssc().is_some()).map(|desc| desc.display_ui());
+            self.feature_descriptors.iter().filter(|desc| desc.as_ssc().is_some()).map(|desc| desc.into_ui());
         let common_features =
-            self.feature_descriptors.iter().filter(|desc| desc.as_ssc().is_none()).map(|desc| desc.display_ui());
+            self.feature_descriptors.iter().filter(|desc| desc.as_ssc().is_none()).map(|desc| desc.into_ui());
 
         let mut config = ui::DeviceConfig { sid_msid_pin_differ: true, locking_enabled: false };
         if let Some(locking) = self.get::<LockingDescriptor>() {

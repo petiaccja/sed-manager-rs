@@ -3,12 +3,12 @@ use std::{num::NonZero, time::Duration};
 use sed_spec::methods::{Limit, OptionalLimit};
 use slint::{SharedString, ToSharedString};
 
-use crate::display_ui::DisplayUi;
+use crate::ui_conv::IntoUi;
 
-impl DisplayUi for Duration {
+impl IntoUi for Duration {
     type Ui = SharedString;
 
-    fn display_ui(&self) -> Self::Ui {
+    fn into_ui(&self) -> Self::Ui {
         if self < &Duration::from_micros(1) {
             format!("{} ns", self.as_nanos()).into()
         } else if self < &Duration::from_millis(1) {
@@ -30,65 +30,65 @@ impl DisplayUi for Duration {
     }
 }
 
-impl<T> DisplayUi for Option<T>
+impl<T> IntoUi for Option<T>
 where
-    T: DisplayUi<Ui = SharedString>,
+    T: IntoUi<Ui = SharedString>,
 {
     type Ui = SharedString;
 
-    fn display_ui(&self) -> Self::Ui {
-        self.as_ref().map(|value| value.display_ui()).unwrap_or("-".into())
+    fn into_ui(&self) -> Self::Ui {
+        self.as_ref().map(|value| value.into_ui()).unwrap_or("-".into())
     }
 }
 
-impl<T> DisplayUi for Limit<T>
+impl<T> IntoUi for Limit<T>
 where
-    T: DisplayUi<Ui = SharedString>,
+    T: IntoUi<Ui = SharedString>,
 {
     type Ui = SharedString;
 
-    fn display_ui(&self) -> Self::Ui {
+    fn into_ui(&self) -> Self::Ui {
         match self {
             Limit::Unlimited => "unlimited".into(),
-            Limit::Limited(value) => value.display_ui(),
+            Limit::Limited(value) => value.into_ui(),
         }
     }
 }
 
-impl<T> DisplayUi for OptionalLimit<T>
+impl<T> IntoUi for OptionalLimit<T>
 where
-    T: DisplayUi<Ui = SharedString>,
+    T: IntoUi<Ui = SharedString>,
 {
     type Ui = SharedString;
 
-    fn display_ui(&self) -> Self::Ui {
+    fn into_ui(&self) -> Self::Ui {
         match self {
             OptionalLimit::Unsupported => "not supported".into(),
-            OptionalLimit::Limited(value) => value.display_ui(),
+            OptionalLimit::Limited(value) => value.into_ui(),
         }
     }
 }
 
-impl DisplayUi for NonZero<usize> {
+impl IntoUi for NonZero<usize> {
     type Ui = SharedString;
 
-    fn display_ui(&self) -> Self::Ui {
-        self.get().display_ui()
+    fn into_ui(&self) -> Self::Ui {
+        self.get().into_ui()
     }
 }
 
-impl DisplayUi for usize {
+impl IntoUi for usize {
     type Ui = SharedString;
 
-    fn display_ui(&self) -> Self::Ui {
+    fn into_ui(&self) -> Self::Ui {
         self.to_string().into()
     }
 }
 
-impl DisplayUi for bool {
+impl IntoUi for bool {
     type Ui = SharedString;
 
-    fn display_ui(&self) -> Self::Ui {
+    fn into_ui(&self) -> Self::Ui {
         match self {
             true => "yes",
             false => "no",

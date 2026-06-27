@@ -5,14 +5,14 @@ use sed_packet::discovery::FeatureDescriptor;
 use sed_spec::objects::{Authority, AuthorityRef, SecurityProviderRef};
 use slint::{ToSharedString, VecModel};
 
-use crate::display_ui::{DisplayUi, DisplayUiName};
+use crate::ui_conv::{IntoUi, IntoUiName};
 
 const INVALID_AUTHORITY: AuthorityRef = AuthorityRef::from_half(NonZero::new(0xFFFF_FFFF).unwrap());
 
-impl DisplayUi for Authority {
+impl IntoUi for Authority {
     type Ui = ui::User;
 
-    fn display_ui(&self) -> Self::Ui {
+    fn into_ui(&self) -> Self::Ui {
         ui::User {
             common_name: self.common_name.as_deref().unwrap_or("").to_shared_string(),
             // Assume enabled. This will give us an error from the TPer when
@@ -26,15 +26,15 @@ impl DisplayUi for Authority {
             locking_range_access: Rc::from(VecModel::from(Vec::new())).into(),
             mbr_access: ui::MbrAccess::default(),
             name: self.uid.unwrap_or(INVALID_AUTHORITY).to_shared_string(),
-            uid: self.uid.unwrap_or(INVALID_AUTHORITY).display_ui(),
+            uid: self.uid.unwrap_or(INVALID_AUTHORITY).into_ui(),
         }
     }
 }
 
-impl DisplayUiName for Authority {
+impl IntoUiName for Authority {
     type Ui = ui::User;
 
-    fn display_ui_name(&self, features: &[FeatureDescriptor], sp: Option<SecurityProviderRef>) -> Self::Ui {
-        ui::User { name: self.uid.unwrap_or(INVALID_AUTHORITY).display_ui_name(features, sp), ..self.display_ui() }
+    fn into_ui_name(&self, features: &[FeatureDescriptor], sp: Option<SecurityProviderRef>) -> Self::Ui {
+        ui::User { name: self.uid.unwrap_or(INVALID_AUTHORITY).into_ui_name(features, sp), ..self.into_ui() }
     }
 }

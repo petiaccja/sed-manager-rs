@@ -2,19 +2,19 @@ use sed_manager_gui_slint as ui;
 use sed_spec::{methods::Properties, property_name};
 use slint::{ToSharedString, VecModel};
 
-use crate::display_ui::DisplayUi;
+use crate::ui_conv::IntoUi;
 
 macro_rules! display_property {
     ($name:ident, $host:expr, $device:expr, $connection:expr) => {
         ui::ProtocolProperty {
             name: property_name!($name).to_shared_string(),
-            host: $host.$name.display_ui(),
+            host: $host.$name.into_ui(),
             device: match $device {
-                Some(device) => device.$name.display_ui(),
+                Some(device) => device.$name.into_ui(),
                 None => "-".to_shared_string(),
             },
             connection: match $connection {
-                Some(connection) => connection.$name.display_ui(),
+                Some(connection) => connection.$name.into_ui(),
                 None => "-".to_shared_string(),
             },
         }
@@ -27,10 +27,10 @@ pub struct CombinedProperties {
     pub connection: Option<Properties>,
 }
 
-impl DisplayUi for CombinedProperties {
+impl IntoUi for CombinedProperties {
     type Ui = VecModel<ui::ProtocolProperty>;
 
-    fn display_ui(&self) -> Self::Ui {
+    fn into_ui(&self) -> Self::Ui {
         let properties = vec![
             display_property!(max_methods, &self.host, &self.device, &self.connection),
             display_property!(max_methods, &self.host, &self.device, &self.connection),

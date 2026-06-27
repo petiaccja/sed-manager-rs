@@ -20,8 +20,8 @@ use tracing::{error, instrument};
 use crate::{
     command::{Command, ExpectInEventLoop},
     device_list::DeviceList,
-    display_ui::{CombinedProperties, DisplayUi, DisplayUiName, TryFromUi as _},
     toast::ToastQueue,
+    ui_conv::{CombinedProperties, IntoUi, IntoUiName, TryFromUi as _},
     ui_ext::{DeviceExt as _, DiscoveryExt, StackStatusExt},
 };
 
@@ -231,7 +231,7 @@ impl App {
                         app.clone().discover(path.clone());
                         app.clone().connect(path.clone());
                     }
-                    ui_device.with_identity(dev.display_ui())
+                    ui_device.with_identity(dev.into_ui())
                 }
                 Err(err) => {
                     let identity = ui_device.identity.clone();
@@ -262,7 +262,7 @@ impl App {
             })
             .display(move |ui_device, result| match result {
                 Some(Ok(discovery)) => {
-                    let (ui_config, ui_discovery) = discovery.display_ui();
+                    let (ui_config, ui_discovery) = discovery.into_ui();
                     ui_device.with_discovery(ui_discovery).with_config(ui_config)
                 }
                 Some(Err(err)) => ui_device.with_discovery(ui::Discovery::error(err.to_string())),
@@ -294,7 +294,7 @@ impl App {
                     return ui_device;
                 };
                 let combined_properties = CombinedProperties { host: capabilities, device: None, connection: None };
-                let status = ui_device.stack_status.clone().with_protocol(combined_properties.display_ui());
+                let status = ui_device.stack_status.clone().with_protocol(combined_properties.into_ui());
                 spawn_local(Self::listen_connection_changed(Rc::downgrade(&self), path.clone(), connection_changed))
                     .expect_in_event_loop();
                 self.clone().query_stack_status(path.clone(), true);
@@ -345,11 +345,11 @@ impl App {
             .display(move |mut ui_device, spec| match spec {
                 Ok(spec) => {
                     let features = &spec.discovery.feature_descriptors;
-                    ui_device.admin_sp.uid = spec.admin.uid.display_ui();
-                    ui_device.admin_sp.name = spec.admin.uid.display_ui_name(features, Some(spec.admin.uid));
+                    ui_device.admin_sp.uid = spec.admin.uid.into_ui();
+                    ui_device.admin_sp.name = spec.admin.uid.into_ui_name(features, Some(spec.admin.uid));
                     if let Some(locking_sp) = spec.locking {
-                        ui_device.locking_sp.uid = locking_sp.uid.display_ui();
-                        ui_device.locking_sp.name = locking_sp.uid.display_ui_name(features, Some(spec.admin.uid))
+                        ui_device.locking_sp.uid = locking_sp.uid.into_ui();
+                        ui_device.locking_sp.name = locking_sp.uid.into_ui_name(features, Some(spec.admin.uid))
                     }
                     ui_device
                 }
@@ -374,7 +374,7 @@ impl App {
                     let features = spec.map(|spec| spec.discovery.feature_descriptors.as_slice()).unwrap_or(&[]);
                     let admin_sp_ref = spec.map(|spec| spec.admin.uid);
                     let users: Vec<_> =
-                        authorities.iter().map(|auth| auth.display_ui_name(features, admin_sp_ref)).collect();
+                        authorities.iter().map(|auth| auth.into_ui_name(features, admin_sp_ref)).collect();
                     let users = Rc::from(VecModel::from(users));
                     let individual_users = Rc::from(users.clone().filter(|user| !user.is_class && user.enabled));
                     let individual_users_names = individual_users.clone().map(|user| user.name);
@@ -567,7 +567,7 @@ impl App {
                                 device: Some(value.remote_properties),
                                 connection: Some(value.connection_properties),
                             };
-                            let status = ui_device.stack_status.clone().with_protocol(combined.display_ui());
+                            let status = ui_device.stack_status.clone().with_protocol(combined.into_ui());
                             ui_device.with_stack_status(status)
                         })
                         .run();
