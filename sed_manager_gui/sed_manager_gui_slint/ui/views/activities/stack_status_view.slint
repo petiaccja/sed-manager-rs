@@ -37,7 +37,7 @@ export component StackStatusView {
 
     VerticalLayout {
         spacing: 1.2rem;
-        alignment: start;
+        alignment: stretch;
 
         Island {
             vertical-stretch: 0.0;
@@ -111,19 +111,18 @@ export component StackStatusView {
             }
         }
 
-        Island {
-            vertical-stretch: 1.0;
-            min-height: 4rem;
-            clip: true;
+        ScrollView {
+            horizontal-scrollbar-policy: always-off;
+            preferred-height: properties-table.min-height;
 
-            ScrollView {
-                horizontal-scrollbar-policy: always-off;
-                preferred-height: properties-table.min-height;
+            VerticalLayout {
+                alignment: start;
 
-                properties-table := VerticalLayout {
-                    alignment: start;
+                Island {
+                    vertical-stretch: 1.0;
+                    clip: true;
 
-                    GridLayout {
+                    properties-table := GridLayout {
                         for name[index] in ["Property", "Host", "Device", "Connection"]: Rectangle {
                             background: PaletteExtra.accented-background;
                             row: 0;
