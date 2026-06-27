@@ -167,3 +167,25 @@ async fn revert_secondary_sp_ex(_with_tracing: WithTracing) {
     let block_sid = device.discover().get::<BlockSIDAuthDescriptor>().unwrap().clone();
     assert_that!(block_sid.sid_msid_pin_differ, eq(true));
 }
+
+#[instrument]
+#[rstest::rstest]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn change_password(_with_tracing: WithTracing) {
+    let device = Arc::new(VirtualDevice::new());
+    let tper = Arc::new(Tper::connect(BASE_COM_ID, 0, device.clone(), None));
+    let session = SetupSession::on_primary_ssc(tper).await.unwrap();
+    const NEW_PASSWORD: &[u8] = b"not_default".as_slice();
+
+    // Change the password of SID, authenticating in with the MSID password.
+    let result = session
+        .change_password(opal_admin::sp::ADMIN, opal_admin::authority::SID, INITIAL_SID_PASSWORD, NEW_PASSWORD.into())
+        .await;
+    assert_that!(result, ok(eq(&())));
+
+    // Change the password of SID again, but this time authenticate with the newly set password.
+    let result = session
+        .change_password(opal_admin::sp::ADMIN, opal_admin::authority::SID, NEW_PASSWORD.into(), NEW_PASSWORD.into())
+        .await;
+    assert_that!(result, ok(eq(&())));
+}

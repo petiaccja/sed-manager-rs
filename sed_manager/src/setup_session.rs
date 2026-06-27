@@ -3,7 +3,7 @@ use std::sync::Arc;
 use sed_packet::MaxBytes;
 use sed_spec::{
     methods::MethodStatus,
-    objects::{AuthorityRef, CPinRefExt, SecurityProviderRefExt},
+    objects::{AuthorityRef, AuthorityRefExt as _, CPinRef, CPinRefExt, SecurityProviderRef, SecurityProviderRefExt},
     types::LifeCycleState,
 };
 use sed_tper::Error as TperError;
@@ -182,5 +182,30 @@ impl SetupSession {
                 Err(err.into())
             }
         }
+    }
+
+    /// Change the password of the `authority` on the `sp`.
+    ///
+    /// The password is changed by starting a session on the `authority` using
+    /// its current password, and then writing the new password to the C_PIN
+    /// table. In some cases, authorities may change the password of another
+    /// authority, but this is not leveraged here.
+    #[instrument(level = "info", skip(self, current_password, new_password), ret, err)]
+    pub async fn change_password(
+        &self,
+        sp: SecurityProviderRef,
+        authority: AuthorityRef,
+        current_password: MaxBytes<32>,
+        new_password: MaxBytes<32>,
+    ) -> Result<(), Error> {
+        let session = self.tper.start_session(sp, Some(authority), Some(current_password)).await?;
+        session
+            .with(async |session| {
+                let credential = session.get_field(authority.credential()).await?;
+                let pin_ref = CPinRef::try_from(credential).map_err(|_| Error::NotAPasswordAuthority)?;
+                session.set_field(pin_ref.pin(), new_password).await?;
+                Ok(())
+            })
+            .await
     }
 }

@@ -32,6 +32,8 @@ pub enum Error {
     FileTooLarge,
     #[error("Invalid ACE expression")]
     InvalidAceExpression,
+    #[error("Not a password authority")]
+    NotAPasswordAuthority,
 }
 
 impl From<TperError> for Error {
