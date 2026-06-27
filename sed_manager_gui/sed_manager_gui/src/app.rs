@@ -11,15 +11,16 @@ use sed_device::{list_physical_drives, open_device};
 use sed_manager::{Error, Spec};
 use sed_manager_gui_slint as ui;
 use sed_packet::{MaxBytes, com_id::ComIdState};
+use sed_spec::objects::{AuthorityRef, SecurityProviderRef};
 use sed_tper::{PropertiesChanged, Tper};
 use sed_virtual_device::{VIRTUAL_DEVICE_PATH, VirtualDevice};
 use slint::{ComponentHandle, ModelExt as _, ModelRc, SharedString, ToSharedString, VecModel, spawn_local};
-use tracing::instrument;
+use tracing::{error, instrument};
 
 use crate::{
     command::{Command, ExpectInEventLoop},
     device_list::DeviceList,
-    display_ui::{CombinedProperties, DisplayUi, DisplayUiName},
+    display_ui::{CombinedProperties, DisplayUi, DisplayUiName, TryFromUi as _},
     toast::ToastQueue,
     ui_ext::{DeviceExt as _, DiscoveryExt, StackStatusExt},
 };
@@ -62,6 +63,18 @@ impl App {
             let view_model = view_model.clone();
             ui.on_activate_locking(move |path, password| {
                 view_model.clone().activate_locking(path.to_string().into(), password)
+            });
+        }
+        {
+            let view_model = view_model.clone();
+            ui.on_change_password(move |path, sp, authority, current_password, new_password| {
+                view_model.clone().change_password(
+                    path.to_string().into(),
+                    sp,
+                    authority,
+                    current_password,
+                    new_password,
+                )
             });
         }
         {
@@ -436,6 +449,51 @@ impl App {
                         self.clone().discover(path.clone());
                     }
                     Err(err) => self.toast_queue.error("Could not activate locking".into(), err.to_string()),
+                };
+                ui_device
+            })
+            .run();
+    }
+
+    #[instrument(skip(self, current_password, new_password))]
+    fn change_password(
+        self: Rc<Self>,
+        path: PathBuf,
+        sp: ui::Uid,
+        authority: ui::Uid,
+        current_password: SharedString,
+        new_password: SharedString,
+    ) {
+        let Some(current_password) = self.try_convert_password(current_password.as_str()) else {
+            return;
+        };
+        let Some(new_password) = self.try_convert_password(new_password.as_str()) else {
+            return;
+        };
+        let Ok(sp) = SecurityProviderRef::try_from_ui(&sp) else {
+            error!(sp_ref = &sp.value, "invalid SP reference");
+            self.toast_queue
+                .error("Invalid SP reference".into(), "The UID is not an SP reference. Please report this bug.".into());
+            return;
+        };
+        let Ok(authority) = AuthorityRef::try_from_ui(&authority) else {
+            error!(authority_ref = &authority.value, "invalid authority reference");
+            self.toast_queue.error(
+                "Invalid authority reference".into(),
+                "The UID is not an authority reference. Please report this bug.".into(),
+            );
+            return;
+        };
+
+        self.command()
+            .on_session(path.clone(), async move |tper, mut session| {
+                let sid_session = session.start_setup_session(tper).await?;
+                sid_session.change_password(sp, authority, current_password, new_password).await
+            })
+            .display(move |ui_device, _, result| {
+                match result {
+                    Ok(_) => self.toast_queue.success("Password changed".into(), "".into()),
+                    Err(err) => self.toast_queue.error("Could not change password".into(), err.to_string()),
                 };
                 ui_device
             })

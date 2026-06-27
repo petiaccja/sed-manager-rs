@@ -36,3 +36,10 @@ impl<T: DisplayUiName> DisplayUiName for &T {
         (*self).display_ui_name(features, sp)
     }
 }
+
+pub trait TryFromUi<T> {
+    type Error;
+    fn try_from_ui(value: T) -> Result<Self, Self::Error>
+    where
+        Self: Sized;
+}

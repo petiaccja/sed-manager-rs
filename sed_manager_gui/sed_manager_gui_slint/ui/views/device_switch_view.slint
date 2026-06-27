@@ -1,4 +1,4 @@
-import { Device, RevertScope, RevertAuthority } from "../data/lib.slint";
+import { Device, RevertScope, RevertAuthority, Uid } from "../data/lib.slint";
 import { DeviceView } from "device_view.slint";
 
 export component DeviceSwitchView {
@@ -7,7 +7,7 @@ export component DeviceSwitchView {
 
     callback take-owneship(device: string, password: string);
     callback activate-locking(device: string, password: string);
-    callback change-password(device: string);
+    callback change-password(device: string, sp: Uid, authority: Uid, current-password: string, new-password: string);
     callback revert-device(device: string, scope: RevertScope, authority: RevertAuthority, password: string);
     callback query-stack-status(device: string);
     callback reset-stack(device: string);
@@ -33,8 +33,8 @@ export component DeviceSwitchView {
                 activate-locking(password) => {
                     activate-locking(device.identity.path, password)
                 };
-                change-password() => {
-                    change-password(device.identity.path)
+                change-password(sp, authority, current-password, new-password) => {
+                    change-password(device.identity.path, sp, authority, current-password, new-password)
                 };
                 revert-device(scope, authority, password) => {
                     revert-device(device.identity.path, scope, authority, password)
