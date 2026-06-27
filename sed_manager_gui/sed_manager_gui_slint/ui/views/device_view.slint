@@ -4,6 +4,7 @@ import {
     Outcome,
     RevertScope,
     RevertAuthority,
+    Uid,
 } from "../data/lib.slint";
 import {
     Island,
@@ -194,7 +195,7 @@ export component DeviceView {
 
     callback take-owneship(password: string);
     callback activate-locking(password: string);
-    callback change-password();
+    callback change-password(sp: Uid, authority: Uid, current-password: string, new-password: string);
     callback revert-device(scope: RevertScope, authority: RevertAuthority, password: string);
     callback query-stack-status();
     callback reset-stack();
@@ -259,9 +260,11 @@ export component DeviceView {
 
                     ChangePasswordView {
                         command-status: device.command-status;
+                        admin-sp: device.admin-sp;
+                        locking-sp: device.locking-sp;
                         preferred-width: 16rem;
-                        change-password => {
-                            change-password()
+                        change-password(sp, authority, current-password, new-password) => {
+                            change-password(sp, authority, current-password, new-password)
                         }
                     }
                 }
