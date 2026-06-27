@@ -1,10 +1,11 @@
 use std::{num::NonZero, rc::Rc};
 
 use sed_manager_gui_slint as ui;
-use sed_spec::objects::{Authority, AuthorityRef};
+use sed_packet::discovery::FeatureDescriptor;
+use sed_spec::objects::{Authority, AuthorityRef, SecurityProviderRef};
 use slint::{ToSharedString, VecModel};
 
-use crate::display_ui::DisplayUi;
+use crate::display_ui::{DisplayUi, DisplayUiName};
 
 const INVALID_AUTHORITY: AuthorityRef = AuthorityRef::from_half(NonZero::new(0xFFFF_FFFF).unwrap());
 
@@ -27,5 +28,13 @@ impl DisplayUi for Authority {
             name: self.uid.unwrap_or(INVALID_AUTHORITY).to_shared_string(),
             uid: self.uid.unwrap_or(INVALID_AUTHORITY).display_ui(),
         }
+    }
+}
+
+impl DisplayUiName for Authority {
+    type Ui = ui::User;
+
+    fn display_ui_name(&self, features: &[FeatureDescriptor], sp: Option<SecurityProviderRef>) -> Self::Ui {
+        ui::User { name: self.uid.unwrap_or(INVALID_AUTHORITY).display_ui_name(features, sp), ..self.display_ui() }
     }
 }

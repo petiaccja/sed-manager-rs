@@ -9,7 +9,7 @@ include!(concat!(env!("OUT_DIR"), "/spec.rs"));
 #[allow(unused)]
 const MARKER: () = GENERATED_MARKER;
 
-const LOOKUP: GlobalLookup = GlobalLookup;
+pub const GLOBAL_LOOKUP: GlobalLookup = GlobalLookup;
 
 #[cfg(test)]
 mod tests {
@@ -102,6 +102,6 @@ mod tests {
     #[case("Admin::Authority::PSID", self::psid::admin::authority::PSID.to_uid())]
     fn lookup_global(#[case] name: impl AsRef<Path>, #[case] uid: Uid) {
         let features = [];
-        assert_eq!(LOOKUP.by_path(&features, name), Some(uid));
+        assert_eq!(GLOBAL_LOOKUP.by_path(&features, name), Some(uid));
     }
 }

@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use async_lock::RwLock;
 use sed_async::Runtime;
+use sed_manager::Spec;
 use sed_manager_gui_slint as ui;
 use sed_tper::Tper;
 use slint::EventLoopError;
@@ -308,7 +309,7 @@ where
 {
     pub fn display<UpdateFn>(self, update_fn: UpdateFn) -> UpdateOnSession<RunFn, RunFnFut, Output, UpdateFn>
     where
-        UpdateFn: FnOnce(ui::Device, Output) -> ui::Device + 'static,
+        UpdateFn: for<'spec> FnOnce(ui::Device, Option<&'spec Spec>, Output) -> ui::Device + 'static,
     {
         let Self { runtime, device_list, device_id, run_fn } = self;
         UpdateOnSession { runtime, device_list, device_id, run_fn, update_fn }
@@ -320,7 +321,7 @@ where
     RunFn: FnOnce(Arc<Tper>, Mut<Session>) -> RunFnFut + Send + 'static,
     RunFnFut: Future<Output = Output> + Send,
     Output: Send + 'static,
-    UpdateFn: FnOnce(ui::Device, Output) -> ui::Device + 'static,
+    UpdateFn: for<'spec> FnOnce(ui::Device, Option<&'spec Spec>, Output) -> ui::Device + 'static,
 {
     runtime: Arc<Runtime>,
     device_list: Arc<RwLock<DeviceList>>,
@@ -334,7 +335,7 @@ where
     RunFn: FnOnce(Arc<Tper>, Mut<Session>) -> RunFnFut + Send + 'static,
     RunFnFut: Future<Output = Output> + Send,
     Output: Send + 'static,
-    UpdateFn: FnOnce(ui::Device, Output) -> ui::Device + 'static,
+    UpdateFn: for<'spec> FnOnce(ui::Device, Option<&'spec Spec>, Output) -> ui::Device + 'static,
 {
     pub fn run(self) {
         let Self { runtime, device_list, device_id, run_fn, update_fn } = self;
@@ -358,7 +359,9 @@ where
                     .spawn(async move { run_fn(tper, Mut::Mutex(session)).await }.in_current_span())
                     .await
                     .unwrap();
-                device_list.ui.update(&device_id, move |value| update_fn(value, output));
+                device_list
+                    .ui
+                    .update(&device_id, move |value| update_fn(value, backend.specification.as_ref(), output));
 
                 // Indicate to UI that we're NO LONGER busy.
                 device_list.ui.update(&device_id, |value| {

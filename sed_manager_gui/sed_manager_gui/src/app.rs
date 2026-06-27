@@ -19,7 +19,7 @@ use tracing::instrument;
 use crate::{
     command::{Command, ExpectInEventLoop},
     device_list::DeviceList,
-    display_ui::{CombinedProperties, DisplayUi},
+    display_ui::{CombinedProperties, DisplayUi, DisplayUiName},
     toast::ToastQueue,
     ui_ext::{DeviceExt as _, DiscoveryExt, StackStatusExt},
 };
@@ -331,11 +331,12 @@ impl App {
             })
             .display(move |mut ui_device, spec| match spec {
                 Ok(spec) => {
+                    let features = &spec.discovery.feature_descriptors;
                     ui_device.admin_sp.uid = spec.admin.uid.display_ui();
-                    ui_device.admin_sp.name = spec.admin.uid.to_shared_string();
+                    ui_device.admin_sp.name = spec.admin.uid.display_ui_name(features, Some(spec.admin.uid));
                     if let Some(locking_sp) = spec.locking {
                         ui_device.locking_sp.uid = locking_sp.uid.display_ui();
-                        ui_device.locking_sp.name = locking_sp.uid.to_shared_string();
+                        ui_device.locking_sp.name = locking_sp.uid.display_ui_name(features, Some(spec.admin.uid))
                     }
                     ui_device
                 }
@@ -355,9 +356,12 @@ impl App {
                 let admin_sp = setup_session.spec().admin.uid;
                 setup_session.list_authorities(admin_sp).await
             })
-            .display(move |mut ui_device, authorities| match authorities {
+            .display(move |mut ui_device, spec, authorities| match authorities {
                 Ok(authorities) => {
-                    let users: Vec<_> = authorities.iter().map(DisplayUi::display_ui).collect();
+                    let features = spec.map(|spec| spec.discovery.feature_descriptors.as_slice()).unwrap_or(&[]);
+                    let admin_sp_ref = spec.map(|spec| spec.admin.uid);
+                    let users: Vec<_> =
+                        authorities.iter().map(|auth| auth.display_ui_name(features, admin_sp_ref)).collect();
                     let users = Rc::from(VecModel::from(users));
                     let individual_users = Rc::from(users.clone().filter(|user| !user.is_class && user.enabled));
                     let individual_users_names = individual_users.clone().map(|user| user.name);
@@ -401,7 +405,7 @@ impl App {
                 let sid_session = session.start_setup_session(tper).await?;
                 sid_session.take_owneship(password).await
             })
-            .display(move |ui_device, result| {
+            .display(move |ui_device, _, result| {
                 match result {
                     Ok(_) => {
                         self.toast_queue.success("Taken ownership".into(), "".into());
@@ -425,7 +429,7 @@ impl App {
                 let sid_session = session.start_setup_session(tper).await?;
                 sid_session.activate_secondary_sp(password).await
             })
-            .display(move |ui_device, result| {
+            .display(move |ui_device, _, result| {
                 match result {
                     Ok(_) => {
                         self.toast_queue.success("Locking activated".into(), "".into());
@@ -462,7 +466,7 @@ impl App {
                     ui::RevertScope::Everything => sid_session.revert_tper(authority, password).await,
                 }
             })
-            .display(move |ui_device, result| {
+            .display(move |ui_device, _, result| {
                 match result {
                     Ok(_) => {
                         self.toast_queue.success("Reverted device successfully".into(), "".into());
