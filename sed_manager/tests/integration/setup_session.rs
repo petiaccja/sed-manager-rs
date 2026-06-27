@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::BTreeSet, sync::Arc};
 
 use googletest::{assert_that, matchers::*};
 use sed_manager::{Error, SetupSession};
@@ -188,4 +188,30 @@ async fn change_password(_with_tracing: WithTracing) {
         .change_password(opal_admin::sp::ADMIN, opal_admin::authority::SID, NEW_PASSWORD.into(), NEW_PASSWORD.into())
         .await;
     assert_that!(result, ok(eq(&())));
+}
+
+#[instrument]
+#[rstest::rstest]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn list_authorities(_with_tracing: WithTracing) {
+    let device = Arc::new(VirtualDevice::new());
+    let tper = Arc::new(Tper::connect(BASE_COM_ID, 0, device.clone(), None));
+    let session = SetupSession::on_primary_ssc(tper).await.unwrap();
+
+    let result = session.list_authorities(opal_admin::sp::ADMIN).await;
+    assert_that!(result, ok(anything()));
+    let authorities = result.unwrap();
+    let actual_uids: BTreeSet<_> = authorities.iter().filter_map(|authority| authority.uid).collect();
+    let expected_uids = BTreeSet::from([
+        opal_admin::authority::ANYBODY,
+        opal_admin::authority::ADMINS,
+        opal_admin::authority::SID,
+        opal_admin::authority::MAKERS,
+        opal_admin::authority::ADMIN.get(0).unwrap(),
+        opal_admin::authority::ADMIN.get(1).unwrap(),
+        opal_admin::authority::ADMIN.get(2).unwrap(),
+        opal_admin::authority::ADMIN.get(3).unwrap(),
+        psid::admin::authority::PSID,
+    ]);
+    assert_that!(actual_uids, eq(&expected_uids));
 }

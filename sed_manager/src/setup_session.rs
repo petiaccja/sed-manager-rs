@@ -3,7 +3,10 @@ use std::sync::Arc;
 use sed_packet::MaxBytes;
 use sed_spec::{
     methods::MethodStatus,
-    objects::{AuthorityRef, AuthorityRefExt as _, CPinRef, CPinRefExt, SecurityProviderRef, SecurityProviderRefExt},
+    objects::{
+        Authority, AuthorityRef, AuthorityRefExt as _, CPinRef, CPinRefExt, SecurityProviderRef, SecurityProviderRefExt,
+    },
+    preconfig::core::shared::table_id,
     types::LifeCycleState,
 };
 use sed_tper::Error as TperError;
@@ -205,6 +208,21 @@ impl SetupSession {
                 let pin_ref = CPinRef::try_from(credential).map_err(|_| Error::NotAPasswordAuthority)?;
                 session.set_field(pin_ref.pin(), new_password).await?;
                 Ok(())
+            })
+            .await
+    }
+
+    #[instrument(level = "info", skip(self), ret, err)]
+    pub async fn list_authorities(&self, sp: SecurityProviderRef) -> Result<Vec<Authority>, Error> {
+        let session = self.tper.start_session(sp, None, None).await?;
+        session
+            .with(async |session| {
+                let authority_refs = session.next::<{ table_id::AUTHORITY.to_u64() }>(None, None).await?;
+                let mut authorities = Vec::new();
+                for authority_ref in authority_refs {
+                    authorities.push(session.get_object::<Authority>(authority_ref, ..).await?);
+                }
+                Ok(authorities)
             })
             .await
     }
