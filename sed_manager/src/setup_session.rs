@@ -12,17 +12,31 @@ use tracing::instrument;
 
 use crate::{error::Error, spec::Spec};
 
+/// Performs simple device setup and information retrieval operations.
+///
+/// The TPer sessions opened by this object are short-lived, and closed
+/// immediately once they data has been read of written. From the perspective
+/// of callers, this can still be regarded as a persistent session, as it will
+/// anyways count towards the limit on the number of sessions the device
+/// supports, though only intermittently.
 #[derive(Debug)]
-pub struct SidSession {
+pub struct SetupSession {
     tper: Arc<Tper>,
     spec: Spec,
 }
 
-impl SidSession {
+impl SetupSession {
+    /// Open a session on the SSC given by `spec`.
     pub fn new(tper: Arc<Tper>, spec: Spec) -> Self {
         Self { tper, spec }
     }
 
+    /// Open a session on the primary SSC of the TPer.
+    ///
+    /// # Errors
+    ///
+    /// An error is returned when no SSC or no recognzied SSC is found on the
+    /// device.
     pub async fn on_primary_ssc(tper: Arc<Tper>) -> Result<Self, Error> {
         let discovery = tper.discover_current().await?;
         let spec = Spec::try_from(discovery).map_err(|_| Error::NoSscAvailable)?;

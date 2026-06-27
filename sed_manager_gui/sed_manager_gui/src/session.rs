@@ -1,32 +1,32 @@
 use std::sync::Arc;
 
-use sed_manager::{Error, SidSession};
+use sed_manager::{Error, SetupSession};
 use sed_tper::Tper;
 
 #[derive(Debug, Default)]
 pub enum Session {
     #[default]
     None,
-    Sid(SidSession),
+    Setup(SetupSession),
 }
 
 impl Session {
     pub async fn close(&mut self) {
         match core::mem::replace(self, Session::None) {
             Session::None => (),
-            Session::Sid(_sid_session) => (), // Not a persistent session, just drop.
+            Session::Setup(_sid_session) => (), // Not a persistent session, just drop.
         }
     }
 
-    pub async fn start_sid_session(&mut self, tper: Arc<Tper>) -> Result<&SidSession, Error> {
+    pub async fn start_sid_session(&mut self, tper: Arc<Tper>) -> Result<&SetupSession, Error> {
         match self {
             Self::None => {
-                let sid_session = SidSession::on_primary_ssc(tper).await?;
-                *self = Self::Sid(sid_session);
-                let Self::Sid(sid_session) = self else { unreachable!() };
+                let sid_session = SetupSession::on_primary_ssc(tper).await?;
+                *self = Self::Setup(sid_session);
+                let Self::Setup(sid_session) = self else { unreachable!() };
                 Ok(sid_session)
             }
-            Self::Sid(sid_session) => Ok(sid_session),
+            Self::Setup(sid_session) => Ok(sid_session),
         }
     }
 }

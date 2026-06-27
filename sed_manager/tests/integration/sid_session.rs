@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use googletest::{assert_that, matchers::*};
-use sed_manager::{Error, SidSession};
+use sed_manager::{Error, SetupSession};
 use sed_packet::{
     MaxBytes,
     discovery::{BlockSIDAuthDescriptor, LockingDescriptor},
@@ -21,7 +21,7 @@ use tracing::instrument;
 async fn take_ownership(_with_tracing: WithTracing) {
     let device = Arc::new(VirtualDevice::new());
     let tper = Arc::new(Tper::connect(BASE_COM_ID, 0, device.clone(), None));
-    let session = SidSession::on_primary_ssc(tper).await.unwrap();
+    let session = SetupSession::on_primary_ssc(tper).await.unwrap();
 
     let block_sid_before = device.discover().get::<BlockSIDAuthDescriptor>().unwrap().clone();
     assert_that!(block_sid_before.sid_msid_pin_differ, eq(false));
@@ -39,7 +39,7 @@ async fn take_ownership(_with_tracing: WithTracing) {
 async fn take_ownership_already_owned(_with_tracing: WithTracing) {
     let device = Arc::new(VirtualDevice::new());
     let tper = Arc::new(Tper::connect(BASE_COM_ID, 0, device.clone(), None));
-    let session = SidSession::on_primary_ssc(tper).await.unwrap();
+    let session = SetupSession::on_primary_ssc(tper).await.unwrap();
 
     session.take_owneship(b"not_default".as_slice().into()).await.unwrap();
     let result = session.take_owneship(b"not_default".as_slice().into()).await;
@@ -52,7 +52,7 @@ async fn take_ownership_already_owned(_with_tracing: WithTracing) {
 async fn activate_secondary_sp(_with_tracing: WithTracing) {
     let device = Arc::new(VirtualDevice::new());
     let tper = Arc::new(Tper::connect(BASE_COM_ID, 0, device.clone(), None));
-    let session = SidSession::on_primary_ssc(tper).await.unwrap();
+    let session = SetupSession::on_primary_ssc(tper).await.unwrap();
 
     let locking_before = device.discover().get::<LockingDescriptor>().unwrap().clone();
     assert_that!(locking_before.locking_enabled, eq(false));
@@ -70,7 +70,7 @@ async fn activate_secondary_sp(_with_tracing: WithTracing) {
 async fn activate_secondary_sp_already_activated(_with_tracing: WithTracing) {
     let device = Arc::new(VirtualDevice::new());
     let tper = Arc::new(Tper::connect(BASE_COM_ID, 0, device.clone(), None));
-    let session = SidSession::on_primary_ssc(tper).await.unwrap();
+    let session = SetupSession::on_primary_ssc(tper).await.unwrap();
 
     session.activate_secondary_sp(INITIAL_SID_PASSWORD).await.unwrap();
     let result = session.activate_secondary_sp(INITIAL_SID_PASSWORD).await;
@@ -84,7 +84,7 @@ async fn revert_tper_with_sid(_with_tracing: WithTracing) {
     let new_sid_password = MaxBytes::<32>::from(b"not_default".as_slice());
     let device = Arc::new(VirtualDevice::new());
     let tper = Arc::new(Tper::connect(BASE_COM_ID, 0, device.clone(), None));
-    let session = SidSession::on_primary_ssc(tper).await.unwrap();
+    let session = SetupSession::on_primary_ssc(tper).await.unwrap();
 
     session.take_owneship(new_sid_password.clone()).await.unwrap();
     session.activate_secondary_sp(new_sid_password.clone()).await.unwrap();
@@ -105,7 +105,7 @@ async fn revert_tper_with_psid(_with_tracing: WithTracing) {
     let new_sid_password = MaxBytes::<32>::from(b"not_default".as_slice());
     let device = Arc::new(VirtualDevice::new());
     let tper = Arc::new(Tper::connect(BASE_COM_ID, 0, device.clone(), None));
-    let session = SidSession::on_primary_ssc(tper).await.unwrap();
+    let session = SetupSession::on_primary_ssc(tper).await.unwrap();
 
     session.take_owneship(new_sid_password.clone()).await.unwrap();
     session.activate_secondary_sp(new_sid_password).await.unwrap();
@@ -126,7 +126,7 @@ async fn revert_secondary_sp(_with_tracing: WithTracing) {
     let new_sid_password = MaxBytes::<32>::from(b"not_default".as_slice());
     let device = Arc::new(VirtualDevice::new());
     let tper = Arc::new(Tper::connect(BASE_COM_ID, 0, device.clone(), None));
-    let session = SidSession::on_primary_ssc(tper).await.unwrap();
+    let session = SetupSession::on_primary_ssc(tper).await.unwrap();
 
     session.take_owneship(new_sid_password.clone()).await.unwrap();
     session.activate_secondary_sp(new_sid_password.clone()).await.unwrap();
@@ -150,7 +150,7 @@ async fn revert_secondary_sp_ex(_with_tracing: WithTracing) {
     let new_sid_password = MaxBytes::<32>::from(b"not_default".as_slice());
     let device = Arc::new(VirtualDevice::new());
     let tper = Arc::new(Tper::connect(BASE_COM_ID, 0, device.clone(), None));
-    let session = SidSession::on_primary_ssc(tper).await.unwrap();
+    let session = SetupSession::on_primary_ssc(tper).await.unwrap();
 
     session.take_owneship(new_sid_password.clone()).await.unwrap();
     session.activate_secondary_sp(new_sid_password.clone()).await.unwrap();
