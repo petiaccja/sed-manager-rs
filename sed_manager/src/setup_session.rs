@@ -212,6 +212,11 @@ impl SetupSession {
             .await
     }
 
+    /// List the authorities on the `sp`.
+    ///
+    /// This will attempts to retrieve all information about the authorities,
+    /// but the information actually retrieved to what the Anybody authority
+    /// has permission to read.
     #[instrument(level = "info", skip(self), ret, err)]
     pub async fn list_authorities(&self, sp: SecurityProviderRef) -> Result<Vec<Authority>, Error> {
         let session = self.tper.start_session(sp, None, None).await?;
