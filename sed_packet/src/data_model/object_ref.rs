@@ -42,20 +42,35 @@ pub trait TokenizeField: Tokenize {
 pub struct ObjectRef<const TABLE: u64>(Uid);
 
 impl<const TABLE: u64> ObjectRef<TABLE> {
+    pub const TABLE_REF: TableRef = TableRef::try_new(TABLE).unwrap();
+
     pub const fn try_new(value: u64) -> Option<Self> {
         let uid = Uid::new(value);
-        match uid.containing_table() {
-            Some(table) if table.to_u64() == TABLE => Some(Self(uid)),
-            _ => None,
+        if uid.is_null() {
+            Some(Self::null())
+        } else if let Some(table) = uid.containing_table()
+            && table.to_u64() == TABLE
+        {
+            Some(Self(uid))
+        } else {
+            None
         }
     }
 
     pub const fn new(value: u64) -> Self {
-        Self::try_new(value).expect("the UID does not refer to an object in this table")
+        Self::try_new(value).expect("expected an object reference into this table or a null UID")
     }
 
     pub const fn from_half(object: NonZero<u32>) -> Self {
         Self::new(TABLE | object.get() as u64)
+    }
+
+    pub const fn null() -> Self {
+        Self(Uid::null())
+    }
+
+    pub const fn is_null(&self) -> bool {
+        self.0.is_null()
     }
 
     pub const fn to_u64(&self) -> u64 {
@@ -66,12 +81,12 @@ impl<const TABLE: u64> ObjectRef<TABLE> {
         self.0
     }
 
-    pub const fn to_half_uid(&self) -> u32 {
+    pub const fn to_half(&self) -> u32 {
         self.0.to_half_uid()
     }
 
     pub const fn containing_table(&self) -> TableRef {
-        TableRef::new(TABLE)
+        Self::TABLE_REF
     }
 
     pub const fn add(&self, offset: u32) -> Self {
@@ -123,7 +138,9 @@ impl<const TABLE: u64> Tokenize for ObjectRef<TABLE> {
 
 impl<const TABLE: u64> Detokenize for ObjectRef<TABLE> {
     fn detokenize<D: Detokenizer>(detokenizer: &mut D) -> Result<Self, D::Error> {
-        Self::try_from(Uid::detokenize(detokenizer)?).map_err(|_| D::Error::message("the UID must refer to a table"))
+        Self::try_from(Uid::detokenize(detokenizer)?).map_err(|uid| {
+            D::Error::message(format!("expected an object reference of table `{}`, got UID `{uid}`", Self::TABLE_REF))
+        })
     }
 }
 
@@ -255,4 +272,31 @@ where
     O: Field<FIELD>,
 {
     type Type = O::Type;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rstest::rstest;
+
+    //--------------------------------------------------------------------------
+    // ObjectRef
+    //--------------------------------------------------------------------------
+
+    const TEST_TABLE: u64 = 0x0000_0001_0000_0000;
+    type TestObjectRef = ObjectRef<TEST_TABLE>;
+
+    #[rstest]
+    #[case::null(0, true)]
+    #[case::own_table(0x0000_0001_0000_0055, true)]
+    #[case::other_table(0x0000_0002_0000_0055, false)]
+    #[case::special(0x0000_0000_0000_0056, false)]
+    fn try_new_object_ref(#[case] value: u64, #[case] success: bool) {
+        let object_ref = TestObjectRef::try_new(value);
+        if success {
+            assert_eq!(object_ref.map(|r| r.to_u64()), Some(value));
+        } else {
+            assert!(object_ref.is_none());
+        }
+    }
 }

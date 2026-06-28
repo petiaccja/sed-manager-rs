@@ -41,10 +41,10 @@ impl Tokenize for AceOperand {
     fn tokenize<T: Tokenizer>(&self, tokenizer: &mut T) -> Result<(), T::Error> {
         match self {
             Self::Authority(object_ref) => {
-                Named { name: AuthorityRef::UID.to_half_uid().to_be_bytes(), value: object_ref }.tokenize(tokenizer)
+                Named { name: AuthorityRef::UID.to_half().to_be_bytes(), value: object_ref }.tokenize(tokenizer)
             }
             Self::BooleanOp(boolean_op) => {
-                Named { name: BooleanOp::UID.to_half_uid().to_be_bytes(), value: boolean_op }.tokenize(tokenizer)
+                Named { name: BooleanOp::UID.to_half().to_be_bytes(), value: boolean_op }.tokenize(tokenizer)
             }
         }
     }
@@ -55,10 +55,10 @@ impl Detokenize for AceOperand {
         let (_, value) = detokenizer.detokenize_named(
             |detokenizer| <[u8; 4]>::detokenize(detokenizer).map(|bytes| u32::from_be_bytes(bytes)),
             |detokenizer, name| match *name {
-                x if x == AuthorityRef::UID.to_half_uid() => {
+                x if x == AuthorityRef::UID.to_half() => {
                     AuthorityRef::detokenize(detokenizer).map(|auth_ref| AceOperand::Authority(auth_ref))
                 }
-                x if x == BooleanOp::UID.to_half_uid() => {
+                x if x == BooleanOp::UID.to_half() => {
                     BooleanOp::detokenize(detokenizer).map(|bool_op| AceOperand::BooleanOp(bool_op))
                 }
                 _ => Err(D::Error::message("invalid type alternative for ACE operand")),

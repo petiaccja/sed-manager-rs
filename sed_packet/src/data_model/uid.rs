@@ -36,7 +36,11 @@ impl Uid {
     }
 
     pub const fn is_special(&self) -> bool {
-        self.table == 0
+        self.table == 0 && self.object != 0
+    }
+
+    pub const fn is_null(&self) -> bool {
+        self.table == 0 && self.object == 0
     }
 
     pub const fn to_descriptor(&self) -> Option<Self> {
@@ -165,6 +169,7 @@ mod tests {
     const OBJECT: Uid = Uid::new(0x0000_0009_0000_0001);
     const SOME_TABLE: Uid = Uid::new(0x0000_0009_0000_0000);
     const SM_METHOD: Uid = Uid::new(0x0000_0000_0000_FF01);
+    const NULL: Uid = Uid::new(0x0000_0000_0000_0000);
 
     #[test]
     fn uid_check_uid_kind() {
@@ -172,21 +177,31 @@ mod tests {
         assert!(!TABLE.is_descriptor());
         assert!(!TABLE.is_object());
         assert!(!TABLE.is_special());
+        assert!(!TABLE.is_null());
 
         assert!(!DESCRIPTOR.is_table());
         assert!(DESCRIPTOR.is_descriptor());
         assert!(DESCRIPTOR.is_object());
         assert!(!DESCRIPTOR.is_special());
+        assert!(!DESCRIPTOR.is_null());
 
         assert!(!OBJECT.is_table());
         assert!(!OBJECT.is_descriptor());
         assert!(OBJECT.is_object());
         assert!(!OBJECT.is_special());
+        assert!(!OBJECT.is_null());
 
         assert!(!SM_METHOD.is_table());
         assert!(!SM_METHOD.is_descriptor());
         assert!(!SM_METHOD.is_object());
         assert!(SM_METHOD.is_special());
+        assert!(!SM_METHOD.is_null());
+
+        assert!(!NULL.is_table());
+        assert!(!NULL.is_descriptor());
+        assert!(!NULL.is_object());
+        assert!(!NULL.is_special());
+        assert!(NULL.is_null());
     }
 
     #[test]

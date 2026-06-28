@@ -9,11 +9,11 @@ pub struct TableRef(Uid);
 impl TableRef {
     pub const fn try_new(value: u64) -> Option<Self> {
         let uid = Uid::new(value);
-        if uid.is_table() { Some(Self(uid)) } else { None }
+        if uid.is_table() || uid.is_null() { Some(Self(uid)) } else { None }
     }
 
     pub const fn new(value: u64) -> Self {
-        Self::try_new(value).expect("the UID must refer to a table")
+        Self::try_new(value).expect("expected a table reference or a null UID")
     }
 
     pub const fn containing_table(uid: Uid) -> Option<Self> {
@@ -80,7 +80,8 @@ impl Tokenize for TableRef {
 
 impl Detokenize for TableRef {
     fn detokenize<D: Detokenizer>(detokenizer: &mut D) -> Result<Self, D::Error> {
-        Self::try_from(Uid::detokenize(detokenizer)?).map_err(|_| D::Error::message("the UID must refer to a table"))
+        Self::try_from(Uid::detokenize(detokenizer)?)
+            .map_err(|uid| D::Error::message(format!("expected a table reference, got UID `{uid}`")))
     }
 }
 
@@ -163,5 +164,29 @@ impl Sub for &TableRef {
 impl std::fmt::Display for TableRef {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rstest::rstest;
+
+    //--------------------------------------------------------------------------
+    // TableRef
+    //--------------------------------------------------------------------------
+
+    #[rstest]
+    #[case::null(0, true)]
+    #[case::table(0x0000_0001_0000_0000, true)]
+    #[case::table_desc(0x0000_0001_0000_0001, false)]
+    #[case::special(0x0000_0000_0000_0056, false)]
+    fn try_new_object_ref(#[case] value: u64, #[case] success: bool) {
+        let object_ref = TableRef::try_new(value);
+        if success {
+            assert_eq!(object_ref.map(|r| r.to_u64()), Some(value));
+        } else {
+            assert!(object_ref.is_none());
+        }
     }
 }
