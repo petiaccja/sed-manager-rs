@@ -11,7 +11,10 @@ use sed_device::{list_physical_drives, open_device};
 use sed_manager::{Error, Spec};
 use sed_manager_gui_slint as ui;
 use sed_packet::{MaxBytes, com_id::ComIdState};
-use sed_spec::objects::{AuthorityRef, SecurityProviderRef};
+use sed_spec::{
+    objects::{AuthorityRef, SecurityProviderRef},
+    preconfig::core::shared::authority::ANYBODY,
+};
 use sed_tper::{PropertiesChanged, Tper};
 use sed_virtual_device::{VIRTUAL_DEVICE_PATH, VirtualDevice};
 use slint::{ComponentHandle, ModelExt as _, ModelRc, SharedString, ToSharedString, VecModel, spawn_local};
@@ -376,7 +379,9 @@ impl App {
                     let users: Vec<_> =
                         authorities.iter().map(|auth| auth.into_ui_name(features, admin_sp_ref)).collect();
                     let users = Rc::from(VecModel::from(users));
-                    let individual_users = Rc::from(users.clone().filter(|user| !user.is_class && user.enabled));
+                    let individual_users = Rc::from(users.clone().filter(|user| {
+                        !user.is_class && user.enabled && user.uid.value.cast_unsigned() != ANYBODY.to_u64()
+                    }));
                     let individual_users_names = individual_users.clone().map(|user| user.name);
                     let individual_users_uids = individual_users.clone().map(|user| user.uid);
                     ui_device.admin_sp.users = users.into();
