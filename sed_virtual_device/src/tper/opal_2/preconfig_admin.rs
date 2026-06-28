@@ -2,7 +2,7 @@ use std::ops::Range;
 
 use sed_spec::{
     ace_expr,
-    objects::{AccessControl, AccessControlRef, Ace, Authority, CPin, SecurityProvider, TableDesc},
+    objects::{AccessControl, AccessControlRef, Ace, Authority, AuthorityRef, CPin, SecurityProvider, TableDesc},
     preconfig::{
         core::shared::invoking_id::THIS_SP,
         opal_2::admin::{ace, authority, c_pin, sp},
@@ -212,24 +212,28 @@ pub fn authority() -> Table<Authority> {
             uid: Some(authority::ANYBODY),
             name: Some("Anybody".into()),
             is_class: Some(false),
+            class: Some(AuthorityRef::null()),
             ..Default::default()
         },
         Authority {
             uid: Some(authority::ADMINS),
             name: Some("Admins".into()),
             is_class: Some(true),
+            class: Some(AuthorityRef::null()),
             ..Default::default()
         },
         Authority {
             uid: Some(authority::MAKERS),
             name: Some("Makers".into()),
             is_class: Some(true),
+            class: Some(AuthorityRef::null()),
             ..Default::default()
         },
         Authority {
             uid: Some(authority::SID),
             name: Some("SID".into()),
             is_class: Some(false),
+            class: Some(AuthorityRef::null()),
             operation: Some(AuthMethod::Password),
             credential: Some(c_pin::SID.into()),
             ..Default::default()
@@ -238,6 +242,7 @@ pub fn authority() -> Table<Authority> {
             uid: Some(psid::admin::authority::PSID),
             name: Some("PSID".into()),
             is_class: Some(false),
+            class: Some(AuthorityRef::null()),
             operation: Some(AuthMethod::Password.into()),
             credential: Some(psid::admin::c_pin::PSID.into()),
             ..Default::default()
