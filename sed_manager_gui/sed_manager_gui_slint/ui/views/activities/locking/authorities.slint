@@ -232,7 +232,6 @@ component AuthoritySideBarItem inherits IslandButton {
             text: authority-name;
             font-size: 1.2rem;
             font-weight: 600;
-            overflow: elide;
             color: root.is-selected ? PaletteExtra.accented-control-foreground : root.foreground;
             vertical-alignment: center;
         }
@@ -348,7 +347,6 @@ export component AuthoritiesTab {
 
                 Button {
                     text: "Save authorities";
-                    width: 8rem;
                     primary: true;
                     enabled: !command-status.session-busy && !command-status.session-busy;
                 }
