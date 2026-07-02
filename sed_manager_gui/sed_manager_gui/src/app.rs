@@ -82,8 +82,14 @@ impl App {
         }
         {
             let view_model = view_model.clone();
-            ui.on_list_authorities(move |path, silent| {
+            ui.on_list_admin_authorities(move |path, silent| {
                 view_model.clone().list_admin_authorities(path.to_string().into(), silent)
+            });
+        }
+        {
+            let view_model = view_model.clone();
+            ui.on_list_locking_authorities(move |path, silent| {
+                view_model.clone().list_locking_authorities(path.to_string().into(), silent)
             });
         }
         {
@@ -374,16 +380,15 @@ impl App {
         self.command()
             .on_session(path.clone(), async |tper, mut session| {
                 let setup_session = session.start_setup_session(tper).await?;
-                let admin_sp = setup_session.spec().admin.uid;
-                setup_session.list_authorities(admin_sp).await
+                let sp_ref = setup_session.spec().admin.uid;
+                setup_session.list_authorities(sp_ref).await.map(|auths| (auths, sp_ref))
             })
-            .display(move |mut ui_device, spec, authorities| match authorities {
-                Ok(authorities) => {
+            .display(move |mut ui_device, spec, result| match result {
+                Ok((authorities, sp_ref)) => {
                     // Convert the authority structures to their UI counterparts.
                     let features = spec.map(|spec| spec.discovery.feature_descriptors.as_slice()).unwrap_or(&[]);
-                    let admin_sp_ref = spec.map(|spec| spec.admin.uid);
                     let authorities: Vec<_> =
-                        authorities.iter().map(|auth| auth.into_ui_name(features, admin_sp_ref)).collect();
+                        authorities.iter().map(|auth| auth.into_ui_name(features, Some(sp_ref))).collect();
                     let authorities = Rc::from(VecModel::from(authorities));
                     ui_device.admin_sp.authorities = authorities.clone().into();
 
@@ -398,12 +403,55 @@ impl App {
                     ui_device.admin_sp.individual_authority_uids = Rc::from(individual_authority_uids).into();
 
                     if !silent {
-                        self.toast_queue.success("Authority list updated".into(), String::new());
+                        self.toast_queue.success("Admin authorities updated".into(), String::new());
                     }
                     ui_device
                 }
                 Err(err) => {
-                    self.toast_queue.error("Failed to list authorities".into(), err.to_string());
+                    self.toast_queue.error("Failed to update admin authorities".into(), err.to_string());
+                    ui_device
+                }
+            })
+            .run();
+    }
+
+    #[instrument(skip(self))]
+    fn list_locking_authorities(self: Rc<Self>, path: PathBuf, silent: bool) {
+        self.command()
+            .on_session(path.clone(), async |tper, mut session| {
+                let setup_session = session.start_setup_session(tper).await?;
+                if let Some(locking_sp) = &setup_session.spec().locking {
+                    setup_session.list_authorities(locking_sp.uid).await.map(|auths| (auths, Some(locking_sp.uid)))
+                } else {
+                    Ok((vec![], None))
+                }
+            })
+            .display(move |mut ui_device, spec, result| match result {
+                Ok((authorities, sp_ref)) => {
+                    // Convert the authority structures to their UI counterparts.
+                    let features = spec.map(|spec| spec.discovery.feature_descriptors.as_slice()).unwrap_or(&[]);
+                    let authorities: Vec<_> =
+                        authorities.iter().map(|auth| auth.into_ui_name(features, sp_ref)).collect();
+                    let authorities = Rc::from(VecModel::from(authorities));
+                    ui_device.locking_sp.authorities = authorities.clone().into();
+
+                    // Map and filter user names and UIDs for the password change
+                    // activity. TODO: move this into Slint when feature is available.
+                    let individual_authorities = Rc::from(authorities.filter(|auth| {
+                        !auth.is_class && auth.enabled && auth.uid.value.cast_unsigned() != ANYBODY.to_u64()
+                    }));
+                    let individual_authority_names = individual_authorities.clone().map(|auth| auth.name);
+                    let individual_authority_uids = individual_authorities.clone().map(|auth| auth.uid);
+                    ui_device.locking_sp.individual_authority_names = Rc::from(individual_authority_names).into();
+                    ui_device.locking_sp.individual_authority_uids = Rc::from(individual_authority_uids).into();
+
+                    if !silent {
+                        self.toast_queue.success("Locking authorities updated".into(), String::new());
+                    }
+                    ui_device
+                }
+                Err(err) => {
+                    self.toast_queue.error("Failed to update locking authorities".into(), err.to_string());
                     ui_device
                 }
             })

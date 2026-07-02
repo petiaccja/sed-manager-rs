@@ -8,7 +8,8 @@ export component DeviceSwitchView {
     callback take-owneship(device: string, password: string);
     callback activate-locking(device: string, password: string);
     callback change-password(device: string, sp: Uid, authority: Uid, current-password: string, new-password: string);
-    callback list-authorities(device: string, silent: bool);
+    callback list-admin-authorities(device: string, silent: bool);
+    callback list-locking-authorities(device: string, silent: bool);
     callback revert-device(device: string, scope: RevertScope, authority: RevertAuthority, password: string);
     callback query-stack-status(device: string);
     callback reset-stack(device: string);
@@ -37,8 +38,11 @@ export component DeviceSwitchView {
                 change-password(sp, authority, current-password, new-password) => {
                     change-password(device.identity.path, sp, authority, current-password, new-password)
                 };
-                list-authorities(silent) => {
-                    list-authorities(device.identity.path, silent)
+                list-admin-authorities(silent) => {
+                    list-admin-authorities(device.identity.path, silent)
+                }
+                list-locking-authorities(silent) => {
+                    list-locking-authorities(device.identity.path, silent)
                 }
                 revert-device(scope, authority, password) => {
                     revert-device(device.identity.path, scope, authority, password)

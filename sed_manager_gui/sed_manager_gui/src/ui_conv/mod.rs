@@ -1,9 +1,9 @@
+mod authority;
 mod device;
 mod discovery;
 mod primitives;
 mod properties;
 mod uid;
-mod authority;
 
 pub use properties::CombinedProperties;
 use sed_packet::discovery::FeatureDescriptor;
