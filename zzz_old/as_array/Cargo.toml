@@ -1,7 +1,0 @@
-[package]
-name = "as_array"
-version = "0.1.1"
-edition = "2024"
-
-[dependencies]
-as_array_macros = { path = "../as_array_macros" }
