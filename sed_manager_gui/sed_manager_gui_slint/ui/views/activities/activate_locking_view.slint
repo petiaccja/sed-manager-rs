@@ -14,7 +14,9 @@ export component ActivateLockingView {
             text: "Owner (SID) password:";
         }
 
-        password := LineEdit { }
+        password := LineEdit {
+            input-type: InputType.password;
+        }
 
         Button {
             text: "Activate locking";
