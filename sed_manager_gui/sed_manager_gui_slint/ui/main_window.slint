@@ -14,7 +14,7 @@ import {
     ToastLevel,
 } from "widgets/lib.slint";
 
-export { ToastQueue } from "widgets/lib.slint";
+export { ToastQueue }from "widgets/lib.slint";
 
 export component MainWindow inherits Window {
     title: "SED Manager";
@@ -30,6 +30,7 @@ export component MainWindow inherits Window {
     callback take-owneship <=> device-switch-view.take-owneship;
     callback activate-locking <=> device-switch-view.activate-locking;
     callback change-password <=> device-switch-view.change-password;
+    callback list-authorities <=> device-switch-view.list-authorities;
     callback revert-device <=> device-switch-view.revert-device;
     callback query-stack-status <=> device-switch-view.query-stack-status;
     callback reset-stack <=> device-switch-view.reset-stack;

@@ -196,6 +196,7 @@ export component DeviceView {
     callback take-owneship(password: string);
     callback activate-locking(password: string);
     callback change-password(sp: Uid, authority: Uid, current-password: string, new-password: string);
+    callback list-authorities(silent: bool);
     callback revert-device(scope: RevertScope, authority: RevertAuthority, password: string);
     callback query-stack-status();
     callback reset-stack();
@@ -218,6 +219,12 @@ export component DeviceView {
 
                 reset-stack => {
                     reset-stack()
+                }
+
+                changed selected-activity => {
+                    if self.selected-activity == DeviceActivity.change-password && device.admin-sp.users.length == 0 {
+                        root.list-authorities(true)
+                    }
                 }
             }
 
@@ -266,6 +273,9 @@ export component DeviceView {
                         preferred-width: 16rem;
                         change-password(sp, authority, current-password, new-password) => {
                             change-password(sp, authority, current-password, new-password)
+                        }
+                        list-authorities => {
+                            list-authorities(false)
                         }
                     }
                 }

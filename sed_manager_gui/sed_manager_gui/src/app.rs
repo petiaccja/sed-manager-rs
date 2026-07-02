@@ -82,6 +82,12 @@ impl App {
         }
         {
             let view_model = view_model.clone();
+            ui.on_list_authorities(move |path, silent| {
+                view_model.clone().list_admin_authorities(path.to_string().into(), silent)
+            });
+        }
+        {
+            let view_model = view_model.clone();
             ui.on_revert_device(move |path, scope, authority, password| {
                 view_model.clone().revert_device(path.to_string().into(), scope, authority, password)
             });
@@ -302,7 +308,6 @@ impl App {
                     .expect_in_event_loop();
                 self.clone().query_stack_status(path.clone(), true);
                 self.clone().list_security_providers(path.clone());
-                self.clone().list_admin_authorities(path);
                 ui_device.with_stack_status(status)
             })
             .run();
@@ -365,7 +370,7 @@ impl App {
     }
 
     #[instrument(skip(self))]
-    fn list_admin_authorities(self: Rc<Self>, path: PathBuf) {
+    fn list_admin_authorities(self: Rc<Self>, path: PathBuf, silent: bool) {
         self.command()
             .on_session(path.clone(), async |tper, mut session| {
                 let setup_session = session.start_setup_session(tper).await?;
@@ -374,19 +379,27 @@ impl App {
             })
             .display(move |mut ui_device, spec, authorities| match authorities {
                 Ok(authorities) => {
+                    // Convert the authority structures to their UI counterparts.
                     let features = spec.map(|spec| spec.discovery.feature_descriptors.as_slice()).unwrap_or(&[]);
                     let admin_sp_ref = spec.map(|spec| spec.admin.uid);
                     let users: Vec<_> =
                         authorities.iter().map(|auth| auth.into_ui_name(features, admin_sp_ref)).collect();
                     let users = Rc::from(VecModel::from(users));
-                    let individual_users = Rc::from(users.clone().filter(|user| {
+                    ui_device.admin_sp.users = users.clone().into();
+
+                    // Map and filter user names and UIDs for the password change
+                    // activity. TODO: move this into Slint when feature is available.
+                    let individual_users = Rc::from(users.filter(|user| {
                         !user.is_class && user.enabled && user.uid.value.cast_unsigned() != ANYBODY.to_u64()
                     }));
-                    let individual_users_names = individual_users.clone().map(|user| user.name);
-                    let individual_users_uids = individual_users.clone().map(|user| user.uid);
-                    ui_device.admin_sp.users = users.into();
-                    ui_device.admin_sp.individual_user_names = Rc::from(individual_users_names).into();
-                    ui_device.admin_sp.individual_user_uids = Rc::from(individual_users_uids).into();
+                    let individual_authority_names = individual_users.clone().map(|user| user.name);
+                    let individual_authority_uids = individual_users.clone().map(|user| user.uid);
+                    ui_device.admin_sp.individual_user_names = Rc::from(individual_authority_names).into();
+                    ui_device.admin_sp.individual_user_uids = Rc::from(individual_authority_uids).into();
+
+                    if !silent {
+                        self.toast_queue.success("User list updated".into(), String::new());
+                    }
                     ui_device
                 }
                 Err(err) => {
