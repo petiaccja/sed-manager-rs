@@ -52,7 +52,7 @@ export global TestData {
         uid: { value: 0ms },
         name: "Admin",
         locking_ranges: [],
-        users: [
+        authorities: [
             {
                 uid: { value: 0ms },
                 name: "SID",
@@ -69,7 +69,7 @@ export global TestData {
         mbr: {
             supported: false,
         },
-        individual-user-names: ["SID", "PSID"],
+        individual-authority-names: ["SID", "PSID"],
     };
 
     private property <SecurityProvider> locking-sp-opal-2: {
@@ -113,7 +113,7 @@ export global TestData {
                 erase: false,
             },
         ],
-        users: [
+        authorities: [
             {
                 uid: { value: 0ms },
                 name: "Admin1",
@@ -172,7 +172,7 @@ export global TestData {
         mbr: {
             supported: true,
         },
-        individual-user-names: ["Admin1", "User1"],
+        individual-authority-names: ["Admin1", "User1"],
     };
 
     out property <[Device]> devices: [

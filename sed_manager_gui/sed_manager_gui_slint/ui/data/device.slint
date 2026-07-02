@@ -82,7 +82,7 @@ export struct MbrAccess {
     set-done: bool,
 }
 
-export struct User {
+export struct Authority {
     uid: Uid,
     name: string,
     common_name: string,
@@ -104,12 +104,12 @@ export struct SecurityProvider {
     uid: Uid,
     name: string,
     locking_ranges: [LockingRange],
-    users: [User],
+    authorities: [Authority],
     mbr: Mbr,
-    // Derive this with a filter-map from `users`. Delete it as soon as Slint
+    // Derive this with a filter-map from `authorities`. Delete it as soon as Slint
     // supports in-Slint filter-map on models.
-    individual-user-names: [string],
-    individual-user-uids: [Uid],
+    individual-authority-names: [string],
+    individual-authority-uids: [Uid],
 }
 
 export struct Device {

@@ -382,28 +382,28 @@ impl App {
                     // Convert the authority structures to their UI counterparts.
                     let features = spec.map(|spec| spec.discovery.feature_descriptors.as_slice()).unwrap_or(&[]);
                     let admin_sp_ref = spec.map(|spec| spec.admin.uid);
-                    let users: Vec<_> =
+                    let authorities: Vec<_> =
                         authorities.iter().map(|auth| auth.into_ui_name(features, admin_sp_ref)).collect();
-                    let users = Rc::from(VecModel::from(users));
-                    ui_device.admin_sp.users = users.clone().into();
+                    let authorities = Rc::from(VecModel::from(authorities));
+                    ui_device.admin_sp.authorities = authorities.clone().into();
 
                     // Map and filter user names and UIDs for the password change
                     // activity. TODO: move this into Slint when feature is available.
-                    let individual_users = Rc::from(users.filter(|user| {
-                        !user.is_class && user.enabled && user.uid.value.cast_unsigned() != ANYBODY.to_u64()
+                    let individual_authorities = Rc::from(authorities.filter(|auth| {
+                        !auth.is_class && auth.enabled && auth.uid.value.cast_unsigned() != ANYBODY.to_u64()
                     }));
-                    let individual_authority_names = individual_users.clone().map(|user| user.name);
-                    let individual_authority_uids = individual_users.clone().map(|user| user.uid);
-                    ui_device.admin_sp.individual_user_names = Rc::from(individual_authority_names).into();
-                    ui_device.admin_sp.individual_user_uids = Rc::from(individual_authority_uids).into();
+                    let individual_authority_names = individual_authorities.clone().map(|auth| auth.name);
+                    let individual_authority_uids = individual_authorities.clone().map(|auth| auth.uid);
+                    ui_device.admin_sp.individual_authority_names = Rc::from(individual_authority_names).into();
+                    ui_device.admin_sp.individual_authority_uids = Rc::from(individual_authority_uids).into();
 
                     if !silent {
-                        self.toast_queue.success("User list updated".into(), String::new());
+                        self.toast_queue.success("Authority list updated".into(), String::new());
                     }
                     ui_device
                 }
                 Err(err) => {
-                    self.toast_queue.error("Can not list users".into(), err.to_string());
+                    self.toast_queue.error("Failed to list authorities".into(), err.to_string());
                     ui_device
                 }
             })

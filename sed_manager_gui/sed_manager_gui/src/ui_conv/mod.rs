@@ -3,7 +3,7 @@ mod discovery;
 mod primitives;
 mod properties;
 mod uid;
-mod user;
+mod authority;
 
 pub use properties::CombinedProperties;
 use sed_packet::discovery::FeatureDescriptor;

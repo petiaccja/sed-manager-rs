@@ -10,13 +10,13 @@ use crate::ui_conv::{IntoUi, IntoUiName};
 const INVALID_AUTHORITY: AuthorityRef = AuthorityRef::from_half(NonZero::new(0xFFFF_FFFF).unwrap());
 
 impl IntoUi for Authority {
-    type Ui = ui::User;
+    type Ui = ui::Authority;
 
     fn into_ui(&self) -> Self::Ui {
-        ui::User {
+        ui::Authority {
             common_name: self.common_name.as_deref().unwrap_or("").to_shared_string(),
             // Assume enabled. This will give us an error from the TPer when
-            // trying to modify the user, which is better than hiding the user
+            // trying to modify the authority, which is better than hiding the authority
             // from the UI.
             enabled: self.enabled.unwrap_or(true),
             // Assume NOT a class. This will give us an error from the TPer if
@@ -32,9 +32,9 @@ impl IntoUi for Authority {
 }
 
 impl IntoUiName for Authority {
-    type Ui = ui::User;
+    type Ui = ui::Authority;
 
     fn into_ui_name(&self, features: &[FeatureDescriptor], sp: Option<SecurityProviderRef>) -> Self::Ui {
-        ui::User { name: self.uid.unwrap_or(INVALID_AUTHORITY).into_ui_name(features, sp), ..self.into_ui() }
+        ui::Authority { name: self.uid.unwrap_or(INVALID_AUTHORITY).into_ui_name(features, sp), ..self.into_ui() }
     }
 }

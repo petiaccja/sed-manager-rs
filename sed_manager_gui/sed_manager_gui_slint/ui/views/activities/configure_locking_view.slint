@@ -18,7 +18,7 @@ import {
 } from "std-widgets.slint";
 import { Sector, SectorUtil } from "../../data/sector.slint";
 import { LockingRangesTab } from "locking/locking_ranges.slint";
-import { UsersTab } from "locking/users.slint";
+import { AuthoritiesTab } from "locking/authorities.slint";
 import { ShadowMbrTab } from "locking/shadow_mbr.slint";
 
 
@@ -42,14 +42,14 @@ export component ConfigureLockingView {
         }
 
         Tab {
-            title: "Users";
+            title: "Authorities";
 
             VerticalLayout {
                 alignment: start;
                 padding-top: 1.2rem;
 
-                UsersTab {
-                    users <=> locking-sp.users;
+                AuthoritiesTab {
+                    authorities <=> locking-sp.authorities;
                     command-status: command-status;
                     mbr: locking-sp.mbr;
                 }

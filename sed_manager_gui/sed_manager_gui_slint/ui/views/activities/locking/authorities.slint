@@ -6,7 +6,7 @@ import {
     GroupBox,
 } from "std-widgets.slint";
 import {
-    User,
+    Authority,
     Sector,
     SectorUtil,
     CommandStatus,
@@ -23,10 +23,10 @@ import {
     IslandButton,
 } from "../../../widgets/lib.slint";
 
-component UserInformation {
-    in-out property <string> user-common-name;
-    in-out property <bool> user-enabled;
-    in property <bool> user-is-class;
+component AuthorityInformation {
+    in-out property <string> authority-common-name;
+    in-out property <bool> authority-enabled;
+    in property <bool> authority-is-class;
 
     Rectangle {
         background: PaletteExtra.separator.with-alpha(0.25);
@@ -60,7 +60,7 @@ component UserInformation {
                 col: 1;
 
                 TextInput {
-                    text <=> user-common-name;
+                    text <=> authority-common-name;
                 }
             }
 
@@ -72,7 +72,7 @@ component UserInformation {
                     alignment: start;
 
                     CheckBox {
-                        checked <=> user-enabled;
+                        checked <=> authority-enabled;
                     }
                 }
             }
@@ -91,7 +91,7 @@ component UserInformation {
                 col: 1;
 
                 Text {
-                    text: user-is-class ? "Class" : "Individual";
+                    text: authority-is-class ? "Class" : "Individual";
                 }
             }
         }
@@ -216,11 +216,11 @@ component LockingRangeAccessTable {
     }
 }
 
-component UserSideBarItem inherits IslandButton {
+component AuthoritySideBarItem inherits IslandButton {
     has-background: true;
     has-idle-background: false;
 
-    in property <string> user-name;
+    in property <string> authority-name;
 
     HorizontalLayout {
         padding-left: 0.8rem;
@@ -229,7 +229,7 @@ component UserSideBarItem inherits IslandButton {
         padding-bottom: 0.6rem;
 
         Text {
-            text: user-name;
+            text: authority-name;
             font-size: 1.2rem;
             font-weight: 600;
             overflow: elide;
@@ -239,12 +239,12 @@ component UserSideBarItem inherits IslandButton {
     }
 }
 
-export component UserSideBar {
+export component AuthoritySideBar {
     height: 3.2rem;
     preferred-width: content.preferred-width;
     preferred-height: content.preferred-height;
 
-    in property <[User]> users;
+    in property <[Authority]> authorities;
     in-out property <int> selected;
 
     ScrollView {
@@ -253,9 +253,9 @@ export component UserSideBar {
             alignment: start;
             spacing: 0.2rem;
 
-            for user[index] in users: UserSideBarItem {
+            for authority[index] in authorities: AuthoritySideBarItem {
                 is-selected: index == selected;
-                user-name: user.name;
+                authority-name: authority.name;
 
                 clicked => {
                     root.selected = index
@@ -265,19 +265,19 @@ export component UserSideBar {
     }
 }
 
-export component UserPanel {
-    in-out property <User> user;
+export component AuthorityPanel {
+    in-out property <Authority> authority;
     in property <Mbr> mbr;
 
     VerticalLayout {
         alignment: start;
 
         GroupBox {
-            title: "User information";
+            title: "Authority information";
 
-            UserInformation {
-                user-common-name <=> user.common-name;
-                user-enabled <=> user.enabled;
+            AuthorityInformation {
+                authority-common-name <=> authority.common-name;
+                authority-enabled <=> authority.enabled;
             }
         }
 
@@ -288,12 +288,12 @@ export component UserPanel {
                 spacing: 1.2rem;
 
                 if mbr.supported: MbrAccessTable {
-                    mbr-access <=> user.mbr-access;
+                    mbr-access <=> authority.mbr-access;
                 }
 
                 LockingRangeAccessTable {
                     min-height: self.preferred-height;
-                    locking-ranges <=> user.locking-range-access;
+                    locking-ranges <=> authority.locking-range-access;
                 }
             }
         }
@@ -301,16 +301,16 @@ export component UserPanel {
 }
 
 
-export component UsersTab {
-    in-out property <[User]> users;
+export component AuthoritiesTab {
+    in-out property <[Authority]> authorities;
     in property <CommandStatus> command-status;
     in property <Mbr> mbr;
 
     VerticalLayout {
-        sidebar := UserSideBar {
+        sidebar := AuthoritySideBar {
             horizontal-stretch: 0.0;
             vertical-stretch: 0.0;
-            users: users;
+            authorities: authorities;
         }
 
         VerticalLayout {
@@ -325,13 +325,13 @@ export component UsersTab {
                 horizontal-scrollbar-policy: always-off;
 
                 content := VerticalLayout {
-                    for user[index] in users: Rectangle {
+                    for authority[index] in authorities: Rectangle {
                         visible: index == sidebar.selected;
                         preferred-height: index == sidebar.selected ? panel.preferred-height : 0;
                         min-height: index == sidebar.selected ? panel.min-height : 0;
                         VerticalLayout {
-                            panel := UserPanel {
-                                user <=> user;
+                            panel := AuthorityPanel {
+                                authority <=> authority;
                             }
                         }
                     }
@@ -347,7 +347,7 @@ export component UsersTab {
                 spacing: 0.8rem;
 
                 Button {
-                    text: "Save users";
+                    text: "Save authorities";
                     width: 8rem;
                     primary: true;
                     enabled: !command-status.session-busy && !command-status.session-busy;

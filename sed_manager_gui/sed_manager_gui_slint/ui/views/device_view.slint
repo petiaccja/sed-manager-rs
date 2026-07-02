@@ -222,7 +222,7 @@ export component DeviceView {
                 }
 
                 changed selected-activity => {
-                    if self.selected-activity == DeviceActivity.change-password && device.admin-sp.users.length == 0 {
+                    if self.selected-activity == DeviceActivity.change-password && device.admin-sp.authorities.length == 0 {
                         root.list-authorities(true)
                     }
                 }
