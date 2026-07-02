@@ -208,12 +208,14 @@ impl Management {
     }
 
     fn poll_method_calls(&mut self) -> Option<Packet> {
+        const MAX_METHOD_CALL_SIZE: usize =
+            Properties::INITIAL.max_gross_packet_size.get() - PACKET_HEADER_LEN - SUB_PACKET_HEADER_LEN;
+
         let Some(MethodCallRecord { call, sender }) = self.method_calls.pop_front() else {
             return None;
         };
-
-        if call.len() > Properties::INITIAL.max_gross_packet_size.get() - PACKET_HEADER_LEN - SUB_PACKET_HEADER_LEN {
-            let _ = sender.send(Err(Error::MethodTooLarge));
+        if call.len() > MAX_METHOD_CALL_SIZE {
+            let _ = sender.send(Err(Error::MethodTooLarge { requested: call.len(), maximum: MAX_METHOD_CALL_SIZE }));
             return None;
         }
 
@@ -227,14 +229,19 @@ impl Management {
                         self.start_session_calls_sending.entry(hsn).or_default().push_back(record);
                         Some(packetize_one(SessionId::MANAGEMENT, sequence_number, call))
                     }
-                    MgmtMethodCallParams::SyncSession(_)
-                    | MgmtMethodCallParams::CloseSession(_)
-                    | MgmtMethodCallParams::Properties(_) => {
-                        // You cannot send these method to the device:
-                        // - SyncSession: only sent by the device
-                        // - CloseSession: only sent by the device
-                        // - Properties: could instruct the device to use capabilities that the protcol doesn't have.
-                        let _ = sender.send(Err(Error::MethodNotAllowed));
+                    MgmtMethodCallParams::SyncSession(_) => {
+                        // Method can only be sent by the device.
+                        let _ = sender.send(Err(Error::MethodNotAllowed(SyncSession::METHOD_ID)));
+                        None
+                    }
+                    MgmtMethodCallParams::CloseSession(_) => {
+                        // Method can only be sent by the device.
+                        let _ = sender.send(Err(Error::MethodNotAllowed(CloseSession::METHOD_ID)));
+                        None
+                    }
+                    MgmtMethodCallParams::Properties(_) => {
+                        // Could instruct the device to use capabilities that the protcol doesn't support.
+                        let _ = sender.send(Err(Error::MethodNotAllowed(PropertiesMethod::METHOD_ID)));
                         None
                     }
                 }
@@ -423,7 +430,7 @@ mod tests {
 
         mgmt.handle_method_call(call, sender);
         assert_that!(mgmt.poll_action(time), matches_pattern!(Action::None));
-        assert_that!(receiver.try_recv(), ok(err(eq(&Error::MethodNotAllowed))));
+        assert_that!(receiver.try_recv(), ok(err(pat!(&Error::MethodNotAllowed { .. }))));
     }
 
     #[test]

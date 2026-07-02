@@ -17,6 +17,7 @@ use sed_spec::objects::{
     AccessControlRef, Ace, AceExpr, Authority, AuthorityRef, CPin, KAes256, KAes256Ref, LockingRange, MbrControl,
     MethodRef, SecurityProvider as SecurityProviderObj, SecurityProviderRef, TableDesc,
 };
+use sed_spec::preconfig::core::shared::authority::ANYBODY;
 use sed_spec::preconfig::core::shared::invoking_id::THIS_SP;
 use sed_spec::preconfig::core::shared::table_id;
 use sed_spec::types::LifeCycleState;
@@ -43,7 +44,8 @@ impl Session {
     ) -> Result<Self, MethodStatus> {
         let sp = tper.sp(sp_uid).ok_or(MethodStatus::InvalidParameter)?;
         let authority = sp.authority().get(&authority_uid).ok_or(MethodStatus::InvalidParameter)?;
-        let authenticated = std::iter::once(authority_uid).chain(authority.class).collect();
+        let class = authority.class.filter(|class| !class.is_null());
+        let authenticated = std::iter::once(authority_uid).chain(class).chain(std::iter::once(ANYBODY)).collect();
         Ok(Self::Open { session_id, sp: sp_uid, authenticated, recv_buffer: VecDeque::new() })
     }
 
@@ -216,6 +218,7 @@ impl Session {
             object: Uid,
             start_column: Option<u16>,
             end_column: Option<u16>,
+            permitted_columns: HashSet<u16>,
         ) -> Result<ObjectSlice<'_, O>, MethodStatus>
         where
             O::Ref: TryFrom<Uid> + Ord,
@@ -224,38 +227,58 @@ impl Session {
                 .get(&object.try_into().map_err(|_| MethodStatus::InvalidParameter)?)
                 .ok_or(MethodStatus::InvalidParameter)?;
             let (start_field, end_field) = unmap_bounds(start_column, end_column);
-            Ok(ObjectSlice { object, start_field, end_field })
+            let fields = normalize_bounds(start_field, end_field, 0, O::FIELD_COUNT);
+            let fields = fields.filter(|field| permitted_columns.contains(field)).collect();
+            Ok(ObjectSlice { object, fields })
         }
 
+        let permitted_columns = self.permitted_columns(tper, invoking_id, Get::METHOD_ID)?;
         let sp = self.this_sp(tper)?;
         if let Ok(ObjectCellBlock { table, object, start_column, end_column }) =
             params.cell_block.clone().try_into_object(invoking_id)
         {
             match table {
-                table_id::ACE => get_slice(sp.ace(), object, start_column, end_column).map(|s| GetResult::Ace(s)),
-                table_id::AUTHORITY => {
-                    get_slice(sp.authority(), object, start_column, end_column).map(|s| GetResult::Authority(s))
+                table_id::ACE => {
+                    get_slice(sp.ace(), object, start_column, end_column, permitted_columns).map(|s| GetResult::Ace(s))
                 }
-                table_id::C_PIN => get_slice(sp.c_pin(), object, start_column, end_column).map(|s| GetResult::CPin(s)),
-                table_id::K_AES_256 => {
-                    get_slice(sp.k_aes_256().ok_or(MethodStatus::InvalidParameter)?, object, start_column, end_column)
-                        .map(|s| GetResult::KAes256(s))
-                }
-                table_id::LOCKING => {
-                    get_slice(sp.locking().ok_or(MethodStatus::InvalidParameter)?, object, start_column, end_column)
-                        .map(|s| GetResult::LockingRange(s))
-                }
-                table_id::MBR_CONTROL => {
-                    get_slice(sp.mbr_control().ok_or(MethodStatus::InvalidParameter)?, object, start_column, end_column)
-                        .map(|s| GetResult::MbrControl(s))
-                }
-                table_id::SP => {
-                    get_slice(sp.sp().ok_or(MethodStatus::InvalidParameter)?, object, start_column, end_column)
-                        .map(|s| GetResult::SecurityProvider(s))
-                }
-                table_id::TABLE => {
-                    get_slice(sp.table(), object, start_column, end_column).map(|s| GetResult::TableDesc(s))
-                }
+                table_id::AUTHORITY => get_slice(sp.authority(), object, start_column, end_column, permitted_columns)
+                    .map(|s| GetResult::Authority(s)),
+                table_id::C_PIN => get_slice(sp.c_pin(), object, start_column, end_column, permitted_columns)
+                    .map(|s| GetResult::CPin(s)),
+                table_id::K_AES_256 => get_slice(
+                    sp.k_aes_256().ok_or(MethodStatus::InvalidParameter)?,
+                    object,
+                    start_column,
+                    end_column,
+                    permitted_columns,
+                )
+                .map(|s| GetResult::KAes256(s)),
+                table_id::LOCKING => get_slice(
+                    sp.locking().ok_or(MethodStatus::InvalidParameter)?,
+                    object,
+                    start_column,
+                    end_column,
+                    permitted_columns,
+                )
+                .map(|s| GetResult::LockingRange(s)),
+                table_id::MBR_CONTROL => get_slice(
+                    sp.mbr_control().ok_or(MethodStatus::InvalidParameter)?,
+                    object,
+                    start_column,
+                    end_column,
+                    permitted_columns,
+                )
+                .map(|s| GetResult::MbrControl(s)),
+                table_id::SP => get_slice(
+                    sp.sp().ok_or(MethodStatus::InvalidParameter)?,
+                    object,
+                    start_column,
+                    end_column,
+                    permitted_columns,
+                )
+                .map(|s| GetResult::SecurityProvider(s)),
+                table_id::TABLE => get_slice(sp.table(), object, start_column, end_column, permitted_columns)
+                    .map(|s| GetResult::TableDesc(s)),
                 _ => Err(MethodStatus::InvalidParameter),
             }
         } else if let Ok(ByteCellBlock { table, start_byte, end_byte }) =
@@ -544,15 +567,26 @@ impl Session {
         method_id: MethodRef,
         mut columns: impl Iterator<Item = u16>,
     ) -> Result<(), MethodStatus> {
+        let permitted_columns = self.permitted_columns(tper, invoking_id, method_id)?;
+        if columns.all(|column| permitted_columns.contains(&column)) {
+            Ok(())
+        } else {
+            Err(MethodStatus::NotAuthorized)
+        }
+    }
+
+    fn permitted_columns(
+        &self,
+        tper: &Tper,
+        invoking_id: Uid,
+        method_id: MethodRef,
+    ) -> Result<HashSet<u16>, MethodStatus> {
         let Self::Open { authenticated, .. } = self else {
             return Err(MethodStatus::Fail);
         };
         let this_sp = self.this_sp(tper)?;
         let ac_table = this_sp.access_control();
-
         let mut permitted_columns = HashSet::new();
-        // Check both the invoking ID and its containing table. ACLs for the
-        // containing table apply to any object in the table.
         for invoking_id in std::iter::once(invoking_id).chain(invoking_id.containing_table()) {
             if let Some(access_control) = ac_table.get(&AccessControlRef { invoking_id, method_id }) {
                 let ace_table = this_sp.ace();
@@ -570,19 +604,13 @@ impl Session {
                 }
             }
         }
-
-        if columns.all(|column| permitted_columns.contains(&column)) {
-            Ok(())
-        } else {
-            Err(MethodStatus::NotAuthorized)
-        }
+        Ok(permitted_columns)
     }
 }
 
 struct ObjectSlice<'o, O> {
     object: &'o O,
-    start_field: Bound<u16>,
-    end_field: Bound<u16>,
+    fields: HashSet<u16>,
 }
 
 impl<'o, O> Tokenize for ObjectSlice<'o, O>
@@ -591,9 +619,8 @@ where
 {
     fn tokenize<T: Tokenizer>(&self, tokenizer: &mut T) -> Result<(), T::Error> {
         tokenizer.tokenize_list(|tokenizer| {
-            let fields = normalize_bounds(self.start_field, self.end_field, 0, O::FIELD_COUNT);
-            for field in fields {
-                self.object.tokenize_field(field, tokenizer)?;
+            for field in &self.fields {
+                self.object.tokenize_field(*field, tokenizer)?;
             }
             Ok(())
         })

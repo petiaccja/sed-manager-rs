@@ -45,8 +45,10 @@ impl Session {
     }
 
     pub fn handle_method_call(&mut self, call: Vec<u8>, sender: Sender<Result<Vec<u8>, Error>>) {
-        if call.len() > self.properties.max_gross_packet_size.get() - PACKET_HEADER_LEN - SUB_PACKET_HEADER_LEN {
-            let _ = sender.send(Err(Error::MethodTooLarge));
+        let max_method_call_size =
+            self.properties.max_gross_packet_size.get() - PACKET_HEADER_LEN - SUB_PACKET_HEADER_LEN;
+        if call.len() > max_method_call_size {
+            let _ = sender.send(Err(Error::MethodTooLarge { requested: call.len(), maximum: max_method_call_size }));
         } else {
             match &mut self.state {
                 State::Active { method_calls, .. } => {
@@ -461,7 +463,7 @@ mod tests {
         let (sender, receiver) = channel();
         session.handle_method_call(vec![0; 1025], sender);
         assert_that!(session.poll_action(time), eq(&Action::None));
-        assert_that!(receiver.try_recv(), ok(err(eq(&Error::MethodTooLarge))));
+        assert_that!(receiver.try_recv(), ok(err(pat!(&Error::MethodTooLarge { .. }))));
     }
 
     #[test]

@@ -475,10 +475,10 @@ mod tests {
             (time_0, Action::Send { protocol, data: request.to_bytes().unwrap() }, None),
             // Attempt 0
             (time_0, Action::Recv { protocol, transfer_len: 512 }, None),
-            (time_0, Action::None, Some(Err(Error::Unspecified))),
+            (time_0, Action::None, Some(Err(Error::NotSupported))),
             // Attempt 1
             (time_0 + 1 * delay, Action::Recv { protocol, transfer_len: 512 }, None),
-            (time_0 + 1 * delay, Action::None, Some(Err(Error::Unspecified))),
+            (time_0 + 1 * delay, Action::None, Some(Err(Error::NotSupported))),
             (time_0 + 1 * delay, Action::Sleep { until: time_0 + 1 * delay + RECV_FAILURE_BACKOFF }, None),
             // Attempt 2
             (time_0 + 2 * delay, Action::Recv { protocol, transfer_len: 512 }, None),
@@ -503,14 +503,14 @@ mod tests {
             (time_0, Action::Send { protocol, data: request.to_bytes().unwrap() }, None),
             // Attempt 0
             (time_0, Action::Recv { protocol, transfer_len: 512 }, None),
-            (time_0, Action::None, Some(Err::<ComPacket, _>(Error::Unspecified))),
+            (time_0, Action::None, Some(Err::<ComPacket, _>(Error::NotSupported))),
             // Attempt 1
             (time_0 + 1 * delay, Action::Recv { protocol, transfer_len: 512 }, None),
-            (time_0 + 1 * delay, Action::None, Some(Err(Error::Unspecified))),
+            (time_0 + 1 * delay, Action::None, Some(Err(Error::NotSupported))),
             (time_0 + 1 * delay, Action::Sleep { until: time_0 + 1 * delay + RECV_FAILURE_BACKOFF }, None),
             // Attempt 2
             (time_0 + 2 * delay, Action::Recv { protocol, transfer_len: 512 }, None),
-            (time_0 + 2 * delay, Action::None, Some(Err(Error::Unspecified))),
+            (time_0 + 2 * delay, Action::None, Some(Err(Error::NotSupported))),
             // Failed
             (time_0 + 3 * delay, Action::Recover, None),
             (time_0 + 3 * delay, Action::None, None),

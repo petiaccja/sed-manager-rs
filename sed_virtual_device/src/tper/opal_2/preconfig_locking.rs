@@ -2,7 +2,9 @@ use std::ops::Range;
 
 use sed_spec::{
     ace_expr,
-    objects::{AccessControl, AccessControlRef, Ace, Authority, CPin, LockingRange, MbrControl, TableDesc},
+    objects::{
+        AccessControl, AccessControlRef, Ace, Authority, AuthorityRef, CPin, LockingRange, MbrControl, TableDesc,
+    },
     preconfig::{
         core::shared::{invoking_id::THIS_SP, mbr_control, table},
         opal_2::{
@@ -559,12 +561,15 @@ pub fn authority() -> Table<Authority> {
             uid: Some(authority::ANYBODY),
             name: Some("Anybody".into()),
             is_class: Some(false),
+            class: Some(AuthorityRef::null()),
+            enabled: Some(true),
             ..Default::default()
         },
         Authority {
             uid: Some(authority::ADMINS),
             name: Some("Admins".into()),
             is_class: Some(true),
+            class: Some(AuthorityRef::null()),
             enabled: Some(true),
             ..Default::default()
         },
@@ -572,6 +577,7 @@ pub fn authority() -> Table<Authority> {
             uid: Some(authority::USERS),
             name: Some("Users".into()),
             is_class: Some(true),
+            class: Some(AuthorityRef::null()),
             enabled: Some(true),
             ..Default::default()
         },
@@ -582,7 +588,7 @@ pub fn authority() -> Table<Authority> {
         name: Some(format!("Admin{}", admin_idx).into()),
         is_class: Some(false),
         class: Some(authority::ADMINS),
-        enabled: Some(admin_idx == 1),
+        enabled: Some(admin_idx == 0),
         operation: Some(AuthMethod::Password),
         credential: Some(c_pin::ADMIN.get(admin_idx).unwrap().into()),
         ..Default::default()

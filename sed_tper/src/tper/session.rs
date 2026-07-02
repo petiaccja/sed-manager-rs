@@ -234,7 +234,7 @@ impl Session {
             MethodResult::<SingleFieldParamList<FieldType<O, TABLE, FIELD>, FIELD>>::from_tokens(&result_tokens)?.0?;
         match result.field {
             Some(value) => Ok(value),
-            None => Err(Error::FieldNotReturned),
+            None => Err(Error::FieldNotReturned { object: field.object().to_uid(), field: field.field() }),
         }
     }
 

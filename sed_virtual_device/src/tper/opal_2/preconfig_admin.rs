@@ -138,13 +138,13 @@ pub fn ace() -> Table<Ace> {
         Ace {
             uid: Some(ace::ANYBODY),
             boolean_expr: Some(ace_expr!((authority::ANYBODY))),
-            columns: Some(Ace::all_columns().collect()),
+            columns: Some((0..32).collect()),
             ..Default::default()
         },
         Ace {
             uid: Some(ace::ADMIN),
             boolean_expr: Some(ace_expr!((authority::ADMINS))),
-            columns: Some(Ace::all_columns().collect()),
+            columns: Some((0..32).collect()),
             ..Default::default()
         },
         // Authority table
