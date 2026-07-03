@@ -337,13 +337,13 @@ pub fn ace() -> Table<Ace> {
         Ace {
             uid: Some(ace::ANYBODY),
             boolean_expr: Some(ace_expr!((authority::ANYBODY))),
-            columns: Some(Ace::all_columns().collect()),
+            columns: Some((0..32).collect()),
             ..Default::default()
         },
         Ace {
             uid: Some(ace::ADMIN),
             boolean_expr: Some(ace_expr!((authority::ADMINS))),
-            columns: Some(Ace::all_columns().collect()),
+            columns: Some((0..32).collect()),
             ..Default::default()
         },
         Ace {
@@ -375,7 +375,7 @@ pub fn ace() -> Table<Ace> {
         Ace {
             uid: Some(ace::AUTHORITY_GET_ALL),
             boolean_expr: Some(ace_expr!((authority::ADMINS))),
-            columns: Some(Ace::all_columns().collect()),
+            columns: Some(Authority::all_columns().collect()),
             ..Default::default()
         },
         Ace {
@@ -444,13 +444,13 @@ pub fn ace() -> Table<Ace> {
         Ace {
             uid: Some(ace::DATA_STORE_GET_ALL),
             boolean_expr: Some(ace_expr!((authority::ADMINS))),
-            columns: Some(Ace::all_columns().collect()),
+            columns: Some((0..1).collect()),
             ..Default::default()
         },
         Ace {
             uid: Some(ace::DATA_STORE_SET_ALL),
             boolean_expr: Some(ace_expr!((authority::ADMINS))),
-            columns: Some(Ace::all_columns().collect()),
+            columns: Some((0..1).collect()),
             ..Default::default()
         },
     ];
@@ -479,7 +479,7 @@ pub fn ace() -> Table<Ace> {
         Ace {
             uid: Some(ace::K_AES_256_GLOBAL_RANGE_GEN_KEY),
             boolean_expr: Some(ace_expr!((authority::ADMINS))),
-            columns: Some(Ace::all_columns().collect()),
+            columns: Some(KAes256::all_columns().collect()),
             ..Default::default()
         },
         // Locking
@@ -515,7 +515,7 @@ pub fn ace() -> Table<Ace> {
             Ace {
                 uid: Some(ace::K_AES_256_RANGE_GEN_KEY.get(range_idx).unwrap()),
                 boolean_expr: Some(ace_expr!((authority::ADMINS))),
-                columns: Some(Ace::all_columns().collect()),
+                columns: Some(KAes256::all_columns().collect()),
                 ..Default::default()
             },
             // Locking

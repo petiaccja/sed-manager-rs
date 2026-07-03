@@ -143,7 +143,7 @@ impl Session {
             sp_info.life_cycle_state = Some(LifeCycleState::Manufactured);
             let sp = tper.sp_mut(sp_uid).expect_sp(sp_uid);
             let admin1_pin =
-                sp.c_pin_mut().get_mut(&locking::c_pin::ADMIN.get(1).unwrap()).expect_object("C_PIN", "ADMIN1");
+                sp.c_pin_mut().get_mut(&locking::c_pin::ADMIN.get(0).unwrap()).expect_object("C_PIN", "ADMIN1");
             admin1_pin.pin = sid_pin;
             Ok(ActivateResult)
         } else {
