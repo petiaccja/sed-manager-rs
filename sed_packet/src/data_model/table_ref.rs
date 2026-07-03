@@ -40,7 +40,7 @@ impl TableRef {
     }
 
     pub const fn diff(&self, rhs: Self) -> i64 {
-        (self.to_u64() & 0xFFFF_FFFF) as i64 - (rhs.to_u64() & 0xFFFF_FFFF) as i64
+        (self.to_u64() >> 32) as i64 - (rhs.to_u64() >> 32) as i64
     }
 }
 
@@ -188,5 +188,13 @@ mod tests {
         } else {
             assert!(object_ref.is_none());
         }
+    }
+
+    #[rstest]
+    #[case(TableRef::new(0x0000_0001_0000_0000), TableRef::new(0x0000_0001_0000_0000), 0)]
+    #[case(TableRef::new(0x0000_0001_0000_0000), TableRef::new(0x0000_0002_0000_0000), -1)]
+    #[case(TableRef::new(0x0000_0002_0000_0000), TableRef::new(0x0000_0001_0000_0000), 1)]
+    fn diff(#[case] lhs: TableRef, #[case] rhs: TableRef, #[case] expected: i64) {
+        assert_eq!(lhs.diff(rhs), expected);
     }
 }

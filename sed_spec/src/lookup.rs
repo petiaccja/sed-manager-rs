@@ -3,8 +3,10 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
+use std::ops::{Add, Sub};
+
 use sed_packet::{
-    ObjectRef, TableRef, Uid,
+    ObjectRef, TableRef, Uid, UidRange,
     discovery::{Feature, FeatureDescriptor},
 };
 
@@ -16,9 +18,31 @@ pub const SP_TABLE: TableRef = TableRef::new(0x00000205_00000000);
 pub const META_TABLE: TableRef = TableRef::new(0xFFFFFFFF_00000000);
 pub(crate) type SpRef = ObjectRef<{ SP_TABLE.to_u64() }>;
 
-pub struct NameRange {
+/// A contiguous range of UIDs whose names follow the pattern `{prefix}{n}{suffix}`,
+/// where `n` is a display index starting at `display_base`.
+pub struct UidRangeEntry<U> {
+    pub range: UidRange<U>,
     pub prefix: &'static str,
     pub suffix: &'static str,
+    pub display_base: u64,
+}
+
+impl<U> UidRangeEntry<U>
+where
+    U: Copy + PartialOrd + Add<u32, Output = U> + Sub<U, Output = i64>,
+{
+    pub fn by_name(&self, name: &str) -> Option<U> {
+        let digits = name.strip_prefix(self.prefix)?.strip_suffix(self.suffix)?;
+        let display_index: u64 = digits.parse().ok()?;
+        let index = display_index.checked_sub(self.display_base)?;
+        self.range.get(usize::try_from(index).ok()?)
+    }
+
+    pub fn by_uid(&self, uid: U) -> Option<String> {
+        let index = self.range.index_of(uid)?;
+        let display_index = index as u64 + self.display_base;
+        Some(format!("{}{}{}", self.prefix, display_index, self.suffix))
+    }
 }
 
 pub struct SortedMap<'a, K, V> {
@@ -37,15 +61,22 @@ impl<'a, K, V> SortedMap<'a, K, V> {
 pub struct TableIdLookup<'a> {
     pub by_name: SortedMap<'a, &'a str, TableRef>,
     pub by_uid: SortedMap<'a, TableRef, &'a str>,
+    pub ranges: &'a [UidRangeEntry<TableRef>],
 }
 
 impl<'a> TableIdLookup<'a> {
     pub fn by_name(&self, name: &str) -> Option<TableRef> {
-        self.by_name.get(&name).cloned()
+        self.by_name
+            .get(&name)
+            .cloned()
+            .or_else(|| self.ranges.iter().find_map(|range| range.by_name(name)))
     }
 
-    pub fn by_uid(&self, uid: TableRef) -> Option<&'a str> {
-        self.by_uid.get(&uid).cloned()
+    pub fn by_uid(&self, uid: TableRef) -> Option<String> {
+        self.by_uid
+            .get(&uid)
+            .map(|name| (*name).to_owned())
+            .or_else(|| self.ranges.iter().find_map(|range| range.by_uid(uid)))
     }
 }
 
@@ -60,6 +91,7 @@ pub struct ObjectTableLookup<'a, const TABLE: u64> {
     pub name: &'a str,
     pub by_name: SortedMap<'a, &'a str, ObjectRef<TABLE>>,
     pub by_uid: SortedMap<'a, ObjectRef<TABLE>, &'a str>,
+    pub ranges: &'a [UidRangeEntry<ObjectRef<TABLE>>],
 }
 
 impl<'a, const TABLE: u64> TableLookup for ObjectTableLookup<'a, TABLE> {
@@ -77,15 +109,20 @@ impl<'a, const TABLE: u64> TableLookup for ObjectTableLookup<'a, TABLE> {
     }
 
     fn by_name(&self, name: &str) -> Option<Uid> {
-        self.by_name.get(&name).map(|x| x.to_uid())
+        self.by_name
+            .get(&name)
+            .map(|x| x.to_uid())
+            .or_else(|| self.ranges.iter().find_map(|range| range.by_name(name)).map(|x| x.to_uid()))
     }
 
     fn by_uid(&self, uid: Uid) -> Option<String> {
-        if let Ok(uid) = ObjectRef::<TABLE>::try_from(uid) {
-            self.by_uid.get(&uid).map(|name| (*name).to_owned())
-        } else {
-            None
-        }
+        let Ok(uid) = ObjectRef::<TABLE>::try_from(uid) else {
+            return None;
+        };
+        self.by_uid
+            .get(&uid)
+            .map(|name| (*name).to_owned())
+            .or_else(|| self.ranges.iter().find_map(|range| range.by_uid(uid)))
     }
 }
 

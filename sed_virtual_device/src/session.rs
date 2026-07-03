@@ -1,5 +1,5 @@
 use std::collections::{BTreeMap, HashSet, VecDeque};
-use std::ops::{Add, Bound, Range, RangeBounds};
+use std::ops::{Add, Bound, Range};
 
 use crate::internal_error::Expect;
 use sed_packet::packet::{Packet, SubPacket, SubPacketKind};
@@ -288,9 +288,8 @@ impl Session {
 
             let table = if table == table_id::MBR {
                 sp.mbr().ok_or(MethodStatus::InvalidParameter)
-            } else if table_id::DATA_STORE.contains(&table) {
-                let index = table - table_id::DATA_STORE.start;
-                sp.data_store(index as usize).ok_or(MethodStatus::InvalidParameter)
+            } else if let Some(index) = table_id::DATA_STORE.index_of(table) {
+                sp.data_store(index).ok_or(MethodStatus::InvalidParameter)
             } else {
                 Err(MethodStatus::InvalidParameter)
             }?;
@@ -482,9 +481,8 @@ impl Session {
         let table_uid = TableRef::try_from(invoking_id).map_err(|_| MethodStatus::InvalidParameter)?;
         let table = if table_uid == table_id::MBR {
             sp.mbr_mut().ok_or(MethodStatus::InvalidParameter)
-        } else if table_id::DATA_STORE.contains(&table_uid) {
-            let index = table_uid - table_id::DATA_STORE.start;
-            sp.data_store_mut(index as usize).ok_or(MethodStatus::InvalidParameter)
+        } else if let Some(index) = table_id::DATA_STORE.index_of(table_uid) {
+            sp.data_store_mut(index).ok_or(MethodStatus::InvalidParameter)
         } else {
             Err(MethodStatus::InvalidParameter)
         }?;

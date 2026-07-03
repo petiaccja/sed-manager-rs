@@ -1,4 +1,3 @@
-use core::ops::{Bound, RangeBounds};
 use std::ops::{Add, Sub};
 
 #[derive(Debug, Clone, Copy)]
@@ -29,15 +28,26 @@ impl<U> UidRange<U> {
             _ => 0,
         }
     }
-}
 
-impl<U> RangeBounds<U> for UidRange<U> {
-    fn start_bound(&self) -> Bound<&U> {
-        Bound::Included(&self.start)
+    /// The inverse of [`Self::get`]: returns the index of `uid` within the range,
+    /// or `None` if `uid` is out of bounds or not aligned with `step`.
+    pub fn index_of(&self, uid: U) -> Option<usize>
+    where
+        U: Clone + PartialOrd + Sub<U, Output = i64>,
+    {
+        if !self.contains(uid.clone()) {
+            return None;
+        }
+        let offset = uid - self.start.clone();
+        let index = offset / self.step as i64;
+        Some(usize::try_from(index).expect("only u32::MAX entries, `contains` ensures positive"))
     }
 
-    fn end_bound(&self) -> Bound<&U> {
-        Bound::Excluded(&self.end)
+    pub fn contains(&self, uid: U) -> bool
+    where
+        U: Clone + PartialOrd + Sub<U, Output = i64>,
+    {
+        self.start <= uid && uid < self.end && (uid - self.start.clone()) % self.step as i64 == 0
     }
 }
 
@@ -160,6 +170,41 @@ mod tests {
         {
             let range = UidRange { start: START, end: START + 11, step: 2 };
             assert_eq!(range.len(), 5);
+        }
+    }
+
+    #[test]
+    fn index_of_in_bounds() {
+        let range = UidRange { start: START, end: END_LONG, step: 2 };
+        assert_eq!(range.index_of(START), Some(0));
+        assert_eq!(range.index_of(START + 2), Some(1));
+        assert_eq!(range.index_of(START + 4), Some(2));
+    }
+
+    #[test]
+    fn index_of_before_start() {
+        let range = UidRange { start: START + 4, end: END_LONG, step: 2 };
+        assert_eq!(range.index_of(START), None);
+    }
+
+    #[test]
+    fn index_of_at_end_excluded() {
+        let range = UidRange { start: START, end: END, step: 1 };
+        assert_eq!(range.index_of(END), None);
+    }
+
+    #[test]
+    fn index_of_misaligned_with_step() {
+        let range = UidRange { start: START, end: END_LONG, step: 2 };
+        assert_eq!(range.index_of(START + 1), None);
+    }
+
+    #[test]
+    fn index_of_agrees_with_get() {
+        let range = UidRange { start: START, end: END_LONG, step: 2 };
+        for index in 0..range.len() {
+            let uid = range.get(index).unwrap();
+            assert_eq!(range.index_of(uid), Some(index));
         }
     }
 }

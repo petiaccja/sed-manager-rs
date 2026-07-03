@@ -124,6 +124,29 @@ impl Object {
         let base = self.base();
         proc_macro2::Literal::from_str(&format!("0x{base:016x}_u64")).unwrap()
     }
+
+    /// Generates a `crate::lookup::UidRangeEntry` literal for `by_name`/`by_uid` lookups
+    /// over a UID range. `ctor` is the type used to construct the range's bounds
+    /// (`ObjectRef` for object tables, `TableRef` for the table ID table).
+    pub fn generate_range_entry(&self, name: &str, ctor: &Ident) -> Expr {
+        let Object::Range { count, step, display_base, .. } = self else {
+            panic!("generate_range_entry can only be called on Object::Range");
+        };
+        let (prefix, suffix) = name.split_once("{n}").unwrap_or((name, ""));
+        let base_hex = self.base_hex();
+        parse_quote! {
+            crate::lookup::UidRangeEntry {
+                range: UidRange {
+                    start: #ctor::new(#base_hex),
+                    end: #ctor::new(#base_hex).add(#count as u32 * #step as u32),
+                    step: #step as u32,
+                },
+                prefix: #prefix,
+                suffix: #suffix,
+                display_base: #display_base,
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -166,6 +189,9 @@ impl Table {
         let by_uid: Vec<_> = self.by_uid_unique();
         let len = by_name.len();
 
+        let ranges: Vec<_> = self.by_ranges(&format_ident!("TableRef"));
+        let ranges_len = ranges.len();
+
         Ok(parse_quote! {
             pub mod #mod_name {
                 use ::sed_packet::{TableRef, UidRange};
@@ -180,9 +206,14 @@ impl Table {
                     #(#by_uid),*
                 ];
 
+                const RANGES: [crate::lookup::UidRangeEntry<TableRef>; #ranges_len] = [
+                    #(#ranges),*
+                ];
+
                 pub const LOOKUP: crate::lookup::TableIdLookup<'static> = crate::lookup::TableIdLookup{
                     by_name: crate::lookup::SortedMap{ items: &BY_NAME },
                     by_uid: crate::lookup::SortedMap{ items: &BY_UID },
+                    ranges: &RANGES,
                 };
             }
         })
@@ -237,6 +268,9 @@ impl Table {
         let by_uid: Vec<_> = self.by_uid_unique();
         let len = by_name.len();
 
+        let ranges: Vec<_> = self.by_ranges(&format_ident!("ObjectRef"));
+        let ranges_len = ranges.len();
+
         Ok(parse_quote! {
             pub mod #mod_name {
                 use ::sed_packet::{TableRef, ObjectRef, UidRange};
@@ -253,10 +287,15 @@ impl Table {
                     #(#by_uid),*
                 ];
 
+                const RANGES: [crate::lookup::UidRangeEntry<ObjectRef<{THIS_TABLE.to_u64()}>>; #ranges_len] = [
+                    #(#ranges),*
+                ];
+
                 pub const LOOKUP: crate::lookup::ObjectTableLookup<'static, {THIS_TABLE.to_u64()}> = crate::lookup::ObjectTableLookup{
                     name: #name,
                     by_name: crate::lookup::SortedMap{ items: &BY_NAME },
                     by_uid: crate::lookup::SortedMap{ items: &BY_UID },
+                    ranges: &RANGES,
                 };
             }
         })
@@ -295,6 +334,16 @@ impl Table {
                 parse_quote! { (#ident, #name) }
             })
             .collect()
+    }
+
+    fn by_ranges(&self, ctor: &Ident) -> Vec<Expr> {
+        let mut ranges: Vec<_> = self
+            .0
+            .iter()
+            .filter_map(|(name, object)| matches!(object, Object::Range { .. }).then_some((name, object)))
+            .collect();
+        ranges.sort_by_key(|(_, object)| object.base());
+        ranges.iter().map(|(name, object)| object.generate_range_entry(name, ctor)).collect()
     }
 }
 
