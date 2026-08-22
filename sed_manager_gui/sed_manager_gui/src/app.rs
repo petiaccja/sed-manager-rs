@@ -13,7 +13,7 @@ use sed_manager_gui_slint as ui;
 use sed_packet::{MaxBytes, com_id::ComIdState};
 use sed_spec::{
     objects::{AuthorityRef, SecurityProviderRef},
-    preconfig::core::shared::authority::ANYBODY,
+    preconfig::{core::shared::authority::ANYBODY, opal_2::locking},
 };
 use sed_tper::{PropertiesChanged, Tper};
 use sed_virtual_device::{VIRTUAL_DEVICE_PATH, VirtualDevice};
@@ -437,8 +437,16 @@ impl App {
 
                     // Map and filter user names and UIDs for the password change
                     // activity. TODO: move this into Slint when feature is available.
+                    const NON_PASSWORD_AUTHORITIES: [AuthorityRef; 3] = [
+                        ANYBODY,
+                        locking::authority::ADMINS,
+                        locking::authority::USERS,
+                    ];
                     let individual_authorities = Rc::from(authorities.filter(|auth| {
-                        !auth.is_class && auth.enabled && auth.uid.value.cast_unsigned() != ANYBODY.to_u64()
+                        let auth_ref = AuthorityRef::try_from(auth.uid.value.cast_unsigned());
+                        !auth.is_class
+                            && auth.enabled
+                            && auth_ref.is_ok_and(|auth| !NON_PASSWORD_AUTHORITIES.contains(&auth))
                     }));
                     let individual_authority_names = individual_authorities.clone().map(|auth| auth.name);
                     let individual_authority_uids = individual_authorities.clone().map(|auth| auth.uid);
