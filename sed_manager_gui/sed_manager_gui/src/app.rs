@@ -12,12 +12,12 @@ use sed_manager::{Error, Spec};
 use sed_manager_gui_slint as ui;
 use sed_packet::{MaxBytes, com_id::ComIdState};
 use sed_spec::{
-    objects::{AuthorityRef, SecurityProviderRef},
+    objects::{Authority, AuthorityRef, SecurityProviderRef},
     preconfig::{core::shared::authority::ANYBODY, opal_2::locking},
 };
 use sed_tper::{PropertiesChanged, Tper};
 use sed_virtual_device::{VIRTUAL_DEVICE_PATH, VirtualDevice};
-use slint::{ComponentHandle, ModelExt as _, ModelRc, SharedString, ToSharedString, VecModel, spawn_local};
+use slint::{ComponentHandle, Model, ModelExt as _, ModelRc, SharedString, ToSharedString, VecModel, spawn_local};
 use tracing::{error, instrument};
 
 use crate::{
@@ -385,20 +385,10 @@ impl App {
             })
             .display(move |mut ui_device, spec, result| match result {
                 Ok((authorities, sp_ref)) => {
-                    // Convert the authority structures to their UI counterparts.
-                    let features = spec.map(|spec| spec.discovery.feature_descriptors.as_slice()).unwrap_or(&[]);
-                    let authorities: Vec<_> =
-                        authorities.iter().map(|auth| auth.into_ui_name(features, Some(sp_ref))).collect();
-                    let authorities = Rc::from(VecModel::from(authorities));
-                    ui_device.admin_sp.authorities = authorities.clone().into();
+                    let (authorities, individual_authority_names, individual_authority_uids) =
+                        display_authorities(spec.clone(), &authorities, Some(sp_ref));
 
-                    // Map and filter user names and UIDs for the password change
-                    // activity. TODO: move this into Slint when feature is available.
-                    let individual_authorities = Rc::from(authorities.filter(|auth| {
-                        !auth.is_class && auth.enabled && auth.uid.value.cast_unsigned() != ANYBODY.to_u64()
-                    }));
-                    let individual_authority_names = individual_authorities.clone().map(|auth| auth.name);
-                    let individual_authority_uids = individual_authorities.clone().map(|auth| auth.uid);
+                    ui_device.admin_sp.authorities = authorities.into();
                     ui_device.admin_sp.individual_authority_names = Rc::from(individual_authority_names).into();
                     ui_device.admin_sp.individual_authority_uids = Rc::from(individual_authority_uids).into();
 
@@ -428,28 +418,10 @@ impl App {
             })
             .display(move |mut ui_device, spec, result| match result {
                 Ok((authorities, sp_ref)) => {
-                    // Convert the authority structures to their UI counterparts.
-                    let features = spec.map(|spec| spec.discovery.feature_descriptors.as_slice()).unwrap_or(&[]);
-                    let authorities: Vec<_> =
-                        authorities.iter().map(|auth| auth.into_ui_name(features, sp_ref)).collect();
-                    let authorities = Rc::from(VecModel::from(authorities));
-                    ui_device.locking_sp.authorities = authorities.clone().into();
+                    let (authorities, individual_authority_names, individual_authority_uids) =
+                        display_authorities(spec.clone(), &authorities, sp_ref);
 
-                    // Map and filter user names and UIDs for the password change
-                    // activity. TODO: move this into Slint when feature is available.
-                    const NON_PASSWORD_AUTHORITIES: [AuthorityRef; 3] = [
-                        ANYBODY,
-                        locking::authority::ADMINS,
-                        locking::authority::USERS,
-                    ];
-                    let individual_authorities = Rc::from(authorities.filter(|auth| {
-                        let auth_ref = AuthorityRef::try_from(auth.uid.value.cast_unsigned());
-                        !auth.is_class
-                            && auth.enabled
-                            && auth_ref.is_ok_and(|auth| !NON_PASSWORD_AUTHORITIES.contains(&auth))
-                    }));
-                    let individual_authority_names = individual_authorities.clone().map(|auth| auth.name);
-                    let individual_authority_uids = individual_authorities.clone().map(|auth| auth.uid);
+                    ui_device.locking_sp.authorities = authorities.into();
                     ui_device.locking_sp.individual_authority_names = Rc::from(individual_authority_names).into();
                     ui_device.locking_sp.individual_authority_uids = Rc::from(individual_authority_uids).into();
 
@@ -651,6 +623,36 @@ impl App {
             }
         }
     }
+}
+
+fn display_authorities(
+    spec: Option<&Spec>,
+    authorities: &[Authority],
+    sp_ref: Option<SecurityProviderRef>,
+) -> (
+    Rc<VecModel<ui::Authority>>,
+    impl Model<Data = SharedString> + use<>,
+    impl Model<Data = ui::Uid> + use<>,
+) {
+    // Convert the authority structures to their UI counterparts.
+    let features = spec.map(|spec| spec.discovery.feature_descriptors.as_slice()).unwrap_or(&[]);
+    let authorities: Vec<_> = authorities.iter().map(|auth| auth.into_ui_name(features, sp_ref)).collect();
+    let authorities = Rc::from(VecModel::from(authorities));
+
+    // Map and filter user names and UIDs for the password change
+    // activity. TODO: move this into Slint when feature is available.
+    const NON_PASSWORD_AUTHORITIES: [AuthorityRef; 3] = [
+        ANYBODY,
+        locking::authority::ADMINS,
+        locking::authority::USERS,
+    ];
+    let individual_authorities = Rc::from(authorities.clone().filter(|auth| {
+        let auth_ref = AuthorityRef::try_from(auth.uid.value.cast_unsigned());
+        !auth.is_class && auth.enabled && auth_ref.is_ok_and(|auth| !NON_PASSWORD_AUTHORITIES.contains(&auth))
+    }));
+    let individual_authority_names = individual_authorities.clone().map(|auth| auth.name);
+    let individual_authority_uids = individual_authorities.clone().map(|auth| auth.uid);
+    (authorities, individual_authority_names, individual_authority_uids)
 }
 
 fn retain_unicode(paths: &mut HashSet<PathBuf>) -> Vec<PathBuf> {
