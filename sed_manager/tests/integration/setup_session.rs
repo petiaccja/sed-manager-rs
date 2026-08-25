@@ -155,7 +155,7 @@ async fn revert_secondary_sp_ex(_with_tracing: WithTracing) {
     session.take_owneship(new_sid_password.clone()).await.unwrap();
     session.activate_secondary_sp(new_sid_password.clone()).await.unwrap();
 
-    let admin1 = opal_locking::authority::ADMIN.get(1).unwrap();
+    let admin1 = opal_locking::authority::ADMIN.get(0).unwrap();
     let result = session.revert_secondary_sp_ex(admin1, new_sid_password, None).await;
     assert_that!(result, ok(anything()));
 
