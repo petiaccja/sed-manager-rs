@@ -305,6 +305,9 @@ export component AuthoritiesTab {
     in property <CommandStatus> command-status;
     in property <Mbr> mbr;
 
+    callback commit-authorities();
+    callback discard-authorities();
+
     VerticalLayout {
         sidebar := AuthoritySideBar {
             horizontal-stretch: 0.0;
@@ -349,11 +352,19 @@ export component AuthoritiesTab {
                     text: "Save authorities";
                     primary: true;
                     enabled: !command-status.session-busy && !command-status.session-busy;
+
+                    clicked => {
+                        commit-authorities();
+                    }
                 }
 
                 Button {
                     text: "Discard";
                     width: 8rem;
+
+                    clicked => {
+                        discard-authorities();
+                    }
                 }
             }
         }

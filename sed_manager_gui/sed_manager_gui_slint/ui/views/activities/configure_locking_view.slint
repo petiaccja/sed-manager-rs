@@ -7,6 +7,9 @@ import {
     CommandStatus,
     SecurityProvider,
     LockingRange,
+    Sector,
+    SectorUtil,
+    Uid,
 } from "../../data/lib.slint";
 import {
     TabWidget,
@@ -15,57 +18,116 @@ import {
     CheckBox,
     Palette,
     Button,
+    StyleMetrics,
 } from "std-widgets.slint";
-import { Sector, SectorUtil } from "../../data/sector.slint";
 import { LockingRangesTab } from "locking/locking_ranges.slint";
 import { AuthoritiesTab } from "locking/authorities.slint";
 import { ShadowMbrTab } from "locking/shadow_mbr.slint";
+import { LoginPanel } from "locking/login.slint";
+import { Icons } from "../../resources/lib.slint";
 
 
 export component ConfigureLockingView {
     in property <CommandStatus> command-status;
     in-out property <SecurityProvider> locking-sp;
 
-    TabWidget {
-        Tab {
-            title: "Locking ranges";
+    callback login(authority: Uid, password: string);
+    callback logout();
+    callback commit-ranges();
+    callback discard-ranges();
+    callback commit-authorities();
+    callback discard-authorities();
 
-            VerticalLayout {
-                alignment: start;
-                padding-top: 1.2rem;
+    if !command-status.secondary-session-active: VerticalLayout {
+        alignment: start;
+        HorizontalLayout {
+            alignment: center;
+            LoginPanel {
+                preferred-width: 16rem;
+                command-status: command-status;
+                locking-sp: locking-sp;
 
-                LockingRangesTab {
-                    locking-ranges <=> locking-sp.locking-ranges;
-                    command-status: command-status;
+                login(authority, password) => {
+                    login(authority, password)
+                }
+            }
+        }
+    }
+
+    if command-status.secondary-session-active: VerticalLayout {
+        alignment: start;
+        spacing: StyleMetrics.layout-spacing;
+
+        HorizontalLayout {
+            alignment: end;
+            Button {
+                text: "Logout";
+                icon: Icons.logout;
+                colorize-icon: true;
+
+                clicked => {
+                    logout();
                 }
             }
         }
 
-        Tab {
-            title: "Authorities";
+        TabWidget {
+            Tab {
+                title: "Locking ranges";
 
-            VerticalLayout {
-                alignment: start;
-                padding-top: 1.2rem;
+                VerticalLayout {
+                    alignment: start;
+                    padding-top: 1.2rem;
 
-                AuthoritiesTab {
-                    authorities <=> locking-sp.authorities;
-                    command-status: command-status;
-                    mbr: locking-sp.mbr;
+                    LockingRangesTab {
+                        locking-ranges <=> locking-sp.locking-ranges;
+                        command-status: command-status;
+
+                        commit-ranges => {
+                            commit-ranges()
+                        }
+
+                        discard-ranges => {
+                            discard-ranges()
+                        }
+                    }
                 }
             }
-        }
 
-        Tab {
-            title: "Shadow MBR";
+            Tab {
+                title: "Authorities";
 
-            VerticalLayout {
-                alignment: start;
-                padding-top: 1.2rem;
+                VerticalLayout {
+                    alignment: start;
+                    padding-top: 1.2rem;
 
-                ShadowMbrTab {
-                    command-status: command-status;
-                    mbr <=> locking-sp.mbr;
+                    AuthoritiesTab {
+                        authorities <=> locking-sp.authorities;
+                        command-status: command-status;
+                        mbr: locking-sp.mbr;
+
+                        commit-authorities => {
+                            commit-authorities()
+                        }
+
+                        discard-authorities => {
+                            discard-authorities()
+                        }
+                    }
+                }
+            }
+
+            Tab {
+                title: "Shadow MBR";
+
+                VerticalLayout {
+                    alignment: start;
+                    padding-top: 1.2rem;
+
+                    ShadowMbrTab {
+                        command-status: command-status;
+                        mbr <=> locking-sp.mbr;
+                    }
                 }
             }
         }

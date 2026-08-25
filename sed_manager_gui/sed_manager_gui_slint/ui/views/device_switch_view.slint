@@ -10,6 +10,12 @@ export component DeviceSwitchView {
     callback change-password(device: string, sp: Uid, authority: Uid, current-password: string, new-password: string);
     callback list-admin-authorities(device: string, silent: bool);
     callback list-locking-authorities(device: string, silent: bool);
+    callback login(device: string, authority: Uid, password: string);
+    callback logout(device: string);
+    callback commit-ranges(device: string);
+    callback discard-ranges(device: string);
+    callback commit-authorities(device: string);
+    callback discard-authorities(device: string);
     callback revert-device(device: string, scope: RevertScope, authority: RevertAuthority, password: string);
     callback query-stack-status(device: string);
     callback reset-stack(device: string);

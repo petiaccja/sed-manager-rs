@@ -198,6 +198,12 @@ export component DeviceView {
     callback change-password(sp: Uid, authority: Uid, current-password: string, new-password: string);
     callback list-admin-authorities(silent: bool);
     callback list-locking-authorities(silent: bool);
+    callback login(authority: Uid, password: string);
+    callback logout();
+    callback commit-ranges();
+    callback discard-ranges();
+    callback commit-authorities();
+    callback discard-authorities();
     callback revert-device(scope: RevertScope, authority: RevertAuthority, password: string);
     callback query-stack-status();
     callback reset-stack();
@@ -230,6 +236,12 @@ export component DeviceView {
                         if device.locking-sp.authorities.length == 0 && device.config.locking-enabled {
                             root.list-locking-authorities(true)
                         }
+                    }
+                    if self.selected-activity == DeviceActivity.configure-locking
+                        && device.locking-sp.authorities.length == 0
+                        && device.config.locking-enabled
+                        && !device.command-status.secondary-session-active {
+                        root.list-locking-authorities(true)
                     }
                 }
             }
@@ -292,7 +304,27 @@ export component DeviceView {
 
             if activity-bar.selected-activity == DeviceActivity.configure-locking: ConfigureLockingView {
                 preferred-width: 16rem;
+                command-status: device.command-status;
                 locking-sp <=> device.locking-sp;
+
+                login(authority, password) => {
+                    login(authority, password)
+                }
+                logout => {
+                    logout()
+                }
+                commit-ranges => {
+                    commit-ranges()
+                }
+                discard-ranges => {
+                    discard-ranges()
+                }
+                commit-authorities => {
+                    commit-authorities()
+                }
+                discard-authorities => {
+                    discard-authorities()
+                }
             }
 
             if activity-bar.selected-activity == DeviceActivity.revert-device: ScrollView {

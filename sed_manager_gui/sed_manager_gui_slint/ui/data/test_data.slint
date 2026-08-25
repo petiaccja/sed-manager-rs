@@ -194,6 +194,27 @@ export global TestData {
         },
         {
             identity: {
+                name: "Storaginator Lock",
+                serial: "SERIAL#3244",
+                path: "/dev/nvme0",
+                firmware: "FIRMWARE#4543",
+                interface: "NVMe",
+                security_commands: true,
+                is_removable: false,
+            },
+            discovery: discovery-opal-1,
+            config: { sid_msid_pin_differ: true, locking_enabled: true },
+            stack-status: stack-status-normal,
+            command-status: {
+                tper-busy: false,
+                session-busy: false,
+                secondary-session-active: true,
+            },
+            admin-sp: admin-sp-opal-2,
+            locking-sp: locking-sp-opal-2,
+        },
+        {
+            identity: {
                 name: "Storaginator Busy",
                 serial: "SERIAL#3244",
                 path: "/dev/nvme0",

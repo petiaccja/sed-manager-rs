@@ -255,6 +255,9 @@ export component LockingRangesTab {
     in-out property <[LockingRange]> locking-ranges;
     in property <CommandStatus> command-status;
 
+    callback commit-ranges();
+    callback discard-ranges();
+
     VerticalLayout {
         alignment: start;
         spacing: 1.2rem;
@@ -277,11 +280,19 @@ export component LockingRangesTab {
                 width: 8rem;
                 primary: true;
                 enabled: !command-status.session-busy && !command-status.session-busy;
+
+                clicked => {
+                    commit-ranges()
+                }
             }
 
             Button {
                 text: "Discard";
                 width: 8rem;
+
+                clicked => {
+                    discard-ranges()
+                }
             }
         }
     }

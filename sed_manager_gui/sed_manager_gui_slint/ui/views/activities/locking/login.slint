@@ -1,0 +1,40 @@
+import { LineEdit, ComboBox, StyleMetrics, Button } from "std-widgets.slint";
+import { CommandStatus, SecurityProvider, Uid } from "../../../data/lib.slint";
+import { Icons } from "../../../resources/lib.slint";
+
+export component LoginPanel {
+    in property <CommandStatus> command-status;
+    in property <SecurityProvider> locking-sp;
+
+    callback login(authority: Uid, password: string);
+
+    VerticalLayout {
+        alignment: start;
+        spacing: StyleMetrics.layout-spacing;
+
+        Text {
+            text: "Login to the " + locking-sp.name + " SP:";
+        }
+
+        authority := ComboBox {
+            model: locking-sp.individual-authority-names;
+        }
+
+        password := LineEdit {
+            input-type: InputType.password;
+            placeholder-text: "Password";
+        }
+
+        Button {
+            primary: true;
+            text: "Login";
+            icon: Icons.login;
+            colorize-icon: true;
+            enabled: !command-status.tper-busy && !command-status.session-busy && !command-status.secondary-session-active;
+
+            clicked => {
+                login(locking-sp.individual-authority-uids[authority.current-index], password.text)
+            }
+        }
+    }
+}
