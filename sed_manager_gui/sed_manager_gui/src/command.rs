@@ -359,14 +359,20 @@ where
                     .spawn(async move { run_fn(tper, Mut::Mutex(session)).await }.in_current_span())
                     .await
                     .unwrap();
-                device_list
-                    .ui
-                    .update(&device_id, move |value| update_fn(value, backend.specification.as_ref(), output));
+                let spec = backend.specification.as_ref();
+                device_list.ui.update(&device_id, move |value| update_fn(value, spec, output));
 
                 // Indicate to UI that we're NO LONGER busy.
                 device_list.ui.update(&device_id, |value| {
                     let command_status = value.command_status.clone();
                     value.with_command_status(command_status.with_session_busy(false))
+                });
+
+                // Update active session.
+                let session = backend.session.lock_arc().await;
+                device_list.ui.update(&device_id, |mut value| {
+                    value.command_status.secondary_session_active = matches!(*session, Session::LockingConfig(_));
+                    value
                 });
             }
             .in_current_span(),

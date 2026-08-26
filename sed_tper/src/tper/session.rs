@@ -475,6 +475,13 @@ impl Session {
     /// separate async task, and does not wait for the result. This may cause
     /// timing issues, and TPer might reply that it's busy when you start
     /// another session.
+    ///
+    /// # Errors
+    ///
+    /// Closing the session may fail, for example,
+    /// when the session has already been aborted by the device and no longer
+    /// exists, or when there was a genuine communication error. You can handle
+    /// the individual errors, but it's best to just do a stack reset.
     #[instrument(level = "info", skip(self), ret, err)]
     pub async fn close(self) -> Result<(), Error> {
         let needs_eos = self.needs_eos.swap(false, Ordering::Relaxed);

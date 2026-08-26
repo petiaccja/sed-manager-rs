@@ -23,6 +23,7 @@ use tracing::{error, instrument};
 use crate::{
     command::{Command, ExpectInEventLoop},
     device_list::DeviceList,
+    session::Session,
     toast::ToastQueue,
     ui_conv::{CombinedProperties, IntoUi, IntoUiName, TryFromUi as _},
     ui_ext::{DeviceExt as _, DiscoveryExt, StackStatusExt},
@@ -91,6 +92,16 @@ impl App {
             ui.on_list_locking_authorities(move |path, silent| {
                 view_model.clone().list_locking_authorities(path.to_string().into(), silent)
             });
+        }
+        {
+            let view_model = view_model.clone();
+            ui.on_login(move |path, authority, password| {
+                view_model.clone().login(path.to_string().into(), authority, password)
+            });
+        }
+        {
+            let view_model = view_model.clone();
+            ui.on_logout(move |path| view_model.clone().logout(path.to_string().into()));
         }
         {
             let view_model = view_model.clone();
@@ -213,8 +224,12 @@ impl App {
             .on_device_list(async move |device_list| {
                 device_list.ui.remove(&path);
                 if let Some(device) = device_list.backend.remove(&path) {
-                    let session = device.read().await.session.clone();
-                    session.lock().await.close().await;
+                    let device = device.read().await;
+                    let session = device.session.clone();
+                    // We could do a stack reset here, but perhaps it's better
+                    // to let whoever opens the device again to do it, because
+                    // it's not 100% that it's necessary despite the failure.
+                    let _ = session.lock().await.close().await;
                 }
             })
             .display(move |_device_list, _| {
@@ -435,6 +450,48 @@ impl App {
                     ui_device
                 }
             })
+            .run();
+    }
+
+    #[instrument(skip(self, password))]
+    fn login(self: Rc<Self>, path: PathBuf, authority: ui::Uid, password: SharedString) {
+        let Some(password) = self.try_convert_password(password.as_str()) else {
+            return;
+        };
+        let Ok(authority) = AuthorityRef::try_from_ui(&authority) else {
+            error!(authority_ref = &authority.value, "invalid authority reference");
+            self.toast_queue.error(
+                "Invalid authority reference".into(),
+                "The UID is not an authority reference. Please report this bug.".into(),
+            );
+            return;
+        };
+
+        self.command()
+            .on_session(path.clone(), async move |tper, mut session| {
+                session.start_locking_config_session(tper, authority, Some(password)).await.map(|_| ())
+            })
+            .display(move |ui_device, _spec, result| match result {
+                Ok(_) => ui_device,
+                Err(err) => {
+                    self.toast_queue.error("Login failed".into(), err.to_string());
+                    ui_device
+                }
+            })
+            .run();
+    }
+
+    #[instrument(skip(self))]
+    fn logout(self: Rc<Self>, path: PathBuf) {
+        self.command()
+            .on_session(path.clone(), async move |tper, mut session| {
+                if matches!(*session, Session::LockingConfig(_)) {
+                    if let Err(_) = session.close().await {
+                        let _ = tper.stack_reset(tper.com_id(), tper.com_id_ext()).await;
+                    }
+                }
+            })
+            .display(move |ui_device, _spec, _result| ui_device)
             .run();
     }
 

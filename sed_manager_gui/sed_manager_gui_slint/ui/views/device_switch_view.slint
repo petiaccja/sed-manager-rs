@@ -50,6 +50,24 @@ export component DeviceSwitchView {
                 list-locking-authorities(silent) => {
                     list-locking-authorities(device.identity.path, silent)
                 }
+                login(authority, password) => {
+                    login(device.identity.path, authority, password)
+                }
+                logout() => {
+                    logout(device.identity.path)
+                }
+                commit-ranges() => {
+                    commit-ranges(device.identity.path)
+                }
+                discard-ranges() => {
+                    discard-ranges(device.identity.path)
+                }
+                commit-authorities() => {
+                    commit-authorities(device.identity.path)
+                }
+                discard-authorities() => {
+                    discard-authorities(device.identity.path)
+                }
                 revert-device(scope, authority, password) => {
                     revert-device(device.identity.path, scope, authority, password)
                 };
