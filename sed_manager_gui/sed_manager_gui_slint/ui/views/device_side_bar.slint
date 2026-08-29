@@ -7,6 +7,8 @@ import { IslandButton } from "../widgets/island_button.slint";
 component DeviceSideBarItem inherits IslandButton {
     has-background: true;
     has-idle-background: false;
+    accessible-role: button;
+    accessible-label: !identity.name.is-empty ? identity.name : identity.path;
 
     in property <Identity> identity;
 
@@ -91,6 +93,7 @@ export component DeviceSideBar {
                 for device[index] in devices: DeviceSideBarItem {
                     is-selected: index == selected;
                     identity: device.identity;
+                    accessible-id: "device-side-bar-item-" + index;
 
                     clicked => {
                         root.selected = index

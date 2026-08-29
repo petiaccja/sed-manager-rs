@@ -16,6 +16,8 @@ export enum TextPlacement {
 
 export component IconButton inherits IslandButton {
     has-background: false;
+    accessible-role: button;
+    accessible-label: text;
 
     in property <image> icon;
     in property <string> text;

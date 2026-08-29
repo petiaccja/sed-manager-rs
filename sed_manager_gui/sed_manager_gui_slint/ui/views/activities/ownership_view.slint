@@ -15,6 +15,7 @@ export component TakeOwnershipView {
 
         Button {
             text: "Take owneship";
+            accessible-id: "take-ownership-submit";
             primary: true;
             enabled: form.matches && !command-status.session-busy && !command-status.tper-busy;
             clicked => {

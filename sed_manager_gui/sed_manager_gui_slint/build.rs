@@ -14,5 +14,10 @@ fn rerun_if_slint_changed(dir: &Path) {
 
 fn main() {
     rerun_if_slint_changed(Path::new("ui"));
-    slint_build::compile("ui/main_window.slint").expect("Slint build failed");
+
+    // Slint debug info is needed by `i-slint-backend-testing`'s `ElementHandle` API.
+    // Add it ONLY in debug builds.
+    let debug_info = std::env::var("PROFILE").as_deref() == Ok("debug");
+    let config = slint_build::CompilerConfiguration::new().with_debug_info(debug_info);
+    slint_build::compile_with_config("ui/main_window.slint", config).expect("Slint build failed");
 }

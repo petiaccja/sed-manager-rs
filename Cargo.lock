@@ -1939,6 +1939,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "i-slint-backend-testing"
+version = "1.17.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "afd45731b1c4b973357f18dd6e4f95811ba496c73b56f21363d6c05af0dc2d0d"
+dependencies = [
+ "cfg_aliases",
+ "i-slint-common",
+ "i-slint-core",
+ "vtable",
+]
+
+[[package]]
 name = "i-slint-backend-winit"
 version = "1.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4568,6 +4580,7 @@ dependencies = [
  "async-broadcast",
  "async-lock",
  "futures",
+ "i-slint-backend-testing",
  "pin-project",
  "sed_async",
  "sed_device",

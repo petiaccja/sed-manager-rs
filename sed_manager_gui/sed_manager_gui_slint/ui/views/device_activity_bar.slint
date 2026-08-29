@@ -40,6 +40,7 @@ export component DeviceActivityBar {
 
             IconButton {
                 text: "Discovery";
+                accessible-id: "activity-discovery";
                 icon: Icons.info;
                 preferred-height: button-height;
                 icon-color: PaletteExtra.info-foreground;
@@ -58,6 +59,7 @@ export component DeviceActivityBar {
 
             if !config.sid-msid-pin-differ: IconButton {
                 text: "Take ownership";
+                accessible-id: "activity-take-ownership";
                 icon: Icons.take-ownership;
                 preferred-height: button-height;
                 icon-color: Colors.take-ownership;
@@ -72,6 +74,7 @@ export component DeviceActivityBar {
 
             if !config.locking-enabled: IconButton {
                 text: "Activate locking";
+                accessible-id: "activity-activate-locking";
                 icon: Icons.activate-locking;
                 preferred-height: button-height;
                 icon-color: Colors.activate-locking;
@@ -86,6 +89,7 @@ export component DeviceActivityBar {
 
             IconButton {
                 text: "Change password";
+                accessible-id: "activity-change-password";
                 icon: Icons.change-password;
                 preferred-height: button-height;
                 icon-color: Colors.change-password;
@@ -100,6 +104,7 @@ export component DeviceActivityBar {
 
             if config.locking-enabled: IconButton {
                 text: "Configure locking";
+                accessible-id: "activity-configure-locking";
                 icon: Icons.configure-locking;
                 preferred-height: button-height;
                 icon-color: Colors.configure-locking;
@@ -118,6 +123,7 @@ export component DeviceActivityBar {
 
             IconButton {
                 text: "Revert device";
+                accessible-id: "activity-revert-device";
                 icon: Icons.revert-device;
                 preferred-height: button-height;
                 icon-color: Colors.revert-device;
@@ -136,6 +142,7 @@ export component DeviceActivityBar {
 
             IconButton {
                 text: "Stack status";
+                accessible-id: "activity-stack-status";
                 icon: Icons.com-id-status;
                 preferred-height: button-height;
                 icon-color: Colors.query-status;
@@ -150,6 +157,7 @@ export component DeviceActivityBar {
 
             IconButton {
                 text: "Reset stack";
+                accessible-id: "activity-reset-stack";
                 icon: Icons.stack-reset;
                 preferred-height: button-height;
                 icon-color: Colors.stack-reset;
