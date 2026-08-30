@@ -1,94 +1,54 @@
-use std::pin::Pin;
-use std::task::Poll;
+use std::any::Any;
 use std::time::{Duration, Instant};
 
-pub struct Runtime {
-    inner: tokio::runtime::Runtime,
-}
+pub trait Runtime {
+    type JoinHandle<T>: Future<Output = Result<T, JoinError>>;
+    type Sleep: Future<Output = ()>;
+    type SleepUntil: Future<Output = ()>;
+    type Timeout<F: Future>: Future<Output = Result<F::Output, TimeoutError>>;
+    type TimeoutAt<F: Future>: Future<Output = Result<F::Output, TimeoutError>>;
 
-impl Runtime {
-    pub fn new_multi_threaded(num_cores: Option<usize>) -> Self {
-        Self {
-            inner: tokio::runtime::Builder::new_multi_thread()
-                .enable_all()
-                .worker_threads(num_cores.or(std::thread::available_parallelism().ok().map(|c| c.get())).unwrap_or(1))
-                .build()
-                .expect("could not create tokio runtime"),
-        }
-    }
-
-    pub fn block_on<F>(&self, f: F) -> F::Output
-    where
-        F: Future,
-    {
-        self.inner.block_on(f)
-    }
-
-    pub fn spawn<F>(&self, f: F) -> JoinHandle<F::Output>
+    fn block_on<F>(&self, f: F) -> F::Output
     where
         F: Future + Send + 'static,
-        F::Output: Send + 'static,
-    {
-        self.inner.spawn(f).into()
-    }
+        F::Output: Send;
 
-    pub fn shutdown(self, duration: Duration) {
-        self.inner.shutdown_timeout(duration);
-    }
+    fn spawn<F>(&self, f: F) -> Self::JoinHandle<F::Output>
+    where
+        F: Future + Send + 'static,
+        F::Output: Send + 'static;
+
+    fn shutdown(self, duration: Duration) -> Result<(), ShutdownError>;
+
+    fn yield_now(&self) -> impl Future<Output = ()>;
+
+    fn sleep(&self, duration: Duration) -> Self::Sleep;
+
+    fn sleep_until(&self, time: Instant) -> Self::SleepUntil;
+
+    fn timeout<F>(&self, duration: Duration, future: F) -> Self::Timeout<F>
+    where
+        F: Future;
+
+    fn timeout_at<F>(&self, time: Instant, future: F) -> Self::TimeoutAt<F>
+    where
+        F: Future;
 }
 
-pub struct JoinHandle<T> {
-    inner: tokio::task::JoinHandle<T>,
+#[derive(Debug, thiserror::Error)]
+pub enum JoinError {
+    #[error("the task was cancelled")]
+    Cancelled,
+    #[error("the task panicked: {}", 0)]
+    Panicked(Box<dyn Any + Send + 'static>),
 }
 
-impl<T> From<tokio::task::JoinHandle<T>> for JoinHandle<T> {
-    fn from(value: tokio::task::JoinHandle<T>) -> Self {
-        Self { inner: value }
-    }
-}
+#[derive(Debug, thiserror::Error, PartialEq, Eq)]
+#[error("timed out")]
+pub struct TimeoutError;
 
-impl<T> Future for JoinHandle<T> {
-    type Output = Result<T, ()>;
-
-    fn poll(self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
-        let inner = unsafe { Pin::map_unchecked_mut(self, |me| &mut me.inner) };
-        match inner.poll(cx) {
-            Poll::Ready(result) => Poll::Ready(result.map_err(|_err| ())),
-            Poll::Pending => Poll::Pending,
-        }
-    }
-}
-
-pub fn spawn<F>(future: F) -> JoinHandle<F::Output>
-where
-    F: Future + Send + 'static,
-    F::Output: Send + 'static,
-{
-    tokio::spawn(future).into()
-}
-
-pub async fn yield_now() {
-    tokio::task::yield_now().await;
-}
-
-pub fn sleep(duration: Duration) -> impl Future<Output = ()> {
-    tokio::time::sleep(duration)
-}
-
-pub fn sleep_until(time: Instant) -> impl Future<Output = ()> {
-    tokio::time::sleep_until(time.into())
-}
-
-pub async fn timeout<F>(duration: Duration, future: F) -> Result<F::Output, ()>
-where
-    F: Future,
-{
-    tokio::time::timeout(duration, future).await.map_err(|_| ())
-}
-
-pub async fn timeout_at<F>(time: Instant, future: F) -> Result<F::Output, ()>
-where
-    F: Future,
-{
-    tokio::time::timeout_at(time.into(), future).await.map_err(|_| ())
+#[derive(Debug, thiserror::Error, PartialEq, Eq)]
+pub enum ShutdownError {
+    #[error("this is a proxy runtime, shut down the runtime through its primary handle")]
+    ProxyRuntime,
 }

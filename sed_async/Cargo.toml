@@ -4,6 +4,16 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-tokio = { workspace = true, features = ["rt", "time"] }
-oneshot.workspace = true
+oneshot = { workspace = true, features = ["std"] }
 pin-project.workspace = true
+tokio = { workspace = true, features = ["rt", "time"], optional = true }
+slint = { workspace = true, optional = true }
+thiserror.workspace = true
+
+[dev-dependencies]
+googletest.workspace = true
+
+[features]
+not_empty = []
+tokio = ["dep:tokio", "not_empty"]
+slint = ["dep:slint", "not_empty"]

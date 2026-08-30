@@ -1,6 +1,7 @@
 use std::{collections::BTreeSet, sync::Arc};
 
 use googletest::{assert_that, matchers::*};
+use sed_async::{PolyRuntime, TokioRuntime};
 use sed_manager::{Error, SetupSession};
 use sed_packet::{
     MaxBytes,
@@ -20,7 +21,8 @@ use tracing::instrument;
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn take_ownership(_with_tracing: WithTracing) {
     let device = Arc::new(VirtualDevice::new());
-    let tper = Arc::new(Tper::connect(BASE_COM_ID, 0, device.clone(), None));
+    let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
+    let tper = Arc::new(Tper::connect(BASE_COM_ID, 0, device.clone(), runtime));
     let session = SetupSession::on_primary_ssc(tper).await.unwrap();
 
     let block_sid_before = device.discover().get::<BlockSIDAuthDescriptor>().unwrap().clone();
@@ -38,7 +40,8 @@ async fn take_ownership(_with_tracing: WithTracing) {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn take_ownership_already_owned(_with_tracing: WithTracing) {
     let device = Arc::new(VirtualDevice::new());
-    let tper = Arc::new(Tper::connect(BASE_COM_ID, 0, device.clone(), None));
+    let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
+    let tper = Arc::new(Tper::connect(BASE_COM_ID, 0, device.clone(), runtime));
     let session = SetupSession::on_primary_ssc(tper).await.unwrap();
 
     session.take_owneship(b"not_default".as_slice().into()).await.unwrap();
@@ -51,7 +54,8 @@ async fn take_ownership_already_owned(_with_tracing: WithTracing) {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn activate_secondary_sp(_with_tracing: WithTracing) {
     let device = Arc::new(VirtualDevice::new());
-    let tper = Arc::new(Tper::connect(BASE_COM_ID, 0, device.clone(), None));
+    let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
+    let tper = Arc::new(Tper::connect(BASE_COM_ID, 0, device.clone(), runtime));
     let session = SetupSession::on_primary_ssc(tper).await.unwrap();
 
     let locking_before = device.discover().get::<LockingDescriptor>().unwrap().clone();
@@ -69,7 +73,8 @@ async fn activate_secondary_sp(_with_tracing: WithTracing) {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn activate_secondary_sp_already_activated(_with_tracing: WithTracing) {
     let device = Arc::new(VirtualDevice::new());
-    let tper = Arc::new(Tper::connect(BASE_COM_ID, 0, device.clone(), None));
+    let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
+    let tper = Arc::new(Tper::connect(BASE_COM_ID, 0, device.clone(), runtime));
     let session = SetupSession::on_primary_ssc(tper).await.unwrap();
 
     session.activate_secondary_sp(INITIAL_SID_PASSWORD).await.unwrap();
@@ -83,7 +88,8 @@ async fn activate_secondary_sp_already_activated(_with_tracing: WithTracing) {
 async fn revert_tper_with_sid(_with_tracing: WithTracing) {
     let new_sid_password = MaxBytes::<32>::from(b"not_default".as_slice());
     let device = Arc::new(VirtualDevice::new());
-    let tper = Arc::new(Tper::connect(BASE_COM_ID, 0, device.clone(), None));
+    let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
+    let tper = Arc::new(Tper::connect(BASE_COM_ID, 0, device.clone(), runtime));
     let session = SetupSession::on_primary_ssc(tper).await.unwrap();
 
     session.take_owneship(new_sid_password.clone()).await.unwrap();
@@ -104,7 +110,8 @@ async fn revert_tper_with_sid(_with_tracing: WithTracing) {
 async fn revert_tper_with_psid(_with_tracing: WithTracing) {
     let new_sid_password = MaxBytes::<32>::from(b"not_default".as_slice());
     let device = Arc::new(VirtualDevice::new());
-    let tper = Arc::new(Tper::connect(BASE_COM_ID, 0, device.clone(), None));
+    let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
+    let tper = Arc::new(Tper::connect(BASE_COM_ID, 0, device.clone(), runtime));
     let session = SetupSession::on_primary_ssc(tper).await.unwrap();
 
     session.take_owneship(new_sid_password.clone()).await.unwrap();
@@ -125,7 +132,8 @@ async fn revert_tper_with_psid(_with_tracing: WithTracing) {
 async fn revert_secondary_sp(_with_tracing: WithTracing) {
     let new_sid_password = MaxBytes::<32>::from(b"not_default".as_slice());
     let device = Arc::new(VirtualDevice::new());
-    let tper = Arc::new(Tper::connect(BASE_COM_ID, 0, device.clone(), None));
+    let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
+    let tper = Arc::new(Tper::connect(BASE_COM_ID, 0, device.clone(), runtime));
     let session = SetupSession::on_primary_ssc(tper).await.unwrap();
 
     session.take_owneship(new_sid_password.clone()).await.unwrap();
@@ -149,7 +157,8 @@ async fn revert_secondary_sp(_with_tracing: WithTracing) {
 async fn revert_secondary_sp_ex(_with_tracing: WithTracing) {
     let new_sid_password = MaxBytes::<32>::from(b"not_default".as_slice());
     let device = Arc::new(VirtualDevice::new());
-    let tper = Arc::new(Tper::connect(BASE_COM_ID, 0, device.clone(), None));
+    let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
+    let tper = Arc::new(Tper::connect(BASE_COM_ID, 0, device.clone(), runtime));
     let session = SetupSession::on_primary_ssc(tper).await.unwrap();
 
     session.take_owneship(new_sid_password.clone()).await.unwrap();
@@ -173,7 +182,8 @@ async fn revert_secondary_sp_ex(_with_tracing: WithTracing) {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn change_password(_with_tracing: WithTracing) {
     let device = Arc::new(VirtualDevice::new());
-    let tper = Arc::new(Tper::connect(BASE_COM_ID, 0, device.clone(), None));
+    let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
+    let tper = Arc::new(Tper::connect(BASE_COM_ID, 0, device.clone(), runtime));
     let session = SetupSession::on_primary_ssc(tper).await.unwrap();
     const NEW_PASSWORD: &[u8] = b"not_default".as_slice();
 
@@ -195,7 +205,8 @@ async fn change_password(_with_tracing: WithTracing) {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn list_authorities(_with_tracing: WithTracing) {
     let device = Arc::new(VirtualDevice::new());
-    let tper = Arc::new(Tper::connect(BASE_COM_ID, 0, device.clone(), None));
+    let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
+    let tper = Arc::new(Tper::connect(BASE_COM_ID, 0, device.clone(), runtime));
     let session = SetupSession::on_primary_ssc(tper).await.unwrap();
 
     let result = session.list_authorities(opal_admin::sp::ADMIN).await;

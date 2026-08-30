@@ -6,7 +6,7 @@ use std::{
 };
 
 use async_lock::RwLock;
-use sed_async::Runtime;
+use sed_async::PolyRuntime;
 use sed_device::{list_physical_drives, open_device};
 use sed_manager::{Error, Spec};
 use sed_manager_gui_slint as ui;
@@ -33,11 +33,11 @@ pub struct App {
     ui: ui::MainWindow,
     device_list: Arc<RwLock<DeviceList>>,
     toast_queue: Rc<ToastQueue>,
-    runtime: Arc<Runtime>,
+    runtime: Arc<PolyRuntime>,
 }
 
 impl App {
-    pub fn new(ui: ui::MainWindow, notification_queue: Rc<ToastQueue>, runtime: Arc<Runtime>) -> Rc<Self> {
+    pub fn new(ui: ui::MainWindow, notification_queue: Rc<ToastQueue>, runtime: Arc<PolyRuntime>) -> Rc<Self> {
         let device_list = DeviceList::default();
         let device_list_ui = device_list.ui.inner();
 
@@ -149,7 +149,7 @@ impl App {
                 let non_unicode = retain_unicode(&mut new_paths);
 
                 // Insert virtual device in debug mode.
-                #[cfg(debug_assertions)]
+                //#[cfg(debug_assertions)]
                 new_paths.insert(VIRTUAL_DEVICE_PATH.into());
 
                 let removed: HashSet<_> =
@@ -313,7 +313,7 @@ impl App {
                     ssc.static_com_ids_p1().next()?
                 };
                 let com_id_ext = 0;
-                let new_tper = Arc::new(Tper::connect(com_id, com_id_ext, sed_device, Some(runtime.as_ref())));
+                let new_tper = Arc::new(Tper::connect(com_id, com_id_ext, sed_device, runtime));
                 let capabilities = new_tper.capabilities();
                 let connection_changed = new_tper.properties_changed();
                 device.tper = Some(new_tper);

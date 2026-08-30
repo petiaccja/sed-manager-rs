@@ -11,7 +11,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use async_channel::RecvError;
-use sed_async::timeout_at;
+use sed_async::{PolyRuntime, Runtime as _};
 use sed_device::Device;
 use sed_packet::{
     com_id::{ComIdRequest, ComIdResponse},
@@ -34,6 +34,7 @@ pub struct Protocol {
     device: Arc<dyn Device>,
     command_rx: async_channel::Receiver<Command>,
     state: ProtocolState,
+    runtime: Arc<PolyRuntime>,
 }
 
 impl Protocol {
@@ -42,11 +43,11 @@ impl Protocol {
     ///
     /// This initializes the protocol stack, but no messages will be delivered
     /// until you call [`run`](Self::run).
-    pub fn new(com_id: u16, com_id_ext: u16, device: Arc<dyn Device>) -> (Self, Controller) {
+    pub fn new(com_id: u16, com_id_ext: u16, device: Arc<dyn Device>, runtime: Arc<PolyRuntime>) -> (Self, Controller) {
         let (command_tx, command_rx) = async_channel::unbounded();
         let state = ProtocolState::new(com_id, com_id_ext);
         let controller = Controller::new(command_tx, state.properties_changed());
-        let protocol = Self { com_id, device, command_rx, state };
+        let protocol = Self { com_id, device, command_rx, state, runtime };
         (protocol, controller)
     }
 
@@ -63,12 +64,12 @@ impl Protocol {
     /// stack on the device's side ready for a subsequent session, but might
     /// take a little time.
     pub async fn run(self) {
-        let Self { com_id, device, command_rx, mut state } = self;
+        let Self { com_id, device, command_rx, mut state, runtime } = self;
 
         loop {
             let action = state.poll_action(Instant::now());
             let is_idle = matches!(action, Action::None);
-            let command = perform_action_or_recv(&*device, com_id, &mut state, &command_rx, action).await;
+            let command = perform_action_or_recv(&*device, com_id, &mut state, &command_rx, action, &*runtime).await;
             if let Some(command) = command {
                 inject_command(&mut state, command);
             } else if is_idle {
@@ -168,6 +169,7 @@ async fn perform_action_or_recv(
     protocol: &mut ProtocolState,
     rx: &async_channel::Receiver<Command>,
     action: Action,
+    runtime: &PolyRuntime,
 ) -> Option<Command> {
     let com_id = com_id.to_be_bytes();
     match action {
@@ -183,11 +185,11 @@ async fn perform_action_or_recv(
             None
         }
         Action::Sleep { until } => {
-            let result = timeout_at(until, rx.recv()).await;
+            let result = runtime.timeout_at(until, rx.recv()).await;
             match result {
                 Ok(Ok(command)) => Some(command),
                 Ok(Err(RecvError)) => None,
-                Err(()) => None,
+                Err(_) => None,
             }
         }
         Action::Recover => None,
@@ -202,6 +204,7 @@ mod tests {
 
     use googletest::assert_that;
     use googletest::matchers::*;
+    use sed_async::TokioRuntime;
     use sed_device::mock_device::{MockDevice, MockEvent};
     use sed_packet::packet::ComPacket;
     use sed_spec::methods::MethodStatus;
@@ -263,7 +266,8 @@ mod tests {
         ];
 
         let device = MockDevice::new(scenario.into_iter());
-        let (protocol, controller) = Protocol::new(1, 0, Arc::new(device));
+        let runtime = PolyRuntime::Tokio(TokioRuntime::current().unwrap());
+        let (protocol, controller) = Protocol::new(1, 0, Arc::new(device), Arc::new(runtime));
         let task = tokio::spawn(protocol.run());
 
         let response_rx = controller.call(SessionId::MANAGEMENT, call);

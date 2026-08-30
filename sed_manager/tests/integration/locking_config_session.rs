@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use googletest::{assert_that, matchers::*};
+use sed_async::{PolyRuntime, TokioRuntime};
 use sed_manager::{LockingConfigSession, SetupSession};
 use sed_packet::MaxBytes;
 use sed_spec::preconfig::opal_2::locking as opal_locking;
@@ -14,8 +15,9 @@ use tracing::instrument;
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn login(_with_tracing: WithTracing) {
     let new_sid_password = MaxBytes::<32>::from(b"not_default".as_slice());
+    let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
     let device = Arc::new(VirtualDevice::new());
-    let tper = Arc::new(Tper::connect(BASE_COM_ID, 0, device.clone(), None));
+    let tper = Arc::new(Tper::connect(BASE_COM_ID, 0, device.clone(), runtime));
     let setup_session = SetupSession::on_primary_ssc(tper.clone()).await.unwrap();
 
     setup_session.take_owneship(new_sid_password.clone()).await.unwrap();
@@ -33,7 +35,8 @@ async fn login_wrong_password(_with_tracing: WithTracing) {
     let new_sid_password = MaxBytes::<32>::from(b"not_default".as_slice());
     let wrong_password = MaxBytes::<32>::from(b"wrong_password".as_slice());
     let device = Arc::new(VirtualDevice::new());
-    let tper = Arc::new(Tper::connect(BASE_COM_ID, 0, device.clone(), None));
+    let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
+    let tper = Arc::new(Tper::connect(BASE_COM_ID, 0, device.clone(), runtime));
     let setup_session = SetupSession::on_primary_ssc(tper.clone()).await.unwrap();
 
     setup_session.take_owneship(new_sid_password.clone()).await.unwrap();

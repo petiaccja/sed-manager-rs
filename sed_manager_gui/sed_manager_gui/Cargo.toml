@@ -10,7 +10,7 @@ sed_manager.workspace = true
 sed_packet.workspace = true
 sed_spec.workspace = true
 sed_manager_gui_slint.workspace = true
-sed_async.workspace = true
+sed_async = { workspace = true, features = ["tokio"] }
 sed_virtual_device.workspace = true
 sed_telemetry.workspace = true
 pin-project.workspace = true
@@ -22,4 +22,5 @@ futures.workspace = true
 
 [dev-dependencies]
 tokio.workspace = true
+sed_async = { workspace = true, features = ["slint"] }
 i-slint-backend-testing.workspace = true

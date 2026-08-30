@@ -3,7 +3,7 @@ use std::sync::{
     atomic::{AtomicU32, Ordering},
 };
 
-use sed_async::{Runtime, spawn};
+use sed_async::{PolyRuntime, Runtime as _};
 use sed_device::Device;
 use sed_packet::discovery::Discovery;
 use sed_packet::{
@@ -83,14 +83,10 @@ impl Tper {
     /// subsequent requests will time out, and you'll likely need to do a stack
     /// reset to get the device's communication stack synchronized again.
     #[instrument(level = "info", skip(runtime))]
-    pub fn connect(com_id: u16, com_id_ext: u16, device: Arc<dyn Device>, runtime: Option<&Runtime>) -> Self {
-        let (protocol, controller) = Protocol::new(com_id, com_id_ext, device.clone());
+    pub fn connect(com_id: u16, com_id_ext: u16, device: Arc<dyn Device>, runtime: Arc<PolyRuntime>) -> Self {
+        let (protocol, controller) = Protocol::new(com_id, com_id_ext, device.clone(), runtime.clone());
         controller.sync_properties();
-        if let Some(runtime) = runtime {
-            runtime.spawn(protocol.run());
-        } else {
-            spawn(protocol.run());
-        }
+        runtime.spawn(protocol.run());
         Self { com_id, com_id_ext, device, controller, host_session_id: 1.into() }
     }
 

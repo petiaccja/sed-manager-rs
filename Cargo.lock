@@ -4534,8 +4534,11 @@ dependencies = [
 name = "sed_async"
 version = "0.1.0"
 dependencies = [
+ "googletest",
  "oneshot",
  "pin-project",
+ "slint",
+ "thiserror 2.0.18",
  "tokio",
 ]
 
@@ -4562,6 +4565,7 @@ version = "0.1.0"
 dependencies = [
  "googletest",
  "rstest",
+ "sed_async",
  "sed_device",
  "sed_packet",
  "sed_spec",

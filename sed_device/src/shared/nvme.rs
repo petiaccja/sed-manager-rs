@@ -262,7 +262,6 @@ mod tests {
         .flatten()
         .cloned()
         .collect();
-        println!("{}", bytes.len());
         assert_eq!(IdentifyController::from_bytes(bytes.as_ref())?, content);
         Ok(())
     }

@@ -2,14 +2,14 @@
 
 use std::sync::Arc;
 
-use sed_async::Runtime;
+use sed_async::{PolyRuntime, TokioRuntime};
 use sed_manager_gui::{app::App, toast::ToastQueue};
 use sed_manager_gui_slint::{self as ui};
 use sed_telemetry::{create_otlp_provider, init_otlp_subscriber, init_stdout_subscriber};
 use slint::ComponentHandle as _;
 
 fn main() -> Result<(), Box<dyn core::error::Error>> {
-    let runtime = Arc::new(Runtime::new_multi_threaded(Some(1)));
+    let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::multi_threaded(Some(1))?));
     let _tracing_guard = match create_otlp_provider() {
         Ok(provider) => init_otlp_subscriber(provider),
         Err(_) => init_stdout_subscriber(),

@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use async_lock::RwLock;
-use sed_async::Runtime;
+use sed_async::{PolyRuntime, Runtime as _};
 use sed_manager::Spec;
 use sed_manager_gui_slint as ui;
 use sed_tper::Tper;
@@ -19,12 +19,12 @@ use crate::ui_ext::{CommandStatusExt, DeviceExt};
 //------------------------------------------------------------------------------
 
 pub struct Command {
-    runtime: Arc<Runtime>,
+    runtime: Arc<PolyRuntime>,
     device_list: Arc<RwLock<DeviceList>>,
 }
 
 impl Command {
-    pub fn new(runtime: Arc<Runtime>, device_list: Arc<RwLock<DeviceList>>) -> Self {
+    pub fn new(runtime: Arc<PolyRuntime>, device_list: Arc<RwLock<DeviceList>>) -> Self {
         Self { runtime, device_list }
     }
 
@@ -142,7 +142,7 @@ where
     RunFnFut: Future<Output = Output> + Send,
     Output: Send + 'static,
 {
-    runtime: Arc<Runtime>,
+    runtime: Arc<PolyRuntime>,
     device_list: Arc<RwLock<DeviceList>>,
     device_id: PathBuf,
     run_fn: RunFn,
@@ -170,7 +170,7 @@ where
     Output: Send + 'static,
     UpdateFn: FnOnce(ui::Device, Output) -> ui::Device + 'static,
 {
-    runtime: Arc<Runtime>,
+    runtime: Arc<PolyRuntime>,
     device_list: Arc<RwLock<DeviceList>>,
     device_id: PathBuf,
     run_fn: RunFn,
@@ -211,7 +211,7 @@ where
     RunFnFut: Future<Output = Output> + Send,
     Output: Send + 'static,
 {
-    runtime: Arc<Runtime>,
+    runtime: Arc<PolyRuntime>,
     device_list: Arc<RwLock<DeviceList>>,
     device_id: PathBuf,
     run_fn: RunFn,
@@ -239,7 +239,7 @@ where
     Output: Send + 'static,
     UpdateFn: FnOnce(ui::Device, Output) -> ui::Device + 'static,
 {
-    runtime: Arc<Runtime>,
+    runtime: Arc<PolyRuntime>,
     device_list: Arc<RwLock<DeviceList>>,
     device_id: PathBuf,
     run_fn: RunFn,
@@ -295,7 +295,7 @@ where
     RunFnFut: Future<Output = Output> + Send,
     Output: Send + 'static,
 {
-    runtime: Arc<Runtime>,
+    runtime: Arc<PolyRuntime>,
     device_list: Arc<RwLock<DeviceList>>,
     device_id: PathBuf,
     run_fn: RunFn,
@@ -323,7 +323,7 @@ where
     Output: Send + 'static,
     UpdateFn: for<'spec> FnOnce(ui::Device, Option<&'spec Spec>, Output) -> ui::Device + 'static,
 {
-    runtime: Arc<Runtime>,
+    runtime: Arc<PolyRuntime>,
     device_list: Arc<RwLock<DeviceList>>,
     device_id: PathBuf,
     run_fn: RunFn,
