@@ -149,7 +149,7 @@ impl App {
                 let non_unicode = retain_unicode(&mut new_paths);
 
                 // Insert virtual device in debug mode.
-                //#[cfg(debug_assertions)]
+                #[cfg(debug_assertions)]
                 new_paths.insert(VIRTUAL_DEVICE_PATH.into());
 
                 let removed: HashSet<_> =
