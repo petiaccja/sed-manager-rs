@@ -12,7 +12,7 @@ use tracing::instrument;
 
 #[instrument]
 #[rstest::rstest]
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test]
 async fn login(_with_tracing: WithTracing) {
     let new_sid_password = MaxBytes::<32>::from(b"not_default".as_slice());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
@@ -30,7 +30,7 @@ async fn login(_with_tracing: WithTracing) {
 
 #[instrument]
 #[rstest::rstest]
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test]
 async fn login_wrong_password(_with_tracing: WithTracing) {
     let new_sid_password = MaxBytes::<32>::from(b"not_default".as_slice());
     let wrong_password = MaxBytes::<32>::from(b"wrong_password".as_slice());

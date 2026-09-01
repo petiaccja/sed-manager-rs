@@ -28,3 +28,4 @@ tokio = { workspace = true, features = ["macros"] }
 googletest.workspace = true
 sed_tper = { workspace = true, features = ["test-utils"] }
 sed_virtual_device.workspace = true
+sed_async = { workspace = true, features = ["tokio"] }

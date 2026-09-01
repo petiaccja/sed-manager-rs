@@ -12,7 +12,7 @@ use tracing::instrument;
 
 #[instrument]
 #[rstest::rstest]
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn discovery(_with_tracing: WithTracing) {
     let device = VirtualDevice::new();
     let discovery = Tper::discover(&device).await.unwrap();
@@ -23,7 +23,7 @@ async fn discovery(_with_tracing: WithTracing) {
 
 #[instrument]
 #[rstest::rstest]
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn verify_com_id_valid_base(_with_tracing: WithTracing) {
     let device = VirtualDevice::new();
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
@@ -35,7 +35,7 @@ async fn verify_com_id_valid_base(_with_tracing: WithTracing) {
 
 #[instrument]
 #[rstest::rstest]
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn verify_com_id_valid_incorrent_id(_with_tracing: WithTracing) {
     let device = VirtualDevice::new();
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
@@ -47,7 +47,7 @@ async fn verify_com_id_valid_incorrent_id(_with_tracing: WithTracing) {
 
 #[instrument]
 #[rstest::rstest]
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn verify_com_id_valid_incorrent_ext(_with_tracing: WithTracing) {
     let device = VirtualDevice::new();
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
@@ -59,7 +59,7 @@ async fn verify_com_id_valid_incorrent_ext(_with_tracing: WithTracing) {
 
 #[instrument]
 #[rstest::rstest]
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn stack_reset_base(_with_tracing: WithTracing) {
     let device = VirtualDevice::new();
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
@@ -73,7 +73,7 @@ async fn stack_reset_base(_with_tracing: WithTracing) {
 
 #[instrument]
 #[rstest::rstest]
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn stack_reset_incorrent_id(_with_tracing: WithTracing) {
     let device = VirtualDevice::new();
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
@@ -84,7 +84,7 @@ async fn stack_reset_incorrent_id(_with_tracing: WithTracing) {
 
 #[instrument]
 #[rstest::rstest]
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn stack_reset_incorrent_ext(_with_tracing: WithTracing) {
     let device = VirtualDevice::new();
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));

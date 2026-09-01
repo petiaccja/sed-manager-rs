@@ -18,7 +18,7 @@ use tracing::instrument;
 
 #[instrument]
 #[rstest::rstest]
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test]
 async fn take_ownership(_with_tracing: WithTracing) {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
@@ -37,7 +37,7 @@ async fn take_ownership(_with_tracing: WithTracing) {
 
 #[instrument]
 #[rstest::rstest]
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test]
 async fn take_ownership_already_owned(_with_tracing: WithTracing) {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
@@ -51,7 +51,7 @@ async fn take_ownership_already_owned(_with_tracing: WithTracing) {
 
 #[instrument]
 #[rstest::rstest]
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test]
 async fn activate_secondary_sp(_with_tracing: WithTracing) {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
@@ -70,7 +70,7 @@ async fn activate_secondary_sp(_with_tracing: WithTracing) {
 
 #[instrument]
 #[rstest::rstest]
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test]
 async fn activate_secondary_sp_already_activated(_with_tracing: WithTracing) {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
@@ -84,7 +84,7 @@ async fn activate_secondary_sp_already_activated(_with_tracing: WithTracing) {
 
 #[instrument]
 #[rstest::rstest]
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test]
 async fn revert_tper_with_sid(_with_tracing: WithTracing) {
     let new_sid_password = MaxBytes::<32>::from(b"not_default".as_slice());
     let device = Arc::new(VirtualDevice::new());
@@ -106,7 +106,7 @@ async fn revert_tper_with_sid(_with_tracing: WithTracing) {
 
 #[instrument]
 #[rstest::rstest]
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test]
 async fn revert_tper_with_psid(_with_tracing: WithTracing) {
     let new_sid_password = MaxBytes::<32>::from(b"not_default".as_slice());
     let device = Arc::new(VirtualDevice::new());
@@ -128,7 +128,7 @@ async fn revert_tper_with_psid(_with_tracing: WithTracing) {
 
 #[instrument]
 #[rstest::rstest]
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test]
 async fn revert_secondary_sp(_with_tracing: WithTracing) {
     let new_sid_password = MaxBytes::<32>::from(b"not_default".as_slice());
     let device = Arc::new(VirtualDevice::new());
@@ -153,7 +153,7 @@ async fn revert_secondary_sp(_with_tracing: WithTracing) {
 
 #[instrument]
 #[rstest::rstest]
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test]
 async fn revert_secondary_sp_ex(_with_tracing: WithTracing) {
     let new_sid_password = MaxBytes::<32>::from(b"not_default".as_slice());
     let device = Arc::new(VirtualDevice::new());
@@ -179,7 +179,7 @@ async fn revert_secondary_sp_ex(_with_tracing: WithTracing) {
 
 #[instrument]
 #[rstest::rstest]
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test]
 async fn change_password(_with_tracing: WithTracing) {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
@@ -202,7 +202,7 @@ async fn change_password(_with_tracing: WithTracing) {
 
 #[instrument]
 #[rstest::rstest]
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test]
 async fn list_authorities(_with_tracing: WithTracing) {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));

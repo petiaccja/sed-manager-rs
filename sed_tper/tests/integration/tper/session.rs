@@ -21,7 +21,7 @@ use tracing::instrument;
 
 #[instrument]
 #[rstest::rstest]
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn session_lifetime(_with_tracing: WithTracing) {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
@@ -37,7 +37,7 @@ async fn session_lifetime(_with_tracing: WithTracing) {
 
 #[instrument]
 #[rstest::rstest]
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test]
 async fn activate(_with_tracing: WithTracing) {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
@@ -57,7 +57,7 @@ async fn activate(_with_tracing: WithTracing) {
 
 #[instrument]
 #[rstest::rstest]
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test]
 async fn authenticate(_with_tracing: WithTracing) {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
@@ -82,7 +82,7 @@ async fn authenticate(_with_tracing: WithTracing) {
 
 #[instrument]
 #[rstest::rstest]
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test]
 async fn gen_key(_with_tracing: WithTracing) {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
@@ -99,7 +99,7 @@ async fn gen_key(_with_tracing: WithTracing) {
 
 #[instrument]
 #[rstest::rstest]
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test]
 async fn get_field(_with_tracing: WithTracing) {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
@@ -116,7 +116,7 @@ async fn get_field(_with_tracing: WithTracing) {
 
 #[instrument]
 #[rstest::rstest]
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test]
 async fn get_object(_with_tracing: WithTracing) {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
@@ -135,7 +135,7 @@ async fn get_object(_with_tracing: WithTracing) {
 
 #[instrument]
 #[rstest::rstest]
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test]
 async fn get_bytes(_with_tracing: WithTracing) {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
@@ -152,7 +152,7 @@ async fn get_bytes(_with_tracing: WithTracing) {
 
 #[instrument]
 #[rstest::rstest]
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test]
 async fn get_acl(_with_tracing: WithTracing) {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
@@ -169,7 +169,7 @@ async fn get_acl(_with_tracing: WithTracing) {
 
 #[instrument]
 #[rstest::rstest]
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test]
 async fn next(_with_tracing: WithTracing) {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
@@ -190,7 +190,7 @@ async fn next(_with_tracing: WithTracing) {
 
 #[instrument]
 #[rstest::rstest]
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test]
 async fn revert(_with_tracing: WithTracing) {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
@@ -207,7 +207,7 @@ async fn revert(_with_tracing: WithTracing) {
 
 #[instrument]
 #[rstest::rstest]
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test]
 async fn revert_sp(_with_tracing: WithTracing) {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
@@ -229,7 +229,7 @@ async fn revert_sp(_with_tracing: WithTracing) {
 
 #[instrument]
 #[rstest::rstest]
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test]
 async fn random(_with_tracing: WithTracing) {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
@@ -246,7 +246,7 @@ async fn random(_with_tracing: WithTracing) {
 
 #[instrument]
 #[rstest::rstest]
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test]
 async fn set_field(_with_tracing: WithTracing) {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
@@ -263,7 +263,7 @@ async fn set_field(_with_tracing: WithTracing) {
 
 #[instrument]
 #[rstest::rstest]
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test]
 async fn set_object(_with_tracing: WithTracing) {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
@@ -281,7 +281,7 @@ async fn set_object(_with_tracing: WithTracing) {
 
 #[instrument]
 #[rstest::rstest]
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test]
 async fn set_bytes(_with_tracing: WithTracing) {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));

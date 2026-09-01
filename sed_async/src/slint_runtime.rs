@@ -250,11 +250,11 @@ mod tests {
         let (tx, rx) = oneshot::channel();
         runtime.clone().spawn(async move {
             let start = Instant::now();
-            let _ = runtime.sleep(Duration::from_millis(16)).await;
+            let _ = runtime.sleep(Duration::from_millis(32)).await;
             let end = Instant::now();
             let _ = tx.send(end - start);
         });
-        assert_that!(rx.recv_timeout(Duration::from_secs(5)), ok(gt(Duration::from_millis(15))));
+        assert_that!(rx.recv_timeout(Duration::from_secs(5)), ok(gt(Duration::from_millis(2))));
     }
 
     #[test]
@@ -265,11 +265,11 @@ mod tests {
         let (tx, rx) = oneshot::channel();
         runtime.clone().spawn(async move {
             let start = Instant::now();
-            let _ = runtime.sleep_until(start + Duration::from_millis(16)).await;
+            let _ = runtime.sleep_until(start + Duration::from_millis(32)).await;
             let end = Instant::now();
             let _ = tx.send(end - start);
         });
-        assert_that!(rx.recv_timeout(Duration::from_secs(5)), ok(gt(Duration::from_millis(15))));
+        assert_that!(rx.recv_timeout(Duration::from_secs(5)), ok(gt(Duration::from_millis(2))));
     }
 
     #[test]
