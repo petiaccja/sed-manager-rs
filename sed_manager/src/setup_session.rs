@@ -214,9 +214,10 @@ impl SetupSession {
 
     /// List the authorities on the `sp`.
     ///
-    /// This will attempts to retrieve all information about the authorities,
-    /// but the information actually retrieved to what the Anybody authority
-    /// has permission to read.
+    /// This function will also attempt to retrieve all columns of the
+    /// authorities. Since it's authenticated only as the `Anybody` authority,
+    /// the returned columns may be incomplete, as `Anybody` may not have
+    /// access.
     #[instrument(level = "info", skip(self), ret, err)]
     pub async fn list_authorities(&self, sp: SecurityProviderRef) -> Result<Vec<Authority>, Error> {
         let session = self.tper.start_session(sp, None, None).await?;
@@ -225,7 +226,7 @@ impl SetupSession {
                 let authority_refs = session.next::<{ table_id::AUTHORITY.to_u64() }>(None, None).await?;
                 let mut authorities = Vec::new();
                 for authority_ref in authority_refs {
-                    authorities.push(session.get_object::<Authority>(authority_ref, ..).await?);
+                    authorities.push(session.get_object(authority_ref, ..).await?);
                 }
                 Ok(authorities)
             })

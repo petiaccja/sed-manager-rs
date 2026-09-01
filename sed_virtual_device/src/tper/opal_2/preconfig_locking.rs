@@ -12,7 +12,7 @@ use sed_spec::{
             locking::{ace, authority, c_pin, k_aes_256, locking},
         },
     },
-    types::{AuthMethod, TableKind},
+    types::{AuthMethod, ResetType, TableKind},
 };
 
 use crate::tper::{
@@ -650,9 +650,14 @@ pub fn locking() -> Table<LockingRange> {
 }
 
 pub fn mbr_control() -> Table<MbrControl> {
-    [MbrControl { uid: Some(mbr_control::MBR_CONTROL), ..Default::default() }]
-        .into_table()
-        .expect("object missing an UID")
+    [MbrControl {
+        uid: Some(mbr_control::MBR_CONTROL),
+        enable: Some(false),
+        done: Some(false),
+        done_on_reset: Some([ResetType::PowerCycle].into()),
+    }]
+    .into_table()
+    .expect("object missing an UID")
 }
 
 pub fn table() -> Table<TableDesc> {

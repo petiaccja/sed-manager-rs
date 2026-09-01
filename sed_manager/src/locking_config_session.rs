@@ -1,7 +1,10 @@
 use std::sync::Arc;
 
 use sed_packet::MaxBytes;
-use sed_spec::objects::AuthorityRef;
+use sed_spec::{
+    objects::{Authority, AuthorityRef, LockingRange, MbrControl},
+    preconfig::core::shared::{mbr_control, table_id},
+};
 use sed_tper::{Session, Tper};
 use tracing::instrument;
 
@@ -52,6 +55,7 @@ impl LockingConfigSession {
         Self::login(tper, spec, authority, password).await
     }
 
+    /// Return the [`Spec`] this session is using.
     pub fn spec(&self) -> &Spec {
         &self.spec
     }
@@ -60,5 +64,44 @@ impl LockingConfigSession {
     /// [`Drop`] is handled.
     pub async fn close(self) -> Result<(), Error> {
         self.session.close().await.map_err(|err| err.into())
+    }
+
+    /// Get the list of authorities and their columns.
+    ///
+    /// This function will attempt to retrieve all columns of the authorities.
+    /// The columns returned may vary based on which authority is authenticated
+    /// in this session.
+    #[instrument(level = "info", skip(self), ret, err)]
+    pub async fn get_authorities(&self) -> Result<Vec<Authority>, Error> {
+        let authority_refs = self.session.next::<{ table_id::AUTHORITY.to_u64() }>(None, None).await?;
+        let mut authorities = Vec::new();
+        for authority_ref in authority_refs {
+            authorities.push(self.session.get_object(authority_ref, ..).await?);
+        }
+        Ok(authorities)
+    }
+
+    /// Get the list of locking ranges and their columns.
+    ///
+    /// This function will attempt to retrieve all columns of the locking ranges.
+    /// The columns returned may vary based on which authority is authenticated
+    /// in this session.
+    #[instrument(level = "info", skip(self), ret, err)]
+    pub async fn get_locking_ranges(&self) -> Result<Vec<LockingRange>, Error> {
+        let range_refs = self.session.next::<{ table_id::LOCKING.to_u64() }>(None, None).await?;
+        let mut ranges = Vec::new();
+        for range_ref in range_refs {
+            ranges.push(self.session.get_object(range_ref, ..).await?);
+        }
+        Ok(ranges)
+    }
+
+    /// Get the MBR parameters.
+    ///
+    /// Some columns of the MBR object may not be returned if the authenticated
+    /// authority has no rights to read them.
+    #[instrument(level = "info", skip(self), ret, err)]
+    pub async fn get_mbr(&self) -> Result<MbrControl, Error> {
+        self.session.get_object(mbr_control::MBR_CONTROL, ..).await.map_err(|err| err.into())
     }
 }
