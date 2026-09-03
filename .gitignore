@@ -7,8 +7,6 @@
 .vscode/
 .claude/
 
-docs/tcg_pdfs
-
 *.profraw
 
 !Cargo.lock
