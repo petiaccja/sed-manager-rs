@@ -11,6 +11,8 @@ import {
     Button,
     LineEdit,
     ProgressIndicator,
+    StyleMetrics,
+    ScrollView,
 } from "std-widgets.slint";
 import { PaletteExtra } from "../../../widgets/palette_extra.slint";
 import { Icons } from "../../../resources/icons.slint";
@@ -20,114 +22,143 @@ export component ShadowMbrTab {
     in property <CommandStatus> command-status;
     in-out property <Mbr> mbr;
 
+    callback logout();
+
     VerticalLayout {
-        spacing: 0.8rem;
+        spacing: StyleMetrics.layout-spacing;
 
-        Island {
-            HorizontalLayout {
+        ScrollView {
+            horizontal-scrollbar-policy: always-off;
+
+            VerticalLayout {
                 alignment: start;
-                padding-left: 0.8rem;
-                padding-right: 0.8rem;
+                spacing: StyleMetrics.layout-spacing;
 
-                GroupBox {
-                    title: "Shadow MBR status";
+                Island {
+                    HorizontalLayout {
+                        padding-left: 0.8rem;
+                        padding-right: 0.8rem;
+                        alignment: start;
 
-                    GridLayout {
-                        spacing: 0.3rem;
+                        GroupBox {
+                            title: "Shadow MBR status";
 
-                        HorizontalLayout {
-                            row: 0;
-                            col: 0;
-                            min-height: 1.8rem;
+                            GridLayout {
+                                spacing: 0.3rem;
 
-                            Text {
-                                text: mbr.supported ? "Supported" : "Not supported";
-                                color: mbr.supported ? PaletteExtra.success-foreground : PaletteExtra.error-foreground;
+                                Text {
+                                    min-height: 1.8rem;
+                                    row: 0;
+                                    col: 0;
+                                    text: mbr.supported ? "Supported" : "Not supported";
+                                    color: mbr.supported ? PaletteExtra.success-foreground : PaletteExtra.error-foreground;
+                                }
+
+                                Image {
+                                    row: 0;
+                                    col: 1;
+                                    source: mbr.supported ? Icons.check : Icons.cancel;
+                                    colorize: mbr.supported ? PaletteExtra.success-foreground : PaletteExtra.error-foreground;
+                                    height: 1.2rem;
+                                    horizontal-alignment: left;
+                                }
+
+                                Text {
+                                    min-height: 1.8rem;
+                                    row: 1;
+                                    col: 0;
+                                    text: "Capacity";
+                                }
+
+                                Text {
+                                    min-height: 1.8rem;
+                                    row: 2;
+                                    col: 0;
+                                    text: "Enabled";
+                                }
+
+                                Text {
+                                    min-height: 1.8rem;
+                                    row: 3;
+                                    col: 0;
+                                    text: "Unshadowed";
+                                }
+
+                                Text {
+                                    row: 1;
+                                    col: 1;
+                                    text: SectorUtil.to_string(mbr.size);
+                                }
+
+                                Switch {
+                                    row: 2;
+                                    col: 1;
+                                    checked <=> mbr.enabled;
+                                    enabled: mbr.supported && !command-status.tper-busy && !command-status.session-busy;
+                                }
+
+                                Switch {
+                                    row: 3;
+                                    col: 1;
+                                    checked <=> mbr.done;
+                                    enabled: mbr.supported && !command-status.tper-busy && !command-status.session-busy;
+                                }
                             }
-
-                            Image {
-                                source: mbr.supported ? Icons.check : Icons.cancel;
-                                colorize: mbr.supported ? PaletteExtra.success-foreground : PaletteExtra.error-foreground;
-                                height: 1.2rem;
-                            }
-                        }
-
-                        Text {
-                            min-height: 1.8rem;
-                            row: 1;
-                            col: 0;
-                            text: "Capacity";
-                        }
-
-                        Text {
-                            min-height: 1.8rem;
-                            row: 2;
-                            col: 0;
-                            text: "Enabled";
-                        }
-
-                        Text {
-                            min-height: 1.8rem;
-                            row: 3;
-                            col: 0;
-                            text: "Unshadowed";
-                        }
-
-                        Text {
-                            row: 1;
-                            col: 1;
-                            text: SectorUtil.to_string(mbr.size);
-                        }
-
-                        Switch {
-                            row: 2;
-                            col: 1;
-                            checked <=> mbr.enabled;
-                            enabled: mbr.supported && !command-status.tper-busy && !command-status.session-busy;
-                        }
-
-                        Switch {
-                            row: 3;
-                            col: 1;
-                            checked <=> mbr.done;
-                            enabled: mbr.supported && !command-status.tper-busy && !command-status.session-busy;
                         }
                     }
                 }
+
+                Island {
+                    HorizontalLayout {
+                        spacing: 0.8rem;
+                        padding: 0.8rem;
+
+                        LineEdit {
+                            placeholder-text: "Path to the PBA image file";
+                        }
+
+                        Button {
+                            width: 90px;
+                            icon: Icons.file-open;
+                            text: "Open";
+                            colorize-icon: true;
+                            enabled: !command-status.session-busy && !command-status.tper-busy && mbr.supported;
+                        }
+
+                        Button {
+                            width: 90px;
+                            icon: Icons.upload;
+                            text: "Upload";
+                            colorize-icon: true;
+                            primary: true;
+                            enabled: !command-status.session-busy && !command-status.tper-busy && mbr.supported;
+                        }
+                    }
+                }
+
+                ProgressIndicator {
+                    progress: mbr.upload-progress;
+                    height: 1rem;
+                }
             }
         }
 
-        Island {
+        VerticalLayout {
+            alignment: end;
+
             HorizontalLayout {
-                spacing: 0.8rem;
-                padding: 0.8rem;
-
-                LineEdit {
-                    placeholder-text: "Path to the PBA image file";
-                }
+                alignment: end;
 
                 Button {
-                    width: 90px;
-                    icon: Icons.file-open;
-                    text: "Open";
+                    text: "Logout";
+                    icon: Icons.logout;
                     colorize-icon: true;
-                    enabled: !command-status.session-busy && !command-status.tper-busy && mbr.supported;
-                }
 
-                Button {
-                    width: 90px;
-                    icon: Icons.upload;
-                    text: "Upload";
-                    colorize-icon: true;
-                    primary: true;
-                    enabled: !command-status.session-busy && !command-status.tper-busy && mbr.supported;
+                    clicked => {
+                        logout();
+                    }
                 }
             }
-        }
-
-        ProgressIndicator {
-            progress: mbr.upload-progress;
-            height: 1rem;
         }
     }
 }

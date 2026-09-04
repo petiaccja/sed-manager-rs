@@ -4,6 +4,7 @@ import {
     Button,
     Palette,
     GroupBox,
+    StyleMetrics,
 } from "std-widgets.slint";
 import {
     Authority,
@@ -22,6 +23,7 @@ import {
     HorizontalSeparator,
     IslandButton,
 } from "../../../widgets/lib.slint";
+import { Icons } from "../../../resources/lib.slint";
 
 component AuthorityInformation {
     in-out property <string> authority-common-name;
@@ -307,46 +309,38 @@ export component AuthoritiesTab {
 
     callback commit-authorities();
     callback discard-authorities();
+    callback logout();
 
     VerticalLayout {
+        spacing: StyleMetrics.layout-spacing;
+
         sidebar := AuthoritySideBar {
             horizontal-stretch: 0.0;
             vertical-stretch: 0.0;
             authorities: authorities;
         }
 
-        VerticalLayout {
-            horizontal-stretch: 1.0;
-            vertical-stretch: 1.0;
-            alignment: start;
+        ScrollView {
+            preferred-width: content.preferred-width;
+            min-width: content.min-width;
+            preferred-height: content.preferred-height;
+            horizontal-scrollbar-policy: always-off;
 
-            ScrollView {
-                preferred-width: content.preferred-width;
-                min-width: content.min-width;
-                preferred-height: content.preferred-height;
-                horizontal-scrollbar-policy: always-off;
-
-                content := VerticalLayout {
-                    for authority[index] in authorities: Rectangle {
-                        visible: index == sidebar.selected;
-                        preferred-height: index == sidebar.selected ? panel.preferred-height : 0;
-                        min-height: index == sidebar.selected ? panel.min-height : 0;
-                        VerticalLayout {
-                            panel := AuthorityPanel {
-                                authority <=> authority;
-                            }
-                        }
+            content := VerticalLayout {
+                for authority[index] in authorities: VerticalLayout {
+                    if index == sidebar.selected: AuthorityPanel {
+                        authority <=> authority;
                     }
                 }
             }
+        }
 
-            Rectangle {
-                height: 1.2rem;
-            }
+        VerticalLayout {
+            alignment: end;
 
             HorizontalLayout {
-                alignment: end;
-                spacing: 0.8rem;
+                alignment: stretch;
+                spacing: StyleMetrics.layout-spacing;
 
                 Button {
                     text: "Save authorities";
@@ -364,6 +358,20 @@ export component AuthoritiesTab {
 
                     clicked => {
                         discard-authorities();
+                    }
+                }
+
+                Rectangle {
+                    horizontal-stretch: 100%;
+                }
+
+                Button {
+                    text: "Logout";
+                    icon: Icons.logout;
+                    colorize-icon: true;
+
+                    clicked => {
+                        logout();
                     }
                 }
             }

@@ -54,79 +54,70 @@ export component ConfigureLockingView {
         }
     }
 
-    if command-status.secondary-session-active: VerticalLayout {
-        alignment: start;
-        spacing: StyleMetrics.layout-spacing;
+    if command-status.secondary-session-active: TabWidget {
+        Tab {
+            title: "Locking ranges";
 
-        HorizontalLayout {
-            alignment: end;
-            Button {
-                text: "Logout";
-                icon: Icons.logout;
-                colorize-icon: true;
+            VerticalLayout {
+                padding-top: StyleMetrics.layout-spacing;
 
-                clicked => {
-                    logout();
+                LockingRangesTab {
+                    locking-ranges <=> locking-sp.locking-ranges;
+                    command-status: command-status;
+
+                    commit-ranges => {
+                        commit-ranges()
+                    }
+
+                    discard-ranges => {
+                        discard-ranges()
+                    }
+
+                    logout() => {
+                        logout()
+                    }
                 }
             }
         }
 
-        TabWidget {
-            Tab {
-                title: "Locking ranges";
+        Tab {
+            title: "Authorities";
 
-                VerticalLayout {
-                    alignment: start;
-                    padding-top: 1.2rem;
+            VerticalLayout {
+                padding-top: StyleMetrics.layout-spacing;
 
-                    LockingRangesTab {
-                        locking-ranges <=> locking-sp.locking-ranges;
-                        command-status: command-status;
+                AuthoritiesTab {
+                    authorities <=> locking-sp.authorities;
+                    command-status: command-status;
+                    mbr: locking-sp.mbr;
 
-                        commit-ranges => {
-                            commit-ranges()
-                        }
+                    commit-authorities => {
+                        commit-authorities()
+                    }
 
-                        discard-ranges => {
-                            discard-ranges()
-                        }
+                    discard-authorities => {
+                        discard-authorities()
+                    }
+
+                    logout() => {
+                        logout()
                     }
                 }
             }
+        }
 
-            Tab {
-                title: "Authorities";
+        Tab {
+            title: "Shadow MBR";
 
-                VerticalLayout {
-                    alignment: start;
-                    padding-top: 1.2rem;
+            VerticalLayout {
+                padding-top: StyleMetrics.layout-spacing;
 
-                    AuthoritiesTab {
-                        authorities <=> locking-sp.authorities;
-                        command-status: command-status;
-                        mbr: locking-sp.mbr;
+                ShadowMbrTab {
+                    command-status: command-status;
+                    mbr <=> locking-sp.mbr;
 
-                        commit-authorities => {
-                            commit-authorities()
-                        }
-
-                        discard-authorities => {
-                            discard-authorities()
-                        }
-                    }
-                }
-            }
-
-            Tab {
-                title: "Shadow MBR";
-
-                VerticalLayout {
-                    alignment: start;
-                    padding-top: 1.2rem;
-
-                    ShadowMbrTab {
-                        command-status: command-status;
-                        mbr <=> locking-sp.mbr;
+                    logout() => {
+                        logout()
                     }
                 }
             }

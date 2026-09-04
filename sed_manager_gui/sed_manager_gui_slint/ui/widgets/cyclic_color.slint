@@ -1,0 +1,16 @@
+import { PaletteExtra } from "palette_extra.slint";
+import { Palette } from "std-widgets.slint";
+
+export global CyclicColor {
+    pure public function foreground(index: int) -> color {
+        PaletteExtra.make-accented(base(index), Palette.foreground, Palette.background)
+    }
+
+    pure public function background(index: int) -> color {
+        PaletteExtra.make-accented(base(index), Palette.background, Palette.foreground).mix(Palette.background, 0.30)
+    }
+
+    pure function base(index: int) -> color {
+        hsv(79 * index, 0.5, 1.0)
+    }
+}

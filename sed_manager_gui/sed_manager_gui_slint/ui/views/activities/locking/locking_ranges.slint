@@ -1,4 +1,10 @@
-import { ScrollView, CheckBox, Button, Palette } from "std-widgets.slint";
+import {
+    ScrollView,
+    CheckBox,
+    Button,
+    Palette,
+    StyleMetrics,
+} from "std-widgets.slint";
 import {
     LockingRange,
     Sector,
@@ -10,21 +16,9 @@ import {
     Cell,
     HeaderCell,
     PaletteExtra,
+    CyclicColor,
 } from "../../../widgets/lib.slint";
-
-global LockingRangeColor {
-    pure public function foreground(index: int) -> color {
-        PaletteExtra.make-accented(base(index), Palette.foreground, Palette.background)
-    }
-
-    pure public function background(index: int) -> color {
-        PaletteExtra.make-accented(base(index), Palette.background, Palette.foreground).mix(Palette.background, 0.30)
-    }
-
-    pure function base(index: int) -> color {
-        hsv(85 * index, 0.5, 1.0)
-    }
-}
+import { Icons } from "../../../resources/lib.slint";
 
 component LockingRangeTable {
     preferred-width: table.preferred-width;
@@ -86,7 +80,7 @@ component LockingRangeTable {
                         HeaderCell {
                             Text {
                                 text: locking-range.name;
-                                color: LockingRangeColor.foreground(index);
+                                color: CyclicColor.foreground(index);
                                 vertical-alignment: center;
                             }
                         }
@@ -206,10 +200,10 @@ component LockingRangeTable {
 
 component LockingRangeStripe inherits Rectangle {
     min-height: 2.0rem;
-    background: LockingRangeColor.background(0);
+    background: CyclicColor.background(0);
     border-radius: 0.6rem;
     border-width: 0.2rem;
-    border-color: LockingRangeColor.foreground(0).with-alpha(0.45);
+    border-color: CyclicColor.foreground(0).with-alpha(0.45);
 
     in property <[LockingRange]> locking-ranges;
     in property <Sector> capacity: { value: 1000ms };
@@ -223,16 +217,16 @@ component LockingRangeStripe inherits Rectangle {
     }
 
     for locking-range[index] in locking-ranges: Rectangle {
-        if index != 0: Rectangle {
+        if index != 0 && locking-range.end.value - locking-range.start.value > 0ms: Rectangle {
             x: range-x(index);
             y: root.x;
             width: range-width(index);
             height: root.height;
 
-            background: LockingRangeColor.background(index);
+            background: CyclicColor.background(index);
             border-radius: 0.6rem;
             border-width: 0.2rem;
-            border-color: LockingRangeColor.foreground(index).with-alpha(0.45);
+            border-color: CyclicColor.foreground(index).with-alpha(0.45);
 
             HorizontalLayout {
                 width: parent.width;
@@ -241,7 +235,7 @@ component LockingRangeStripe inherits Rectangle {
 
                 Text {
                     text: locking-range.name;
-                    color: LockingRangeColor.foreground(index);
+                    color: CyclicColor.foreground(index);
                     overflow: elide;
                     horizontal-alignment: center;
                     vertical-alignment: center;
@@ -257,12 +251,13 @@ export component LockingRangesTab {
 
     callback commit-ranges();
     callback discard-ranges();
+    callback logout();
 
     VerticalLayout {
-        alignment: start;
-        spacing: 1.2rem;
+        spacing: StyleMetrics.layout-spacing * 1.4;
 
         LockingRangeTable {
+            max-height: self.preferred-height;
             locking-ranges <=> locking-ranges;
         }
 
@@ -271,27 +266,45 @@ export component LockingRangesTab {
             locking-ranges: locking-ranges;
         }
 
-        HorizontalLayout {
+        VerticalLayout {
             alignment: end;
-            spacing: 0.8rem;
 
-            Button {
-                text: "Save ranges";
-                width: 8rem;
-                primary: true;
-                enabled: !command-status.session-busy && !command-status.session-busy;
+            HorizontalLayout {
+                alignment: stretch;
+                spacing: 0.8rem;
 
-                clicked => {
-                    commit-ranges()
+                Button {
+                    text: "Save ranges";
+                    width: 8rem;
+                    primary: true;
+                    enabled: !command-status.session-busy && !command-status.session-busy;
+
+                    clicked => {
+                        commit-ranges()
+                    }
                 }
-            }
 
-            Button {
-                text: "Discard";
-                width: 8rem;
+                Button {
+                    text: "Discard";
+                    width: 8rem;
 
-                clicked => {
-                    discard-ranges()
+                    clicked => {
+                        discard-ranges()
+                    }
+                }
+
+                Rectangle {
+                    horizontal-stretch: 100%;
+                }
+
+                Button {
+                    text: "Logout";
+                    icon: Icons.logout;
+                    colorize-icon: true;
+
+                    clicked => {
+                        logout();
+                    }
                 }
             }
         }
