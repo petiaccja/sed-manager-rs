@@ -1,6 +1,7 @@
 mod authority;
 mod device;
 mod discovery;
+mod locking_range;
 mod primitives;
 mod properties;
 mod uid;

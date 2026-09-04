@@ -28,7 +28,7 @@ pub struct LockingRange {
     pub reencrypt_request: Option<ReencryptRequest>,
     pub adv_key_mode: Option<AdvKeyMode>,
     pub verify_mode: Option<VerifyMode>,
-    pub const_on_reset: Option<HashSet<ResetType>>,
+    pub cont_on_reset: Option<HashSet<ResetType>>,
     pub last_reencrypt_lba: Option<u64>,
     pub last_reenc_stat: Option<LastReencStatus>,
     pub general_status: Option<GeneralStatus>,

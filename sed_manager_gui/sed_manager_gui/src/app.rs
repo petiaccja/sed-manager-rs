@@ -472,11 +472,78 @@ impl App {
                 session.start_locking_config_session(tper, authority, Some(password)).await.map(|_| ())
             })
             .display(move |ui_device, _spec, result| match result {
-                Ok(_) => ui_device,
+                Ok(_) => {
+                    self.clone().list_locking_config_authorities(path.clone(), true);
+                    self.clone().list_locking_config_ranges(path.clone(), true);
+                    ui_device
+                }
                 Err(err) => {
                     self.toast_queue.error("Login failed".into(), err.to_string());
                     ui_device
                 }
+            })
+            .run();
+    }
+
+    #[instrument(skip(self))]
+    fn list_locking_config_authorities(self: Rc<Self>, path: PathBuf, silent: bool) {
+        self.command()
+            .on_session(path.clone(), async |_tper, session| {
+                let Session::LockingConfig(locking_config_session) = &*session else {
+                    return None;
+                };
+                Some(locking_config_session.get_authorities().await)
+            })
+            .display(move |mut ui_device, spec, result| match result {
+                Some(Ok(authorities)) => {
+                    let sp_ref = spec.and_then(|spec| spec.locking.as_ref()).map(|sp| sp.uid);
+                    let (authorities, individual_authority_names, individual_authority_uids) =
+                        display_authorities(spec, &authorities, sp_ref);
+
+                    ui_device.locking_sp.authorities = authorities.into();
+                    ui_device.locking_sp.individual_authority_names = Rc::from(individual_authority_names).into();
+                    ui_device.locking_sp.individual_authority_uids = Rc::from(individual_authority_uids).into();
+
+                    if !silent {
+                        self.toast_queue.success("Locking authorities updated".into(), String::new());
+                    }
+                    ui_device
+                }
+                Some(Err(err)) => {
+                    self.toast_queue.error("Failed to update locking authorities".into(), err.to_string());
+                    ui_device
+                }
+                _ => ui_device,
+            })
+            .run();
+    }
+
+    #[instrument(skip(self))]
+    fn list_locking_config_ranges(self: Rc<Self>, path: PathBuf, silent: bool) {
+        self.command()
+            .on_session(path.clone(), async |_tper, session| {
+                let Session::LockingConfig(locking_config_session) = &*session else {
+                    return None;
+                };
+                Some(locking_config_session.get_locking_ranges().await)
+            })
+            .display(move |mut ui_device, spec, result| match result {
+                Some(Ok(ranges)) => {
+                    let features = spec.map(|spec| spec.discovery.feature_descriptors.as_slice()).unwrap_or(&[]);
+                    let sp_ref = spec.and_then(|spec| spec.locking.as_ref()).map(|sp| sp.uid);
+                    let ranges: Vec<_> = ranges.iter().map(|range| range.into_ui_name(features, sp_ref)).collect();
+                    ui_device.locking_sp.locking_ranges = Rc::from(VecModel::from(ranges)).into();
+
+                    if !silent {
+                        self.toast_queue.success("Locking ranges updated".into(), String::new());
+                    }
+                    ui_device
+                }
+                Some(Err(err)) => {
+                    self.toast_queue.error("Failed to update locking ranges".into(), err.to_string());
+                    ui_device
+                }
+                _ => ui_device,
             })
             .run();
     }
