@@ -3,6 +3,7 @@ mod poly_runtime;
 mod runtime;
 #[cfg(feature = "slint")]
 mod slint_runtime;
+mod sync_wrapper;
 #[cfg(feature = "tokio")]
 mod tokio_runtime;
 

@@ -10,6 +10,7 @@ use slint::EventLoopError;
 use crate::{
     Runtime,
     runtime::{JoinError, ShutdownError, TimeoutError},
+    sync_wrapper::SyncWrapper,
 };
 
 #[derive(Debug)]
@@ -52,7 +53,7 @@ impl Runtime for SlintRuntime {
             let _ = spawn_tx.send(slint::spawn_local(f));
         });
         match invoke_result {
-            Ok(_) => SlintJoinHandle::Spawn(spawn_rx),
+            Ok(_) => SlintJoinHandle::Spawn(SyncWrapper::new(spawn_rx)),
             Err(error) => panic!("the event loop is not running: {error}"),
         }
     }
@@ -119,7 +120,7 @@ impl Runtime for SlintRuntime {
 
 #[pin_project(project = SlintJoinHandleProj)]
 pub enum SlintJoinHandle<T> {
-    Spawn(#[pin] oneshot::AsyncReceiver<Result<slint::JoinHandle<T>, EventLoopError>>),
+    Spawn(#[pin] SyncWrapper<oneshot::AsyncReceiver<Result<slint::JoinHandle<T>, EventLoopError>>>),
     Join(#[pin] slint::JoinHandle<T>),
 }
 
@@ -128,7 +129,7 @@ impl<T> Future for SlintJoinHandle<T> {
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         match self.as_mut().project() {
-            SlintJoinHandleProj::Spawn(receiver) => match receiver.poll(cx) {
+            SlintJoinHandleProj::Spawn(receiver) => match receiver.as_pin_mut().poll(cx) {
                 Poll::Ready(Ok(Ok(join_handle))) => {
                     *self = SlintJoinHandle::Join(join_handle);
                     cx.waker().wake_by_ref();

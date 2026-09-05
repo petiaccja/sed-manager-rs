@@ -3,7 +3,7 @@ use std::sync::{
     atomic::{AtomicU32, Ordering},
 };
 
-use sed_async::{PolyRuntime, Runtime as _};
+use sed_async::{PolyRuntime, Runtime};
 use sed_device::Device;
 use sed_packet::discovery::Discovery;
 use sed_packet::{
@@ -38,6 +38,7 @@ pub struct Tper {
     com_id_ext: u16,
     device: Arc<dyn Device>,
     controller: Controller,
+    protocol_task: <PolyRuntime as Runtime>::JoinHandle<()>,
     host_session_id: AtomicU32,
 }
 
@@ -86,8 +87,8 @@ impl Tper {
     pub fn connect(com_id: u16, com_id_ext: u16, device: Arc<dyn Device>, runtime: Arc<PolyRuntime>) -> Self {
         let (protocol, controller) = Protocol::new(com_id, com_id_ext, device.clone(), runtime.clone());
         controller.sync_properties();
-        runtime.spawn(protocol.run());
-        Self { com_id, com_id_ext, device, controller, host_session_id: 1.into() }
+        let protocol_task = runtime.spawn(protocol.run());
+        Self { com_id, com_id_ext, device, controller, protocol_task, host_session_id: 1.into() }
     }
 
     /// Discover the capabilities of the provided device.
@@ -167,5 +168,16 @@ impl Tper {
     ) -> Result<Session, Error> {
         let host_session_number = self.host_session_id.fetch_add(1, Ordering::Relaxed);
         Session::start(self.controller.clone(), host_session_number, sp, authority, password).await
+    }
+
+    /// Initiate the shutdown of the protocol stack held internally.
+    ///
+    /// Once the returned future is complete, the protocol stack is shut down.
+    /// Note that all live [`Session`]s that hold a reference to the protocol stack
+    /// needs to be shut down and dropped, otherwise the protocol stack will not be
+    /// able to shut down.
+    #[instrument(level = "debug", skip(self))]
+    pub fn close(self) -> <PolyRuntime as Runtime>::JoinHandle<()> {
+        self.protocol_task
     }
 }
