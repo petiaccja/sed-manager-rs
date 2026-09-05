@@ -6,7 +6,6 @@
 mod ata;
 mod generic;
 mod nvme;
-mod raw_device;
 mod scsi;
 
 use std::path::Path;
@@ -28,7 +27,7 @@ pub async fn open_device(path: impl AsRef<Path>) -> Result<Box<dyn Device>, Erro
     let generic_device = GenericDevice::open(path).await?;
     match generic_device.interface() {
         Interface::NVMe => NvmeDevice::from_generic(generic_device).await.map(|dev| into_boxed(dev)),
-        Interface::SCSI => ScsiDevice::try_from(generic_device).map(|dev| into_boxed(dev)),
+        Interface::SCSI => ScsiDevice::from_generic(generic_device).await.map(|dev| into_boxed(dev)),
         Interface::ATA => AtaDevice::from_generic(generic_device).await.map(|dev| into_boxed(dev)),
         Interface::SATA => AtaDevice::from_generic(generic_device).await.map(|dev| into_boxed(dev)), // SATA is "same" as ATA.
         _ => Ok(into_boxed(generic_device)),

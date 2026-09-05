@@ -3,10 +3,11 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-mod async_io;
-mod device_handle;
 mod devices;
 mod drive_list;
+mod handle;
+mod ioctl_device;
+mod thread_pool;
 
 pub use devices::open_device;
 pub use drive_list::list_physical_drives;

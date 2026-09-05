@@ -17,7 +17,7 @@ use windows::{
     core::{HRESULT, PCWSTR},
 };
 
-use crate::{Error as DeviceError, windows::async_io::submit_work};
+use crate::{Error as DeviceError, windows::thread_pool::spawn};
 
 fn list_physical_drives_sync() -> Result<Vec<PathBuf>, DeviceError> {
     let dev_info = unsafe {
@@ -86,7 +86,7 @@ fn list_physical_drives_sync() -> Result<Vec<PathBuf>, DeviceError> {
 }
 
 pub async fn list_physical_drives() -> Result<Vec<PathBuf>, DeviceError> {
-    match submit_work(list_physical_drives_sync).await {
+    match spawn(list_physical_drives_sync).await {
         Ok(result) => result,
         Err(err) => Err(err.err_or_resume_unwind().into()),
     }

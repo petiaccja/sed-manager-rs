@@ -40,7 +40,7 @@ impl ThreadPoolError {
     }
 }
 
-pub fn submit_work<F, Output>(work: F) -> impl Future<Output = Result<F::Output, ThreadPoolError>>
+pub fn spawn<F, Output>(work: F) -> impl Future<Output = Result<F::Output, ThreadPoolError>>
 where
     F: FnOnce() -> Output + Send,
     F::Output: Send,
@@ -64,7 +64,7 @@ impl ThreadPoolIo {
         Ok(Self { tp_io })
     }
 
-    pub fn submit<F>(&self, io: F) -> impl Future<Output = Result<u32, WindowsError>>
+    pub fn spawn<F>(&self, io: F) -> impl Future<Output = Result<u32, WindowsError>>
     where
         F: FnOnce(AtomicPtr<OVERLAPPED>) -> Result<u32, WindowsError>,
     {
@@ -299,7 +299,7 @@ extern "system" fn overlapped_io_callback(
 
 #[cfg(test)]
 mod tests {
-    use crate::windows::device_handle::DeviceHandle;
+    use crate::windows::handle::Handle;
 
     use super::*;
 
@@ -317,15 +317,15 @@ mod tests {
 
     #[tokio::test]
     async fn submit_work_success() {
-        assert_eq!(submit_work(|| 3 + 4).await.unwrap(), 7);
+        assert_eq!(spawn(|| 3 + 4).await.unwrap(), 7);
     }
 
     #[tokio::test]
     async fn submit_work_panic() {
-        assert_that!(submit_work(|| panic!()).await, err(matches_pattern!(ThreadPoolError::Panic(_))));
+        assert_that!(spawn(|| panic!()).await, err(matches_pattern!(ThreadPoolError::Panic(_))));
     }
 
-    fn create_pipes() -> (DeviceHandle, DeviceHandle) {
+    fn create_pipes() -> (Handle, Handle) {
         let name = HSTRING::from(format!(r"\\.\pipe\test-async-io-{}", PIPE_ID.fetch_add(1, Ordering::Relaxed)));
 
         let read_handle = unsafe {
@@ -354,22 +354,22 @@ mod tests {
             .unwrap()
         };
 
-        (DeviceHandle(read_handle), DeviceHandle(write_handle))
+        (Handle::from(read_handle), Handle::from(write_handle))
     }
 
     #[tokio::test]
     async fn overlapped_io_success_immediate() {
         let (read_handle, write_handle) = create_pipes();
-        let read_io = ThreadPoolIo::new(read_handle.0).unwrap();
-        let write_io = ThreadPoolIo::new(write_handle.0).unwrap();
+        let read_io = ThreadPoolIo::new(read_handle.inner()).unwrap();
+        let write_io = ThreadPoolIo::new(write_handle.inner()).unwrap();
 
         let write_buffer = [1, 2, 3];
         let write_result = write_io
-            .submit(|overlapped| {
+            .spawn(|overlapped| {
                 let mut num_bytes_transferred = 0;
                 unsafe {
                     WriteFile(
-                        write_handle.0,
+                        write_handle.inner(),
                         Some(write_buffer.as_slice()),
                         Some(&mut num_bytes_transferred as *mut _),
                         Some(overlapped.load(Ordering::Relaxed)),
@@ -383,11 +383,11 @@ mod tests {
 
         let mut read_buffer = vec![0, 0, 0];
         let read_result = read_io
-            .submit(|overlapped| {
+            .spawn(|overlapped| {
                 let mut num_bytes_transferred = 0;
                 unsafe {
                     ReadFile(
-                        read_handle.0,
+                        read_handle.inner(),
                         Some(read_buffer.as_mut_slice()),
                         Some(&mut num_bytes_transferred as *mut _),
                         Some(overlapped.load(Ordering::Relaxed)),
@@ -404,16 +404,16 @@ mod tests {
     #[tokio::test]
     async fn overlapped_io_success_drop_future() {
         let (read_handle, write_handle) = create_pipes();
-        let read_io = ThreadPoolIo::new(read_handle.0).unwrap();
-        let write_io = ThreadPoolIo::new(write_handle.0).unwrap();
+        let read_io = ThreadPoolIo::new(read_handle.inner()).unwrap();
+        let write_io = ThreadPoolIo::new(write_handle.inner()).unwrap();
 
         let write_buffer = [1, 2, 3];
         let mut context = Context::from_waker(Waker::noop());
-        let _ = core::pin::pin!(write_io.submit(|overlapped| {
+        let _ = core::pin::pin!(write_io.spawn(|overlapped| {
             let mut num_bytes_transferred = 0;
             unsafe {
                 WriteFile(
-                    write_handle.0,
+                    write_handle.inner(),
                     Some(write_buffer.as_slice()),
                     Some(&mut num_bytes_transferred as *mut _),
                     Some(overlapped.load(Ordering::Relaxed)),
@@ -425,11 +425,11 @@ mod tests {
 
         let mut read_buffer = vec![0, 0, 0];
         let read_result = read_io
-            .submit(|overlapped| {
+            .spawn(|overlapped| {
                 let mut num_bytes_transferred = 0;
                 unsafe {
                     ReadFile(
-                        read_handle.0,
+                        read_handle.inner(),
                         Some(read_buffer.as_mut_slice()),
                         Some(&mut num_bytes_transferred as *mut _),
                         Some(overlapped.load(Ordering::Relaxed)),
@@ -446,8 +446,8 @@ mod tests {
     #[tokio::test]
     async fn overlapped_io_success_delayed() {
         let (read_handle, write_handle) = create_pipes();
-        let read_io = ThreadPoolIo::new(read_handle.0).unwrap();
-        let write_io = ThreadPoolIo::new(write_handle.0).unwrap();
+        let read_io = ThreadPoolIo::new(read_handle.inner()).unwrap();
+        let write_io = ThreadPoolIo::new(write_handle.inner()).unwrap();
 
         let mut context = Context::from_waker(Waker::noop());
 
@@ -455,11 +455,11 @@ mod tests {
         let write_buffer = [1, 2, 3];
 
         let read_result = {
-            let read_future = read_io.submit(|overlapped| {
+            let read_future = read_io.spawn(|overlapped| {
                 let mut num_bytes_transferred = 0;
                 unsafe {
                     ReadFile(
-                        read_handle.0,
+                        read_handle.inner(),
                         Some(read_buffer.as_mut_slice()),
                         Some(&mut num_bytes_transferred as *mut _),
                         Some(overlapped.load(Ordering::Relaxed)),
@@ -472,11 +472,11 @@ mod tests {
             assert_that!(read_future.as_mut().poll(&mut context), matches_pattern!(Poll::Pending));
 
             let write_result = write_io
-                .submit(|overlapped| {
+                .spawn(|overlapped| {
                     let mut num_bytes_transferred = 0;
                     unsafe {
                         WriteFile(
-                            write_handle.0,
+                            write_handle.inner(),
                             Some(write_buffer.as_slice()),
                             Some(&mut num_bytes_transferred as *mut _),
                             Some(overlapped.load(Ordering::Relaxed)),
