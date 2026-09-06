@@ -344,41 +344,56 @@ where
 {
     pub fn run(self) {
         let Self { runtime, device_list, device_id, run_fn, update_fn } = self;
+
         slint::spawn_local(
             async move {
-                // Acquire resources.
                 let device_list = device_list.read().await;
-                let Some(backend) = device_list.backend.get(&device_id) else { return };
-                let backend = backend.read().await;
-                let Some(tper) = backend.tper.clone() else { return };
-                let session = backend.session.lock_arc().await;
+                let Some(backend) = device_list.backend.get(&device_id).cloned() else {
+                    return;
+                };
+                let backend = backend.read_arc().await;
 
-                // Indicate to UI that we're busy on the session.
-                device_list.ui.update(&device_id, |value| {
-                    let command_status = value.command_status.clone();
-                    value.with_command_status(command_status.with_session_busy(true))
-                });
+                let (busy_sender, busy_signal) = oneshot::async_channel();
+                let run_task = runtime.spawn(
+                    async move {
+                        // Acquire resources.
+                        let tper = backend.tper.as_ref()?.clone();
+                        let session = backend.session.lock_arc().await;
 
-                // Execute the command and display results.
-                let output = runtime
-                    .spawn(async move { run_fn(tper, Mut::Mutex(session)).await }.in_current_span())
-                    .await
-                    .unwrap();
-                let spec = backend.specification.as_ref();
-                device_list.ui.update(&device_id, move |value| update_fn(value, spec, output));
+                        // Signal that now we're busy on the session.
+                        let _ = busy_sender.send(());
 
-                // Indicate to UI that we're NO LONGER busy.
-                device_list.ui.update(&device_id, |value| {
-                    let command_status = value.command_status.clone();
-                    value.with_command_status(command_status.with_session_busy(false))
-                });
+                        // Execute the command and display results.
+                        Some((run_fn(tper, Mut::Mutex(session)).await, backend))
+                    }
+                    .in_current_span(),
+                );
 
-                // Update active session.
-                let session = backend.session.lock_arc().await;
-                device_list.ui.update(&device_id, |mut value| {
-                    value.command_status.secondary_session_active = matches!(*session, Session::LockingConfig(_));
-                    value
-                });
+                if let Ok(_) = busy_signal.await {
+                    // Indicate to UI that we're busy on the session.
+                    device_list.ui.update(&device_id, |value| {
+                        let command_status = value.command_status.clone();
+                        value.with_command_status(command_status.with_session_busy(true))
+                    });
+                }
+
+                if let Ok(Some((output, backend))) = run_task.await {
+                    let spec = backend.specification.as_ref();
+                    device_list.ui.update(&device_id, move |value| update_fn(value, spec, output));
+
+                    // Indicate to UI that we're NO LONGER busy.
+                    device_list.ui.update(&device_id, |value| {
+                        let command_status = value.command_status.clone();
+                        value.with_command_status(command_status.with_session_busy(false))
+                    });
+
+                    // Update active session.
+                    let session = backend.session.lock_arc().await;
+                    device_list.ui.update(&device_id, |mut value| {
+                        value.command_status.secondary_session_active = matches!(*session, Session::LockingConfig(_));
+                        value
+                    });
+                }
             }
             .in_current_span(),
         )
