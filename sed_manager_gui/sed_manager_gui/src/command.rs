@@ -82,6 +82,34 @@ impl Command {
         let Self { runtime, device_list } = self;
         CommandOnSession { runtime, device_list, device_id, run_fn }
     }
+
+    pub fn on_session_ref<RunFn, Output>(self, device_id: PathBuf, run_fn: RunFn) -> CommandOnSessionRef<RunFn, Output>
+    where
+        RunFn: for<'x> OnSessionRunFn<'x, Output = Output> + Send + 'static,
+        for<'x> <RunFn as OnSessionRunFn<'x>>::Future: Send,
+        Output: Send + 'static,
+    {
+        let Self { runtime, device_list } = self;
+        CommandOnSessionRef { runtime, device_list, device_id, run_fn }
+    }
+}
+
+pub trait OnSessionRunFn<'x> {
+    type Output;
+    type Future: Future<Output = Self::Output> + Send;
+    fn call_once(self, tper: &'x Tper, session: &'x mut Session) -> Self::Future;
+}
+
+impl<'x, F, Fut, Output> OnSessionRunFn<'x> for F
+where
+    F: FnOnce(&'x Tper, &'x mut Session) -> Fut,
+    Fut: Future<Output = Output> + Send + 'x,
+{
+    type Output = Output;
+    type Future = Fut;
+    fn call_once(self, tper: &'x Tper, session: &'x mut Session) -> Fut {
+        self(tper, session)
+    }
 }
 
 //------------------------------------------------------------------------------
@@ -401,6 +429,121 @@ where
     }
 }
 
+//------------------------------------------------------------------------------
+// Command on session with references
+//------------------------------------------------------------------------------
+
+pub struct CommandOnSessionRef<RunFn, Output>
+where
+    RunFn: for<'x> OnSessionRunFn<'x, Output = Output> + Send + 'static,
+    for<'x> <RunFn as OnSessionRunFn<'x>>::Future: Send,
+    Output: Send + 'static,
+{
+    runtime: Arc<PolyRuntime>,
+    device_list: Arc<RwLock<DeviceList>>,
+    device_id: PathBuf,
+    run_fn: RunFn,
+}
+
+impl<RunFn, Output> CommandOnSessionRef<RunFn, Output>
+where
+    RunFn: for<'x> OnSessionRunFn<'x, Output = Output> + Send + 'static,
+    for<'x> <RunFn as OnSessionRunFn<'x>>::Future: Send,
+    Output: Send + 'static,
+{
+    pub fn display<UpdateFn>(self, update_fn: UpdateFn) -> UpdateOnSessionRef<RunFn, Output, UpdateFn>
+    where
+        UpdateFn: for<'spec> FnOnce(ui::Device, Option<&'spec Spec>, Output) -> ui::Device + 'static,
+    {
+        let Self { runtime, device_list, device_id, run_fn } = self;
+        UpdateOnSessionRef { runtime, device_list, device_id, run_fn, update_fn }
+    }
+}
+
+pub struct UpdateOnSessionRef<RunFn, Output, UpdateFn>
+where
+    RunFn: for<'x> OnSessionRunFn<'x, Output = Output> + Send + 'static,
+    for<'x> <RunFn as OnSessionRunFn<'x>>::Future: Send,
+    Output: Send + 'static,
+    UpdateFn: for<'spec> FnOnce(ui::Device, Option<&'spec Spec>, Output) -> ui::Device + 'static,
+{
+    runtime: Arc<PolyRuntime>,
+    device_list: Arc<RwLock<DeviceList>>,
+    device_id: PathBuf,
+    run_fn: RunFn,
+    update_fn: UpdateFn,
+}
+
+impl<RunFn, Output, UpdateFn> UpdateOnSessionRef<RunFn, Output, UpdateFn>
+where
+    RunFn: for<'x> OnSessionRunFn<'x, Output = Output> + Send + 'static,
+    for<'x> <RunFn as OnSessionRunFn<'x>>::Future: Send,
+    Output: Send + 'static,
+    UpdateFn: for<'spec> FnOnce(ui::Device, Option<&'spec Spec>, Output) -> ui::Device + 'static,
+{
+    pub fn run(self) {
+        let Self { runtime, device_list, device_id, run_fn, update_fn } = self;
+
+        slint::spawn_local(
+            async move {
+                let device_list = device_list.read().await;
+                let Some(backend) = device_list.backend.get(&device_id).cloned() else {
+                    return;
+                };
+                let backend = backend.read_arc().await;
+
+                let (busy_sender, busy_signal) = oneshot::async_channel();
+                let run_task = runtime.spawn(
+                    async move {
+                        // Acquire resources.
+                        let tper = backend.tper.as_ref()?.clone();
+                        let mut session = backend.session.lock_arc().await;
+
+                        // Signal that now we're busy on the session.
+                        let _ = busy_sender.send(());
+
+                        // Execute the command and display results.
+                        Some((run_fn.call_once(tper.deref(), session.deref_mut()).await, backend))
+                    }
+                    .in_current_span(),
+                );
+
+                if let Ok(_) = busy_signal.await {
+                    // Indicate to UI that we're busy on the session.
+                    device_list.ui.update(&device_id, |value| {
+                        let command_status = value.command_status.clone();
+                        value.with_command_status(command_status.with_session_busy(true))
+                    });
+                }
+
+                if let Ok(Some((output, backend))) = run_task.await {
+                    let spec = backend.specification.as_ref();
+                    device_list.ui.update(&device_id, move |value| update_fn(value, spec, output));
+
+                    // Indicate to UI that we're NO LONGER busy.
+                    device_list.ui.update(&device_id, |value| {
+                        let command_status = value.command_status.clone();
+                        value.with_command_status(command_status.with_session_busy(false))
+                    });
+
+                    // Update active session.
+                    let session = backend.session.lock_arc().await;
+                    device_list.ui.update(&device_id, |mut value| {
+                        value.command_status.secondary_session_active = matches!(*session, Session::LockingConfig(_));
+                        value
+                    });
+                }
+            }
+            .in_current_span(),
+        )
+        .expect_in_event_loop();
+    }
+}
+
+//------------------------------------------------------------------------------
+// Helper stuff
+//------------------------------------------------------------------------------
+
 #[derive(Debug)]
 pub enum Mut<T> {
     Mutex(async_lock::MutexGuardArc<T>),
@@ -438,4 +581,12 @@ impl<T> ExpectInEventLoop for Result<T, EventLoopError> {
     fn expect_in_event_loop(self) -> Self::Output {
         self.expect("expected to be inside the event loop")
     }
+}
+
+fn foo(command: Command) {
+    command.on_session_ref("asd".into(), async move |_tper: &_, _session: &mut _| {});
+}
+
+fn foo2(command: Command) {
+    command.on_session_ref("asd".into(), |_tper: &Tper, _session: &mut Session| async move {});
 }
