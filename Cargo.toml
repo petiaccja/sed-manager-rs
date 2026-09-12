@@ -29,7 +29,6 @@ sed_spec_codegen = { version = "0.1.0", path = "sed_spec_codegen" }
 sed_spec_macros = { version = "0.1.0", path = "sed_spec_macros" }
 sed_telemetry = { version = "0.1.0", path = "sed_telemetry" }
 sed_tper = { version = "0.1.0", path = "sed_tper" }
-sed_tper_macros = { version = "0.1.0", path = "sed_tper_macros" }
 sed_virtual_device = { version = "0.1.0", path = "sed_virtual_device" }
 
 # Maintained by Peter.

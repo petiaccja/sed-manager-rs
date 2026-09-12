@@ -38,25 +38,31 @@ jobs:
         sudo apt-get update
         sudo apt-get install libfontconfig-dev
         sudo apt-get install libfreetype-dev
+        sudo apt-get install xvfb
 
     - name: Install Rust toolchain
       run: |
-        rustup toolchain install 1.92
-        rustup default 1.92
+        rustup toolchain install 1.98
+        rustup default 1.98
 
     - name: Build
       run: cargo build --profile ${{ matrix.cargo_profile }} --verbose
 
     - name: Run tests
-      run: cargo test --profile ${{ matrix.cargo_profile }} --verbose
+      shell: bash
+      run: |
+        if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
+          xvfb-run -a cargo test --profile ${{ matrix.cargo_profile }} --verbose
+        else
+          cargo test --profile ${{ matrix.cargo_profile }} --verbose
+        fi
 
     - name: "Upload binaries"
       uses: actions/upload-artifact@v4
       with:
         name: sed-manager-${{ matrix.os_name }}-${{ matrix.cargo_profile }}
         path: |
-          ${{ github.workspace }}/target/${{ matrix.cargo_folder }}/sed_manager_config*
-          ${{ github.workspace }}/target/${{ matrix.cargo_folder }}/sed_manager_unlock*
+          ${{ github.workspace }}/target/${{ matrix.cargo_folder }}/sed_manager_gui*
           !${{ github.workspace }}/target/${{ matrix.cargo_folder }}/*.d
           !${{ github.workspace }}/target/${{ matrix.cargo_folder }}/*.pdb
         if-no-files-found: error
