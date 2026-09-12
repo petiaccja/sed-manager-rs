@@ -1,0 +1,14 @@
+{
+  "name": "Rust",
+  "image": "mcr.microsoft.com/devcontainers/rust",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {},
+    "ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {}
+  },
+  "mounts": ["source=claude-code-config,target=/home/vscode/.claude,type=volume"],
+  "containerEnv": {
+    "CLAUDE_CONFIG_DIR": "/home/vscode/.claude",
+    "CLAUDE_CODE_OAUTH_TOKEN": "${localEnv:CLAUDE_CODE_OAUTH_TOKEN}"
+  },
+  "postCreateCommand": "sudo chown -R vscode:vscode /home/vscode/.claude"
+}
