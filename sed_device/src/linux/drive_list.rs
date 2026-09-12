@@ -4,10 +4,10 @@
 //L-----------------------------------------------------------------------------
 
 use std::fs;
+use std::io::ErrorKind;
 use std::path::PathBuf;
 
 use crate::Error as DeviceError;
-use crate::linux::Error as LinuxError;
 
 pub fn get_nvme_controller(device: PathBuf) -> PathBuf {
     const PREFIX: &str = "nvme";
@@ -28,8 +28,15 @@ pub fn get_nvme_controller(device: PathBuf) -> PathBuf {
 fn list_physical_drives_sync() -> Result<Vec<PathBuf>, DeviceError> {
     const DISK_FOLDER: &str = "/dev/disk/by-id";
 
-    // Get all drives in the by-id folder.
-    let drive_iter = fs::read_dir(DISK_FOLDER).map_err(|_| LinuxError::NoDiskFolder)?;
+    // Get all drives in the by-id folder. The folder missing is not an error
+    // and an empty list is returned. This can happen for example in containers.
+    // Otherwise, the error is returned (e.g. permission denied).
+    let drive_iter = match fs::read_dir(DISK_FOLDER) {
+        Ok(drive_iter) => drive_iter,
+        Err(err) if err.kind() == ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(err) if err.kind() == ErrorKind::PermissionDenied => return Err(DeviceError::PermissionDenied),
+        Err(_) => return Err(DeviceError::Unspecified),
+    };
     let drives = drive_iter.filter_map(|entry| entry.ok().map(|entry| entry.path()));
 
     // Canonicalize all drives: this removes symlinks so we get `/dev/nvme0n1` instead of `/dev/disk/by-id/nvme-****-1`.
@@ -61,11 +68,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_list_physical_drives() -> Result<(), DeviceError> {
-        let drives = match list_physical_drives().await {
-            Ok(drives) => drives,
-            Err(DeviceError::PlatformError(LinuxError::NoDiskFolder)) => return Ok(()),
-            Err(err) => return Err(err),
-        };
+        let drives = list_physical_drives().await?;
         // Make sure the NVMe controllers are returned.
         assert!(!drives.iter().any(|dev| dev.to_string_lossy().contains("nvme0n")));
         assert!(!drives.iter().any(|dev| dev.to_string_lossy().contains("nvme1n")));
