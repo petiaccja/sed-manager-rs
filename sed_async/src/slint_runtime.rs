@@ -211,7 +211,16 @@ mod tests {
     static EVENT_LOOP_INITIALIZED: OnceLock<std::thread::JoinHandle<()>> = OnceLock::new();
 
     fn init_event_loop() {
-        EVENT_LOOP_INITIALIZED.get_or_init(|| std::thread::spawn(|| slint::run_event_loop_until_quit().unwrap()));
+        EVENT_LOOP_INITIALIZED.get_or_init(|| {
+            std::thread::spawn(|| {
+                // Use the headless testing backend instead of a real windowing backend, so
+                // these tests don't need a display (or GPU) to run, e.g. in CI. The testing
+                // backend's queue binds to whatever thread creates it, so it must be
+                // initialized on the same thread that then runs the event loop.
+                i_slint_backend_testing::init_integration_test_with_system_time();
+                slint::run_event_loop_until_quit().unwrap()
+            })
+        });
         while slint::invoke_from_event_loop(|| {}).is_err() {
             std::thread::sleep(Duration::from_millis(16));
         }

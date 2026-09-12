@@ -4523,6 +4523,7 @@ name = "sed_async"
 version = "0.1.0"
 dependencies = [
  "googletest",
+ "i-slint-backend-testing",
  "oneshot",
  "pin-project",
  "slint",

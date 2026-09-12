@@ -12,6 +12,7 @@ thiserror.workspace = true
 
 [dev-dependencies]
 googletest.workspace = true
+i-slint-backend-testing.workspace = true
 
 [features]
 not_empty = []
