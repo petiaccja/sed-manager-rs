@@ -39,6 +39,7 @@ sorbit = { version = "0.1.2", git = "https://github.com/petiaccja/sorbit", rev =
 # -- Async
 tokio = { version = "1.51.1", features = ["rt-multi-thread"] }
 oneshot = { version = "0.2.1", features = ["async"] }
+blocking = "1.6.2"
 async-channel = { version = "2.5.0" }
 async-broadcast = "0.7.2"
 async-lock = "3.4.2"
@@ -61,7 +62,7 @@ prettyplease = { version = "0.2.37" }
 
 # -- Operating systems
 windows = { version = "0.62.2" }
-nix = { version = "0.29", default-features = false, features = ["fs", "ioctl"] }
+rustix = "1.1.4"
 
 # -- Testing
 rstest = { version = "0.26.1" }

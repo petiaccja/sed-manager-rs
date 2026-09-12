@@ -3,9 +3,9 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use nix::errno::Errno;
+use rustix::io::Errno;
 
-use crate::device;
+use crate::Error as DeviceError;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum Error {
@@ -15,19 +15,13 @@ pub enum Error {
     NoDiskFolder,
 }
 
-impl From<Error> for device::Error {
-    fn from(value: Error) -> Self {
-        Self::PlatformError(value)
-    }
-}
-
 impl From<Errno> for Error {
     fn from(value: Errno) -> Self {
         Self::Errno(value)
     }
 }
 
-impl From<Errno> for device::Error {
+impl From<Errno> for DeviceError {
     fn from(value: Errno) -> Self {
         Self::PlatformError(Error::Errno(value))
     }

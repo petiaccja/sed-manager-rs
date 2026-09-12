@@ -3,13 +3,15 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use crate::device::{Device, Error};
+use std::path::Path;
+
+use crate::{Device, Error};
 
 mod ata;
 mod nvme;
 
-use ata::ATADevice;
-use nvme::NVMeDevice;
+use ata::AtaDevice;
+use nvme::NvmeDevice;
 
 fn replace_error(error: &mut Option<Error>, new_error: Error) {
     let is_only_mismatch = error.as_ref().is_some_and(|value| value == &Error::InterfaceNotSupported);
@@ -18,14 +20,15 @@ fn replace_error(error: &mut Option<Error>, new_error: Error) {
     }
 }
 
-pub fn open_device(drive_path: &str) -> Result<Box<dyn Device>, Error> {
+pub async fn open_device(path: impl AsRef<Path>) -> Result<Box<dyn Device>, Error> {
+    let path = path.as_ref();
     let mut error = Option::<Error>::None;
 
-    match ATADevice::open(drive_path) {
+    match AtaDevice::open(path).await {
         Ok(device) => return Ok(Box::new(device)),
         Err(new_error) => replace_error(&mut error, new_error),
     }
-    match NVMeDevice::open(drive_path) {
+    match NvmeDevice::open(path).await {
         Ok(device) => return Ok(Box::new(device)),
         Err(new_error) => replace_error(&mut error, new_error),
     }

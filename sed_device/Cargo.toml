@@ -27,7 +27,8 @@ windows = { workspace = true, features = [
 ] }
 
 [target.'cfg(unix)'.dependencies]
-nix.workspace = true
+rustix = { workspace = true, features = ["fs"] }
+blocking.workspace = true
 
 [dev-dependencies]
 sed_device = { path = ".", features = ["test-utils"] }

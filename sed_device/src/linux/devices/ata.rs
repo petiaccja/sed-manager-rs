@@ -11,44 +11,66 @@
 //! and `ATA_12`/`ATA_16` SCSI opcodes. Support can be implemented with the `SG_IO`
 //! ioctl and the `sg_io_hdr` structure. `hdparm`'s source code might be helpful.
 
-use nix::ioctl_read_bad;
+use std::io;
+use std::path::Path;
 
-use crate::device::linux::utility::FileHandle;
-use crate::device::shared::ata::IdentifyDevice;
-use crate::device::{Device, Error as DeviceError, Interface};
-use crate::serialization::DeserializeBinary;
+use sorbit::ser_de::FromBytes as _;
 
-pub struct ATADevice {
-    file: FileHandle,
-    cached_desc: IdentifyDevice,
+use crate::linux::ioctl_device::IoctlDevice;
+use crate::shared::ata::{AtaError, IdentifyDevice};
+use crate::{Device, Error as DeviceError, Interface};
+
+pub use ioctl::AtaIoctlDevice;
+
+pub struct AtaDevice {
+    ioctl_device: IoctlDevice,
+    desc: IdentifyDevice,
+    is_removable: bool,
 }
 
-impl Device for ATADevice {
-    fn path(&self) -> Option<String> {
-        Some(self.file.path().into())
+impl AtaDevice {
+    pub async fn open(path: impl AsRef<Path>) -> Result<Self, DeviceError> {
+        let ioctl_device = IoctlDevice::open(path).await?;
+        let desc = ioctl_device.identify_device().await?;
+        if desc.not_ata_device {
+            return Err(DeviceError::InterfaceNotSupported);
+        }
+        let is_removable = query_is_removable(ioctl_device.path()).await.unwrap_or(false);
+        Ok(Self { ioctl_device, desc, is_removable })
+    }
+}
+
+#[async_trait::async_trait]
+impl Device for AtaDevice {
+    fn path(&self) -> Option<&Path> {
+        Some(self.ioctl_device.path())
     }
 
     fn interface(&self) -> Interface {
-        self.cached_desc.interface()
+        self.desc.interface()
     }
 
     fn model_number(&self) -> String {
-        self.cached_desc.model_number()
+        self.desc.model_number()
     }
 
     fn serial_number(&self) -> String {
-        self.cached_desc.serial_number()
+        self.desc.serial_number()
     }
 
     fn firmware_revision(&self) -> String {
-        self.cached_desc.firmware_revision()
+        self.desc.firmware_revision()
     }
 
     fn is_security_supported(&self) -> bool {
-        self.cached_desc.trusted_computing_supported
+        self.desc.trusted_computing_supported
     }
 
-    fn security_send(
+    fn is_removable(&self) -> bool {
+        self.is_removable
+    }
+
+    async fn security_send(
         &self,
         _security_protocol: u8,
         _protocol_specific: [u8; 2],
@@ -61,7 +83,7 @@ impl Device for ATADevice {
         }
     }
 
-    fn security_recv(
+    async fn security_recv(
         &self,
         _security_protocol: u8,
         _protocol_specific: [u8; 2],
@@ -75,22 +97,33 @@ impl Device for ATADevice {
     }
 }
 
-impl ATADevice {
-    pub fn open(path: &str) -> Result<Self, DeviceError> {
-        let file = FileHandle::open(path)?;
-        let desc = query_description(&file)?;
-        Ok(Self { file, cached_desc: desc })
-    }
+/// Reads the `removable` flag for a block device from sysfs, e.g. `/sys/block/sda/removable`.
+async fn query_is_removable(path: impl AsRef<Path>) -> Result<bool, io::Error> {
+    let path = path.as_ref().to_owned();
+    blocking::unblock(move || {
+        let file_name = path.file_name().ok_or(io::ErrorKind::InvalidFilename)?;
+        let removable_path = Path::new("/sys/block").join(file_name).join("removable");
+        std::fs::read_to_string(removable_path).map(|contents| contents.trim() == "1")
+    })
+    .await
 }
 
-fn query_description(file: &FileHandle) -> Result<IdentifyDevice, DeviceError> {
-    let mut identity = [0_u8; 512];
-    let _ = unsafe { hdio_get_identity(file.handle(), &mut identity as *mut [u8; 512]) }?;
-    let identity = IdentifyDevice::from_bytes(identity.into()).map_err(|_| DeviceError::InvalidArgument)?;
-    if identity.not_ata_device {
-        return Err(DeviceError::InterfaceNotSupported);
-    }
-    Ok(identity)
-}
+mod ioctl {
+    use super::*;
 
-ioctl_read_bad!(hdio_get_identity, 0x030d, [u8; 512]);
+    /// `HDIO_GET_IDENTITY`. This is a raw legacy opcode, not one composed from
+    /// `_IOR(group, num, size)`, so it must be used as a literal, not re-encoded
+    /// via `rustix::ioctl::opcode::read`.
+    const HDIO_GET_IDENTITY: rustix::ioctl::Opcode = 0x030d;
+
+    pub trait AtaIoctlDevice {
+        async fn identify_device(&self) -> Result<IdentifyDevice, DeviceError>;
+    }
+
+    impl AtaIoctlDevice for IoctlDevice {
+        async fn identify_device(&self) -> Result<IdentifyDevice, DeviceError> {
+            let identity = self.ioctl(unsafe { rustix::ioctl::Getter::<HDIO_GET_IDENTITY, [u8; 512]>::new() }).await?;
+            IdentifyDevice::from_bytes(&identity).map_err(|_| DeviceError::ATAError(AtaError::with_error_bit()))
+        }
+    }
+}
