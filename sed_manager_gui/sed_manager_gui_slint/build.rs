@@ -16,8 +16,8 @@ fn main() {
     rerun_if_slint_changed(Path::new("ui"));
 
     // Slint debug info is needed by `i-slint-backend-testing`'s `ElementHandle` API.
-    // Add it ONLY in debug builds.
-    let debug_info = std::env::var("PROFILE").as_deref() == Ok("debug");
-    let config = slint_build::CompilerConfiguration::new().with_debug_info(debug_info);
+    // It would be better to add this only in test builds, but it's needed for both
+    // debug and release.
+    let config = slint_build::CompilerConfiguration::new().with_debug_info(true);
     slint_build::compile_with_config("ui/main_window.slint", config).expect("Slint build failed");
 }
