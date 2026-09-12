@@ -1,3 +1,8 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
 use crate::token::{Command, Detokenize, Detokenizer, Tokenize, Tokenizer};
 
 impl Tokenize for Command {

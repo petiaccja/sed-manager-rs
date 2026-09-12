@@ -1,3 +1,8 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
 use super::{LongAtom, MediumAtom, ShortAtom, TinyAtom, Token};
 
 macro_rules! impl_from_int {

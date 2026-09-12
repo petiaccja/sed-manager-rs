@@ -1,3 +1,8 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
 use std::ops::RangeBounds;
 use std::sync::atomic::{AtomicBool, Ordering};
 

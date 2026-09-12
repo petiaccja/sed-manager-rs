@@ -1,3 +1,8 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
 use core::marker::PhantomData;
 use std::num::NonZero;
 use std::ops::{Add, AddAssign, Sub, SubAssign};

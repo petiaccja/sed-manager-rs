@@ -1,3 +1,8 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
 use crate::token::{Detokenize, Detokenizer, MessageError as _, Tokenize, Tokenizer};
 
 impl Tokenize for bool {

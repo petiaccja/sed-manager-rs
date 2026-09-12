@@ -1,3 +1,8 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
 use sed_packet::{MaxBytes, Object, ObjectUid};
 
 use crate::tper::security_provider::Table;

@@ -1,3 +1,8 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
 use sed_spec::{
     methods::MethodStatus, objects::SecurityProviderRef, preconfig::opal_2::admin::sp, types::LifeCycleState,
 };

@@ -1,3 +1,8 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
 use sed_packet::Named;
 use sed_packet::token::{Detokenize, Detokenizer, MessageError, Tokenize, Tokenizer};
 

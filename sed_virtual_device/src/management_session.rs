@@ -1,3 +1,8 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
 use std::collections::{HashMap, VecDeque};
 use std::num::NonZero;
 use std::sync::atomic::{AtomicU32, Ordering};

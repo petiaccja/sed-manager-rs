@@ -1,3 +1,8 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
 use sorbit::ser_de::{Deserialize as _, Deserializer, Serialize as _, Serializer};
 
 use crate::token::{Detokenizer, Tokenize, Tokenizer};

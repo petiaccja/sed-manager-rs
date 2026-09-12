@@ -1,3 +1,8 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
 use num_enum::{FromPrimitive, IntoPrimitive};
 use sed_packet::token::{Detokenize, Detokenizer, Tokenize, Tokenizer};
 

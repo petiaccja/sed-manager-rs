@@ -1,3 +1,8 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
 use sorbit::io::{FixedMemoryStream, GrowingMemoryStream};
 use sorbit::stream_ser_de::{StreamDeserializer, StreamSerializer};
 

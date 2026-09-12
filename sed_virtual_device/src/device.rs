@@ -1,3 +1,8 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
 use std::collections::{HashMap, HashSet};
 use std::ops::{Deref as _, DerefMut as _};
 use std::path::Path;
