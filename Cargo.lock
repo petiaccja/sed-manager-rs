@@ -4579,6 +4579,7 @@ dependencies = [
  "sed_async",
  "sed_device",
  "sed_manager",
+ "sed_manager_gui",
  "sed_manager_gui_slint",
  "sed_packet",
  "sed_spec",

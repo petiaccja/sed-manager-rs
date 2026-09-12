@@ -148,8 +148,8 @@ impl App {
                 // they are used as HashMap keys.
                 let non_unicode = retain_unicode(&mut new_paths);
 
-                // Insert virtual device in debug mode.
-                #[cfg(debug_assertions)]
+                // Insert virtual device in debug mode, or when explicitly requested (e.g. by tests).
+                #[cfg(any(debug_assertions, feature = "virtual_device"))]
                 new_paths.insert(VIRTUAL_DEVICE_PATH.into());
 
                 let removed: HashSet<_> =
