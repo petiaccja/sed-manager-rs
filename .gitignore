@@ -5,3 +5,8 @@
 .vs
 
 .vscode/
+.claude/
+
+*.profraw
+
+!Cargo.lock

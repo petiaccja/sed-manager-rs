@@ -1,0 +1,129 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
+import { Status } from "status.slint";
+import { Uid } from "uid.slint";
+import { Sector } from "sector.slint";
+
+export struct DiscoveryProperty {
+    name: string,
+    value: string,
+}
+
+export struct DiscoveryFeature {
+    name: string,
+    properties: [DiscoveryProperty],
+}
+
+export struct Discovery {
+    status: Status,
+    common-features: [DiscoveryFeature],
+    ssc-features: [DiscoveryFeature],
+}
+
+export struct DeviceConfig {
+    sid-msid-pin-differ: bool,
+    locking-enabled: bool,
+}
+
+export struct Identity {
+    status: Status,
+    name: string,
+    serial: string,
+    path: string,
+    firmware: string,
+    interface: string,
+    security-commands: bool,
+    is-removable: bool,
+}
+
+export struct ComIdStatus {
+    good: bool,
+    com-id: int,
+    com-id-ext: int,
+    status: string,
+}
+
+export struct ProtocolProperty {
+    name: string,
+    host: string,
+    device: string,
+    connection: string,
+}
+
+export struct StackStatus {
+    com-id: ComIdStatus,
+    protocol: [ProtocolProperty],
+}
+
+export struct CommandStatus {
+    tper-busy: bool,
+    session-busy: bool,
+    secondary-session-active: bool,
+}
+
+export struct LockingRange {
+    uid: Uid,
+    name: string,
+    common_name: string,
+    start: Sector,
+    end: Sector,
+    read-lock-enabled: bool,
+    write-lock-enabled: bool,
+    read-locked: bool,
+    write-locked: bool,
+    erase: bool,
+}
+
+export struct LockingRangeAccess {
+    uid: Uid,
+    name: string,
+    read-unlock: bool,
+    write-unlock: bool,
+}
+
+export struct MbrAccess {
+    set-done: bool,
+}
+
+export struct Authority {
+    uid: Uid,
+    name: string,
+    common_name: string,
+    enabled: bool,
+    is-class: bool,
+    locking-range-access: [LockingRangeAccess],
+    mbr-access: MbrAccess,
+}
+
+export struct Mbr {
+    supported: bool,
+    size: Sector,
+    enabled: bool,
+    done: bool,
+    upload-progress: float,
+}
+
+export struct SecurityProvider {
+    uid: Uid,
+    name: string,
+    locking_ranges: [LockingRange],
+    authorities: [Authority],
+    mbr: Mbr,
+    // Derive this with a filter-map from `authorities`. Delete it as soon as Slint
+    // supports in-Slint filter-map on models.
+    individual-authority-names: [string],
+    individual-authority-uids: [Uid],
+}
+
+export struct Device {
+    identity: Identity,
+    discovery: Discovery,
+    config: DeviceConfig,
+    stack-status: StackStatus,
+    command-status: CommandStatus,
+    admin-sp: SecurityProvider,
+    locking-sp: SecurityProvider,
+}

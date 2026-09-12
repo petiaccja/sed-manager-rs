@@ -1,0 +1,385 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
+import {
+    ScrollView,
+    CheckBox,
+    Button,
+    Palette,
+    GroupBox,
+    StyleMetrics,
+} from "std-widgets.slint";
+import {
+    Authority,
+    Sector,
+    SectorUtil,
+    CommandStatus,
+    LockingRangeAccess,
+    Mbr,
+    MbrAccess,
+} from "../../../data/lib.slint";
+import {
+    Detached,
+    Cell,
+    HeaderCell,
+    PaletteExtra,
+    HorizontalSeparator,
+    IslandButton,
+} from "../../../widgets/lib.slint";
+import { Icons } from "../../../resources/lib.slint";
+
+component AuthorityInformation {
+    in-out property <string> authority-common-name;
+    in-out property <bool> authority-enabled;
+    in property <bool> authority-is-class;
+
+    Rectangle {
+        background: PaletteExtra.separator.with-alpha(0.25);
+        clip: true;
+        border-radius: 0.6rem;
+        border-width: 0.1rem;
+        border-color: self.background;
+
+        table := GridLayout {
+            spacing: 0.1rem;
+
+            for column[index] in [
+                "Common name",
+                "Enabled",
+                "Password",
+                "Kind",
+            ]: HeaderCell {
+                row: index;
+                col: 0;
+                z: 1;
+
+                Text {
+                    width: self.min-width;
+                    text: column;
+                    vertical-alignment: center;
+                }
+            }
+
+            Cell {
+                row: 0;
+                col: 1;
+
+                TextInput {
+                    text <=> authority-common-name;
+                }
+            }
+
+            Cell {
+                row: 1;
+                col: 1;
+
+                HorizontalLayout {
+                    alignment: start;
+
+                    CheckBox {
+                        checked <=> authority-enabled;
+                    }
+                }
+            }
+
+            Cell {
+                row: 2;
+                col: 1;
+
+                TextInput {
+                    input-type: password;
+                }
+            }
+
+            Cell {
+                row: 3;
+                col: 1;
+
+                Text {
+                    text: authority-is-class ? "Class" : "Individual";
+                }
+            }
+        }
+    }
+}
+
+component MbrAccessTable {
+    in-out property <MbrAccess> mbr-access;
+
+    Rectangle {
+        background: PaletteExtra.separator.with-alpha(0.25);
+        clip: true;
+        border-radius: 0.6rem;
+        border-width: 0.1rem;
+        border-color: self.background;
+
+        HorizontalLayout {
+            spacing: 0.1rem;
+
+            HeaderCell {
+                Text {
+                    text: "Shadow MBR";
+                }
+            }
+
+            Cell {
+                horizontal-stretch: 1.0;
+                HorizontalLayout {
+                    allow-unshadow := CheckBox {
+                        checked <=> mbr-access.set-done;
+                        text: "Allow unshadow";
+                    }
+                }
+            }
+        }
+    }
+}
+
+component LockingRangeAccessTable {
+    preferred-width: table.preferred-width;
+    preferred-height: table.preferred-height;
+
+    in-out property <[LockingRangeAccess]> locking-ranges;
+
+    viewport := ScrollView {
+        GridLayout {
+            Rectangle {
+                background: PaletteExtra.separator.with-alpha(0.25);
+                clip: true;
+                border-radius: 0.6rem;
+                border-width: 0.1rem;
+                border-color: self.background;
+
+                table := GridLayout {
+                    spacing: 0.1rem;
+
+                    Detached {
+                        row: 0;
+                        col: 0;
+                        z: 2;
+                        offset-x: -viewport.viewport-x;
+                        offset-y: -viewport.viewport-y;
+                        HeaderCell { }
+                    }
+
+                    for column[index] in [
+                        "Allow read unlock",
+                        "Allow write unlock",
+                    ]: Detached {
+                        row: 0;
+                        col: index + 1;
+                        z: 1;
+                        offset-y: -viewport.viewport-y;
+
+                        HeaderCell {
+                            Text {
+                                text: column;
+                                horizontal-alignment: center;
+                            }
+                        }
+                    }
+
+                    for locking-range[index] in locking-ranges: Detached {
+                        row: index + 1;
+                        col: 0;
+                        offset-x: -viewport.viewport-x;
+                        z: 1;
+
+                        HeaderCell {
+                            Text {
+                                text: locking-range.name;
+                            }
+                        }
+                    }
+
+                    for locking-range[index] in locking-ranges: Detached {
+                        row: index + 1;
+                        col: 1;
+
+                        Cell {
+                            horizontal-alignment: space-around;
+                            CheckBox {
+                                checked <=> locking-range.read-unlock;
+                            }
+                        }
+                    }
+
+                    for locking-range[index] in locking-ranges: Detached {
+                        row: index + 1;
+                        col: 2;
+
+                        Cell {
+                            horizontal-alignment: space-around;
+                            CheckBox {
+                                checked <=> locking-range.write-unlock;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+component AuthoritySideBarItem inherits IslandButton {
+    has-background: true;
+    has-idle-background: false;
+
+    in property <string> authority-name;
+
+    HorizontalLayout {
+        padding-left: 0.8rem;
+        padding-right: 0.8rem;
+        padding-top: 0.6rem;
+        padding-bottom: 0.6rem;
+
+        Text {
+            text: authority-name;
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: root.is-selected ? PaletteExtra.accented-control-foreground : root.foreground;
+            vertical-alignment: center;
+        }
+    }
+}
+
+export component AuthoritySideBar {
+    height: 3.2rem;
+    preferred-width: content.preferred-width;
+    preferred-height: content.preferred-height;
+
+    in property <[Authority]> authorities;
+    in-out property <int> selected;
+
+    ScrollView {
+        vertical-scrollbar-policy: always-off;
+        content := HorizontalLayout {
+            alignment: start;
+            spacing: 0.2rem;
+
+            for authority[index] in authorities: AuthoritySideBarItem {
+                is-selected: index == selected;
+                authority-name: authority.name;
+
+                clicked => {
+                    root.selected = index
+                }
+            }
+        }
+    }
+}
+
+export component AuthorityPanel {
+    in-out property <Authority> authority;
+    in property <Mbr> mbr;
+
+    VerticalLayout {
+        alignment: start;
+
+        GroupBox {
+            title: "Authority information";
+
+            AuthorityInformation {
+                authority-common-name <=> authority.common-name;
+                authority-enabled <=> authority.enabled;
+            }
+        }
+
+        GroupBox {
+            title: "Access control";
+
+            VerticalLayout {
+                spacing: 1.2rem;
+
+                if mbr.supported: MbrAccessTable {
+                    mbr-access <=> authority.mbr-access;
+                }
+
+                LockingRangeAccessTable {
+                    min-height: self.preferred-height;
+                    locking-ranges <=> authority.locking-range-access;
+                }
+            }
+        }
+    }
+}
+
+
+export component AuthoritiesTab {
+    in-out property <[Authority]> authorities;
+    in property <CommandStatus> command-status;
+    in property <Mbr> mbr;
+
+    callback commit-authorities();
+    callback discard-authorities();
+    callback logout();
+
+    VerticalLayout {
+        spacing: StyleMetrics.layout-spacing;
+
+        sidebar := AuthoritySideBar {
+            horizontal-stretch: 0.0;
+            vertical-stretch: 0.0;
+            authorities: authorities;
+        }
+
+        ScrollView {
+            preferred-width: content.preferred-width;
+            min-width: content.min-width;
+            preferred-height: content.preferred-height;
+            horizontal-scrollbar-policy: always-off;
+
+            content := VerticalLayout {
+                for authority[index] in authorities: VerticalLayout {
+                    if index == sidebar.selected: AuthorityPanel {
+                        authority <=> authority;
+                    }
+                }
+            }
+        }
+
+        VerticalLayout {
+            alignment: end;
+
+            HorizontalLayout {
+                alignment: stretch;
+                spacing: StyleMetrics.layout-spacing;
+
+                Button {
+                    text: "Save authorities";
+                    primary: true;
+                    enabled: !command-status.session-busy && !command-status.session-busy;
+
+                    clicked => {
+                        commit-authorities();
+                    }
+                }
+
+                Button {
+                    text: "Discard";
+                    width: 8rem;
+
+                    clicked => {
+                        discard-authorities();
+                    }
+                }
+
+                Rectangle {
+                    horizontal-stretch: 100%;
+                }
+
+                Button {
+                    text: "Logout";
+                    icon: Icons.logout;
+                    colorize-icon: true;
+
+                    clicked => {
+                        logout();
+                    }
+                }
+            }
+        }
+    }
+}

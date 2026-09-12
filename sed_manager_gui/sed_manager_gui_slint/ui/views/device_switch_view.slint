@@ -1,0 +1,88 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
+import { Device, RevertScope, RevertAuthority, Uid } from "../data/lib.slint";
+import { DeviceView } from "device_view.slint";
+
+export component DeviceSwitchView {
+    in property <int> selected;
+    in-out property <[Device]> devices;
+
+    callback take-owneship(device: string, password: string);
+    callback activate-locking(device: string, password: string);
+    callback change-password(device: string, sp: Uid, authority: Uid, current-password: string, new-password: string);
+    callback list-admin-authorities(device: string, silent: bool);
+    callback list-locking-authorities(device: string, silent: bool);
+    callback login(device: string, authority: Uid, password: string);
+    callback logout(device: string);
+    callback commit-ranges(device: string);
+    callback discard-ranges(device: string);
+    callback commit-authorities(device: string);
+    callback discard-authorities(device: string);
+    callback revert-device(device: string, scope: RevertScope, authority: RevertAuthority, password: string);
+    callback query-stack-status(device: string);
+    callback reset-stack(device: string);
+
+    VerticalLayout {
+        if devices.length == 0: Rectangle { }
+
+        for device[index] in devices: Rectangle {
+            min-width: content.min-width;
+            min-height: index == selected ? content.min-height : 0px;
+            preferred-width: content.preferred-width;
+            preferred-height: index == selected ? content.preferred-height : 0px;
+            visible: index == selected;
+            vertical-stretch: index == selected ? 1.0 : 0.0;
+            content := DeviceView {
+                width: parent.width;
+                height: index == selected ? parent.height : self.min-height;
+                device <=> device;
+
+                take-owneship(password) => {
+                    take-owneship(device.identity.path, password)
+                };
+                activate-locking(password) => {
+                    activate-locking(device.identity.path, password)
+                };
+                change-password(sp, authority, current-password, new-password) => {
+                    change-password(device.identity.path, sp, authority, current-password, new-password)
+                };
+                list-admin-authorities(silent) => {
+                    list-admin-authorities(device.identity.path, silent)
+                }
+                list-locking-authorities(silent) => {
+                    list-locking-authorities(device.identity.path, silent)
+                }
+                login(authority, password) => {
+                    login(device.identity.path, authority, password)
+                }
+                logout() => {
+                    logout(device.identity.path)
+                }
+                commit-ranges() => {
+                    commit-ranges(device.identity.path)
+                }
+                discard-ranges() => {
+                    discard-ranges(device.identity.path)
+                }
+                commit-authorities() => {
+                    commit-authorities(device.identity.path)
+                }
+                discard-authorities() => {
+                    discard-authorities(device.identity.path)
+                }
+                revert-device(scope, authority, password) => {
+                    revert-device(device.identity.path, scope, authority, password)
+                };
+                query-stack-status() => {
+                    query-stack-status(device.identity.path)
+                };
+                reset-stack() => {
+                    reset-stack(device.identity.path)
+                };
+            }
+        }
+    }
+}

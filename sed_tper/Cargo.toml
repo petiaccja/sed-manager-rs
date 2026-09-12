@@ -1,0 +1,31 @@
+[package]
+name = "sed_tper"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+test-utils = []
+
+[dependencies]
+sed_packet.workspace = true
+sed_device.workspace = true
+sed_spec.workspace = true
+sed_async.workspace = true
+sed_spec_macros.workspace = true
+sorbit.workspace = true
+oneshot.workspace = true
+async-channel.workspace = true
+async-broadcast.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+num_enum.workspace = true
+
+[dev-dependencies]
+sed_telemetry = { workspace = true, features = ["test-utils"] }
+sed_device = { workspace = true, features = ["test-utils"] }
+rstest.workspace = true
+tokio = { workspace = true, features = ["macros"] }
+googletest.workspace = true
+sed_tper = { workspace = true, features = ["test-utils"] }
+sed_virtual_device.workspace = true
+sed_async = { workspace = true, features = ["tokio"] }

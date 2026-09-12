@@ -1,0 +1,35 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
+import { LineEdit, Button } from "std-widgets.slint";
+import { CommandStatus } from "../../data/lib.slint";
+
+export component ActivateLockingView {
+    in property <CommandStatus> command-status;
+
+    callback activate-locking(password: string);
+
+    VerticalLayout {
+        spacing: 0.5rem;
+        alignment: start;
+
+        Text {
+            text: "Owner (SID) password:";
+        }
+
+        password := LineEdit {
+            input-type: InputType.password;
+        }
+
+        Button {
+            text: "Activate locking";
+            primary: true;
+            clicked => {
+                activate-locking(password.text)
+            }
+            enabled: !command-status.session-busy && !command-status.tper-busy;
+        }
+    }
+}

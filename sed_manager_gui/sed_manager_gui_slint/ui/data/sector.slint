@@ -1,0 +1,30 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
+// A number of sectors in drives using logically based addresses. Can be used
+// both as an offset (index) or as a size.
+export struct Sector {
+    // Using `duration` as that's the only 64-bit integer type in Slint. This
+    // is a bit of a hack, but perhaps the simplest approach.
+    value: duration,
+}
+
+export global SectorUtil {
+    pure callback to-string(sector: Sector) -> string;
+    pure callback is-sector(s: string) -> bool;
+    pure callback to-sector(s: string) -> Sector;
+
+    to-string(sector) => {
+        sector.value / 1ms
+    }
+
+    is-sector(s) => {
+        s.is-float()
+    }
+
+    to-sector(s) => {
+        { value: 1ms * s.to-float() }
+    }
+}

@@ -1,0 +1,183 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
+use sorbit::io::{FixedMemoryStream, GrowingMemoryStream};
+use sorbit::stream_ser_de::{StreamDeserializer, StreamSerializer};
+
+use crate::token::MessageError;
+use crate::token::token::Token;
+
+use super::command::Command;
+use super::error::Error;
+
+pub trait Tokenize {
+    fn tokenize<T: Tokenizer>(&self, tokenizer: &mut T) -> Result<(), T::Error>;
+}
+
+pub trait Detokenize: Sized {
+    fn detokenize<D: Detokenizer>(detokenizer: &mut D) -> Result<Self, D::Error>;
+}
+
+pub trait ToTokens {
+    fn to_tokens(&self) -> Result<Vec<u8>, Error>;
+}
+
+pub trait FromTokens: Sized {
+    fn from_tokens(tokens: &[u8]) -> Result<Self, Error>;
+}
+
+impl<T> ToTokens for T
+where
+    T: Tokenize,
+{
+    fn to_tokens(&self) -> Result<Vec<u8>, Error> {
+        use super::SorbitTokenizer;
+
+        let stream = GrowingMemoryStream::new();
+        let serializer = StreamSerializer::new(stream);
+        let mut tokenizer = SorbitTokenizer::new(serializer);
+        self.tokenize(&mut tokenizer)?;
+        Ok(tokenizer.take().take().take())
+    }
+}
+
+impl<T> FromTokens for T
+where
+    T: Detokenize,
+{
+    fn from_tokens(tokens: &[u8]) -> Result<Self, Error> {
+        use super::SorbitDetokenizer;
+
+        let stream = FixedMemoryStream::new(tokens);
+        let serializer = StreamDeserializer::new(stream);
+        let mut tokenizer = SorbitDetokenizer::new(serializer);
+        T::detokenize(&mut tokenizer)
+    }
+}
+
+pub enum TokenType {
+    Integer { signed: bool },
+    Bytes,
+    Command,
+    Named,
+    List,
+    Control,
+}
+
+impl From<&Token> for TokenType {
+    fn from(token: &Token) -> Self {
+        fn atom_type(bytes: bool, signed: bool) -> TokenType {
+            match bytes {
+                true => TokenType::Bytes,
+                false => TokenType::Integer { signed },
+            }
+        }
+
+        match token {
+            Token::TinyAtom(atom) => atom_type(false, atom.signed),
+            Token::ShortAtom(atom) => atom_type(atom.byte, atom.signed),
+            Token::MediumAtom(atom) => atom_type(atom.byte, atom.signed),
+            Token::LongAtom(atom) => atom_type(atom.byte, atom.signed),
+            Token::StartList => Self::List,
+            Token::EndList => Self::Control,
+            Token::StartName => Self::Named,
+            Token::EndName => Self::Control,
+            Token::Call => Self::Command,
+            Token::EndOfData => Self::Command,
+            Token::EndOfSession => Self::Command,
+            Token::StartTransaction => Self::Control,
+            Token::EndTransaction => Self::Control,
+            Token::Empty => Self::Control,
+        }
+    }
+}
+
+impl From<&TokenType> for &'static str {
+    fn from(value: &TokenType) -> Self {
+        match value {
+            TokenType::Integer { signed } => match signed {
+                true => "sint",
+                false => "uint",
+            },
+            TokenType::Bytes => "bytes",
+            TokenType::Command => "command",
+            TokenType::Named => "named",
+            TokenType::List => "list",
+            TokenType::Control => "control",
+        }
+    }
+}
+
+impl From<TokenType> for &'static str {
+    fn from(value: TokenType) -> Self {
+        <_>::from(&value)
+    }
+}
+
+impl core::fmt::Display for TokenType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.into())
+    }
+}
+
+pub trait Tokenizer {
+    type Error: MessageError;
+
+    fn tokenize_i8(&mut self, value: i8) -> Result<(), Self::Error>;
+    fn tokenize_i16(&mut self, value: i16) -> Result<(), Self::Error>;
+    fn tokenize_i32(&mut self, value: i32) -> Result<(), Self::Error>;
+    fn tokenize_i64(&mut self, value: i64) -> Result<(), Self::Error>;
+    fn tokenize_u8(&mut self, value: u8) -> Result<(), Self::Error>;
+    fn tokenize_u16(&mut self, value: u16) -> Result<(), Self::Error>;
+    fn tokenize_u32(&mut self, value: u32) -> Result<(), Self::Error>;
+    fn tokenize_u64(&mut self, value: u64) -> Result<(), Self::Error>;
+    fn tokenize_command(&mut self, value: Command) -> Result<(), Self::Error>;
+    fn tokenize_named(&mut self, name: impl Tokenize, value: impl Tokenize) -> Result<(), Self::Error>;
+    fn tokenize_list(&mut self, items: impl FnOnce(&mut Self) -> Result<(), Self::Error>) -> Result<(), Self::Error>;
+    fn tokenize_bytes(&mut self, bytes: &[u8]) -> Result<(), Self::Error>;
+}
+
+pub trait Detokenizer {
+    type Error: MessageError;
+
+    fn ignore(&mut self, max_recursion: usize) -> Result<(), Self::Error>;
+    fn peek_kind(&mut self) -> Result<TokenType, Self::Error>;
+    fn detokenize_until<O>(&mut self, value: impl FnMut(&mut Self) -> Result<O, Self::Error>)
+    -> Result<O, Self::Error>;
+    fn detokenize_i8(&mut self) -> Result<i8, Self::Error>;
+    fn detokenize_i16(&mut self) -> Result<i16, Self::Error>;
+    fn detokenize_i32(&mut self) -> Result<i32, Self::Error>;
+    fn detokenize_i64(&mut self) -> Result<i64, Self::Error>;
+    fn detokenize_u8(&mut self) -> Result<u8, Self::Error>;
+    fn detokenize_u16(&mut self) -> Result<u16, Self::Error>;
+    fn detokenize_u32(&mut self) -> Result<u32, Self::Error>;
+    fn detokenize_u64(&mut self) -> Result<u64, Self::Error>;
+    fn detokenize_command(&mut self) -> Result<Command, Self::Error>;
+    fn detokenize_named<Name, Value>(
+        &mut self,
+        name: impl FnOnce(&mut Self) -> Result<Name, Self::Error>,
+        value: impl FnOnce(&mut Self, &Name) -> Result<Value, Self::Error>,
+    ) -> Result<(Name, Value), Self::Error>;
+    fn detokenize_list(&mut self, item: impl FnMut(&mut Self) -> Result<(), Self::Error>) -> Result<(), Self::Error>;
+    fn detokenize_bytes(&mut self) -> Result<Vec<u8>, Self::Error>;
+}
+
+impl<V: Tokenize> Tokenize for &V {
+    fn tokenize<T: Tokenizer>(&self, tokenizer: &mut T) -> Result<(), T::Error> {
+        (*self).tokenize(tokenizer)
+    }
+}
+
+impl<V: Tokenize> Tokenize for Box<V> {
+    fn tokenize<T: Tokenizer>(&self, tokenizer: &mut T) -> Result<(), T::Error> {
+        self.as_ref().tokenize(tokenizer)
+    }
+}
+
+impl ToTokens for Box<dyn ToTokens> {
+    fn to_tokens(&self) -> Result<Vec<u8>, Error> {
+        self.as_ref().to_tokens()
+    }
+}

@@ -1,0 +1,113 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
+import { Device, Identity } from "../data/lib.slint";
+import { Palette, ScrollView } from "std-widgets.slint";
+import { PaletteExtra, IconButton, Island } from "../widgets/lib.slint";
+import { Icons } from "../resources/lib.slint";
+import { IslandButton } from "../widgets/island_button.slint";
+
+component DeviceSideBarItem inherits IslandButton {
+    has-background: true;
+    has-idle-background: false;
+    accessible-role: button;
+    accessible-label: !identity.name.is-empty ? identity.name : identity.path;
+
+    in property <Identity> identity;
+
+    callback close-device(path: string);
+
+    HorizontalLayout {
+        padding-left: 0.8rem;
+        padding-right: 0.8rem;
+        padding-top: 0.6rem;
+        padding-bottom: 0.6rem;
+
+        VerticalLayout {
+            spacing: 0.2rem;
+            horizontal-stretch: 1.0;
+
+            Text {
+                text: !identity.name.is-empty ? identity.name : identity.path;
+                font-size: 1.6rem;
+                font-weight: 600;
+                overflow: elide;
+                color: root.is-selected ? PaletteExtra.accented-control-foreground : root.foreground;
+            }
+
+            Text {
+                text: !identity.serial.is-empty ? identity.serial : "---";
+                overflow: elide;
+                color: root.foreground;
+            }
+        }
+
+        IconButton {
+            horizontal-stretch: 0.0;
+            icon-size: 1.6rem;
+            icon: Icons.close;
+
+            clicked => {
+                close-device(identity.path)
+            }
+        }
+    }
+}
+
+component DeviceSideBarTitle {
+    min-width: text.min-width + 1.6rem;
+    min-height: text.min-height + 0.8rem;
+
+    in property <string> text;
+
+    text := Text {
+        x: (root.width - self.width) / 2;
+        y: (root.height - self.height) / 2;
+        text: root.text;
+        font-size: 1.8rem;
+        font-weight: 800;
+        color: PaletteExtra.accented-control-foreground;
+    }
+}
+
+export component DeviceSideBar {
+    in property <string> title: "Devices";
+    in property <[Device]> devices;
+    in-out property <int> selected;
+
+    callback close-device(path: string);
+
+    VerticalLayout {
+        spacing: 0.2rem;
+
+        if !title.is-empty: DeviceSideBarTitle {
+            vertical-stretch: 0.0;
+            text: title;
+        }
+
+        ScrollView {
+            horizontal-scrollbar-policy: always-off;
+            vertical-stretch: 1.0;
+            preferred-width: content.preferred-width;
+            content := VerticalLayout {
+                alignment: start;
+                spacing: 0.2rem;
+
+                for device[index] in devices: DeviceSideBarItem {
+                    is-selected: index == selected;
+                    identity: device.identity;
+                    accessible-id: "device-side-bar-item-" + index;
+
+                    clicked => {
+                        root.selected = index
+                    }
+                    close-device(path) => {
+                        close-device(path)
+                    }
+                }
+            }
+        }
+    }
+}

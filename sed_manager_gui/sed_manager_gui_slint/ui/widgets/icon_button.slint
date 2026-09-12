@@ -1,0 +1,75 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
+import { PaletteExtra } from "palette_extra.slint";
+import { Palette, Button } from "std-widgets.slint";
+import { IslandButton } from "island_button.slint";
+
+export enum TextPlacement {
+    left,
+    right,
+    top,
+    bottom,
+}
+
+export component IconButton inherits IslandButton {
+    has-background: false;
+    accessible-role: button;
+    accessible-label: text;
+
+    in property <image> icon;
+    in property <string> text;
+    in property <brush> icon-color: root.foreground;
+    in property <brush> text-color: root.foreground;
+    in property <length> icon-size: 2 * font-size;
+    in property <length> font-size: 1rem;
+    in property <int> font-weight: 0;
+    in property <TextPlacement> text-placement: TextPlacement.right;
+
+    GridLayout {
+        padding: 0.4rem;
+        spacing: 0.4rem;
+
+        HorizontalLayout {
+            col: text-placement == TextPlacement.left ? 1 : 0;
+            row: text-placement == TextPlacement.top ? 1 : 0;
+            alignment: center;
+
+            VerticalLayout {
+                alignment: center;
+
+                Image {
+
+                    width: icon-size;
+                    height: icon-size;
+
+                    source: icon;
+                    image-fit: contain;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                    colorize: icon-color;
+                }
+            }
+        }
+
+        label := GridLayout {
+            col: text-placement == TextPlacement.right ? 1 : 0;
+            row: text-placement == TextPlacement.bottom ? 1 : 0;
+
+            horizontal-stretch: 1.0;
+            vertical-stretch: 1.0;
+            visible: !text.is-empty;
+
+            if !text.is-empty: Text {
+                text: text;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+                color: text-color;
+                font-size: font-size;
+                font-weight: font-weight;
+            }
+        }
+    }
+}

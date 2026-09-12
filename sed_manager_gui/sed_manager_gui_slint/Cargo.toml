@@ -1,0 +1,10 @@
+[package]
+name = "sed_manager_gui_slint"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+slint.workspace = true
+
+[build-dependencies]
+slint-build.workspace = true

@@ -1,0 +1,41 @@
+[package]
+name = "sed_device"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+test-utils = []
+
+[dependencies]
+sorbit.workspace = true
+thiserror.workspace = true
+num_enum.workspace = true
+async-trait.workspace = true
+oneshot.workspace = true
+pin-project.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows = { workspace = true, features = [
+    "Win32_System_IO",
+    "Win32_Security",
+    "Win32_Storage_FileSystem",
+    "Win32_Storage_IscsiDisc",
+    "Win32_System_Ioctl",
+    "Win32_Devices_DeviceAndDriverInstallation",
+    "Win32_System_Threading",
+    "Win32_System_WindowsProgramming",
+] }
+
+[target.'cfg(unix)'.dependencies]
+rustix = { workspace = true, features = ["fs"] }
+blocking.workspace = true
+
+[dev-dependencies]
+sed_device = { path = ".", features = ["test-utils"] }
+tokio = { workspace = true,  features = ["macros"] }
+googletest.workspace = true
+
+[target.'cfg(windows)'.dev-dependencies]
+windows = { workspace = true, features = [
+    "Win32_System_Pipes",
+] }

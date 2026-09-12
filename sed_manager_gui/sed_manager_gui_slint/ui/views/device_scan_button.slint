@@ -1,0 +1,32 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
+import { Outcome } from "../data/lib.slint";
+import { Icons } from "../resources/lib.slint";
+import { Palette, Spinner } from "std-widgets.slint";
+import { PaletteExtra } from "../widgets/lib.slint";
+import { IconButton } from "../widgets/icon_button.slint";
+
+export component DeviceScanButton {
+    opacity: button.has-hover ? 100% : 50%;
+
+    in property <Outcome> outcome;
+
+    callback clicked <=> button.clicked;
+
+    button := IconButton {
+        has-background: true;
+        icon: Icons.feature-search;
+        icon-size: 4rem;
+        visible: outcome != Outcome.pending;
+        accessible-label: "Scan for devices";
+        accessible-id: "scan-button";
+    }
+
+    Spinner {
+        indeterminate: true;
+        visible: outcome == Outcome.pending;
+    }
+}

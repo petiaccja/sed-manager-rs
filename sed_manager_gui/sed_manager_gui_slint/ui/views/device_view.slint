@@ -1,0 +1,425 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
+import {
+    Device,
+    Identity,
+    Outcome,
+    RevertScope,
+    RevertAuthority,
+    Uid,
+} from "../data/lib.slint";
+import {
+    Island,
+    PaletteExtra,
+    VerticalSeparator,
+    IconButton,
+    ToastCard,
+    ToastLevel,
+    ToastQueue,
+} from "../widgets/lib.slint";
+import { Spinner, Palette, TextEdit, ScrollView } from "std-widgets.slint";
+import { Icons } from "../resources/lib.slint";
+import { HorizontalSeparator } from "../widgets/separator.slint";
+import { DiscoveryView } from "activities/discovery_view.slint";
+import { DeviceActivityBar, DeviceActivity } from "device_activity_bar.slint";
+import { TakeOwnershipView } from "activities/ownership_view.slint";
+import { ActivateLockingView } from "activities/activate_locking_view.slint";
+import { ChangePasswordView } from "activities/change_password_view.slint";
+import { ConfigureLockingView } from "activities/configure_locking_view.slint";
+import { RevertDeviceView } from "activities/revert_device_view.slint";
+import { StackStatusView } from "activities/stack_status_view.slint";
+
+component NameAndSerial {
+    in property <Identity> identity;
+
+    HorizontalLayout {
+        spacing: 0.6rem;
+        alignment: start;
+
+        Text {
+            text: !identity.name.is-empty ? identity.name : identity.path;
+            font-weight: 800;
+            font-size: 2rem;
+            color: PaletteExtra.accented-foreground;
+            overflow: elide;
+            vertical-alignment: center;
+        }
+
+        if !identity.serial.is-empty: VerticalSeparator {
+            background: @linear-gradient(0deg, #00000000 0%, PaletteExtra.separator 20%, PaletteExtra.separator 80%, #00000000 100%);
+        }
+
+        if !identity.serial.is-empty: Text {
+            text: !identity.serial.is-empty ? identity.serial : "---";
+            font-size: 1.4rem;
+            overflow: elide;
+            vertical-alignment: center;
+        }
+    }
+}
+
+component Properties {
+    in property <Identity> identity;
+
+    // This is only so that the text can be copied easily.
+    path-buffer := TextInput {
+        text: identity.path;
+        visible: false;
+    }
+
+    HorizontalLayout {
+        alignment: start;
+
+        GridLayout {
+            padding: 0.25rem;
+            spacing-horizontal: 1rem;
+
+            Text {
+                row: 0;
+                col: 0;
+                text: "Path:";
+            }
+
+            TouchArea {
+                HorizontalLayout {
+                    spacing: 0.4rem;
+                    alignment: start;
+
+                    Text {
+                        text: identity.path;
+                        overflow: elide;
+                    }
+
+                    Image {
+                        source: Icons.content-copy;
+                        height: 1.2rem;
+                        width: 1.2rem;
+                    }
+                }
+
+                double-clicked => {
+                    path-buffer.copy();
+                    ToastQueue.push({ title: "Path copied to clipboard", level: ToastLevel.info })
+                }
+            }
+
+            Text {
+                row: 1;
+                col: 0;
+
+                text: "Interface:";
+                overflow: elide;
+            }
+
+            Text {
+                text: identity.interface;
+                overflow: elide;
+            }
+
+            Text {
+                row: 2;
+                col: 0;
+
+                text: "Firmware:";
+                overflow: elide;
+            }
+
+            Text {
+                text: identity.firmware;
+                overflow: elide;
+            }
+
+            Text {
+                row: 3;
+                col: 0;
+
+                text: "Security commands:";
+                overflow: elide;
+            }
+
+            Text {
+                text: identity.security_commands ? "Yes" : "No";
+                overflow: elide;
+            }
+        }
+    }
+}
+
+component Header inherits Island {
+    in property <Device> device;
+
+    HorizontalLayout {
+        spacing: 0.6rem;
+        padding: 0.6rem;
+
+        Image {
+            source: Icons.hard-drive;
+            image-fit: ImageFit.contain;
+            vertical-alignment: center;
+            colorize: PaletteExtra.accented-foreground;
+            width: 4rem;
+        }
+
+        VerticalLayout {
+            spacing: 0.4rem;
+            alignment: start;
+
+            name-serial-block := NameAndSerial {
+                identity: device.identity;
+            }
+
+            if device.identity.status.outcome == Outcome.success: Properties {
+                identity: device.identity;
+            }
+
+            if device.identity.status.outcome == Outcome.error: ToastCard {
+                notification: {
+                    level: ToastLevel.error,
+                    title: "Could not open device",
+                    message: device.identity.status.message,
+                };
+                has-icon: true;
+            }
+
+            if device.identity.status.outcome == Outcome.pending: HorizontalLayout {
+                alignment: start;
+                Spinner {
+                    indeterminate: true;
+                    preferred-height: 4rem;
+                }
+            }
+        }
+    }
+}
+
+export component DeviceView {
+    in-out property <Device> device;
+
+    callback take-owneship(password: string);
+    callback activate-locking(password: string);
+    callback change-password(sp: Uid, authority: Uid, current-password: string, new-password: string);
+    callback list-admin-authorities(silent: bool);
+    callback list-locking-authorities(silent: bool);
+    callback login(authority: Uid, password: string);
+    callback logout();
+    callback commit-ranges();
+    callback discard-ranges();
+    callback commit-authorities();
+    callback discard-authorities();
+    callback revert-device(scope: RevertScope, authority: RevertAuthority, password: string);
+    callback query-stack-status();
+    callback reset-stack();
+
+    VerticalLayout {
+        spacing: 1.6rem;
+
+        header := Header {
+            device: device;
+        }
+
+        if device.discovery.status.outcome == Outcome.success: HorizontalLayout {
+            spacing: 1.6rem;
+            vertical-stretch: 1.0;
+
+            activity-bar := DeviceActivityBar {
+                command-status: device.command-status;
+                config: device.config;
+                horizontal-stretch: 0.0;
+
+                reset-stack => {
+                    reset-stack()
+                }
+
+                changed selected-activity => {
+                    if self.selected-activity == DeviceActivity.change-password {
+                        if device.admin-sp.authorities.length == 0 {
+                            root.list-admin-authorities(true)
+                        }
+                        if device.locking-sp.authorities.length == 0 && device.config.locking-enabled {
+                            root.list-locking-authorities(true)
+                        }
+                    }
+                    if self.selected-activity == DeviceActivity.configure-locking
+                        && device.locking-sp.authorities.length == 0
+                        && device.config.locking-enabled
+                        && !device.command-status.secondary-session-active {
+                        root.list-locking-authorities(true)
+                    }
+                }
+            }
+
+            if activity-bar.selected-activity == DeviceActivity.discovery: DiscoveryView {
+                discovery: device.discovery;
+                horizontal-stretch: 1.0;
+            }
+
+            if activity-bar.selected-activity == DeviceActivity.take-ownership: HorizontalLayout {
+                horizontal-stretch: 1.0;
+                alignment: center;
+
+                ownership-view := TakeOwnershipView {
+                    command-status: device.command-status;
+                    preferred-width: 16rem;
+                    take-ownership(password) => {
+                        take-owneship(password)
+                    }
+                }
+            }
+
+            if activity-bar.selected-activity == DeviceActivity.activate-locking: HorizontalLayout {
+                horizontal-stretch: 1.0;
+                alignment: center;
+
+                ActivateLockingView {
+                    command-status: device.command-status;
+                    preferred-width: 16rem;
+                    activate-locking(password) => {
+                        activate-locking(password)
+                    }
+                }
+            }
+
+            if activity-bar.selected-activity == DeviceActivity.change-password: ScrollView {
+                horizontal-scrollbar-policy: always-off;
+                min-width: content.min-width;
+                content := HorizontalLayout {
+                    alignment: center;
+
+                    ChangePasswordView {
+                        command-status: device.command-status;
+                        admin-sp: device.admin-sp;
+                        locking-sp: device.locking-sp;
+                        config: device.config;
+                        preferred-width: 16rem;
+                        change-password(sp, authority, current-password, new-password) => {
+                            change-password(sp, authority, current-password, new-password)
+                        }
+                        list-authorities => {
+                            list-admin-authorities(false);
+                            if device.config.locking-enabled {
+                                list-locking-authorities(false);
+                            }
+                        }
+                    }
+                }
+            }
+
+            if activity-bar.selected-activity == DeviceActivity.configure-locking: ConfigureLockingView {
+                preferred-width: 16rem;
+                command-status: device.command-status;
+                locking-sp <=> device.locking-sp;
+
+                login(authority, password) => {
+                    login(authority, password)
+                }
+                logout => {
+                    logout()
+                }
+                commit-ranges => {
+                    commit-ranges()
+                }
+                discard-ranges => {
+                    discard-ranges()
+                }
+                commit-authorities => {
+                    commit-authorities()
+                }
+                discard-authorities => {
+                    discard-authorities()
+                }
+            }
+
+            if activity-bar.selected-activity == DeviceActivity.revert-device: ScrollView {
+                horizontal-scrollbar-policy: always-off;
+                min-width: revert-device-view.min-width;
+                revert-device-view := HorizontalLayout {
+                    alignment: center;
+
+                    RevertDeviceView {
+                        command-status: device.command-status;
+                        preferred-width: 16rem;
+                        revert-device(scope, authority, password) => {
+                            revert-device(scope, authority, password)
+                        }
+                    }
+                }
+            }
+
+            if activity-bar.selected-activity == DeviceActivity.stack-status: StackStatusView {
+                command-status: device.command-status;
+                horizontal-stretch: 1.0;
+                stack-status: device.stack-status;
+                query-stack-status => {
+                    query-stack-status()
+                }
+            }
+        }
+
+        if device.discovery.status.outcome == Outcome.pending: VerticalLayout {
+            alignment: center;
+            vertical-stretch: 1.0;
+            spacing: 0.6rem;
+
+            HorizontalLayout {
+                alignment: center;
+                Spinner {
+                    width: 8rem;
+                    height: 8rem;
+                    indeterminate: true;
+                }
+            }
+
+            Text {
+                text: "Gathering device information...";
+                font-size: 1.4rem;
+                horizontal-alignment: center;
+            }
+        }
+
+        if device.discovery.status.outcome == Outcome.idle: VerticalLayout {
+            alignment: center;
+            vertical-stretch: 1.0;
+
+            HorizontalLayout {
+                alignment: center;
+
+                Image {
+                    width: 8rem;
+                    height: 8rem;
+                    source: Icons.question-mark;
+                    colorize: PaletteExtra.accented-control-foreground;
+                    opacity: 20%;
+                }
+            }
+        }
+
+        if device.discovery.status.outcome == Outcome.error: VerticalLayout {
+            alignment: center;
+            vertical-stretch: 1.0;
+
+            HorizontalLayout {
+                alignment: center;
+
+                ToastCard {
+                    notification: {
+                        title: "Could not get capabilities",
+                        message: device.discovery.status.message,
+                        level: ToastLevel.error
+                    };
+                    has-icon: true;
+                }
+            }
+        }
+    }
+
+    if device.command-status.tper-busy || device.command-status.session-busy: Spinner {
+        x: root.width - self.width - 1rem;
+        y: root.height - self.height - 1rem;
+        width: 6rem;
+        height: 6rem;
+        indeterminate: true;
+    }
+}

@@ -1,0 +1,303 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
+import { Device, Discovery, StackStatus, SecurityProvider } from "device.slint";
+import { Status, Outcome } from "status.slint";
+
+export global TestData {
+    private property <Discovery> discovery-opal-1:
+        {
+        status: { outcome: Outcome.success },
+        common-features: [
+            {
+                name: "TPer",
+                properties: [
+                    { name: "Sync supported", value: "Yes" },
+                    { name: "Async supported", value: "No" },
+                ],
+            },
+            {
+                name: "Locking",
+                properties: [
+                    { name: "Locked", value: "No" },
+                    { name: "Encryption supported", value: "Yes" },
+                ],
+            },
+        ],
+        ssc-features: [
+            {
+                name: "Opal 1.0",
+                properties: [
+                    { name: "Base ComID", value: "4096" },
+                    { name: "Num ComIDs", value: "1" },
+                    { name: "Initial SID password", value: "MSID" },
+                ],
+            },
+        ],
+    };
+
+    private property <StackStatus> stack-status-normal: {
+        com-id: {
+            good: true,
+            com-id: 3072,
+            com-id-ext: 0,
+            status: "Issued",
+        },
+        protocol: [
+            { name: "MaxMethods", host: "unlimited", device: "1", connection: "1" },
+            { name: "MaxComPacketSize", host: "1048576", device: "16384", connection: "16384" },
+            { name: "AckNak", host: "No", device: "No", connection: "No" },
+            { name: "Async", host: "No", device: "No", connection: "No" },
+        ]
+    };
+
+    private property <SecurityProvider> admin-sp-opal-2: {
+        uid: { value: 0ms },
+        name: "Admin",
+        locking_ranges: [],
+        authorities: [
+            {
+                uid: { value: 0ms },
+                name: "SID",
+                common_name: "",
+                enabled: true,
+            },
+            {
+                uid: { value: 0ms },
+                name: "PSID",
+                common_name: "",
+                enabled: true,
+            }
+        ],
+        mbr: {
+            supported: false,
+        },
+        individual-authority-names: ["SID", "PSID"],
+    };
+
+    private property <SecurityProvider> locking-sp-opal-2: {
+        uid: { value: 0ms },
+        name: "Locking",
+        locking_ranges: [
+            {
+                uid: { value: 0ms },
+                name: "GlobalRange",
+                common_name: "",
+                start: { value: 0ms },
+                end: { value: 0ms },
+                read-lock-enabled: false,
+                write-lock-enabled: false,
+                read-locked: false,
+                write-locked: false,
+                erase: false,
+            },
+            {
+                uid: { value: 0ms },
+                name: "Range1",
+                common_name: "",
+                start: { value: 100ms },
+                end: { value: 200ms },
+                read-lock-enabled: true,
+                write-lock-enabled: true,
+                read-locked: false,
+                write-locked: false,
+                erase: false,
+            },
+            {
+                uid: { value: 0ms },
+                name: "Range2",
+                common_name: "",
+                start: { value: 200ms },
+                end: { value: 700ms },
+                read-lock-enabled: true,
+                write-lock-enabled: true,
+                read-locked: false,
+                write-locked: false,
+                erase: false,
+            },
+        ],
+        authorities: [
+            {
+                uid: { value: 0ms },
+                name: "Admin1",
+                common_name: "",
+                enabled: true,
+                locking-range-access: [
+                    {
+                        uid: { value: 0ms },
+                        name: "GlobalRange",
+                        read-unlock: true,
+                        write-unlock: true,
+                    },
+                    {
+                        uid: { value: 0ms },
+                        name: "Range1",
+                        read-unlock: true,
+                        write-unlock: true,
+                    },
+                    {
+                        uid: { value: 0ms },
+                        name: "Range2",
+                        read-unlock: true,
+                        write-unlock: true,
+                    },
+                ],
+                mbr-access: { set-done: true },
+            },
+            {
+                uid: { value: 0ms },
+                name: "User1",
+                common_name: "",
+                enabled: true,
+                locking-range-access: [
+                    {
+                        uid: { value: 0ms },
+                        name: "GlobalRange",
+                        read-unlock: false,
+                        write-unlock: false,
+                    },
+                    {
+                        uid: { value: 0ms },
+                        name: "Range1",
+                        read-unlock: true,
+                        write-unlock: false,
+                    },
+                    {
+                        uid: { value: 0ms },
+                        name: "Range2",
+                        read-unlock: false,
+                        write-unlock: false,
+                    },
+                ],
+                mbr-access: { set-done: true },
+            }
+        ],
+        mbr: {
+            supported: true,
+        },
+        individual-authority-names: ["Admin1", "User1"],
+    };
+
+    out property <[Device]> devices: [
+        {
+            identity: {
+                name: "Storaginator Idle",
+                serial: "SERIAL#3244",
+                path: "/dev/nvme0",
+                firmware: "FIRMWARE#4543",
+                interface: "NVMe",
+                security_commands: true,
+                is_removable: false,
+            },
+            discovery: discovery-opal-1,
+            config: { sid_msid_pin_differ: true, locking_enabled: true },
+            stack-status: stack-status-normal,
+            admin-sp: admin-sp-opal-2,
+            locking-sp: locking-sp-opal-2,
+        },
+        {
+            identity: {
+                name: "Storaginator Lock",
+                serial: "SERIAL#3244",
+                path: "/dev/nvme0",
+                firmware: "FIRMWARE#4543",
+                interface: "NVMe",
+                security_commands: true,
+                is_removable: false,
+            },
+            discovery: discovery-opal-1,
+            config: { sid_msid_pin_differ: true, locking_enabled: true },
+            stack-status: stack-status-normal,
+            command-status: {
+                tper-busy: false,
+                session-busy: false,
+                secondary-session-active: true,
+            },
+            admin-sp: admin-sp-opal-2,
+            locking-sp: locking-sp-opal-2,
+        },
+        {
+            identity: {
+                name: "Storaginator Busy",
+                serial: "SERIAL#3244",
+                path: "/dev/nvme0",
+                firmware: "FIRMWARE#4543",
+                interface: "NVMe",
+                security_commands: true,
+                is_removable: false,
+            },
+            discovery: discovery-opal-1,
+            config: { sid_msid_pin_differ: false, locking_enabled: false },
+            stack-status: stack-status-normal,
+            command-status: {
+                tper-busy: true,
+                session-busy: true,
+            },
+            admin-sp: admin-sp-opal-2,
+            locking-sp: locking-sp-opal-2,
+        },
+        {
+            identity: {
+                name: "Storaginator DiLoad",
+                serial: "SERIAL#8255",
+                path: "/dev/sda/success/very/long/device/path",
+                firmware: "FIRMWARE#9912",
+                interface: "SATA",
+                security_commands: false,
+                is_removable: true,
+            },
+            discovery: {
+                status: { outcome: Outcome.pending },
+            },
+        },
+        {
+            identity: {
+                name: "Storaginator DiFail",
+                serial: "SERIAL#8255",
+                path: "/dev/sde",
+                firmware: "FIRMWARE#3422",
+                interface: "USB",
+                security_commands: false,
+                is_removable: true,
+            },
+            discovery: {
+                status: { outcome: Outcome.error, message: "IF-RECV failed yadda yadda." },
+            },
+        },
+        {
+            identity: {
+                status: {
+                    outcome: Outcome.error,
+                    message: "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua."
+                },
+                name: "",
+                serial: "",
+                path: "/dev/sdb/error/very/long/device/path",
+                firmware: "",
+                interface: "",
+                security_commands: false,
+                is_removable: false,
+            },
+            discovery: {
+                status: { outcome: Outcome.idle },
+            },
+        },
+        {
+            identity: {
+                status: { outcome: Outcome.pending },
+                name: "",
+                serial: "",
+                path: "/dev/sdc",
+                firmware: "",
+                interface: "",
+                security_commands: false,
+                is_removable: false,
+            },
+            discovery: {
+                status: { outcome: Outcome.idle },
+            },
+        },
+    ];
+}

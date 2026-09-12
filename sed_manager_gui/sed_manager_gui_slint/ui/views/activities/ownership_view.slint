@@ -1,0 +1,37 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
+import { PasswordForm } from "../password_form.slint";
+import { Button } from "std-widgets.slint";
+import { CommandStatus } from "../../data/lib.slint";
+
+export component TakeOwnershipView {
+    in property <CommandStatus> command-status;
+
+    callback take-ownership(password: string);
+
+    VerticalLayout {
+        spacing: 0.6rem;
+        alignment: start;
+
+        form := PasswordForm { }
+
+        Button {
+            text: "Take owneship";
+            accessible-id: "take-ownership-submit";
+            primary: true;
+            enabled: form.matches && !command-status.session-busy && !command-status.tper-busy;
+            clicked => {
+                take-ownership(form.password)
+            }
+        }
+
+        Text {
+            text: form.matches ? "" : "Passwords do not match";
+            font-italic: true;
+            horizontal-alignment: center;
+        }
+    }
+}

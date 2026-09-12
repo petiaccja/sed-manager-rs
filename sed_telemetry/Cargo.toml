@@ -1,0 +1,17 @@
+[package]
+name = "sed_telemetry"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+test-utils = ["dep:rstest"]
+
+[dependencies]
+tracing.workspace = true
+opentelemetry.workspace = true
+opentelemetry_sdk.workspace = true
+opentelemetry-otlp.workspace = true
+tonic.workspace = true
+tracing-opentelemetry.workspace = true
+tracing-subscriber.workspace = true
+rstest = { workspace = true, optional = true }
