@@ -42,7 +42,7 @@ impl SetupSession {
     ///
     /// An error is returned when no SSC or no recognzied SSC is found on the
     /// device.
-    pub async fn on_primary_ssc(tper: &Tper) -> Result<Self, Error> {
+    pub async fn new_on_primary_ssc(tper: &Tper) -> Result<Self, Error> {
         let discovery = tper.discover_current().await?;
         let spec = Spec::try_from(discovery).map_err(|_| Error::NoSscAvailable)?;
         Ok(Self::new(spec))

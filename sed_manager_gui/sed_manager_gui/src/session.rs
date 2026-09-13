@@ -46,7 +46,7 @@ impl Session {
         // session failed, but they should anyway just do a stack reset.
         self.close().await?;
 
-        let sid_session = SetupSession::on_primary_ssc(tper).await?;
+        let sid_session = SetupSession::new_on_primary_ssc(tper).await?;
         *self = Self::Setup(sid_session);
         let Self::Setup(sid_session) = self else { unreachable!() };
         Ok(sid_session)
