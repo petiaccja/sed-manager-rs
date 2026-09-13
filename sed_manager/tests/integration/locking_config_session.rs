@@ -18,14 +18,14 @@ use tracing::instrument;
 const NEW_SID_PASSWORD: MaxBytes<32> =
     unsafe { MaxBytes::from_const_with_len_unchecked(*b"not_default\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0", 0) };
 
-async fn setup() -> Arc<Tper> {
+async fn setup() -> Tper {
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
     let device = Arc::new(VirtualDevice::new());
-    let tper = Arc::new(Tper::connect(BASE_COM_ID, 0, device.clone(), runtime));
-    let setup_session = SetupSession::on_primary_ssc(tper.clone()).await.unwrap();
+    let tper = Tper::connect(BASE_COM_ID, 0, device.clone(), runtime);
+    let setup_session = SetupSession::on_primary_ssc(&tper).await.unwrap();
 
-    setup_session.take_owneship(NEW_SID_PASSWORD).await.unwrap();
-    setup_session.activate_secondary_sp(NEW_SID_PASSWORD).await.unwrap();
+    setup_session.take_owneship(&tper, NEW_SID_PASSWORD).await.unwrap();
+    setup_session.activate_secondary_sp(&tper, NEW_SID_PASSWORD).await.unwrap();
 
     tper
 }
@@ -37,7 +37,7 @@ async fn login(_with_tracing: WithTracing) {
     let tper = setup().await;
 
     let admin1 = opal_locking::authority::ADMIN.get(0).unwrap();
-    let result = LockingConfigSession::login_on_primary_ssc(tper, admin1, Some(NEW_SID_PASSWORD)).await;
+    let result = LockingConfigSession::login_on_primary_ssc(&tper, admin1, Some(NEW_SID_PASSWORD)).await;
     assert_that!(result, ok(anything()));
 }
 
@@ -49,7 +49,7 @@ async fn login_wrong_password(_with_tracing: WithTracing) {
     let wrong_password = MaxBytes::<32>::from(b"wrong_password".as_slice());
 
     let admin1 = opal_locking::authority::ADMIN.get(0).unwrap();
-    let result = LockingConfigSession::login_on_primary_ssc(tper, admin1, Some(wrong_password)).await;
+    let result = LockingConfigSession::login_on_primary_ssc(&tper, admin1, Some(wrong_password)).await;
     assert_that!(result, err(anything()));
 }
 
@@ -60,7 +60,7 @@ async fn get_authorities(_with_tracing: WithTracing) {
     let tper = setup().await;
 
     let admin1 = opal_locking::authority::ADMIN.get(0).unwrap();
-    let session = LockingConfigSession::login_on_primary_ssc(tper, admin1, Some(NEW_SID_PASSWORD)).await.unwrap();
+    let session = LockingConfigSession::login_on_primary_ssc(&tper, admin1, Some(NEW_SID_PASSWORD)).await.unwrap();
     let result = session.get_authorities().await;
     assert_that!(result, ok(len(eq(15))));
 }
@@ -72,7 +72,7 @@ async fn get_locking_ranges(_with_tracing: WithTracing) {
     let tper = setup().await;
 
     let admin1 = opal_locking::authority::ADMIN.get(0).unwrap();
-    let session = LockingConfigSession::login_on_primary_ssc(tper, admin1, Some(NEW_SID_PASSWORD)).await.unwrap();
+    let session = LockingConfigSession::login_on_primary_ssc(&tper, admin1, Some(NEW_SID_PASSWORD)).await.unwrap();
     let result = session.get_locking_ranges().await;
     assert_that!(result, ok(len(eq(9))));
 }
@@ -84,7 +84,7 @@ async fn get_mbr(_with_tracing: WithTracing) {
     let tper = setup().await;
 
     let admin1 = opal_locking::authority::ADMIN.get(0).unwrap();
-    let session = LockingConfigSession::login_on_primary_ssc(tper, admin1, Some(NEW_SID_PASSWORD)).await.unwrap();
+    let session = LockingConfigSession::login_on_primary_ssc(&tper, admin1, Some(NEW_SID_PASSWORD)).await.unwrap();
     let result = session.get_mbr().await;
     assert_that!(result, ok(field!(MbrControl.enable, eq(&Some(false)))));
 }

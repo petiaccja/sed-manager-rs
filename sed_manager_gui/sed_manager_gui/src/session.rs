@@ -3,8 +3,6 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use std::sync::Arc;
-
 use sed_manager::{Error, LockingConfigSession, SetupSession};
 use sed_packet::MaxBytes;
 use sed_spec::objects::AuthorityRef;
@@ -43,7 +41,7 @@ impl Session {
     /// is returned. Opening the setup session might also fail.
     ///
     /// [`close`]: Self.close
-    pub async fn start_setup_session(&mut self, tper: Arc<Tper>) -> Result<&SetupSession, Error> {
+    pub async fn start_setup_session(&mut self, tper: &Tper) -> Result<&SetupSession, Error> {
         // We could better inform the caller that the closing of the previous
         // session failed, but they should anyway just do a stack reset.
         self.close().await?;
@@ -64,7 +62,7 @@ impl Session {
     /// [`close`]: Self.close
     pub async fn start_locking_config_session(
         &mut self,
-        tper: Arc<Tper>,
+        tper: &Tper,
         authority: AuthorityRef,
         password: Option<MaxBytes<32>>,
     ) -> Result<&LockingConfigSession, Error> {
