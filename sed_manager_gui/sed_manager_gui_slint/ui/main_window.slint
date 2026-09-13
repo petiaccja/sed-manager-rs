@@ -5,7 +5,12 @@
 
 import { Logo } from "resources/logo.slint";
 import { Device, Outcome } from "data/lib.slint";
-import { TabWidget } from "std-widgets.slint";
+import {
+    TabWidget,
+    Palette,
+    Spinner,
+    StyleMetrics,
+} from "std-widgets.slint";
 import {
     DeviceView,
     DeviceSideBar,
@@ -19,7 +24,7 @@ import {
     ToastLevel,
 } from "widgets/lib.slint";
 
-export { ToastQueue } from "widgets/lib.slint";
+export { ToastQueue }from "widgets/lib.slint";
 
 export component MainWindow inherits Window {
     title: "SED Manager";
@@ -28,7 +33,8 @@ export component MainWindow inherits Window {
     preferred-height: 720px;
 
     in-out property <[Device]> devices: TestData.devices;
-    in property <Outcome> scan-outcome;
+    in property <Outcome> scan-outcome: Outcome.success;
+    in property <bool> is-quitting: false;
 
     callback scan <=> scan-button.clicked;
     callback close-device <=> side-bar.close-device;
@@ -77,5 +83,30 @@ export component MainWindow inherits Window {
         z: 2;
         width: 20rem;
         height: parent.height - 2 * self.y;
+    }
+
+    if is-quitting: Rectangle {
+        background: Palette.background;
+        opacity: 90%;
+        z: 3;
+
+        HorizontalLayout {
+            alignment: center;
+            VerticalLayout {
+                alignment: center;
+                spacing: StyleMetrics.layout-spacing;
+
+                Spinner {
+                    indeterminate: true;
+                    height: 8rem;
+                }
+
+                Text {
+                    text: "Closing all devices...";
+                    font-size: 1.4rem;
+                    horizontal-alignment: center;
+                }
+            }
+        }
     }
 }

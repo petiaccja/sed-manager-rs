@@ -22,6 +22,8 @@ fn main() -> Result<(), Box<dyn core::error::Error>> {
     let notification_queue = ToastQueue::new(ui.clone_strong());
     let main_app = App::new(ui.clone_strong(), notification_queue.clone(), runtime);
     main_app.scan(true);
-    ui.run()?;
+    ui.show()?;
+    slint::run_event_loop_until_quit()?;
+    ui.hide()?;
     Ok(())
 }

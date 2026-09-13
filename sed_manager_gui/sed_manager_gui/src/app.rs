@@ -22,7 +22,10 @@ use sed_spec::{
 };
 use sed_tper::{PropertiesChanged, Tper};
 use sed_virtual_device::{VIRTUAL_DEVICE_PATH, VirtualDevice};
-use slint::{ComponentHandle, Model, ModelExt as _, ModelRc, SharedString, ToSharedString, VecModel, spawn_local};
+use slint::{
+    CloseRequestResponse, ComponentHandle, Model, ModelExt as _, ModelRc, SharedString, ToSharedString, VecModel,
+    quit_event_loop, spawn_local,
+};
 use tracing::{error, instrument};
 
 use crate::{
@@ -121,6 +124,13 @@ impl App {
         {
             let view_model = view_model.clone();
             ui.on_reset_stack(move |path| view_model.clone().reset_stack(path.to_string().into()));
+        }
+        {
+            let view_model = view_model.clone();
+            ui.window().on_close_requested(move || {
+                view_model.clone().quit();
+                CloseRequestResponse::KeepWindowShown
+            });
         }
 
         // Device model
@@ -229,12 +239,8 @@ impl App {
             .on_device_list(async move |device_list| {
                 device_list.ui.remove(&path);
                 if let Some(device) = device_list.backend.remove(&path) {
-                    let device = device.read().await;
-                    let session = device.session.clone();
-                    // We could do a stack reset here, but perhaps it's better
-                    // to let whoever opens the device again to do it, because
-                    // it's not 100% that it's necessary despite the failure.
-                    let _ = session.lock().await.close().await;
+                    let mut device = device.write().await;
+                    device.close().await;
                 }
             })
             .display(move |_device_list, _| {
@@ -711,6 +717,27 @@ impl App {
                     Err(err) => self.toast_queue.error("Reverting device failed".into(), err.to_string()),
                 };
                 ui_device
+            })
+            .run();
+    }
+
+    #[instrument(skip(self))]
+    fn quit(&self) {
+        self.ui.set_is_quitting(true);
+
+        self.command()
+            .on_device_list(async move |device_list| {
+                // This should be done concurrently for all devices.
+                // Unfortunately we don't have access to the runtime here, but
+                // if the devices are well-behaved, this should be quick.
+                for device in device_list.backend.values_mut() {
+                    let mut device = device.write().await;
+                    device.close().await;
+                }
+            })
+            .display(move |_device_list, _| {
+                // Once all device are closed we can quit the event loop.
+                let _ = quit_event_loop();
             })
             .run();
     }
