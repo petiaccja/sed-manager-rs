@@ -3,7 +3,7 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use std::ops::{Deref, DerefMut};
+use std::ops::DerefMut;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -111,17 +111,17 @@ where
 pub trait OnSessionRunFn<'x> {
     type Output;
     type Future: Future<Output = Self::Output> + Send;
-    fn call_once(self, tper: Arc<Tper>, session: &'x mut Session) -> Self::Future;
+    fn call_once(self, tper: &'x Tper, session: &'x mut Session) -> Self::Future;
 }
 
 impl<'x, F, Fut, Output> OnSessionRunFn<'x> for F
 where
-    F: FnOnce(Arc<Tper>, &'x mut Session) -> Fut,
+    F: FnOnce(&'x Tper, &'x mut Session) -> Fut,
     Fut: Future<Output = Output> + Send + 'x,
 {
     type Output = Output;
     type Future = Fut;
-    fn call_once(self, tper: Arc<Tper>, session: &'x mut Session) -> Fut {
+    fn call_once(self, tper: &'x Tper, session: &'x mut Session) -> Fut {
         self(tper, session)
     }
 }
@@ -311,8 +311,7 @@ where
                 // Acquire resources.
                 let device_list = device_list.read().await;
                 let Some(backend) = device_list.backend.get(&device_id) else { return };
-                let backend = backend.read().await;
-                let Some(tper) = backend.tper.clone() else { return };
+                let backend = backend.read_arc().await;
 
                 // Indicate to UI that we're busy on the TPer.
                 device_list.ui.update(&device_id, |value| {
@@ -321,15 +320,25 @@ where
                 });
 
                 // Execute command and update results.
-                let output =
-                    runtime.spawn(async move { run_fn.call_once(tper.deref()).await }.in_current_span()).await.unwrap();
-                device_list.ui.update(&device_id, move |value| update_fn(value, output));
+                let run_task = runtime.spawn(
+                    async move {
+                        let tper = backend.tper.as_ref()?;
+                        let output = run_fn.call_once(tper).await;
+                        Some((output, backend))
+                    }
+                    .in_current_span(),
+                );
 
-                // Indicate to UI that we're NO LONGER busy.
-                device_list.ui.update(&device_id, |value| {
-                    let command_status = value.command_status.clone();
-                    value.with_command_status(command_status.with_tper_busy(false))
-                });
+                if let Some((output, _backend)) = run_task.await.expect("commands should not be cancelled") {
+                    // Execute the update fn.
+                    device_list.ui.update(&device_id, move |value| update_fn(value, output));
+
+                    // Indicate to UI that we're NO LONGER busy.
+                    device_list.ui.update(&device_id, |value| {
+                        let command_status = value.command_status.clone();
+                        value.with_command_status(command_status.with_tper_busy(false))
+                    });
+                }
             }
             .in_current_span(),
         )
@@ -404,14 +413,15 @@ where
                 let run_task = runtime.spawn(
                     async move {
                         // Acquire resources.
-                        let tper = backend.tper.as_ref()?.clone();
+                        let tper = backend.tper.as_ref()?;
                         let mut session = backend.session.lock_arc().await;
 
                         // Signal that now we're busy on the session.
                         let _ = busy_sender.send(());
 
                         // Execute the command and display results.
-                        Some((run_fn.call_once(tper, session.deref_mut()).await, backend))
+                        let output = run_fn.call_once(tper, session.deref_mut()).await;
+                        Some((output, backend))
                     }
                     .in_current_span(),
                 );
@@ -424,8 +434,9 @@ where
                     });
                 }
 
-                if let Ok(Some((output, backend))) = run_task.await {
+                if let Some((output, backend)) = run_task.await.expect("commands should not be cancelled") {
                     let spec = backend.specification.as_ref();
+                    // Execute the update fn.
                     device_list.ui.update(&device_id, move |value| update_fn(value, spec, output));
 
                     // Indicate to UI that we're NO LONGER busy.

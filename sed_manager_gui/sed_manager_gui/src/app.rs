@@ -5,7 +5,6 @@
 
 use std::{
     collections::HashSet,
-    ops::Deref as _,
     path::{Path, PathBuf},
     rc::{Rc, Weak},
     sync::Arc,
@@ -319,7 +318,7 @@ impl App {
                     ssc.static_com_ids_p1().next()?
                 };
                 let com_id_ext = 0;
-                let new_tper = Arc::new(Tper::connect(com_id, com_id_ext, sed_device, runtime));
+                let new_tper = Tper::connect(com_id, com_id_ext, sed_device, runtime);
                 let capabilities = new_tper.capabilities();
                 let connection_changed = new_tper.properties_changed();
                 device.tper = Some(new_tper);
@@ -399,10 +398,10 @@ impl App {
     #[instrument(skip(self))]
     fn list_admin_authorities(self: Rc<Self>, path: PathBuf, silent: bool) {
         self.command()
-            .on_session(path.clone(), async |tper: Arc<Tper>, session: &mut Session| {
-                let setup_session = session.start_setup_session(tper.deref()).await?;
+            .on_session(path.clone(), async |tper: &Tper, session: &mut Session| {
+                let setup_session = session.start_setup_session(tper).await?;
                 let sp_ref = setup_session.spec().admin.uid;
-                setup_session.list_authorities(tper.deref(), sp_ref).await.map(|auths| (auths, sp_ref))
+                setup_session.list_authorities(tper, sp_ref).await.map(|auths| (auths, sp_ref))
             })
             .display(move |mut ui_device, spec, result| match result {
                 Ok((authorities, sp_ref)) => {
@@ -429,11 +428,11 @@ impl App {
     #[instrument(skip(self))]
     fn list_locking_authorities(self: Rc<Self>, path: PathBuf, silent: bool) {
         self.command()
-            .on_session(path.clone(), async |tper: Arc<Tper>, session: &mut Session| {
-                let setup_session = session.start_setup_session(tper.deref()).await?;
+            .on_session(path.clone(), async |tper: &Tper, session: &mut Session| {
+                let setup_session = session.start_setup_session(tper).await?;
                 if let Some(locking_sp) = &setup_session.spec().locking {
                     setup_session
-                        .list_authorities(tper.deref(), locking_sp.uid)
+                        .list_authorities(tper, locking_sp.uid)
                         .await
                         .map(|auths| (auths, Some(locking_sp.uid)))
                 } else {
@@ -477,8 +476,8 @@ impl App {
         };
 
         self.command()
-            .on_session(path.clone(), async move |tper: Arc<Tper>, session: &mut Session| {
-                session.start_locking_config_session(tper.deref(), authority, Some(password)).await.map(|_| ())
+            .on_session(path.clone(), async move |tper: &Tper, session: &mut Session| {
+                session.start_locking_config_session(tper, authority, Some(password)).await.map(|_| ())
             })
             .display(move |ui_device, _spec, result| match result {
                 Ok(_) => {
@@ -497,7 +496,7 @@ impl App {
     #[instrument(skip(self))]
     fn list_locking_config_authorities(self: Rc<Self>, path: PathBuf, silent: bool) {
         self.command()
-            .on_session(path.clone(), async |_tper: Arc<Tper>, session: &mut Session| {
+            .on_session(path.clone(), async |_tper: &Tper, session: &mut Session| {
                 let Session::LockingConfig(locking_config_session) = &*session else {
                     return None;
                 };
@@ -530,7 +529,7 @@ impl App {
     #[instrument(skip(self))]
     fn list_locking_config_ranges(self: Rc<Self>, path: PathBuf, silent: bool) {
         self.command()
-            .on_session(path.clone(), async |_tper: Arc<Tper>, session: &mut Session| {
+            .on_session(path.clone(), async |_tper: &Tper, session: &mut Session| {
                 let Session::LockingConfig(locking_config_session) = &*session else {
                     return None;
                 };
@@ -560,7 +559,7 @@ impl App {
     #[instrument(skip(self))]
     fn logout(self: Rc<Self>, path: PathBuf) {
         self.command()
-            .on_session(path.clone(), async move |tper: Arc<Tper>, session: &mut Session| {
+            .on_session(path.clone(), async move |tper: &Tper, session: &mut Session| {
                 if matches!(*session, Session::LockingConfig(_)) {
                     if let Err(_) = session.close().await {
                         let _ = tper.stack_reset(tper.com_id(), tper.com_id_ext()).await;
@@ -593,9 +592,9 @@ impl App {
         };
 
         self.command()
-            .on_session(path.clone(), async move |tper: Arc<Tper>, session: &mut Session| {
-                let sid_session = session.start_setup_session(tper.deref()).await?;
-                sid_session.take_owneship(tper.deref(), password).await
+            .on_session(path.clone(), async move |tper: &Tper, session: &mut Session| {
+                let sid_session = session.start_setup_session(tper).await?;
+                sid_session.take_owneship(tper, password).await
             })
             .display(move |ui_device, _, result| {
                 match result {
@@ -617,9 +616,9 @@ impl App {
         };
 
         self.command()
-            .on_session(path.clone(), async move |tper: Arc<Tper>, session: &mut Session| {
-                let sid_session = session.start_setup_session(tper.deref()).await?;
-                sid_session.activate_secondary_sp(tper.deref(), password).await
+            .on_session(path.clone(), async move |tper: &Tper, session: &mut Session| {
+                let sid_session = session.start_setup_session(tper).await?;
+                sid_session.activate_secondary_sp(tper, password).await
             })
             .display(move |ui_device, _, result| {
                 match result {
@@ -665,9 +664,9 @@ impl App {
         };
 
         self.command()
-            .on_session(path.clone(), async move |tper: Arc<Tper>, session: &mut Session| {
-                let sid_session = session.start_setup_session(tper.deref()).await?;
-                sid_session.change_password(tper.deref(), sp, authority, current_password, new_password).await
+            .on_session(path.clone(), async move |tper: &Tper, session: &mut Session| {
+                let sid_session = session.start_setup_session(tper).await?;
+                sid_session.change_password(tper, sp, authority, current_password, new_password).await
             })
             .display(move |ui_device, _, result| {
                 match result {
@@ -692,15 +691,15 @@ impl App {
         };
 
         self.command()
-            .on_session(path.clone(), async move |tper: Arc<Tper>, session: &mut Session| {
-                let sid_session = session.start_setup_session(tper.deref()).await?;
+            .on_session(path.clone(), async move |tper: &Tper, session: &mut Session| {
+                let sid_session = session.start_setup_session(tper).await?;
                 let authority = match authority {
                     ui::RevertAuthority::Sid => sid_session.spec().admin.authorities.sid,
                     ui::RevertAuthority::Psid => sid_session.spec().admin.authorities.psid,
                 };
                 match scope {
-                    ui::RevertScope::Locking => sid_session.revert_secondary_sp(tper.deref(), password).await,
-                    ui::RevertScope::Everything => sid_session.revert_tper(tper.deref(), authority, password).await,
+                    ui::RevertScope::Locking => sid_session.revert_secondary_sp(tper, password).await,
+                    ui::RevertScope::Everything => sid_session.revert_tper(tper, authority, password).await,
                 }
             })
             .display(move |ui_device, _, result| {

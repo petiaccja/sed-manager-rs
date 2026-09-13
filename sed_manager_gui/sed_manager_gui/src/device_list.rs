@@ -24,6 +24,6 @@ pub struct DeviceList {
 pub struct Device {
     pub interface: Option<Arc<dyn sed_device::Device>>,
     pub specification: Option<Spec>,
-    pub tper: Option<Arc<Tper>>,
+    pub tper: Option<Tper>,
     pub session: Arc<Mutex<Session>>,
 }
