@@ -19,6 +19,7 @@ tracing.workspace = true
 async-lock.workspace = true
 async-broadcast.workspace = true
 futures.workspace = true
+oneshot.workspace = true
 
 [dev-dependencies]
 tokio.workspace = true

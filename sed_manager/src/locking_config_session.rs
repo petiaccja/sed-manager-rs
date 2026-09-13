@@ -3,8 +3,6 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use std::sync::Arc;
-
 use sed_packet::MaxBytes;
 use sed_spec::{
     objects::{Authority, AuthorityRef, LockingRange, MbrControl},
@@ -34,7 +32,7 @@ impl LockingConfigSession {
     /// by the `spec`.
     #[instrument(level = "info", skip(tper, password), ret, err)]
     pub async fn login(
-        tper: Arc<Tper>,
+        tper: &Tper,
         spec: Spec,
         authority: AuthorityRef,
         password: Option<MaxBytes<32>>,
@@ -51,7 +49,7 @@ impl LockingConfigSession {
     /// [`Spec`] about how the primary SSC is chosen.
     #[instrument(level = "info", skip(tper, password), ret, err)]
     pub async fn login_on_primary_ssc(
-        tper: Arc<Tper>,
+        tper: &Tper,
         authority: AuthorityRef,
         password: Option<MaxBytes<32>>,
     ) -> Result<Self, Error> {

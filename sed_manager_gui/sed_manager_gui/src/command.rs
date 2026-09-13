@@ -3,7 +3,7 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use std::ops::{Deref, DerefMut};
+use std::ops::DerefMut;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -41,46 +41,88 @@ impl Command {
         CommandOnDeviceList { device_list, run_fn }
     }
 
-    pub fn on_device<RunFn, RunFnFut, Output>(
-        self,
-        device: PathBuf,
-        run_fn: RunFn,
-    ) -> CommandOnDevice<RunFn, RunFnFut, Output>
+    pub fn on_device<RunFn, Output>(self, device: PathBuf, run_fn: RunFn) -> CommandOnDevice<RunFn, Output>
     where
-        RunFn: FnOnce(Mut<Device>) -> RunFnFut + Send + 'static,
-        RunFnFut: Future<Output = Output> + Send,
+        RunFn: for<'x> OnDeviceRunFn<'x, Output = Output> + Send + 'static,
+        for<'x> <RunFn as OnDeviceRunFn<'x>>::Future: Send,
         Output: Send + 'static,
     {
         let Self { runtime, device_list } = self;
         CommandOnDevice { runtime, device_list, device_id: device, run_fn }
     }
 
-    pub fn on_tper<RunFn, RunFnFut, Output>(
-        self,
-        device_id: PathBuf,
-        run_fn: RunFn,
-    ) -> CommandOnTper<RunFn, RunFnFut, Output>
+    pub fn on_tper<RunFn, Output>(self, device_id: PathBuf, run_fn: RunFn) -> CommandOnTper<RunFn, Output>
     where
-        RunFn: FnOnce(Arc<Tper>) -> RunFnFut + Send + 'static,
-        RunFnFut: Future<Output = Output> + Send,
+        RunFn: for<'x> OnTperRunFn<'x, Output = Output> + Send + 'static,
+        for<'x> <RunFn as OnTperRunFn<'x>>::Future: Send,
         Output: Send + 'static,
     {
         let Self { runtime, device_list } = self;
         CommandOnTper { runtime, device_list, device_id, run_fn }
     }
 
-    pub fn on_session<RunFn, RunFnFut, Output>(
-        self,
-        device_id: PathBuf,
-        run_fn: RunFn,
-    ) -> CommandOnSession<RunFn, RunFnFut, Output>
+    pub fn on_session<RunFn, Output>(self, device_id: PathBuf, run_fn: RunFn) -> CommandOnSession<RunFn, Output>
     where
-        RunFn: FnOnce(Arc<Tper>, Mut<Session>) -> RunFnFut + Send + 'static,
-        RunFnFut: Future<Output = Output> + Send,
+        RunFn: for<'x> OnSessionRunFn<'x, Output = Output> + Send + 'static,
+        for<'x> <RunFn as OnSessionRunFn<'x>>::Future: Send,
         Output: Send + 'static,
     {
         let Self { runtime, device_list } = self;
         CommandOnSession { runtime, device_list, device_id, run_fn }
+    }
+}
+
+pub trait OnDeviceRunFn<'x> {
+    type Output;
+    type Future: Future<Output = Self::Output> + Send;
+    fn call_once(self, device: &'x mut Device) -> Self::Future;
+}
+
+impl<'x, F, Fut, Output> OnDeviceRunFn<'x> for F
+where
+    F: FnOnce(&'x mut Device) -> Fut,
+    Fut: Future<Output = Output> + Send + 'x,
+{
+    type Output = Output;
+    type Future = Fut;
+    fn call_once(self, device: &'x mut Device) -> Fut {
+        self(device)
+    }
+}
+
+pub trait OnTperRunFn<'x> {
+    type Output;
+    type Future: Future<Output = Self::Output> + Send;
+    fn call_once(self, tper: &'x Tper) -> Self::Future;
+}
+
+impl<'x, F, Fut, Output> OnTperRunFn<'x> for F
+where
+    F: FnOnce(&'x Tper) -> Fut,
+    Fut: Future<Output = Output> + Send + 'x,
+{
+    type Output = Output;
+    type Future = Fut;
+    fn call_once(self, tper: &'x Tper) -> Fut {
+        self(tper)
+    }
+}
+
+pub trait OnSessionRunFn<'x> {
+    type Output;
+    type Future: Future<Output = Self::Output> + Send;
+    fn call_once(self, tper: &'x Tper, session: &'x mut Session) -> Self::Future;
+}
+
+impl<'x, F, Fut, Output> OnSessionRunFn<'x> for F
+where
+    F: FnOnce(&'x Tper, &'x mut Session) -> Fut,
+    Fut: Future<Output = Output> + Send + 'x,
+{
+    type Output = Output;
+    type Future = Fut;
+    fn call_once(self, tper: &'x Tper, session: &'x mut Session) -> Fut {
+        self(tper, session)
     }
 }
 
@@ -138,13 +180,13 @@ where
 }
 
 //------------------------------------------------------------------------------
+
 // Command on device
 //------------------------------------------------------------------------------
-
-pub struct CommandOnDevice<RunFn, RunFnFut, Output>
+pub struct CommandOnDevice<RunFn, Output>
 where
-    RunFn: FnOnce(Mut<Device>) -> RunFnFut + Send + 'static,
-    RunFnFut: Future<Output = Output> + Send,
+    RunFn: for<'x> OnDeviceRunFn<'x, Output = Output> + Send + 'static,
+    for<'x> <RunFn as OnDeviceRunFn<'x>>::Future: Send,
     Output: Send + 'static,
 {
     runtime: Arc<PolyRuntime>,
@@ -153,13 +195,13 @@ where
     run_fn: RunFn,
 }
 
-impl<RunFn, RunFnFut, Output> CommandOnDevice<RunFn, RunFnFut, Output>
+impl<RunFn, Output> CommandOnDevice<RunFn, Output>
 where
-    RunFn: FnOnce(Mut<Device>) -> RunFnFut + Send + 'static,
-    RunFnFut: Future<Output = Output> + Send,
+    RunFn: for<'x> OnDeviceRunFn<'x, Output = Output> + Send + 'static,
+    for<'x> <RunFn as OnDeviceRunFn<'x>>::Future: Send,
     Output: Send + 'static,
 {
-    pub fn display<UpdateFn>(self, update_fn: UpdateFn) -> UpdateOnDevice<RunFn, RunFnFut, Output, UpdateFn>
+    pub fn display<UpdateFn>(self, update_fn: UpdateFn) -> UpdateOnDevice<RunFn, Output, UpdateFn>
     where
         UpdateFn: FnOnce(ui::Device, Output) -> ui::Device + 'static,
     {
@@ -168,10 +210,10 @@ where
     }
 }
 
-pub struct UpdateOnDevice<RunFn, RunFnFut, Output, UpdateFn>
+pub struct UpdateOnDevice<RunFn, Output, UpdateFn>
 where
-    RunFn: FnOnce(Mut<Device>) -> RunFnFut + Send + 'static,
-    RunFnFut: Future<Output = Output> + Send,
+    RunFn: for<'x> OnDeviceRunFn<'x, Output = Output> + Send + 'static,
+    for<'x> <RunFn as OnDeviceRunFn<'x>>::Future: Send,
     Output: Send + 'static,
     UpdateFn: FnOnce(ui::Device, Output) -> ui::Device + 'static,
 {
@@ -182,10 +224,10 @@ where
     update_fn: UpdateFn,
 }
 
-impl<RunFn, RunFnFut, Output, UpdateFn> UpdateOnDevice<RunFn, RunFnFut, Output, UpdateFn>
+impl<RunFn, Output, UpdateFn> UpdateOnDevice<RunFn, Output, UpdateFn>
 where
-    RunFn: FnOnce(Mut<Device>) -> RunFnFut + Send + 'static,
-    RunFnFut: Future<Output = Output> + Send,
+    RunFn: for<'x> OnDeviceRunFn<'x, Output = Output> + Send + 'static,
+    for<'x> <RunFn as OnDeviceRunFn<'x>>::Future: Send,
     Output: Send + 'static,
     UpdateFn: FnOnce(ui::Device, Output) -> ui::Device + 'static,
 {
@@ -195,10 +237,14 @@ where
             async move {
                 let state = device_list.read().await;
                 let Some(device) = state.backend.get(&device_id) else { return };
-                let device = device.write_arc().await;
-                let output =
-                    runtime.spawn(async move { run_fn(Mut::RwLock(device)).await }.in_current_span()).await.unwrap();
-                state.ui.update(&device_id, move |value| update_fn(value, output));
+                let mut device = device.write_arc().await;
+
+                let run_task = runtime
+                    .spawn(async move { (run_fn.call_once(device.deref_mut()).await, device) }.in_current_span());
+
+                if let Ok((output, _device)) = run_task.await {
+                    state.ui.update(&device_id, move |value| update_fn(value, output));
+                }
             }
             .in_current_span(),
         )
@@ -210,10 +256,10 @@ where
 // Command on Tper
 //------------------------------------------------------------------------------
 
-pub struct CommandOnTper<RunFn, RunFnFut, Output>
+pub struct CommandOnTper<RunFn, Output>
 where
-    RunFn: FnOnce(Arc<Tper>) -> RunFnFut + Send + 'static,
-    RunFnFut: Future<Output = Output> + Send,
+    RunFn: for<'x> OnTperRunFn<'x, Output = Output> + Send + 'static,
+    for<'x> <RunFn as OnTperRunFn<'x>>::Future: Send,
     Output: Send + 'static,
 {
     runtime: Arc<PolyRuntime>,
@@ -222,13 +268,13 @@ where
     run_fn: RunFn,
 }
 
-impl<RunFn, RunFnFut, Output> CommandOnTper<RunFn, RunFnFut, Output>
+impl<RunFn, Output> CommandOnTper<RunFn, Output>
 where
-    RunFn: FnOnce(Arc<Tper>) -> RunFnFut + Send + 'static,
-    RunFnFut: Future<Output = Output> + Send,
+    RunFn: for<'x> OnTperRunFn<'x, Output = Output> + Send + 'static,
+    for<'x> <RunFn as OnTperRunFn<'x>>::Future: Send,
     Output: Send + 'static,
 {
-    pub fn display<UpdateFn>(self, update_fn: UpdateFn) -> UpdateOnTper<RunFn, RunFnFut, Output, UpdateFn>
+    pub fn display<UpdateFn>(self, update_fn: UpdateFn) -> UpdateOnTper<RunFn, Output, UpdateFn>
     where
         UpdateFn: FnOnce(ui::Device, Output) -> ui::Device + 'static,
     {
@@ -237,10 +283,10 @@ where
     }
 }
 
-pub struct UpdateOnTper<RunFn, RunFnFut, Output, UpdateFn>
+pub struct UpdateOnTper<RunFn, Output, UpdateFn>
 where
-    RunFn: FnOnce(Arc<Tper>) -> RunFnFut + Send + 'static,
-    RunFnFut: Future<Output = Output> + Send,
+    RunFn: for<'x> OnTperRunFn<'x, Output = Output> + Send + 'static,
+    for<'x> <RunFn as OnTperRunFn<'x>>::Future: Send,
     Output: Send + 'static,
     UpdateFn: FnOnce(ui::Device, Output) -> ui::Device + 'static,
 {
@@ -251,10 +297,10 @@ where
     update_fn: UpdateFn,
 }
 
-impl<RunFn, RunFnFut, Output, UpdateFn> UpdateOnTper<RunFn, RunFnFut, Output, UpdateFn>
+impl<RunFn, Output, UpdateFn> UpdateOnTper<RunFn, Output, UpdateFn>
 where
-    RunFn: FnOnce(Arc<Tper>) -> RunFnFut + Send + 'static,
-    RunFnFut: Future<Output = Output> + Send,
+    RunFn: for<'x> OnTperRunFn<'x, Output = Output> + Send + 'static,
+    for<'x> <RunFn as OnTperRunFn<'x>>::Future: Send,
     Output: Send + 'static,
     UpdateFn: FnOnce(ui::Device, Output) -> ui::Device + 'static,
 {
@@ -265,8 +311,7 @@ where
                 // Acquire resources.
                 let device_list = device_list.read().await;
                 let Some(backend) = device_list.backend.get(&device_id) else { return };
-                let backend = backend.read().await;
-                let Some(tper) = backend.tper.clone() else { return };
+                let backend = backend.read_arc().await;
 
                 // Indicate to UI that we're busy on the TPer.
                 device_list.ui.update(&device_id, |value| {
@@ -275,14 +320,25 @@ where
                 });
 
                 // Execute command and update results.
-                let output = runtime.spawn(async move { run_fn(tper).await }.in_current_span()).await.unwrap();
-                device_list.ui.update(&device_id, move |value| update_fn(value, output));
+                let run_task = runtime.spawn(
+                    async move {
+                        let tper = backend.tper.as_ref()?;
+                        let output = run_fn.call_once(tper).await;
+                        Some((output, backend))
+                    }
+                    .in_current_span(),
+                );
 
-                // Indicate to UI that we're NO LONGER busy.
-                device_list.ui.update(&device_id, |value| {
-                    let command_status = value.command_status.clone();
-                    value.with_command_status(command_status.with_tper_busy(false))
-                });
+                if let Some((output, _backend)) = run_task.await.expect("commands should not be cancelled") {
+                    // Execute the update fn.
+                    device_list.ui.update(&device_id, move |value| update_fn(value, output));
+
+                    // Indicate to UI that we're NO LONGER busy.
+                    device_list.ui.update(&device_id, |value| {
+                        let command_status = value.command_status.clone();
+                        value.with_command_status(command_status.with_tper_busy(false))
+                    });
+                }
             }
             .in_current_span(),
         )
@@ -294,10 +350,10 @@ where
 // Command on session
 //------------------------------------------------------------------------------
 
-pub struct CommandOnSession<RunFn, RunFnFut, Output>
+pub struct CommandOnSession<RunFn, Output>
 where
-    RunFn: FnOnce(Arc<Tper>, Mut<Session>) -> RunFnFut + Send + 'static,
-    RunFnFut: Future<Output = Output> + Send,
+    RunFn: for<'x> OnSessionRunFn<'x, Output = Output> + Send + 'static,
+    for<'x> <RunFn as OnSessionRunFn<'x>>::Future: Send,
     Output: Send + 'static,
 {
     runtime: Arc<PolyRuntime>,
@@ -306,13 +362,13 @@ where
     run_fn: RunFn,
 }
 
-impl<RunFn, RunFnFut, Output> CommandOnSession<RunFn, RunFnFut, Output>
+impl<RunFn, Output> CommandOnSession<RunFn, Output>
 where
-    RunFn: FnOnce(Arc<Tper>, Mut<Session>) -> RunFnFut + Send + 'static,
-    RunFnFut: Future<Output = Output> + Send,
+    RunFn: for<'x> OnSessionRunFn<'x, Output = Output> + Send + 'static,
+    for<'x> <RunFn as OnSessionRunFn<'x>>::Future: Send,
     Output: Send + 'static,
 {
-    pub fn display<UpdateFn>(self, update_fn: UpdateFn) -> UpdateOnSession<RunFn, RunFnFut, Output, UpdateFn>
+    pub fn display<UpdateFn>(self, update_fn: UpdateFn) -> UpdateOnSession<RunFn, Output, UpdateFn>
     where
         UpdateFn: for<'spec> FnOnce(ui::Device, Option<&'spec Spec>, Output) -> ui::Device + 'static,
     {
@@ -321,10 +377,10 @@ where
     }
 }
 
-pub struct UpdateOnSession<RunFn, RunFnFut, Output, UpdateFn>
+pub struct UpdateOnSession<RunFn, Output, UpdateFn>
 where
-    RunFn: FnOnce(Arc<Tper>, Mut<Session>) -> RunFnFut + Send + 'static,
-    RunFnFut: Future<Output = Output> + Send,
+    RunFn: for<'x> OnSessionRunFn<'x, Output = Output> + Send + 'static,
+    for<'x> <RunFn as OnSessionRunFn<'x>>::Future: Send,
     Output: Send + 'static,
     UpdateFn: for<'spec> FnOnce(ui::Device, Option<&'spec Spec>, Output) -> ui::Device + 'static,
 {
@@ -335,50 +391,67 @@ where
     update_fn: UpdateFn,
 }
 
-impl<RunFn, RunFnFut, Output, UpdateFn> UpdateOnSession<RunFn, RunFnFut, Output, UpdateFn>
+impl<RunFn, Output, UpdateFn> UpdateOnSession<RunFn, Output, UpdateFn>
 where
-    RunFn: FnOnce(Arc<Tper>, Mut<Session>) -> RunFnFut + Send + 'static,
-    RunFnFut: Future<Output = Output> + Send,
+    RunFn: for<'x> OnSessionRunFn<'x, Output = Output> + Send + 'static,
+    for<'x> <RunFn as OnSessionRunFn<'x>>::Future: Send,
     Output: Send + 'static,
     UpdateFn: for<'spec> FnOnce(ui::Device, Option<&'spec Spec>, Output) -> ui::Device + 'static,
 {
     pub fn run(self) {
         let Self { runtime, device_list, device_id, run_fn, update_fn } = self;
+
         slint::spawn_local(
             async move {
-                // Acquire resources.
                 let device_list = device_list.read().await;
-                let Some(backend) = device_list.backend.get(&device_id) else { return };
-                let backend = backend.read().await;
-                let Some(tper) = backend.tper.clone() else { return };
-                let session = backend.session.lock_arc().await;
+                let Some(backend) = device_list.backend.get(&device_id).cloned() else {
+                    return;
+                };
+                let backend = backend.read_arc().await;
 
-                // Indicate to UI that we're busy on the session.
-                device_list.ui.update(&device_id, |value| {
-                    let command_status = value.command_status.clone();
-                    value.with_command_status(command_status.with_session_busy(true))
-                });
+                let (busy_sender, busy_signal) = oneshot::async_channel();
+                let run_task = runtime.spawn(
+                    async move {
+                        // Acquire resources.
+                        let tper = backend.tper.as_ref()?;
+                        let mut session = backend.session.lock_arc().await;
 
-                // Execute the command and display results.
-                let output = runtime
-                    .spawn(async move { run_fn(tper, Mut::Mutex(session)).await }.in_current_span())
-                    .await
-                    .unwrap();
-                let spec = backend.specification.as_ref();
-                device_list.ui.update(&device_id, move |value| update_fn(value, spec, output));
+                        // Signal that now we're busy on the session.
+                        let _ = busy_sender.send(());
 
-                // Indicate to UI that we're NO LONGER busy.
-                device_list.ui.update(&device_id, |value| {
-                    let command_status = value.command_status.clone();
-                    value.with_command_status(command_status.with_session_busy(false))
-                });
+                        // Execute the command and display results.
+                        let output = run_fn.call_once(tper, session.deref_mut()).await;
+                        Some((output, backend))
+                    }
+                    .in_current_span(),
+                );
 
-                // Update active session.
-                let session = backend.session.lock_arc().await;
-                device_list.ui.update(&device_id, |mut value| {
-                    value.command_status.secondary_session_active = matches!(*session, Session::LockingConfig(_));
-                    value
-                });
+                if let Ok(_) = busy_signal.await {
+                    // Indicate to UI that we're busy on the session.
+                    device_list.ui.update(&device_id, |value| {
+                        let command_status = value.command_status.clone();
+                        value.with_command_status(command_status.with_session_busy(true))
+                    });
+                }
+
+                if let Some((output, backend)) = run_task.await.expect("commands should not be cancelled") {
+                    let spec = backend.specification.as_ref();
+                    // Execute the update fn.
+                    device_list.ui.update(&device_id, move |value| update_fn(value, spec, output));
+
+                    // Indicate to UI that we're NO LONGER busy.
+                    device_list.ui.update(&device_id, |value| {
+                        let command_status = value.command_status.clone();
+                        value.with_command_status(command_status.with_session_busy(false))
+                    });
+
+                    // Update active session.
+                    let session = backend.session.lock_arc().await;
+                    device_list.ui.update(&device_id, |mut value| {
+                        value.command_status.secondary_session_active = matches!(*session, Session::LockingConfig(_));
+                        value
+                    });
+                }
             }
             .in_current_span(),
         )
@@ -386,31 +459,9 @@ where
     }
 }
 
-#[derive(Debug)]
-pub enum Mut<T> {
-    Mutex(async_lock::MutexGuardArc<T>),
-    RwLock(async_lock::RwLockWriteGuardArc<T>),
-}
-
-impl<T> Deref for Mut<T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        match self {
-            Mut::Mutex(inner) => inner.deref(),
-            Mut::RwLock(inner) => inner.deref(),
-        }
-    }
-}
-
-impl<T> DerefMut for Mut<T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        match self {
-            Mut::Mutex(inner) => inner.deref_mut(),
-            Mut::RwLock(inner) => inner.deref_mut(),
-        }
-    }
-}
+//------------------------------------------------------------------------------
+// Helper stuff
+//------------------------------------------------------------------------------
 
 pub(crate) trait ExpectInEventLoop {
     type Output;
