@@ -14,7 +14,7 @@ use sorbit::ser_de::FromBytes as _;
 
 use crate::linux::ioctl_device::IoctlDevice;
 use crate::shared::nvme::{GenericStatusCode, IdentifyController, Opcode, StatusCode, StatusField};
-use crate::{Device, Error, Interface};
+use crate::{Error, Interface, StorageDevice};
 
 pub use ioctl::NvmeIoctlDevice;
 
@@ -32,7 +32,7 @@ impl NvmeDevice {
 }
 
 #[async_trait::async_trait]
-impl Device for NvmeDevice {
+impl StorageDevice for NvmeDevice {
     fn path(&self) -> Option<&Path> {
         Some(self.ioctl_device.path())
     }

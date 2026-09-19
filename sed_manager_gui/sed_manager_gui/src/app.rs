@@ -256,7 +256,7 @@ impl App {
         self.command()
             .on_device(path.clone(), async move |device: &mut Device| {
                 let result = if device_path.as_path() != VIRTUAL_DEVICE_PATH {
-                    open_device(&device_path).await.map(|dev| Arc::<dyn sed_device::Device>::from(dev))
+                    open_device(&device_path).await.map(|dev| Arc::<dyn sed_device::StorageDevice>::from(dev))
                 } else {
                     Ok(Arc::new(VirtualDevice::new()) as _)
                 };

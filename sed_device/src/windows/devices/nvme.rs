@@ -7,10 +7,10 @@ use core::mem::offset_of;
 use std::path::Path;
 
 use crate::Error as DeviceError;
-use crate::device::{Device, Interface};
 use crate::shared::aligned_array::AlignedArray;
 use crate::shared::memory::write_nonoverlapping;
 use crate::shared::nvme::IdentifyController;
+use crate::storage_device::{Interface, StorageDevice};
 use crate::windows::devices::generic::{DeviceDesc, GenericIoctlDevice};
 use crate::windows::ioctl_device::IoctlDevice;
 
@@ -52,7 +52,7 @@ impl NvmeDevice {
 }
 
 #[async_trait::async_trait]
-impl Device for NvmeDevice {
+impl StorageDevice for NvmeDevice {
     fn path(&self) -> Option<&Path> {
         Some(&self.ioctl_device.path())
     }

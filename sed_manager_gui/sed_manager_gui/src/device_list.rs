@@ -22,7 +22,7 @@ pub struct DeviceList {
 
 #[derive(Debug, Default)]
 pub struct Device {
-    pub interface: Option<Arc<dyn sed_device::Device>>,
+    pub interface: Option<Arc<dyn sed_device::StorageDevice>>,
     pub specification: Option<Spec>,
     pub tper: Option<Tper>,
     pub session: Arc<Mutex<Session>>,

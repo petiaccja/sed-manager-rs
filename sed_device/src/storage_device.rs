@@ -20,7 +20,7 @@ pub enum Interface {
 }
 
 #[async_trait::async_trait]
-pub trait Device: Send + Sync {
+pub trait StorageDevice: Send + Sync {
     fn path(&self) -> Option<&Path>;
     fn interface(&self) -> Interface;
     fn model_number(&self) -> String;
@@ -53,7 +53,7 @@ impl core::fmt::Display for Interface {
     }
 }
 
-impl<'a> core::fmt::Debug for dyn Device + 'a {
+impl<'a> core::fmt::Debug for dyn StorageDevice + 'a {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("dyn Device")
             .field("interface", &self.interface())
