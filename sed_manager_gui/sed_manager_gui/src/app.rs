@@ -407,7 +407,7 @@ impl App {
             .on_session(path.clone(), async |tper: &Tper, session: &mut Session| {
                 let setup_session = session.start_setup_session(tper).await?;
                 let sp_ref = setup_session.spec().admin.uid;
-                setup_session.list_authorities(tper, sp_ref).await.map(|auths| (auths, sp_ref))
+                setup_session.list_authorities(sp_ref).await.map(|auths| (auths, sp_ref))
             })
             .display(move |mut ui_device, spec, result| match result {
                 Ok((authorities, sp_ref)) => {
@@ -437,10 +437,7 @@ impl App {
             .on_session(path.clone(), async |tper: &Tper, session: &mut Session| {
                 let setup_session = session.start_setup_session(tper).await?;
                 if let Some(locking_sp) = &setup_session.spec().locking {
-                    setup_session
-                        .list_authorities(tper, locking_sp.uid)
-                        .await
-                        .map(|auths| (auths, Some(locking_sp.uid)))
+                    setup_session.list_authorities(locking_sp.uid).await.map(|auths| (auths, Some(locking_sp.uid)))
                 } else {
                     Ok((vec![], None))
                 }
@@ -600,7 +597,7 @@ impl App {
         self.command()
             .on_session(path.clone(), async move |tper: &Tper, session: &mut Session| {
                 let sid_session = session.start_setup_session(tper).await?;
-                sid_session.take_owneship(tper, password).await
+                sid_session.take_owneship(password).await
             })
             .display(move |ui_device, _, result| {
                 match result {
@@ -624,7 +621,7 @@ impl App {
         self.command()
             .on_session(path.clone(), async move |tper: &Tper, session: &mut Session| {
                 let sid_session = session.start_setup_session(tper).await?;
-                sid_session.activate_secondary_sp(tper, password).await
+                sid_session.activate_secondary_sp(password).await
             })
             .display(move |ui_device, _, result| {
                 match result {
@@ -672,7 +669,7 @@ impl App {
         self.command()
             .on_session(path.clone(), async move |tper: &Tper, session: &mut Session| {
                 let sid_session = session.start_setup_session(tper).await?;
-                sid_session.change_password(tper, sp, authority, current_password, new_password).await
+                sid_session.change_password(sp, authority, current_password, new_password).await
             })
             .display(move |ui_device, _, result| {
                 match result {
@@ -704,8 +701,8 @@ impl App {
                     ui::RevertAuthority::Psid => sid_session.spec().admin.authorities.psid,
                 };
                 match scope {
-                    ui::RevertScope::Locking => sid_session.revert_secondary_sp(tper, password).await,
-                    ui::RevertScope::Everything => sid_session.revert_tper(tper, authority, password).await,
+                    ui::RevertScope::Locking => sid_session.revert_secondary_sp(password).await,
+                    ui::RevertScope::Everything => sid_session.revert_tper(authority, password).await,
                 }
             })
             .display(move |ui_device, _, result| {

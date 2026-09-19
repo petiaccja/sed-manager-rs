@@ -24,8 +24,8 @@ async fn setup() -> Tper {
     let tper = Tper::connect(BASE_COM_ID, 0, device.clone(), runtime);
     let setup_session = SetupSession::new_on_primary_ssc(&tper).await.unwrap();
 
-    setup_session.take_owneship(&tper, NEW_SID_PASSWORD).await.unwrap();
-    setup_session.activate_secondary_sp(&tper, NEW_SID_PASSWORD).await.unwrap();
+    setup_session.take_owneship(NEW_SID_PASSWORD).await.unwrap();
+    setup_session.activate_secondary_sp(NEW_SID_PASSWORD).await.unwrap();
 
     tper
 }

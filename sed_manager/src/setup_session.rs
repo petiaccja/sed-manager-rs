@@ -12,8 +12,8 @@ use sed_spec::{
     preconfig::core::shared::table_id,
     types::LifeCycleState,
 };
-use sed_tper::Error as TperError;
 use sed_tper::Tper;
+use sed_tper::{Error as TperError, TperHandle};
 use tracing::instrument;
 
 use crate::{error::Error, spec::Spec};
@@ -28,12 +28,13 @@ use crate::{error::Error, spec::Spec};
 #[derive(Debug)]
 pub struct SetupSession {
     spec: Spec,
+    tper: TperHandle,
 }
 
 impl SetupSession {
     /// Open a session on the SSC given by `spec`.
-    pub fn new(spec: Spec) -> Self {
-        Self { spec }
+    pub fn new(tper: &Tper, spec: Spec) -> Self {
+        Self { tper: tper.handle(), spec }
     }
 
     /// Open a session on the primary SSC of the TPer.
@@ -45,7 +46,7 @@ impl SetupSession {
     pub async fn new_on_primary_ssc(tper: &Tper) -> Result<Self, Error> {
         let discovery = tper.discover_current().await?;
         let spec = Spec::try_from(discovery).map_err(|_| Error::NoSscAvailable)?;
-        Ok(Self::new(spec))
+        Ok(Self::new(tper, spec))
     }
 
     pub fn spec(&self) -> &Spec {
@@ -62,18 +63,20 @@ impl SetupSession {
     ///
     /// The method may also fail due to any common Tper RPC errors.
     #[instrument(level = "info", skip(self, new_sid_password), ret, err)]
-    pub async fn take_owneship(&self, tper: &Tper, new_sid_password: MaxBytes<32>) -> Result<(), Error> {
+    pub async fn take_owneship(&self, new_sid_password: MaxBytes<32>) -> Result<(), Error> {
         let admin = &self.spec.admin;
 
         // Get the MSID password.
-        let initial_password = tper
+        let initial_password = self
+            .tper
             .start_session(admin.uid, None, None)
             .await?
             .with(async |session| session.get_field(admin.c_pins.msid.pin()).await)
             .await?;
 
         // Change the SID password to the new one.
-        tper.start_session(admin.uid, Some(admin.authorities.sid), Some(initial_password))
+        self.tper
+            .start_session(admin.uid, Some(admin.authorities.sid), Some(initial_password))
             .await
             .map_err(|err| match err {
                 TperError::MethodCallFailed(MethodStatus::NotAuthorized) => Error::AlreadyOwned,
@@ -97,7 +100,7 @@ impl SetupSession {
     ///
     /// [`Manufactured`]: LifeCycleState::Manufactured
     #[instrument(level = "info", skip(self, sid_password), ret, err)]
-    pub async fn activate_secondary_sp(&self, tper: &Tper, sid_password: MaxBytes<32>) -> Result<(), Error> {
+    pub async fn activate_secondary_sp(&self, sid_password: MaxBytes<32>) -> Result<(), Error> {
         let admin = &self.spec.admin;
         let secondary_sp_uid = self
             .spec
@@ -107,7 +110,8 @@ impl SetupSession {
             .or_else(|| self.spec.kpio.as_ref().map(|sp| sp.uid))
             .ok_or(Error::IncompatibleSsc)?;
 
-        tper.start_session(admin.uid, Some(admin.authorities.sid), Some(sid_password))
+        self.tper
+            .start_session(admin.uid, Some(admin.authorities.sid), Some(sid_password))
             .await?
             .with(async |session| {
                 let life_cycle_state = session.get_field(secondary_sp_uid.life_cycle_state()).await?;
@@ -133,10 +137,11 @@ impl SetupSession {
     /// - `authority`: this may be the SID or the PSID authority.
     /// - `password`: the password of the `authority`.
     #[instrument(level = "info", skip(self, password), ret, err)]
-    pub async fn revert_tper(&self, tper: &Tper, authority: AuthorityRef, password: MaxBytes<32>) -> Result<(), Error> {
+    pub async fn revert_tper(&self, authority: AuthorityRef, password: MaxBytes<32>) -> Result<(), Error> {
         let admin = &self.spec.admin;
 
-        tper.start_session(admin.uid, Some(authority), Some(password))
+        self.tper
+            .start_session(admin.uid, Some(authority), Some(password))
             .await?
             .with(async |session| session.revert(admin.uid).await)
             .await?;
@@ -149,11 +154,12 @@ impl SetupSession {
     /// This method requires a login to the Admin SP as SID.
     /// Only the secondary SP will be reverted, the Admin SP is unaffected.
     #[instrument(level = "info", skip(self, sid_password), ret, err)]
-    pub async fn revert_secondary_sp(&self, tper: &Tper, sid_password: MaxBytes<32>) -> Result<(), Error> {
+    pub async fn revert_secondary_sp(&self, sid_password: MaxBytes<32>) -> Result<(), Error> {
         let admin = &self.spec.admin;
         let secondary_sp_uid = self.spec.secondary_sp_uid().ok_or(Error::IncompatibleSsc)?;
 
-        tper.start_session(admin.uid, Some(admin.authorities.sid), Some(sid_password))
+        self.tper
+            .start_session(admin.uid, Some(admin.authorities.sid), Some(sid_password))
             .await?
             .with(async |session| session.revert(secondary_sp_uid).await)
             .await?;
@@ -168,14 +174,13 @@ impl SetupSession {
     #[instrument(level = "info", skip(self, password), ret, err)]
     pub async fn revert_secondary_sp_ex(
         &self,
-        tper: &Tper,
         admin: AuthorityRef,
         password: MaxBytes<32>,
         keep_global_range_key: Option<bool>,
     ) -> Result<(), Error> {
         let secondary_sp_uid = self.spec.secondary_sp_uid().ok_or(Error::IncompatibleSsc)?;
 
-        let session = tper.start_session(secondary_sp_uid, Some(admin), Some(password)).await?;
+        let session = self.tper.start_session(secondary_sp_uid, Some(admin), Some(password)).await?;
         match session.revert_sp(keep_global_range_key).await {
             Ok(()) => Ok(()),
             Err((session, err)) => {
@@ -194,13 +199,12 @@ impl SetupSession {
     #[instrument(level = "info", skip(self, current_password, new_password), ret, err)]
     pub async fn change_password(
         &self,
-        tper: &Tper,
         sp: SecurityProviderRef,
         authority: AuthorityRef,
         current_password: MaxBytes<32>,
         new_password: MaxBytes<32>,
     ) -> Result<(), Error> {
-        let session = tper.start_session(sp, Some(authority), Some(current_password)).await?;
+        let session = self.tper.start_session(sp, Some(authority), Some(current_password)).await?;
         session
             .with(async |session| {
                 let credential = session.get_field(authority.credential()).await?;
@@ -218,8 +222,8 @@ impl SetupSession {
     /// the returned columns may be incomplete, as `Anybody` may not have
     /// access.
     #[instrument(level = "info", skip(self), ret, err)]
-    pub async fn list_authorities(&self, tper: &Tper, sp: SecurityProviderRef) -> Result<Vec<Authority>, Error> {
-        let session = tper.start_session(sp, None, None).await?;
+    pub async fn list_authorities(&self, sp: SecurityProviderRef) -> Result<Vec<Authority>, Error> {
+        let session = self.tper.start_session(sp, None, None).await?;
         session
             .with(async |session| {
                 let authority_refs = session.next::<{ table_id::AUTHORITY.to_u64() }>(None, None).await?;
