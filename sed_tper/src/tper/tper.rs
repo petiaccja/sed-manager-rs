@@ -44,7 +44,7 @@ pub struct Tper {
     device: Arc<dyn Device>,
     controller: Controller,
     protocol_task: <PolyRuntime as Runtime>::JoinHandle<()>,
-    host_session_id: AtomicU32,
+    host_session_id: Arc<AtomicU32>,
 }
 
 impl Tper {
@@ -62,6 +62,13 @@ impl Tper {
     /// reflect how this library implements the TCG protocol stack.
     pub fn capabilities(&self) -> Properties {
         CAPABILITIES
+    }
+
+    /// Create a handle to the Tper's connection and protocol stack.
+    ///
+    /// The [`TperHandle`] can perform a subset of the tasks of the [`Tper`].
+    pub fn handle(&self) -> TperHandle {
+        TperHandle { controller: self.controller.clone(), host_session_id: self.host_session_id.clone() }
     }
 
     /// Listen to changes in the connection properties.
@@ -93,7 +100,8 @@ impl Tper {
         let (protocol, controller) = Protocol::new(com_id, com_id_ext, device.clone(), runtime.clone());
         controller.sync_properties();
         let protocol_task = runtime.spawn(protocol.run());
-        Self { com_id, com_id_ext, device, controller, protocol_task, host_session_id: 1.into() }
+        let host_session_id = Arc::new(AtomicU32::new(1));
+        Self { com_id, com_id_ext, device, controller, protocol_task, host_session_id }
     }
 
     /// Discover the capabilities of the provided device.
@@ -184,5 +192,38 @@ impl Tper {
     #[instrument(level = "debug", skip(self))]
     pub fn close(self) -> <PolyRuntime as Runtime>::JoinHandle<()> {
         self.protocol_task
+    }
+}
+
+/// A handle to the `Tper`'s protocol stack through which you can do a subset of
+/// the [`Tper`]'s tasks.
+///
+/// The [`Tper`] itself owns the underlying protocol stack that communicates with
+/// the [`Device`]. Closing the protocol stack must be done through [`Tper::close`],
+/// the [`TperHandle`] cannot be used for purpose. Keep it in mind though that
+/// live handles will keep the protocol stack alive and `close()` will not
+/// return until you drop all handles and all sessions.
+///
+/// For the moment, this object deals only with session management. This could
+/// be extended in theory, but in the current codebase there are limited uses
+/// of this object so keeping the API minimal makes it less likely to spread
+/// and makes it easier to remove if future design changes.
+#[derive(Debug)]
+pub struct TperHandle {
+    controller: Controller,
+    host_session_id: Arc<AtomicU32>,
+}
+
+impl TperHandle {
+    /// See [`Tper::start_session`].
+    #[instrument(level = "debug", skip(self, password), ret, err)]
+    pub async fn start_session(
+        &self,
+        sp: SecurityProviderRef,
+        authority: Option<AuthorityRef>,
+        password: Option<MaxBytes<32>>,
+    ) -> Result<Session, Error> {
+        let host_session_number = self.host_session_id.fetch_add(1, Ordering::Relaxed);
+        Session::start(self.controller.clone(), host_session_number, sp, authority, password).await
     }
 }

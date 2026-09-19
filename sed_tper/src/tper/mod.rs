@@ -7,4 +7,4 @@ mod session;
 mod tper;
 
 pub use session::Session;
-pub use tper::Tper;
+pub use tper::{Tper, TperHandle};

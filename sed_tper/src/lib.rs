@@ -9,4 +9,4 @@ mod tper;
 
 pub use error::Error;
 pub use protocol::PropertiesChanged;
-pub use tper::{Session, Tper};
+pub use tper::{Session, Tper, TperHandle};
