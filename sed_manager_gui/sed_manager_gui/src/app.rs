@@ -12,7 +12,7 @@ use std::{
 
 use async_lock::RwLock;
 use sed_async::PolyRuntime;
-use sed_device::{list_physical_drives, open_device};
+use sed_device::{list_storage_devices, open_storage_device};
 use sed_manager::{Error, Spec};
 use sed_manager_gui_slint as ui;
 use sed_packet::{MaxBytes, com_id::ComIdState};
@@ -157,7 +157,7 @@ impl App {
 
         self.command()
             .on_device_list(async |device_list| {
-                let mut new_paths: HashSet<_> = list_physical_drives().await?.into_iter().collect();
+                let mut new_paths: HashSet<_> = list_storage_devices().await?.into_iter().collect();
 
                 // The paths must be losslessly converted to Slint string because
                 // they are used as HashMap keys.
@@ -256,7 +256,7 @@ impl App {
         self.command()
             .on_device(path.clone(), async move |device: &mut Device| {
                 let result = if device_path.as_path() != VIRTUAL_DEVICE_PATH {
-                    open_device(&device_path).await.map(|dev| Arc::<dyn sed_device::Device>::from(dev))
+                    open_storage_device(&device_path).await.map(|dev| Arc::<dyn sed_device::StorageDevice>::from(dev))
                 } else {
                     Ok(Arc::new(VirtualDevice::new()) as _)
                 };

@@ -8,7 +8,7 @@ use std::ops::{Deref as _, DerefMut as _};
 use std::path::Path;
 use std::sync::Mutex;
 
-use sed_device::{Device, Error, Interface};
+use sed_device::{Error, Interface, StorageDevice};
 use sed_packet::com_id::ComIdRequest;
 use sed_packet::discovery::Discovery;
 use sed_packet::packet::ComPacket;
@@ -85,7 +85,7 @@ impl VirtualDevice {
 }
 
 #[async_trait::async_trait]
-impl Device for VirtualDevice {
+impl StorageDevice for VirtualDevice {
     fn path(&self) -> Option<&Path> {
         Some(VIRTUAL_DEVICE_PATH.as_ref())
     }

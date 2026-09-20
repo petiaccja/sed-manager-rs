@@ -3,12 +3,12 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use sed_device::Device;
+use sed_device::StorageDevice;
 
 use crate::ui_conv::IntoUi;
 use sed_manager_gui_slint as ui;
 
-impl IntoUi for dyn Device {
+impl IntoUi for dyn StorageDevice {
     type Ui = ui::Identity;
 
     fn into_ui(&self) -> Self::Ui {

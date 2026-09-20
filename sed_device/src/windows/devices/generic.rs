@@ -14,7 +14,7 @@ use windows::Win32::System::Ioctl::{
 };
 
 use crate::windows::ioctl_device::IoctlDevice;
-use crate::{Device, Error, Interface};
+use crate::{Error, Interface, StorageDevice};
 
 pub use ioctl::GenericIoctlDevice;
 
@@ -40,7 +40,7 @@ impl GenericDevice {
 }
 
 #[async_trait::async_trait]
-impl Device for GenericDevice {
+impl StorageDevice for GenericDevice {
     fn path(&self) -> Option<&Path> {
         Some(&self.ioctl_device.path())
     }

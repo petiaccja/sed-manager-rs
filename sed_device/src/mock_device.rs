@@ -5,7 +5,7 @@
 
 use std::{collections::VecDeque, path::Path, sync::Mutex};
 
-use crate::{Device, Error, Interface};
+use crate::{Error, Interface, StorageDevice};
 
 pub struct MockDevice {
     scenario: Mutex<VecDeque<(usize, MockEvent)>>,
@@ -46,7 +46,7 @@ impl MockDevice {
 }
 
 #[async_trait::async_trait]
-impl Device for MockDevice {
+impl StorageDevice for MockDevice {
     fn path(&self) -> Option<&Path> {
         None
     }

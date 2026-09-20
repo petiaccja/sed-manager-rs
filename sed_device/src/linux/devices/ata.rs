@@ -18,7 +18,7 @@ use sorbit::ser_de::FromBytes as _;
 
 use crate::linux::ioctl_device::IoctlDevice;
 use crate::shared::ata::{AtaError, IdentifyDevice};
-use crate::{Device, Error as DeviceError, Interface};
+use crate::{Error as DeviceError, Interface, StorageDevice};
 
 pub use ioctl::AtaIoctlDevice;
 
@@ -41,7 +41,7 @@ impl AtaDevice {
 }
 
 #[async_trait::async_trait]
-impl Device for AtaDevice {
+impl StorageDevice for AtaDevice {
     fn path(&self) -> Option<&Path> {
         Some(self.ioctl_device.path())
     }

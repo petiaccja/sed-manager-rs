@@ -16,7 +16,7 @@ use crate::shared::aligned_array::AlignedArray;
 use crate::shared::scsi::{Command, ScsiError, SecurityProtocolIn, SecurityProtocolOut, SenseData, SenseKey};
 use crate::windows::devices::generic::{DeviceDesc, GenericIoctlDevice as _};
 use crate::windows::ioctl_device::IoctlDevice;
-use crate::{Device, Error as DeviceError, Interface};
+use crate::{Error as DeviceError, Interface, StorageDevice};
 
 use super::GenericDevice;
 
@@ -50,7 +50,7 @@ impl ScsiDevice {
 }
 
 #[async_trait::async_trait]
-impl Device for ScsiDevice {
+impl StorageDevice for ScsiDevice {
     fn path(&self) -> Option<&Path> {
         Some(self.ioctl_device.path())
     }

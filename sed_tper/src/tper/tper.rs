@@ -9,7 +9,7 @@ use std::sync::{
 };
 
 use sed_async::{PolyRuntime, Runtime};
-use sed_device::Device;
+use sed_device::StorageDevice;
 use sed_packet::discovery::Discovery;
 use sed_packet::{
     MaxBytes,
@@ -41,7 +41,7 @@ use crate::{
 pub struct Tper {
     com_id: u16,
     com_id_ext: u16,
-    device: Arc<dyn Device>,
+    device: Arc<dyn StorageDevice>,
     controller: Controller,
     protocol_task: <PolyRuntime as Runtime>::JoinHandle<()>,
     host_session_id: Arc<AtomicU32>,
@@ -96,7 +96,7 @@ impl Tper {
     /// subsequent requests will time out, and you'll likely need to do a stack
     /// reset to get the device's communication stack synchronized again.
     #[instrument(level = "info", skip(runtime))]
-    pub fn connect(com_id: u16, com_id_ext: u16, device: Arc<dyn Device>, runtime: Arc<PolyRuntime>) -> Self {
+    pub fn connect(com_id: u16, com_id_ext: u16, device: Arc<dyn StorageDevice>, runtime: Arc<PolyRuntime>) -> Self {
         let (protocol, controller) = Protocol::new(com_id, com_id_ext, device.clone(), runtime.clone());
         controller.sync_properties();
         let protocol_task = runtime.spawn(protocol.run());
@@ -106,7 +106,7 @@ impl Tper {
 
     /// Discover the capabilities of the provided device.
     #[instrument(level = "info", ret, err)]
-    pub async fn discover(device: &dyn Device) -> Result<Discovery, Error> {
+    pub async fn discover(device: &dyn StorageDevice) -> Result<Discovery, Error> {
         let bytes = device.security_recv(0x01, 0x0001_u16.to_be_bytes(), 4096).await?;
         Discovery::from_bytes(&bytes).map_err(|error| Error::InvalidDiscovery(error))
     }

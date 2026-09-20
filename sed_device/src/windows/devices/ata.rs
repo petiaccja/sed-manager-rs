@@ -16,7 +16,7 @@ use crate::shared::aligned_array::AlignedArray;
 use crate::shared::ata::{AtaError, IdentifyDevice, Input};
 use crate::windows::devices::generic::{DeviceDesc, GenericIoctlDevice};
 use crate::windows::ioctl_device::IoctlDevice;
-use crate::{Device, Error as DeviceError, Interface};
+use crate::{Error as DeviceError, Interface, StorageDevice};
 
 use super::GenericDevice;
 
@@ -50,7 +50,7 @@ impl AtaDevice {
 }
 
 #[async_trait::async_trait]
-impl Device for AtaDevice {
+impl StorageDevice for AtaDevice {
     fn path(&self) -> Option<&Path> {
         Some(self.ioctl_device.path())
     }

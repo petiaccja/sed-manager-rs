@@ -17,7 +17,7 @@ use std::time::Instant;
 
 use async_channel::RecvError;
 use sed_async::{PolyRuntime, Runtime as _};
-use sed_device::Device;
+use sed_device::StorageDevice;
 use sed_packet::{
     com_id::{ComIdRequest, ComIdResponse},
     session_id::SessionId,
@@ -36,7 +36,7 @@ pub use shared::PropertiesChanged;
 #[derive(Debug)]
 pub struct Protocol {
     com_id: u16,
-    device: Arc<dyn Device>,
+    device: Arc<dyn StorageDevice>,
     command_rx: async_channel::Receiver<Command>,
     state: ProtocolState,
     runtime: Arc<PolyRuntime>,
@@ -48,7 +48,12 @@ impl Protocol {
     ///
     /// This initializes the protocol stack, but no messages will be delivered
     /// until you call [`run`](Self::run).
-    pub fn new(com_id: u16, com_id_ext: u16, device: Arc<dyn Device>, runtime: Arc<PolyRuntime>) -> (Self, Controller) {
+    pub fn new(
+        com_id: u16,
+        com_id_ext: u16,
+        device: Arc<dyn StorageDevice>,
+        runtime: Arc<PolyRuntime>,
+    ) -> (Self, Controller) {
         let (command_tx, command_rx) = async_channel::unbounded();
         let state = ProtocolState::new(com_id, com_id_ext);
         let controller = Controller::new(command_tx, state.properties_changed());
@@ -169,7 +174,7 @@ fn inject_command(state: &mut ProtocolState, command: Command) {
 }
 
 async fn perform_action_or_recv(
-    device: &dyn Device,
+    device: &dyn StorageDevice,
     com_id: u16,
     protocol: &mut ProtocolState,
     rx: &async_channel::Receiver<Command>,

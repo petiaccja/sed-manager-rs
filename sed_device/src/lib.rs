@@ -3,11 +3,11 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-mod device;
 mod error;
 #[cfg(feature = "test-utils")]
 pub mod mock_device;
 mod shared;
+mod storage_device;
 
 #[cfg(target_os = "windows")]
 mod windows;
@@ -21,6 +21,6 @@ use windows as os;
 #[cfg(target_os = "linux")]
 use linux as os;
 
-pub use device::{Device, Interface};
 pub use error::Error;
-pub use os::{list_physical_drives, open_device};
+pub use os::{list_storage_devices, open_storage_device};
+pub use storage_device::{Interface, StorageDevice};
