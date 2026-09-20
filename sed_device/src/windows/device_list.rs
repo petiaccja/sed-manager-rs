@@ -99,7 +99,7 @@ mod tests {
     #[tokio::test]
     async fn test_list_storage_devices() -> Result<(), DeviceError> {
         // There must be at least one physical drive, so this test should pass.
-        match list_physical_drives().await {
+        match list_storage_devices().await {
             Ok(physical_drives) => {
                 assert!(!physical_drives.is_empty());
                 Ok(())
