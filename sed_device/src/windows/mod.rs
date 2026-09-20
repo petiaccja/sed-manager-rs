@@ -9,5 +9,5 @@ mod handle;
 mod ioctl_device;
 mod thread_pool;
 
-pub use devices::open_storage_device;
 pub use device_list::list_storage_devices;
+pub use devices::open_storage_device;

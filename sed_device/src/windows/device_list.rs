@@ -86,7 +86,7 @@ fn list_storage_devices_sync() -> Result<Vec<PathBuf>, DeviceError> {
 }
 
 pub async fn list_storage_devices() -> Result<Vec<PathBuf>, DeviceError> {
-    match spawn(list_physical_drives_sync).await {
+    match spawn(list_storage_devices_sync).await {
         Ok(result) => result,
         Err(err) => Err(err.err_or_resume_unwind().into()),
     }

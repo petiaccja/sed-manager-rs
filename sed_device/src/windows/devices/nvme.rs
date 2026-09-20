@@ -210,7 +210,7 @@ mod test {
     use crate::windows::device_list::list_storage_devices;
 
     async fn get_nvme_devices() -> Vec<NvmeDevice> {
-        let paths = list_physical_drives().await.ok().unwrap_or(vec![]);
+        let paths = list_storage_devices().await.ok().unwrap_or(vec![]);
         let mut nvme_devices = Vec::new();
         for path in paths {
             if let Ok(generic_device) = GenericDevice::open(&path).await
