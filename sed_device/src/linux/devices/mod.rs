@@ -20,7 +20,7 @@ fn replace_error(error: &mut Option<Error>, new_error: Error) {
     }
 }
 
-pub async fn open_device(path: impl AsRef<Path>) -> Result<Box<dyn StorageDevice>, Error> {
+pub async fn open_storage_device(path: impl AsRef<Path>) -> Result<Box<dyn StorageDevice>, Error> {
     let path = path.as_ref();
     let mut error = Option::<Error>::None;
 

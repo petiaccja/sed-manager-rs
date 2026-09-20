@@ -19,7 +19,7 @@ use windows::{
 
 use crate::{Error as DeviceError, windows::thread_pool::spawn};
 
-fn list_physical_drives_sync() -> Result<Vec<PathBuf>, DeviceError> {
+fn list_storage_devices_sync() -> Result<Vec<PathBuf>, DeviceError> {
     let dev_info = unsafe {
         SetupDiGetClassDevsW(
             Some(&GUID_DEVINTERFACE_DISK as *const _),
@@ -85,7 +85,7 @@ fn list_physical_drives_sync() -> Result<Vec<PathBuf>, DeviceError> {
     Ok(device_paths)
 }
 
-pub async fn list_physical_drives() -> Result<Vec<PathBuf>, DeviceError> {
+pub async fn list_storage_devices() -> Result<Vec<PathBuf>, DeviceError> {
     match spawn(list_physical_drives_sync).await {
         Ok(result) => result,
         Err(err) => Err(err.err_or_resume_unwind().into()),
@@ -97,7 +97,7 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn test_get_physical_drives() -> Result<(), DeviceError> {
+    async fn test_list_storage_devices() -> Result<(), DeviceError> {
         // There must be at least one physical drive, so this test should pass.
         match list_physical_drives().await {
             Ok(physical_drives) => {

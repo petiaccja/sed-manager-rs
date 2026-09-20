@@ -25,7 +25,7 @@ pub fn get_nvme_controller(device: PathBuf) -> PathBuf {
     }
 }
 
-fn list_physical_drives_sync() -> Result<Vec<PathBuf>, DeviceError> {
+fn list_storage_devices_sync() -> Result<Vec<PathBuf>, DeviceError> {
     const DISK_FOLDER: &str = "/dev/disk/by-id";
 
     // Get all drives in the by-id folder. The folder missing is not an error
@@ -58,8 +58,8 @@ fn list_physical_drives_sync() -> Result<Vec<PathBuf>, DeviceError> {
     Ok(drives)
 }
 
-pub async fn list_physical_drives() -> Result<Vec<PathBuf>, DeviceError> {
-    blocking::unblock(list_physical_drives_sync).await
+pub async fn list_storage_devices() -> Result<Vec<PathBuf>, DeviceError> {
+    blocking::unblock(list_storage_devices_sync).await
 }
 
 #[cfg(test)]
@@ -67,8 +67,8 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn test_list_physical_drives() -> Result<(), DeviceError> {
-        let drives = list_physical_drives().await?;
+    async fn test_list_storage_devices() -> Result<(), DeviceError> {
+        let drives = list_storage_devices().await?;
         // Make sure the NVMe controllers are returned.
         assert!(!drives.iter().any(|dev| dev.to_string_lossy().contains("nvme0n")));
         assert!(!drives.iter().any(|dev| dev.to_string_lossy().contains("nvme1n")));

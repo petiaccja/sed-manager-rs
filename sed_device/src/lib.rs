@@ -22,5 +22,5 @@ use windows as os;
 use linux as os;
 
 pub use error::Error;
-pub use os::{list_physical_drives, open_device};
+pub use os::{list_storage_devices, open_storage_device};
 pub use storage_device::{Interface, StorageDevice};
