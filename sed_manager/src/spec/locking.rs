@@ -5,7 +5,7 @@
 
 use sed_spec::objects::SecurityProviderRef;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Locking {
     pub uid: SecurityProviderRef,
 }

@@ -3,11 +3,18 @@ name = "sed_manager"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+default = ["virtual_device"]
+virtual_device = ["sed_virtual_device"]
+
 [dependencies]
+sed_async = { workspace = true, features = ["tokio"] }
 sed_tper.workspace = true
 sed_packet.workspace = true
 sed_spec.workspace = true
 sed_device.workspace = true
+sed_virtual_device = { workspace = true, optional = true }
+async-broadcast.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 
@@ -15,7 +22,6 @@ tracing.workspace = true
 sed_telemetry = { workspace = true, features = ["test-utils"] }
 sed_device = { workspace = true, features = ["test-utils"] }
 sed_tper = { workspace = true, features = ["test-utils"] }
-sed_async = { workspace = true, features = ["tokio"] }
 sed_virtual_device.workspace = true
 rstest.workspace = true
 tokio = { workspace = true, features = ["macros"] }

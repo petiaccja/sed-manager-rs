@@ -4553,6 +4553,7 @@ dependencies = [
 name = "sed_manager"
 version = "0.1.0"
 dependencies = [
+ "async-broadcast",
  "googletest",
  "rstest",
  "sed_async",

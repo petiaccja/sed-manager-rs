@@ -16,7 +16,7 @@ use sed_spec::{objects::SecurityProviderRef, preconfig::psid};
 
 use crate::spec::admin::{AuthorityTable, CPinTable};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Spec {
     /// The specification of the Admin SP of the TPer's SSC.
     pub admin: Admin,
