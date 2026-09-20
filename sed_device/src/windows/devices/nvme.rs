@@ -207,7 +207,7 @@ mod ioctl {
 mod test {
     use super::*;
 
-    use crate::windows::drive_list::list_physical_drives;
+    use crate::windows::device_list::list_storage_devices;
 
     async fn get_nvme_devices() -> Vec<NvmeDevice> {
         let paths = list_physical_drives().await.ok().unwrap_or(vec![]);

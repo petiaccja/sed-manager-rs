@@ -10,4 +10,4 @@ mod ioctl_device;
 mod thread_pool;
 
 pub use devices::open_storage_device;
-pub use drive_list::list_storage_devices;
+pub use device_list::list_storage_devices;
