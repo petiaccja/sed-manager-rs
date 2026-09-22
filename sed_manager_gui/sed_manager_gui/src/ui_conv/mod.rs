@@ -7,6 +7,7 @@ mod authority;
 mod device;
 mod discovery;
 mod locking_range;
+mod mbr_control;
 mod primitives;
 mod properties;
 mod uid;

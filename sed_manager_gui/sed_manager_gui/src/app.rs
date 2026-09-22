@@ -473,6 +473,7 @@ impl App {
                 Ok(_) => {
                     self.clone().list_locking_config_authorities(path.clone(), true);
                     self.clone().list_locking_config_ranges(path.clone(), true);
+                    self.clone().get_mbr(path.clone(), true);
                     ui_device
                 }
                 Err(err) => {
@@ -539,6 +540,33 @@ impl App {
                 }
                 Some(Err(err)) => {
                     self.toast_queue.error("Failed to update locking ranges".into(), err.to_string());
+                    ui_device
+                }
+                _ => ui_device,
+            })
+            .run();
+    }
+
+    #[instrument(skip(self))]
+    fn get_mbr(self: Rc<Self>, path: PathBuf, silent: bool) {
+        self.command()
+            .on_session(path.clone(), async |_device: &Device, session: &mut Session| {
+                let Session::LockingConfig(locking_config_session) = &*session else {
+                    return None;
+                };
+                Some(locking_config_session.get_mbr().await)
+            })
+            .display(move |mut ui_device, _spec, result| match result {
+                Some(Ok(mbr)) => {
+                    ui_device.locking_sp.mbr = mbr.into_ui();
+
+                    if !silent {
+                        self.toast_queue.success("Shadow MBR status updated".into(), String::new());
+                    }
+                    ui_device
+                }
+                Some(Err(err)) => {
+                    self.toast_queue.error("Failed to update shadow MBR status".into(), err.to_string());
                     ui_device
                 }
                 _ => ui_device,
