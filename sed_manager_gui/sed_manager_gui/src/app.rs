@@ -170,7 +170,7 @@ impl App {
 
                 // Insert virtual device in debug mode, or when explicitly requested (e.g. by tests).
                 #[cfg(not(any(debug_assertions, feature = "virtual_device")))]
-                new_paths.remove(sed_virtual_device::VIRTUAL_DEVICE_PATH);
+                new_paths.remove(Path::new(sed_virtual_device::VIRTUAL_DEVICE_PATH));
 
                 let removed: HashSet<_> =
                     device_list.backend.extract_if(|path, _| !new_paths.contains(path)).map(|(path, _)| path).collect();
