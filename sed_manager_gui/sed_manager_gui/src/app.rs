@@ -12,16 +12,14 @@ use std::{
 
 use async_lock::RwLock;
 use sed_async::PolyRuntime;
-use sed_device::{list_storage_devices, open_storage_device};
-use sed_manager::{Error, Spec};
+use sed_manager::{Device, Error, Host, Spec};
 use sed_manager_gui_slint as ui;
 use sed_packet::{MaxBytes, com_id::ComIdState};
 use sed_spec::{
     objects::{Authority, AuthorityRef, SecurityProviderRef},
     preconfig::{core::shared::authority::ANYBODY, opal_2::locking},
 };
-use sed_tper::{PropertiesChanged, Tper};
-use sed_virtual_device::{VIRTUAL_DEVICE_PATH, VirtualDevice};
+use sed_tper::PropertiesChanged;
 use slint::{
     CloseRequestResponse, ComponentHandle, Model, ModelExt as _, ModelRc, SharedString, ToSharedString, VecModel,
     quit_event_loop, spawn_local,
@@ -30,7 +28,7 @@ use tracing::{error, instrument};
 
 use crate::{
     command::{Command, ExpectInEventLoop},
-    device_list::{Device, DeviceList},
+    device_list::{DeviceEntry, DeviceList},
     session::Session,
     toast::ToastQueue,
     ui_conv::{CombinedProperties, IntoUi, IntoUiName, TryFromUi as _},
@@ -41,11 +39,17 @@ pub struct App {
     ui: ui::MainWindow,
     device_list: Arc<RwLock<DeviceList>>,
     toast_queue: Rc<ToastQueue>,
+    host: Arc<Host>,
     runtime: Arc<PolyRuntime>,
 }
 
 impl App {
-    pub fn new(ui: ui::MainWindow, notification_queue: Rc<ToastQueue>, runtime: Arc<PolyRuntime>) -> Rc<Self> {
+    pub fn new(
+        ui: ui::MainWindow,
+        notification_queue: Rc<ToastQueue>,
+        host: Arc<Host>,
+        runtime: Arc<PolyRuntime>,
+    ) -> Rc<Self> {
         let device_list = DeviceList::default();
         let device_list_ui = device_list.ui.inner();
 
@@ -53,6 +57,7 @@ impl App {
             ui: ui.clone_strong(),
             toast_queue: notification_queue,
             device_list: Arc::new(RwLock::new(device_list)),
+            host,
             runtime,
         });
 
@@ -154,18 +159,18 @@ impl App {
     #[instrument(skip(self, silent))]
     pub fn scan(self: Rc<Self>, silent: bool) {
         self.ui.set_scan_outcome(ui::Outcome::Pending);
-
+        let host = self.host.clone();
         self.command()
-            .on_device_list(async |device_list| {
-                let mut new_paths: HashSet<_> = list_storage_devices().await?.into_iter().collect();
+            .on_device_list(async move |device_list| {
+                let mut new_paths: HashSet<_> = host.list_devices().await?.into_iter().collect();
 
                 // The paths must be losslessly converted to Slint string because
                 // they are used as HashMap keys.
                 let non_unicode = retain_unicode(&mut new_paths);
 
                 // Insert virtual device in debug mode, or when explicitly requested (e.g. by tests).
-                #[cfg(any(debug_assertions, feature = "virtual_device"))]
-                new_paths.insert(VIRTUAL_DEVICE_PATH.into());
+                #[cfg(not(any(debug_assertions, feature = "virtual_device")))]
+                new_paths.remove(Path::new(sed_virtual_device::VIRTUAL_DEVICE_PATH));
 
                 let removed: HashSet<_> =
                     device_list.backend.extract_if(|path, _| !new_paths.contains(path)).map(|(path, _)| path).collect();
@@ -252,27 +257,42 @@ impl App {
     #[instrument(skip(self))]
     fn open(self: Rc<Self>, path: PathBuf) {
         let app = self.clone();
-        let device_path = path.clone();
+        let path_ = path.clone();
+        let host = self.host.clone();
         self.command()
-            .on_device(path.clone(), async move |device: &mut Device| {
-                let result = if device_path.as_path() != VIRTUAL_DEVICE_PATH {
-                    open_storage_device(&device_path).await.map(|dev| Arc::<dyn sed_device::StorageDevice>::from(dev))
-                } else {
-                    Ok(Arc::new(VirtualDevice::new()) as _)
-                };
-
-                if let Ok(dev) = &result {
-                    device.interface = Some(dev.clone());
-                }
-                result
-            })
-            .display(move |ui_device, result| match result {
-                Ok(dev) => {
-                    if dev.is_security_supported() {
-                        app.clone().discover(path.clone());
-                        app.clone().connect(path.clone());
+            .on_device_entry(path.clone(), async move |device_entry: &mut DeviceEntry| {
+                match host.open_device(path_).await {
+                    Ok(device) => {
+                        let storage_device = device.storage_device();
+                        let capabilities = device.capabilities().ok();
+                        let properties_changed = device.properties_changed().ok();
+                        device_entry.device = Some(device);
+                        Ok((storage_device, capabilities, properties_changed))
                     }
-                    ui_device.with_identity(dev.into_ui())
+                    Err(err) => Err(err),
+                }
+            })
+            .display(move |mut ui_device, result| match result {
+                Ok((storage_device, capabilities, properties_changed)) => {
+                    if storage_device.is_security_supported() {
+                        app.clone().discover(path.clone());
+                    }
+                    if let (Some(capabilities), Some(properties_changed)) = (capabilities, properties_changed) {
+                        let combined_properties =
+                            CombinedProperties { host: capabilities, device: None, connection: None };
+                        let status = ui_device.stack_status.clone().with_protocol(combined_properties.into_ui());
+                        spawn_local(Self::listen_connection_changed(
+                            Rc::downgrade(&self),
+                            path.clone(),
+                            properties_changed,
+                        ))
+                        .expect_in_event_loop();
+                        self.clone().query_stack_status(path.clone(), true);
+                        self.clone().list_security_providers(path.clone());
+                        ui_device.stack_status = status;
+                    }
+                    ui_device.identity = storage_device.into_ui();
+                    ui_device
                 }
                 Err(err) => {
                     let identity = ui_device.identity.clone();
@@ -288,18 +308,12 @@ impl App {
     #[instrument(skip(self))]
     fn discover(self: Rc<Self>, path: PathBuf) {
         self.command()
-            .on_device(path.clone(), async move |device: &mut Device| {
-                let Some(sed_device) = device.interface.as_ref() else {
-                    return None;
-                };
-                match Tper::discover(sed_device.as_ref()).await {
-                    Ok(mut discovery) => {
-                        Spec::sort(&mut discovery);
-                        device.specification = Spec::try_from(discovery.clone()).ok();
-                        Some(Ok(discovery))
-                    }
-                    Err(err) => Some(Err(err)),
+            .on_device(path.clone(), async move |device: &Device| match device.discover().await {
+                Ok(mut discovery) => {
+                    Spec::sort(&mut discovery);
+                    Some(Ok(discovery))
                 }
+                Err(err) => Some(Err(err)),
             })
             .display(move |ui_device, result| match result {
                 Some(Ok(discovery)) => {
@@ -312,62 +326,35 @@ impl App {
             .run();
     }
 
-    #[instrument(skip(self))]
-    fn connect(self: Rc<Self>, path: PathBuf) {
-        let runtime = self.runtime.clone();
-        self.command()
-            .on_device(path.clone(), async move |device: &mut Device| {
-                let sed_device = device.interface.clone()?;
-                let com_id = {
-                    let spec = device.specification.as_ref()?;
-                    let ssc = spec.default_ssc()?;
-                    ssc.static_com_ids_p1().next()?
-                };
-                let com_id_ext = 0;
-                let new_tper = Tper::connect(com_id, com_id_ext, sed_device, runtime);
-                let capabilities = new_tper.capabilities();
-                let connection_changed = new_tper.properties_changed();
-                device.tper = Some(new_tper);
-                Some((capabilities, connection_changed))
-            })
-            .display(move |ui_device, result| {
-                let Some((capabilities, connection_changed)) = result else {
-                    return ui_device;
-                };
-                let combined_properties = CombinedProperties { host: capabilities, device: None, connection: None };
-                let status = ui_device.stack_status.clone().with_protocol(combined_properties.into_ui());
-                spawn_local(Self::listen_connection_changed(Rc::downgrade(&self), path.clone(), connection_changed))
-                    .expect_in_event_loop();
-                self.clone().query_stack_status(path.clone(), true);
-                self.clone().list_security_providers(path.clone());
-                ui_device.with_stack_status(status)
-            })
-            .run();
-    }
-
     #[instrument(skip(self, silent))]
     fn query_stack_status(self: Rc<Self>, path: PathBuf, silent: bool) {
         self.command()
-            .on_tper(path.clone(), async |tper: &Tper| {
-                let result = tper.verify_com_id_valid(tper.com_id(), tper.com_id_ext()).await;
-                (tper.com_id(), tper.com_id_ext(), result)
+            .on_device(path.clone(), async |device: &Device| -> Result<_, Error> {
+                Ok((device.com_id()?, device.com_id_ext()?, device.query_com_id_state().await))
             })
-            .display(move |ui_device, (com_id, com_id_ext, result)| {
-                let ui_status_base =
-                    ui::ComIdStatus { com_id: com_id.into(), com_id_ext: com_id_ext.into(), ..Default::default() };
+            .display(move |ui_device, result| {
                 let ui_status = match result {
-                    Ok(state) => {
+                    Ok((com_id, com_id_ext, Ok(state))) => {
                         let good = [ComIdState::Issued, ComIdState::Associated].contains(&state);
                         if !silent {
                             self.toast_queue.success("Stack status updated".into(), "".to_string());
                         }
-                        ui::ComIdStatus { status: state.to_shared_string(), good, ..ui_status_base }
+                        let status = state.to_shared_string();
+                        ui::ComIdStatus { com_id: com_id.into(), com_id_ext: com_id_ext.into(), status, good }
+                    }
+                    Ok((com_id, com_id_ext, Err(err))) => {
+                        if !silent {
+                            self.toast_queue.error("Could not update stack status".into(), err.to_string());
+                        }
+                        let status = err.to_shared_string();
+                        ui::ComIdStatus { com_id: com_id.into(), com_id_ext: com_id_ext.into(), good: false, status }
                     }
                     Err(err) => {
                         if !silent {
                             self.toast_queue.error("Could not update stack status".into(), err.to_string());
                         }
-                        ui::ComIdStatus { status: err.to_shared_string(), ..ui_status_base }
+                        let status = err.to_shared_string();
+                        ui::ComIdStatus { good: false, status, ..Default::default() }
                     }
                 };
                 let status = ui_device.stack_status.clone().with_com_id(ui_status);
@@ -379,8 +366,8 @@ impl App {
     #[instrument(skip(self))]
     fn list_security_providers(self: Rc<Self>, path: PathBuf) {
         self.command()
-            .on_tper(path.clone(), async |tper: &Tper| {
-                Spec::try_from(tper.discover_current().await?).map_err(|_| Error::NoSscAvailable)
+            .on_device(path.clone(), async |device: &Device| {
+                Spec::try_from(device.discover().await?).map_err(|_| Error::NoSscAvailable)
             })
             .display(move |mut ui_device, spec| match spec {
                 Ok(spec) => {
@@ -404,8 +391,8 @@ impl App {
     #[instrument(skip(self))]
     fn list_admin_authorities(self: Rc<Self>, path: PathBuf, silent: bool) {
         self.command()
-            .on_session(path.clone(), async |tper: &Tper, session: &mut Session| {
-                let setup_session = session.start_setup_session(tper).await?;
+            .on_session(path.clone(), async |device: &Device, session: &mut Session| {
+                let setup_session = session.start_setup_session(device).await?;
                 let sp_ref = setup_session.spec().admin.uid;
                 setup_session.list_authorities(sp_ref).await.map(|auths| (auths, sp_ref))
             })
@@ -434,8 +421,8 @@ impl App {
     #[instrument(skip(self))]
     fn list_locking_authorities(self: Rc<Self>, path: PathBuf, silent: bool) {
         self.command()
-            .on_session(path.clone(), async |tper: &Tper, session: &mut Session| {
-                let setup_session = session.start_setup_session(tper).await?;
+            .on_session(path.clone(), async |device: &Device, session: &mut Session| {
+                let setup_session = session.start_setup_session(device).await?;
                 if let Some(locking_sp) = &setup_session.spec().locking {
                     setup_session.list_authorities(locking_sp.uid).await.map(|auths| (auths, Some(locking_sp.uid)))
                 } else {
@@ -479,8 +466,8 @@ impl App {
         };
 
         self.command()
-            .on_session(path.clone(), async move |tper: &Tper, session: &mut Session| {
-                session.start_locking_config_session(tper, authority, Some(password)).await.map(|_| ())
+            .on_session(path.clone(), async move |device: &Device, session: &mut Session| {
+                session.start_locking_config_session(device, authority, Some(password)).await.map(|_| ())
             })
             .display(move |ui_device, _spec, result| match result {
                 Ok(_) => {
@@ -499,7 +486,7 @@ impl App {
     #[instrument(skip(self))]
     fn list_locking_config_authorities(self: Rc<Self>, path: PathBuf, silent: bool) {
         self.command()
-            .on_session(path.clone(), async |_tper: &Tper, session: &mut Session| {
+            .on_session(path.clone(), async |_device: &Device, session: &mut Session| {
                 let Session::LockingConfig(locking_config_session) = &*session else {
                     return None;
                 };
@@ -532,7 +519,7 @@ impl App {
     #[instrument(skip(self))]
     fn list_locking_config_ranges(self: Rc<Self>, path: PathBuf, silent: bool) {
         self.command()
-            .on_session(path.clone(), async |_tper: &Tper, session: &mut Session| {
+            .on_session(path.clone(), async |_device: &Device, session: &mut Session| {
                 let Session::LockingConfig(locking_config_session) = &*session else {
                     return None;
                 };
@@ -562,10 +549,10 @@ impl App {
     #[instrument(skip(self))]
     fn logout(self: Rc<Self>, path: PathBuf) {
         self.command()
-            .on_session(path.clone(), async move |tper: &Tper, session: &mut Session| {
+            .on_session(path.clone(), async move |device: &Device, session: &mut Session| {
                 if matches!(*session, Session::LockingConfig(_)) {
                     if let Err(_) = session.close().await {
-                        let _ = tper.stack_reset(tper.com_id(), tper.com_id_ext()).await;
+                        let _ = device.stack_reset().await;
                     }
                 }
             })
@@ -577,7 +564,7 @@ impl App {
     fn reset_stack(self: Rc<Self>, path: PathBuf) {
         let app = self.clone();
         self.command()
-            .on_tper(path.clone(), async |tper: &Tper| tper.stack_reset(tper.com_id(), tper.com_id_ext()).await)
+            .on_device(path.clone(), async |device: &Device| device.stack_reset().await)
             .display(move |ui_device, result| {
                 match result {
                     Ok(_) => app.toast_queue.success("Stack has been reset".into(), "".into()),
@@ -595,8 +582,8 @@ impl App {
         };
 
         self.command()
-            .on_session(path.clone(), async move |tper: &Tper, session: &mut Session| {
-                let sid_session = session.start_setup_session(tper).await?;
+            .on_session(path.clone(), async move |device: &Device, session: &mut Session| {
+                let sid_session = session.start_setup_session(device).await?;
                 sid_session.take_owneship(password).await
             })
             .display(move |ui_device, _, result| {
@@ -619,8 +606,8 @@ impl App {
         };
 
         self.command()
-            .on_session(path.clone(), async move |tper: &Tper, session: &mut Session| {
-                let sid_session = session.start_setup_session(tper).await?;
+            .on_session(path.clone(), async move |device: &Device, session: &mut Session| {
+                let sid_session = session.start_setup_session(device).await?;
                 sid_session.activate_secondary_sp(password).await
             })
             .display(move |ui_device, _, result| {
@@ -667,8 +654,8 @@ impl App {
         };
 
         self.command()
-            .on_session(path.clone(), async move |tper: &Tper, session: &mut Session| {
-                let sid_session = session.start_setup_session(tper).await?;
+            .on_session(path.clone(), async move |device: &Device, session: &mut Session| {
+                let sid_session = session.start_setup_session(device).await?;
                 sid_session.change_password(sp, authority, current_password, new_password).await
             })
             .display(move |ui_device, _, result| {
@@ -694,8 +681,8 @@ impl App {
         };
 
         self.command()
-            .on_session(path.clone(), async move |tper: &Tper, session: &mut Session| {
-                let sid_session = session.start_setup_session(tper).await?;
+            .on_session(path.clone(), async move |device: &Device, session: &mut Session| {
+                let sid_session = session.start_setup_session(device).await?;
                 let authority = match authority {
                     ui::RevertAuthority::Sid => sid_session.spec().admin.authorities.sid,
                     ui::RevertAuthority::Psid => sid_session.spec().admin.authorities.psid,
@@ -762,15 +749,19 @@ impl App {
                 Ok(value) => {
                     let Some(app) = self_.upgrade() else { break };
                     app.command()
-                        .on_tper(path.clone(), async |tper: &Tper| tper.capabilities())
-                        .display(move |ui_device, host| {
-                            let combined = CombinedProperties {
-                                host,
-                                device: Some(value.remote_properties),
-                                connection: Some(value.connection_properties),
-                            };
-                            let status = ui_device.stack_status.clone().with_protocol(combined.into_ui());
-                            ui_device.with_stack_status(status)
+                        .on_device(path.clone(), async |device: &Device| device.capabilities())
+                        .display(move |ui_device, host_capabilities| {
+                            if let Ok(host_capabilities) = host_capabilities {
+                                let combined = CombinedProperties {
+                                    host: host_capabilities,
+                                    device: Some(value.remote_properties),
+                                    connection: Some(value.connection_properties),
+                                };
+                                let status = ui_device.stack_status.clone().with_protocol(combined.into_ui());
+                                ui_device.with_stack_status(status)
+                            } else {
+                                ui_device
+                            }
                         })
                         .run();
                 }

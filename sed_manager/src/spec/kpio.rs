@@ -5,7 +5,7 @@
 
 use sed_spec::objects::SecurityProviderRef;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Kpio {
     pub uid: SecurityProviderRef,
 }
