@@ -554,7 +554,7 @@ impl App {
                 let Session::LockingConfig(locking_config_session) = &*session else {
                     return None;
                 };
-                Some(locking_config_session.get_mbr().await)
+                Some(locking_config_session.get_mbr_control().await)
             })
             .display(move |mut ui_device, _spec, result| match result {
                 Some(Ok(mbr)) => {

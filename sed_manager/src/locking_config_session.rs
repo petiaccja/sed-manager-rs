@@ -5,8 +5,8 @@
 
 use sed_packet::MaxBytes;
 use sed_spec::{
-    objects::{Authority, AuthorityRef, LockingRange, MbrControl},
-    preconfig::core::shared::{mbr_control, table_id},
+    objects::{Authority, AuthorityRef, LockingRange, MbrControl, TableDescRefExt},
+    preconfig::core::shared::{mbr_control, table, table_id},
 };
 use sed_tper::{Session, Tper};
 use tracing::instrument;
@@ -99,12 +99,29 @@ impl LockingConfigSession {
         Ok(ranges)
     }
 
-    /// Get the MBR parameters.
+    /// Get MBR table size.
+    ///
+    /// # Errors
+    ///
+    /// Besides the usual, an invalid parameter error is returned if the MBR is
+    /// not supported. (In this case, the Table table has no entry for the MBR
+    /// table.)
+    #[instrument(level = "info", skip(self), ret, err)]
+    pub async fn get_mbr_size(&self) -> Result<u32, Error> {
+        self.session.get_field(table::MBR.rows()).await.map_err(|err| err.into())
+    }
+
+    /// Get the MBR control parameters.
     ///
     /// Some columns of the MBR object may not be returned if the authenticated
     /// authority has no rights to read them.
+    ///
+    /// # Errors
+    ///
+    /// Besides the usual, an invalid parameter error is returned if the MBR is
+    /// not supported. (In this case, the MBRControl table is missing.)
     #[instrument(level = "info", skip(self), ret, err)]
-    pub async fn get_mbr(&self) -> Result<MbrControl, Error> {
+    pub async fn get_mbr_control(&self) -> Result<MbrControl, Error> {
         self.session.get_object(mbr_control::MBR_CONTROL, ..).await.map_err(|err| err.into())
     }
 }
