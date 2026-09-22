@@ -3,10 +3,9 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use sed_manager::{Error, LockingConfigSession, SetupSession};
+use sed_manager::{Device, Error, LockingConfigSession, SetupSession};
 use sed_packet::MaxBytes;
 use sed_spec::objects::AuthorityRef;
-use sed_tper::Tper;
 
 #[derive(Debug, Default)]
 pub enum Session {
@@ -41,12 +40,12 @@ impl Session {
     /// is returned. Opening the setup session might also fail.
     ///
     /// [`close`]: Self.close
-    pub async fn start_setup_session(&mut self, tper: &Tper) -> Result<&SetupSession, Error> {
+    pub async fn start_setup_session(&mut self, device: &Device) -> Result<&SetupSession, Error> {
         // We could better inform the caller that the closing of the previous
         // session failed, but they should anyway just do a stack reset.
         self.close().await?;
 
-        let sid_session = SetupSession::new_on_primary_ssc(tper).await?;
+        let sid_session = device.start_setup_session().await?;
         *self = Self::Setup(sid_session);
         let Self::Setup(sid_session) = self else { unreachable!() };
         Ok(sid_session)
@@ -62,13 +61,13 @@ impl Session {
     /// [`close`]: Self.close
     pub async fn start_locking_config_session(
         &mut self,
-        tper: &Tper,
+        device: &Device,
         authority: AuthorityRef,
         password: Option<MaxBytes<32>>,
     ) -> Result<&LockingConfigSession, Error> {
         self.close().await?;
 
-        let locking_session = LockingConfigSession::login_on_primary_ssc(tper, authority, password).await?;
+        let locking_session = device.start_locking_config_session(authority, password).await?;
         *self = Self::LockingConfig(locking_session);
         let Self::LockingConfig(locking_session) = self else { unreachable!() };
         Ok(locking_session)

@@ -20,6 +20,13 @@ pub struct Host {
 }
 
 impl Host {
+    /// Open the host computer for managing SEDs.
+    ///
+    /// Further services created by the host will use the provided async runtime.
+    pub fn new(runtime: Arc<PolyRuntime>) -> Self {
+        Self { runtime }
+    }
+
     /// List the physical drives present in the system.
     /// See [`list_storage_devices`] to learn more.
     #[instrument(level = "info", skip(self), ret, err)]

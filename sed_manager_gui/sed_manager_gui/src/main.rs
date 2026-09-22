@@ -7,6 +7,7 @@
 use std::sync::Arc;
 
 use sed_async::{PolyRuntime, TokioRuntime};
+use sed_manager::Host;
 use sed_manager_gui::{app::App, toast::ToastQueue};
 use sed_manager_gui_slint::{self as ui};
 use sed_telemetry::{create_otlp_provider, init_otlp_subscriber, init_stdout_subscriber};
@@ -18,9 +19,10 @@ fn main() -> Result<(), Box<dyn core::error::Error>> {
         Ok(provider) => init_otlp_subscriber(provider),
         Err(_) => init_stdout_subscriber(),
     };
+    let host = Arc::new(Host::new(runtime.clone()));
     let ui = ui::MainWindow::new()?;
     let notification_queue = ToastQueue::new(ui.clone_strong());
-    let main_app = App::new(ui.clone_strong(), notification_queue.clone(), runtime);
+    let main_app = App::new(ui.clone_strong(), notification_queue.clone(), host, runtime);
     main_app.scan(true);
     ui.show()?;
     slint::run_event_loop_until_quit()?;

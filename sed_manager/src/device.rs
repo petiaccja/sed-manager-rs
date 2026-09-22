@@ -3,7 +3,7 @@ use std::sync::Arc;
 use sed_async::PolyRuntime;
 use sed_device::StorageDevice;
 use sed_packet::{MaxBytes, com_id::ComIdState, discovery::Discovery};
-use sed_spec::objects::AuthorityRef;
+use sed_spec::{methods::Properties, objects::AuthorityRef};
 use sed_tper::{PropertiesChanged, Tper};
 use tracing::instrument;
 
@@ -11,7 +11,7 @@ use crate::{Error, LockingConfigSession, SetupSession, Spec};
 
 #[derive(Debug)]
 pub struct Device {
-    device: Arc<dyn StorageDevice>,
+    storage_device: Arc<dyn StorageDevice>,
     spec: Result<Spec, Error>,
     tper: Option<Tper>,
 }
@@ -19,9 +19,9 @@ pub struct Device {
 impl Device {
     /// Create a new device holding a reference the to provided [`StorageDevice`].
     #[instrument(level = "info")]
-    pub async fn new(device: Box<dyn StorageDevice>, runtime: Arc<PolyRuntime>) -> Self {
-        let device = Arc::from(device);
-        let spec = Tper::discover(&*device)
+    pub async fn new(storage_device: Box<dyn StorageDevice>, runtime: Arc<PolyRuntime>) -> Self {
+        let storage_device = Arc::from(storage_device);
+        let spec = Tper::discover(&*storage_device)
             .await
             .map_err(Error::from)
             .map(|discovery| Spec::try_from(discovery).map_err(|_| Error::NoSscAvailable))
@@ -31,15 +31,35 @@ impl Device {
             .ok()
             .and_then(|spec| spec.default_ssc())
             .and_then(|ssc| ssc.as_ssc())
-            .map(|ssc| Tper::connect(ssc.static_com_ids_p1().start, 0, device.clone(), runtime));
-        Self { device, spec, tper }
+            .map(|ssc| Tper::connect(ssc.static_com_ids_p1().start, 0, storage_device.clone(), runtime));
+        Self { storage_device, spec, tper }
     }
 
     /// Discover the SED capabilities of the device.
     /// For more information, see [`Tper::discover`].
     #[instrument(level = "info", skip(self), ret, err)]
     pub async fn discover(&self) -> Result<Discovery, Error> {
-        Tper::discover(&*self.device).await.map_err(|err| err.into())
+        Tper::discover(&*self.storage_device).await.map_err(|err| err.into())
+    }
+
+    // Return the opened storage device.
+    pub fn storage_device(&self) -> Arc<dyn StorageDevice> {
+        self.storage_device.clone()
+    }
+
+    // Return the opened storage device.
+    pub fn com_id(&self) -> Result<u16, Error> {
+        self.tper.as_ref().map(|tper| tper.com_id()).ok_or(Error::NoSscAvailable)
+    }
+
+    // Return the opened storage device.
+    pub fn com_id_ext(&self) -> Result<u16, Error> {
+        self.tper.as_ref().map(|tper| tper.com_id_ext()).ok_or(Error::NoSscAvailable)
+    }
+
+    // Return the specification corresponding to the chosen SSC.
+    pub fn spec(&self) -> Result<&Spec, Error> {
+        self.spec.as_ref().map_err(Clone::clone)
     }
 
     /// Query the status of the ComID on which the device is connected.
@@ -78,6 +98,12 @@ impl Device {
         let spec = self.spec.clone()?;
         let tper = self.tper.as_ref().ok_or(Error::NoSscAvailable)?;
         LockingConfigSession::login(tper, spec, authority, password).await
+    }
+
+    /// Get the protocol capabilities of the host.
+    /// See [`Tper::capabilities`].
+    pub fn capabilities(&self) -> Result<Properties, Error> {
+        self.tper.as_ref().map(|tper| tper.capabilities()).ok_or(Error::NoSscAvailable)
     }
 
     /// Listen to changes in the connection properties.

@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 
 use i_slint_backend_testing::ElementHandle;
 use sed_async::{PolyRuntime, Runtime, SlintRuntime};
+use sed_manager::Host;
 use sed_manager_gui::{app::App, toast::ToastQueue};
 use sed_manager_gui_slint as ui;
 use sed_telemetry::{create_otlp_provider, init_otlp_subscriber, init_stdout_subscriber};
@@ -51,7 +52,8 @@ fn scan_select_take_ownership() {
         let runtime = Arc::new(PolyRuntime::Slint(SlintRuntime));
         let ui = ui::MainWindow::new().unwrap();
         let notification_queue = ToastQueue::new(ui.clone_strong());
-        let _app = App::new(ui.clone_strong(), notification_queue, runtime.clone());
+        let host = Arc::new(Host::new(runtime.clone()));
+        let _app = App::new(ui.clone_strong(), notification_queue, host, runtime.clone());
 
         // Scan for devices; the virtual device is always included in debug builds.
         find_one(&ui, "scan-button").single_click(PointerEventButton::Left).await;
