@@ -16,10 +16,11 @@ use sed_manager::{Device, Error, Host, Spec};
 use sed_manager_gui_slint as ui;
 use sed_packet::{MaxBytes, com_id::ComIdState};
 use sed_spec::{
+    methods::MethodStatus,
     objects::{Authority, AuthorityRef, SecurityProviderRef},
     preconfig::{core::shared::authority::ANYBODY, opal_2::locking},
 };
-use sed_tper::PropertiesChanged;
+use sed_tper::{Error as TperError, PropertiesChanged};
 use slint::{
     CloseRequestResponse, ComponentHandle, Model, ModelExt as _, ModelRc, SharedString, ToSharedString, VecModel,
     quit_event_loop, spawn_local,
@@ -31,7 +32,7 @@ use crate::{
     device_list::{DeviceEntry, DeviceList},
     session::Session,
     toast::ToastQueue,
-    ui_conv::{CombinedProperties, IntoUi, IntoUiName, TryFromUi as _},
+    ui_conv::{CombinedProperties, IntoUi, IntoUiName, MbrDesc, TryFromUi as _},
     ui_ext::{DeviceExt as _, DiscoveryExt, StackStatusExt},
 };
 
@@ -554,7 +555,19 @@ impl App {
                 let Session::LockingConfig(locking_config_session) = &*session else {
                     return None;
                 };
-                Some(locking_config_session.get_mbr_control().await)
+
+                let size = match locking_config_session.get_mbr_size().await {
+                    Ok(size) => size,
+                    Err(Error::TperError(TperError::MethodCallFailed(MethodStatus::InvalidParameter))) => {
+                        return Some(Ok(MbrDesc { supported: false, size: None, control: None }));
+                    }
+                    Err(err) => return Some(Err(err)),
+                };
+                let control = match locking_config_session.get_mbr_control().await {
+                    Ok(control) => control,
+                    Err(err) => return Some(Err(err)),
+                };
+                Some(Ok(MbrDesc { supported: true, size: Some(size), control: Some(control) }))
             })
             .display(move |mut ui_device, _spec, result| match result {
                 Some(Ok(mbr)) => {

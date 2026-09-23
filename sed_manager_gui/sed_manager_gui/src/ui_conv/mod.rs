@@ -7,11 +7,12 @@ mod authority;
 mod device;
 mod discovery;
 mod locking_range;
-mod mbr_control;
+mod mbr;
 mod primitives;
 mod properties;
 mod uid;
 
+pub use mbr::MbrDesc;
 pub use properties::CombinedProperties;
 use sed_packet::discovery::FeatureDescriptor;
 use sed_spec::objects::SecurityProviderRef;
