@@ -20,6 +20,7 @@ use sed_spec::objects::SecurityProviderRef;
 pub trait IntoUi {
     type Ui;
 
+    #[expect(clippy::wrong_self_convention, reason = "fix later")]
     fn into_ui(&self) -> Self::Ui;
 }
 
@@ -34,6 +35,7 @@ impl<T: IntoUi> IntoUi for &T {
 pub trait IntoUiName {
     type Ui;
 
+    #[expect(clippy::wrong_self_convention, reason = "fix later")]
     fn into_ui_name(&self, features: &[FeatureDescriptor], sp: Option<SecurityProviderRef>) -> Self::Ui;
 }
 

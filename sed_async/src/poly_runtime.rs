@@ -89,19 +89,17 @@ impl Runtime for PolyRuntime {
         }
     }
 
-    fn yield_now(&self) -> impl Future<Output = ()> {
-        async {
-            #[cfg(feature = "not_empty")]
-            match self {
-                #[cfg(feature = "tokio")]
-                PolyRuntime::Tokio(inner) => inner.yield_now().await,
-                #[cfg(feature = "slint")]
-                PolyRuntime::Slint(inner) => inner.yield_now().await,
-            }
-            #[cfg(not(feature = "not_empty"))]
-            {
-                unreachable!()
-            }
+    async fn yield_now(&self) {
+        #[cfg(feature = "not_empty")]
+        match self {
+            #[cfg(feature = "tokio")]
+            PolyRuntime::Tokio(inner) => inner.yield_now().await,
+            #[cfg(feature = "slint")]
+            PolyRuntime::Slint(inner) => inner.yield_now().await,
+        }
+        #[cfg(not(feature = "not_empty"))]
+        {
+            unreachable!()
         }
     }
 

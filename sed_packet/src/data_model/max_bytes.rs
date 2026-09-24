@@ -5,7 +5,7 @@
 
 use smallvec::SmallVec;
 
-use crate::token::{Detokenize, Detokenizer, MessageError, Tokenize, Tokenizer};
+use crate::token_stream::{Detokenize, Detokenizer, MessageError, Tokenize, Tokenizer};
 
 pub type MaxBytes<const N: usize> = SmallVec<[u8; N]>;
 
@@ -18,6 +18,10 @@ impl<const N: usize> Tokenize for SmallVec<[u8; N]> {
 impl<const N: usize> Detokenize for SmallVec<[u8; N]> {
     fn detokenize<D: Detokenizer>(detokenizer: &mut D) -> Result<Self, D::Error> {
         let bytes = detokenizer.detokenize_bytes()?;
-        bytes.try_into().map_err(|_| D::Error::message("unexpected array length"))
+        if bytes.len() < N {
+            Ok(bytes.into())
+        } else {
+            Err(D::Error::message("unexpected array length"))
+        }
     }
 }

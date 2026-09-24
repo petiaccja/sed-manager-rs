@@ -7,7 +7,7 @@ use std::convert::Infallible;
 
 use sed_packet::{
     Bytes, MaxBytes, Object, ObjectRef, Uid,
-    token::{Detokenize, Detokenizer, MessageError as _, TokenType, Tokenize, Tokenizer},
+    token_stream::{Detokenize, Detokenizer, MessageError as _, TokenType, Tokenize, Tokenizer},
 };
 use sed_spec_macros::{DetokenizeStruct, TokenizeStruct};
 

@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use sed_packet::{
     Bytes, MaxBytes, Named, Uid,
-    token::{Detokenize, Detokenizer, MessageError as _, TokenType, Tokenize, Tokenizer},
+    token_stream::{Detokenize, Detokenizer, MessageError as _, TokenType, Tokenize, Tokenizer},
 };
 use sed_spec_macros::{DetokenizeStruct, TokenizeStruct};
 

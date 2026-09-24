@@ -8,7 +8,7 @@ use std::{cmp::min, marker::PhantomData, time::Instant};
 use sed_packet::{
     packet::{Packet, SubPacket, SubPacketKind},
     session_id::SessionId,
-    token::{Command, ToTokens as _},
+    token_stream::{Command, ToTokens as _},
 };
 use sed_spec::methods::Properties;
 
@@ -50,7 +50,7 @@ pub struct PropertiesChanged {
 
 #[cfg(test)]
 pub mod tests {
-    use sed_packet::{Bytes, session_id::SessionId, token::ToTokens as _};
+    use sed_packet::{Bytes, session_id::SessionId, token_stream::ToTokens as _};
     use sed_spec::{
         methods::{
             CloseSession, MethodCall, MethodParam, MethodResult, MethodStatus, Random, RandomResult,
@@ -100,7 +100,7 @@ pub mod tests {
                 initial_credit: None,
                 signed_hash: None,
             },
-            status: status,
+            status,
         }
         .to_tokens()
         .unwrap()

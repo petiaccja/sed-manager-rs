@@ -426,7 +426,7 @@ where
                     .in_current_span(),
                 );
 
-                if let Ok(_) = busy_signal.await {
+                if busy_signal.await.is_ok() {
                     // Indicate to UI that we're busy on the session.
                     device_list.ui.update(&device_id, |value| {
                         let command_status = value.command_status.clone();

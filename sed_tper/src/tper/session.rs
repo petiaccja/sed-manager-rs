@@ -7,7 +7,7 @@ use std::ops::RangeBounds;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use sed_packet::session_id::SessionId;
-use sed_packet::token::{Command, Detokenize, Detokenizer, FromTokens, ToTokens, Tokenize};
+use sed_packet::token_stream::{Command, Detokenize, Detokenizer, FromTokens, ToTokens, Tokenize};
 use sed_packet::{Bytes, Field, FieldRef, Ignore, MaxBytes, Named, Object, ObjectRef, TableRef, Uid};
 use sed_spec::methods::{
     Activate, Authenticate, AuthenticateResult, CellBlock, GenKey, Get, GetAcl, GetBytesResult, MethodCall,

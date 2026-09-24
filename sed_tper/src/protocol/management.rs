@@ -12,7 +12,7 @@ use oneshot::Sender;
 use sed_packet::{
     packet::{PACKET_HEADER_LEN, Packet, SUB_PACKET_HEADER_LEN},
     session_id::SessionId,
-    token::{FromTokens, ToTokens},
+    token_stream::{FromTokens, ToTokens},
 };
 use sed_spec::{
     methods::{
@@ -216,9 +216,7 @@ impl Management {
         const MAX_METHOD_CALL_SIZE: usize =
             Properties::INITIAL.max_gross_packet_size.get() - PACKET_HEADER_LEN - SUB_PACKET_HEADER_LEN;
 
-        let Some(MethodCallRecord { call, sender }) = self.method_calls.pop_front() else {
-            return None;
-        };
+        let MethodCallRecord { call, sender } = self.method_calls.pop_front()?;
         if call.len() > MAX_METHOD_CALL_SIZE {
             let _ = sender.send(Err(Error::MethodTooLarge { requested: call.len(), maximum: MAX_METHOD_CALL_SIZE }));
             return None;
@@ -380,7 +378,7 @@ mod tests {
     use rstest::rstest;
     use sed_packet::packet::SubPacket;
     use sed_packet::packet::SubPacketKind;
-    use sed_packet::token::ToTokens;
+    use sed_packet::token_stream::ToTokens;
     use sed_spec::methods::Limit;
     use sed_spec::{
         methods::{MethodCall, MethodParam},

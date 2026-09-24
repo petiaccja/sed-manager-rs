@@ -6,7 +6,7 @@
 use std::ops::{Add, AddAssign, Sub, SubAssign};
 
 use crate::data_model::uid::Uid;
-use crate::token::{Detokenize, Detokenizer, MessageError, Tokenize, Tokenizer};
+use crate::token_stream::{Detokenize, Detokenizer, MessageError, Tokenize, Tokenizer};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct TableRef(Uid);

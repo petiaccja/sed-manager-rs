@@ -38,7 +38,7 @@ impl Host {
     pub async fn list_devices(&self) -> Result<Vec<PathBuf>, Error> {
         #[allow(unused_mut)]
         let mut devices = list_storage_devices().await?;
-        #[cfg(any(feature = "virtual_device"))]
+        #[cfg(feature = "virtual_device")]
         devices.push(sed_virtual_device::VIRTUAL_DEVICE_PATH.into());
         Ok(devices)
     }
@@ -47,7 +47,7 @@ impl Host {
     /// See [`open_storage_device`] to learn more.
     #[instrument(level = "info", skip(self, path), err)]
     pub async fn open_device(&self, path: impl AsRef<Path>) -> Result<Device, Error> {
-        #[cfg(any(feature = "virtual_device"))]
+        #[cfg(feature = "virtual_device")]
         if path.as_ref() == sed_virtual_device::VIRTUAL_DEVICE_PATH {
             use sed_virtual_device::VirtualDevice;
 

@@ -4,6 +4,7 @@
 //L-----------------------------------------------------------------------------
 
 mod session;
+#[expect(clippy::module_inception, reason = "it is what it is")]
 mod tper;
 
 pub use session::Session;

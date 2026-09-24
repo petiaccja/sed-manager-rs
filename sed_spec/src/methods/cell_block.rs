@@ -5,7 +5,7 @@
 
 use core::ops::{Add, Bound, RangeBounds, Sub};
 
-use sed_packet::token::{Detokenize, Detokenizer, MessageError as _, TokenType, Tokenize, Tokenizer};
+use sed_packet::token_stream::{Detokenize, Detokenizer, MessageError as _, TokenType, Tokenize, Tokenizer};
 use sed_packet::{ObjectRef, TableRef, Uid};
 use sed_spec_macros::{DetokenizeStruct, TokenizeStruct};
 

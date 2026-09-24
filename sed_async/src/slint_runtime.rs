@@ -68,10 +68,8 @@ impl Runtime for SlintRuntime {
         Err(ShutdownError::ProxyRuntime)
     }
 
-    fn yield_now(&self) -> impl Future<Output = ()> {
-        async {
-            // Slint does not seem to have a yield equivalent.
-        }
+    async fn yield_now(&self) {
+        // Slint does not seem to have a yield equivalent.
     }
 
     fn sleep(&self, duration: Duration) -> Self::Sleep {

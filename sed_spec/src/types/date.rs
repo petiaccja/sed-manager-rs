@@ -4,7 +4,7 @@
 //L-----------------------------------------------------------------------------
 
 use sed_packet::Named;
-use sed_packet::token::{Detokenize, Detokenizer, MessageError, Tokenize, Tokenizer};
+use sed_packet::token_stream::{Detokenize, Detokenizer, MessageError, Tokenize, Tokenizer};
 
 #[derive(PartialEq, Eq, Clone, Debug, Default)]
 pub struct Date {

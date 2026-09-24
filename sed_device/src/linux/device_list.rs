@@ -13,8 +13,8 @@ pub fn get_nvme_controller(device: PathBuf) -> PathBuf {
     const PREFIX: &str = "nvme";
     if let Some(name) = device.file_name() {
         let name = name.to_string_lossy().to_string();
-        if name.starts_with(PREFIX) {
-            let cut = name[PREFIX.len()..].find('n').unwrap_or(name.len()) + PREFIX.len();
+        if let Some(tail) = name.strip_prefix(PREFIX) {
+            let cut = tail.find('n').unwrap_or(name.len()) + PREFIX.len();
             let controller = device.with_file_name(&name[0..cut]);
             if controller.exists() { controller } else { device }
         } else {

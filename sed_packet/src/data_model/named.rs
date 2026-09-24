@@ -3,7 +3,7 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use crate::token::{Detokenize, Detokenizer, Tokenize, Tokenizer};
+use crate::token_stream::{Detokenize, Detokenizer, Tokenize, Tokenizer};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Named<Name, Value> {

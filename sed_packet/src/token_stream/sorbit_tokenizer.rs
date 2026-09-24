@@ -5,7 +5,7 @@
 
 use sorbit::ser_de::{Deserialize as _, Deserializer, Serialize as _, Serializer};
 
-use crate::token::{Detokenizer, Tokenize, Tokenizer};
+use crate::token_stream::{Detokenizer, MessageError, Tokenize, Tokenizer};
 
 use super::command::Command;
 use super::error::Error;
@@ -165,6 +165,9 @@ where
     type Error = Error;
 
     fn ignore(&mut self, max_recursion: usize) -> Result<(), Self::Error> {
+        if max_recursion == 0 {
+            return Err(Self::Error::message("recursion depth exceeded"));
+        }
         let next = self.peek_token()?;
         match next {
             Token::TinyAtom(_) => self.read_token().map(|_| ()),
@@ -279,7 +282,7 @@ mod tests {
     use super::*;
 
     use crate::Named;
-    use crate::token::{Detokenize, FromTokens, ToTokens};
+    use crate::token_stream::{Detokenize, FromTokens, ToTokens};
 
     use googletest::assert_that;
     use googletest::matchers::*;
@@ -378,7 +381,7 @@ mod tests {
     fn detokenize_until_found() {
         let bytes = &[0xF0, 1, 2, 3, 0xF1, 0xF9];
         let mut detokenizer = SorbitDetokenizer::new(StreamDeserializer::new(FixedMemoryStream::new(bytes)));
-        assert_eq!(detokenizer.detokenize_until(|de| Command::detokenize(de)), Ok(Command::EndOfData));
+        assert_eq!(detokenizer.detokenize_until(Command::detokenize), Ok(Command::EndOfData));
     }
 
     #[test]
@@ -386,7 +389,7 @@ mod tests {
         let bytes = &[0xF0, 1, 2, 3, 0xF1, 1];
         let mut detokenizer = SorbitDetokenizer::new(StreamDeserializer::new(FixedMemoryStream::new(bytes)));
         assert_that!(
-            detokenizer.detokenize_until(|de| Command::detokenize(de)),
+            detokenizer.detokenize_until(Command::detokenize),
             err(matches_pattern!(Error::CanNotSerialize(_)))
         );
     }

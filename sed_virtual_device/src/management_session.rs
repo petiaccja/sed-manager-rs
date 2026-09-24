@@ -11,7 +11,7 @@ use sed_packet::packet::{
     COM_PACKET_HEADER_LEN, PACKET_HEADER_LEN, Packet, SUB_PACKET_HEADER_LEN, SubPacket, SubPacketKind,
 };
 use sed_packet::session_id::SessionId;
-use sed_packet::token::ToTokens;
+use sed_packet::token_stream::ToTokens;
 use sed_spec::methods::{
     ExtractResult, Limit, MethodCall, MethodParam, MethodStatus, MgmtMethodCall, MgmtMethodCallParams, OptionalLimit,
     Properties, PropertiesMethod, StartSession, SyncSession, extract_method,

@@ -37,6 +37,7 @@ impl VirtualDevice {
     /// Create a new virtual device.
     ///
     /// The device's configuration is the preconfiguration for the Opal 2.0 SSC.
+    #[expect(clippy::new_without_default, reason = "the SSC cannot be defaulted, even though it's harcoded")]
     pub fn new() -> Self {
         let static_com_ids = (BASE_COM_ID.0..BASE_COM_ID.0 + NUM_COM_IDS).map(ComId);
         let com_sessions = static_com_ids.clone().map(|com_id| (com_id, ComSession::new(com_id))).collect();

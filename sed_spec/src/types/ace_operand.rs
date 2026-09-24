@@ -5,7 +5,7 @@
 
 use sed_packet::{
     Named,
-    token::{Detokenize, Detokenizer, MessageError, Tokenize, Tokenizer},
+    token_stream::{Detokenize, Detokenizer, MessageError, Tokenize, Tokenizer},
 };
 
 use crate::{

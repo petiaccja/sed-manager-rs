@@ -10,7 +10,7 @@ use std::cmp::Ordering;
 
 use sed_packet::{
     Named,
-    token::{Detokenize, Detokenizer, Tokenize, Tokenizer},
+    token_stream::{Detokenize, Detokenizer, Tokenize, Tokenizer},
 };
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -443,7 +443,7 @@ mod tests {
 
     use rstest::rstest;
 
-    use sed_packet::token::{FromTokens, ToTokens};
+    use sed_packet::token_stream::{FromTokens, ToTokens};
 
     #[rstest]
     #[case::unlimited(Limit::Unlimited, &[0])]

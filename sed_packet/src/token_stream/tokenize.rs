@@ -6,8 +6,8 @@
 use sorbit::io::{FixedMemoryStream, GrowingMemoryStream};
 use sorbit::stream_ser_de::{StreamDeserializer, StreamSerializer};
 
-use crate::token::MessageError;
-use crate::token::token::Token;
+use crate::token_stream::MessageError;
+use crate::token_stream::token::Token;
 
 use super::command::Command;
 use super::error::Error;

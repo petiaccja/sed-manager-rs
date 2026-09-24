@@ -3,7 +3,7 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use sed_packet::token::{Command, Detokenize, Detokenizer, MessageError as _, Tokenize, Tokenizer};
+use sed_packet::token_stream::{Command, Detokenize, Detokenizer, MessageError as _, Tokenize, Tokenizer};
 use sed_packet::{TableRef, Uid};
 
 use crate::methods::{
@@ -317,30 +317,26 @@ impl Detokenize for SessionMethodCall {
 mod tests {
     use super::*;
 
-    #[cfg(test)]
-    mod tests {
-        use super::*;
+    use rstest::rstest;
+    use sed_packet::token_stream::{FromTokens as _, ToTokens as _};
+    use sed_spec_macros::{DetokenizeStruct, TokenizeStruct};
 
-        use rstest::rstest;
-        use sed_packet::token::{FromTokens as _, ToTokens as _};
-        use sed_spec_macros::{DetokenizeStruct, TokenizeStruct};
+    #[derive(Debug, Clone, PartialEq, Eq, DetokenizeStruct, TokenizeStruct)]
+    struct Parameters {
+        a: u8,
+        b: Option<u8>,
+    }
 
-        #[derive(Debug, Clone, PartialEq, Eq, DetokenizeStruct, TokenizeStruct)]
-        struct Parameters {
-            a: u8,
-            b: Option<u8>,
-        }
+    #[test]
+    fn tokenize() {
+        let value = MethodCall {
+            invoking_id: Uid::new(0x56),
+            method_id: Uid::new(0x78),
+            parameters: Parameters { a: 1, b: None },
+            status: MethodStatus::Fail,
+        };
 
-        #[test]
-        fn tokenize() {
-            let value = MethodCall {
-                invoking_id: Uid::new(0x56),
-                method_id: Uid::new(0x78),
-                parameters: Parameters { a: 1, b: None },
-                status: MethodStatus::Fail,
-            };
-
-            #[rustfmt::skip]
+        #[rustfmt::skip]
             let bytes = &[
                 0xF8, // CALL
                 0b1010_1000, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x56, // Invoking ID
@@ -350,13 +346,13 @@ mod tests {
                 0xF0, 0x3F, 0x00, 0x00, 0xF1, // Status
             ];
 
-            assert_eq!(value.to_tokens().unwrap(), bytes);
-            assert_eq!(<MethodCall<Parameters>>::from_tokens(bytes).unwrap(), value);
-        }
+        assert_eq!(value.to_tokens().unwrap(), bytes);
+        assert_eq!(<MethodCall<Parameters>>::from_tokens(bytes).unwrap(), value);
+    }
 
-        #[rstest]
-        // Missing CALL token
-        #[case(
+    #[rstest]
+    // Missing CALL token
+    #[case(
             &[
                 0xF9, // NOT CALL
                 0b1010_1000, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x56, // Invoking ID
@@ -366,8 +362,8 @@ mod tests {
                 0xF0, 0x3F, 0x00, 0x00, 0xF1, // Status
             ]
         )]
-        // Missing EOD token
-        #[case(
+    // Missing EOD token
+    #[case(
             &[
                 0xF8, // CALL
                 0b1010_1000, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x56, // Invoking ID
@@ -376,8 +372,8 @@ mod tests {
                 0xF0, 0x3F, 0x00, 0x00, 0xF1, // Status
             ]
         )]
-        // Empty status list
-        #[case(
+    // Empty status list
+    #[case(
             &[
                 0xF8, // CALL
                 0b1010_1000, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x56, // Invoking ID
@@ -387,21 +383,21 @@ mod tests {
                 0xF0, 0xF1, // Status
             ]
         )]
-        fn detokenize_edge_cases(#[case] bytes: &[u8]) {
-            assert!(<MethodCall<Parameters>>::from_tokens(bytes).is_err());
-        }
+    fn detokenize_edge_cases(#[case] bytes: &[u8]) {
+        assert!(<MethodCall<Parameters>>::from_tokens(bytes).is_err());
+    }
 
-        #[test]
-        fn sm_tokenize() {
-            let value = MgmtMethodCall {
-                params: MgmtMethodCallParams::CloseSession(CloseSession {
-                    remote_session_number: 1,
-                    local_session_number: 2,
-                }),
-                status: MethodStatus::Fail,
-            };
+    #[test]
+    fn sm_tokenize() {
+        let value = MgmtMethodCall {
+            params: MgmtMethodCallParams::CloseSession(CloseSession {
+                remote_session_number: 1,
+                local_session_number: 2,
+            }),
+            status: MethodStatus::Fail,
+        };
 
-            #[rustfmt::skip]
+        #[rustfmt::skip]
             let bytes = &[
                 0xF8, // CALL
                 0b1010_1000, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, // Invoking ID
@@ -411,13 +407,13 @@ mod tests {
                 0xF0, 0x3F, 0x00, 0x00, 0xF1, // Status
             ];
 
-            assert_eq!(value.to_tokens().unwrap(), bytes);
-            assert_eq!(MgmtMethodCall::from_tokens(bytes).unwrap(), value);
-        }
+        assert_eq!(value.to_tokens().unwrap(), bytes);
+        assert_eq!(MgmtMethodCall::from_tokens(bytes).unwrap(), value);
+    }
 
-        #[rstest]
-        // Missing CALL token
-        #[case(
+    #[rstest]
+    // Missing CALL token
+    #[case(
             &[
                 0xF9, // CALL
                 0b1010_1000, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, // Invoking ID
@@ -427,8 +423,8 @@ mod tests {
                 0xF0, 0x3F, 0x00, 0x00, 0xF1, // Status
             ]
         )]
-        // Missing EOD token
-        #[case(
+    // Missing EOD token
+    #[case(
             &[
                 0xF8, // CALL
                 0b1010_1000, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, // Invoking ID
@@ -437,8 +433,8 @@ mod tests {
                 0xF0, 0x3F, 0x00, 0x00, 0xF1, // Status
             ]
         )]
-        // Empty status list
-        #[case(
+    // Empty status list
+    #[case(
             &[
                 0xF8, // CALL
                 0b1010_1000, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, // Invoking ID
@@ -448,8 +444,8 @@ mod tests {
                 0xF0, 0xF1, // Status
             ]
         )]
-        // Not SMUID
-        #[case(
+    // Not SMUID
+    #[case(
             &[
                 0xF8, // CALL
                 0b1010_1000, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFE, // Invoking ID
@@ -459,8 +455,8 @@ mod tests {
                 0xF0, 0x3F, 0x00, 0x00, 0xF1, // Status
             ]
         )]
-        // Unknown method ID
-        #[case(
+    // Unknown method ID
+    #[case(
             &[
                 0xF8, // CALL
                 0b1010_1000, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, // Invoking ID
@@ -470,8 +466,7 @@ mod tests {
                 0xF0, 0x3F, 0x00, 0x00, 0xF1, // Status
             ]
         )]
-        fn sm_detokenize_edge_cases(#[case] bytes: &[u8]) {
-            assert!(<MethodCall<Parameters>>::from_tokens(bytes).is_err());
-        }
+    fn sm_detokenize_edge_cases(#[case] bytes: &[u8]) {
+        assert!(<MethodCall<Parameters>>::from_tokens(bytes).is_err());
     }
 }

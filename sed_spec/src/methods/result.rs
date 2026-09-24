@@ -5,7 +5,7 @@
 
 use std::convert::Infallible;
 
-use sed_packet::token::{Command, Detokenize, Detokenizer, MessageError as _, Tokenize, Tokenizer};
+use sed_packet::token_stream::{Command, Detokenize, Detokenizer, MessageError as _, Tokenize, Tokenizer};
 
 use crate::methods::MethodStatus;
 
@@ -98,7 +98,7 @@ mod tests {
     use super::*;
 
     use rstest::rstest;
-    use sed_packet::token::{Error as TokenError, FromTokens as _, ToTokens as _};
+    use sed_packet::token_stream::{Error as TokenError, FromTokens as _, ToTokens as _};
     use sed_spec_macros::{DetokenizeStruct, TokenizeStruct};
 
     #[derive(Debug, Clone, PartialEq, Eq, DetokenizeStruct, TokenizeStruct)]

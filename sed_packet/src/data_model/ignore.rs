@@ -3,7 +3,7 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use crate::token::{Detokenize, Detokenizer};
+use crate::token_stream::{Detokenize, Detokenizer};
 
 pub struct Ignore;
 

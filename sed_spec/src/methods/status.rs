@@ -4,7 +4,7 @@
 //L-----------------------------------------------------------------------------
 
 use num_enum::{IntoPrimitive, TryFromPrimitive};
-use sed_packet::token::{Detokenize, Detokenizer, MessageError, Tokenize, Tokenizer};
+use sed_packet::token_stream::{Detokenize, Detokenizer, MessageError, Tokenize, Tokenizer};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error, TryFromPrimitive, IntoPrimitive)]
 #[repr(u8)]

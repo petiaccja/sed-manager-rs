@@ -9,7 +9,7 @@ use std::ops::{Add, AddAssign, Sub, SubAssign};
 
 use crate::data_model::table_ref::TableRef;
 use crate::data_model::uid::Uid;
-use crate::token::{Detokenize, Detokenizer, MessageError, Tokenize, Tokenizer};
+use crate::token_stream::{Detokenize, Detokenizer, MessageError, Tokenize, Tokenizer};
 
 //------------------------------------------------------------------------------
 // Traits

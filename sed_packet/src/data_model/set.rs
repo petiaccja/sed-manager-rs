@@ -5,7 +5,7 @@
 
 use std::collections::{BTreeSet, HashSet};
 
-use crate::token::{Detokenize, Detokenizer, Tokenize, Tokenizer};
+use crate::token_stream::{Detokenize, Detokenizer, Tokenize, Tokenizer};
 
 impl<Item> Tokenize for HashSet<Item>
 where
