@@ -3,6 +3,9 @@ name = "sed_manager_gui"
 version = "0.1.0"
 edition = "2024"
 
+[lints]
+workspace = true
+
 [dependencies]
 sed_device.workspace = true
 sed_tper.workspace = true

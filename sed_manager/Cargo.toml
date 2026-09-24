@@ -3,6 +3,9 @@ name = "sed_manager"
 version = "0.1.0"
 edition = "2024"
 
+[lints]
+workspace = true
+
 [features]
 default = ["virtual_device"]
 virtual_device = ["sed_virtual_device"]

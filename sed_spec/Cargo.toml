@@ -3,6 +3,9 @@ name = "sed_spec"
 version = "0.1.0"
 edition = "2024"
 
+[lints]
+workspace = true
+
 [dependencies]
 sed_packet.workspace = true
 sed_spec_macros.workspace = true
