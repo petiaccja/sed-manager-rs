@@ -80,11 +80,23 @@ async fn get_locking_ranges(_with_tracing: WithTracing) {
 #[instrument]
 #[rstest::rstest]
 #[tokio::test]
-async fn get_mbr(_with_tracing: WithTracing) {
+async fn get_mbr_size(_with_tracing: WithTracing) {
     let tper = setup().await;
 
     let admin1 = opal_locking::authority::ADMIN.get(0).unwrap();
     let session = LockingConfigSession::login_on_primary_ssc(&tper, admin1, Some(NEW_SID_PASSWORD)).await.unwrap();
-    let result = session.get_mbr().await;
+    let result = session.get_mbr_size().await;
+    assert_that!(result, ok(gt(&1)));
+}
+
+#[instrument]
+#[rstest::rstest]
+#[tokio::test]
+async fn get_mbr_control(_with_tracing: WithTracing) {
+    let tper = setup().await;
+
+    let admin1 = opal_locking::authority::ADMIN.get(0).unwrap();
+    let session = LockingConfigSession::login_on_primary_ssc(&tper, admin1, Some(NEW_SID_PASSWORD)).await.unwrap();
+    let result = session.get_mbr_control().await;
     assert_that!(result, ok(field!(MbrControl.enable, eq(&Some(false)))));
 }

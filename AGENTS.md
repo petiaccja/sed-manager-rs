@@ -71,8 +71,22 @@ Formatting is enforced by the CI pipeline. Use `rustfmt` to ensure the code is f
 cargo fmt
 ```
 
-The plan is that all files have a license header which is checked by the CI. Currently, the project does not
-adhere to this rule, and the license header may be omitted.
+All Rust and Slint files have the following license header:
+
+```rust
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+```
+
+The license header is automatically inserted by [`licensesnip`](https://crates.io/crates/licensesnip)
+and checked on the CI:
+
+```sh
+licensesnip # Add license headers to all files that don't already have one.
+licensesnip check # Check if all files have the correct license header.
+```
 
 ## Conventions, principles, and constraints
 
