@@ -98,6 +98,6 @@ i-slint-backend-testing = { version = "=1.17.1" }
 [workspace.lints.clippy]
 correctness = "deny"
 suspicious = "deny"
-complexity = "allow"
-perf = "allow"
-style = "allow"
+complexity = "warn"
+perf = "warn"
+style = "warn"
