@@ -94,3 +94,10 @@ slint = { version = "=1.17.1", default-features = false, features = [
 ] }
 slint-build = { version = "=1.17.1" }
 i-slint-backend-testing = { version = "=1.17.1" }
+
+[workspace.lints.clippy]
+correctness = "deny"
+suspicious = "deny"
+complexity = "allow"
+perf = "allow"
+style = "allow"

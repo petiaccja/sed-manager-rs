@@ -539,7 +539,9 @@ where
                     |de, name| {
                         match name {
                             x if x == &INDEX => field = Some(T::detokenize(de)?),
-                            _ => drop(Ignore::detokenize(de)?),
+                            _ => {
+                                let _ = Ignore::detokenize(de)?;
+                            }
                         };
                         Ok(())
                     },

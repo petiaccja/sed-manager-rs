@@ -276,7 +276,7 @@ mod tests {
 
         // Dequeue both associated packets.
         assert_that!(
-            session.poll_action(time + 0 * delay),
+            session.poll_action(time),
             matches_pattern!(Action::Send(elements_are![field!(&Packet.sequence_number, 1)]))
         );
         assert_that!(

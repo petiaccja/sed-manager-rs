@@ -38,7 +38,7 @@ use crate::{
 
 pub struct App {
     ui: ui::MainWindow,
-    device_list: Arc<RwLock<DeviceList>>,
+    device_list: Rc<RwLock<DeviceList>>,
     toast_queue: Rc<ToastQueue>,
     host: Arc<Host>,
     runtime: Arc<PolyRuntime>,
@@ -57,7 +57,7 @@ impl App {
         let view_model = Rc::from(Self {
             ui: ui.clone_strong(),
             toast_queue: notification_queue,
-            device_list: Arc::new(RwLock::new(device_list)),
+            device_list: Rc::new(RwLock::new(device_list)),
             host,
             runtime,
         });
