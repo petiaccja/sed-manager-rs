@@ -9,7 +9,10 @@ use googletest::{assert_that, matchers::*};
 use sed_async::{PolyRuntime, TokioRuntime};
 use sed_manager::{LockingConfigSession, SetupSession};
 use sed_packet::MaxBytes;
-use sed_spec::{objects::MbrControl, preconfig::opal_2::locking as opal_locking};
+use sed_spec::{
+    objects::MbrControl,
+    preconfig::{enterprise::locking as enterprise_locking, opal_2::locking as opal_locking},
+};
 use sed_telemetry::{WithTracing, with_tracing};
 use sed_tper::Tper;
 use sed_virtual_device::{BASE_COM_ID, VirtualDevice};
@@ -99,4 +102,70 @@ async fn get_mbr_control(_with_tracing: WithTracing) {
     let session = LockingConfigSession::login_on_primary_ssc(&tper, admin1, Some(NEW_SID_PASSWORD)).await.unwrap();
     let result = session.get_mbr_control().await;
     assert_that!(result, ok(field!(MbrControl.enable, eq(&Some(false)))));
+}
+
+#[instrument]
+#[rstest::rstest]
+#[tokio::test]
+async fn enterprise_login(_with_tracing: WithTracing) {
+    let device = Arc::new(sed_virtual_device::VirtualDevice::new_enterprise());
+    let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
+    let tper = Tper::connect(BASE_COM_ID, 0, device, runtime);
+
+    let band_master0 = enterprise_locking::authority::BAND_MASTER.get(0).unwrap();
+    let result =
+        LockingConfigSession::login_on_primary_ssc(&tper, band_master0, Some(sed_virtual_device::INITIAL_SID_PASSWORD))
+            .await;
+    assert_that!(result, ok(anything()));
+}
+
+#[instrument]
+#[rstest::rstest]
+#[tokio::test]
+async fn enterprise_get_mbr_size_not_supported(_with_tracing: WithTracing) {
+    let device = Arc::new(sed_virtual_device::VirtualDevice::new_enterprise());
+    let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
+    let tper = Tper::connect(BASE_COM_ID, 0, device, runtime);
+
+    let band_master0 = enterprise_locking::authority::BAND_MASTER.get(0).unwrap();
+    let session =
+        LockingConfigSession::login_on_primary_ssc(&tper, band_master0, Some(sed_virtual_device::INITIAL_SID_PASSWORD))
+            .await
+            .unwrap();
+    let result = session.get_mbr_size().await;
+    assert_that!(result, err(anything()));
+}
+
+#[instrument]
+#[rstest::rstest]
+#[tokio::test]
+async fn enterprise_get_authorities(_with_tracing: WithTracing) {
+    let device = Arc::new(sed_virtual_device::VirtualDevice::new_enterprise());
+    let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
+    let tper = Tper::connect(BASE_COM_ID, 0, device, runtime);
+
+    let band_master0 = enterprise_locking::authority::BAND_MASTER.get(0).unwrap();
+    let session =
+        LockingConfigSession::login_on_primary_ssc(&tper, band_master0, Some(sed_virtual_device::INITIAL_SID_PASSWORD))
+            .await
+            .unwrap();
+    let result = session.get_authorities().await;
+    assert_that!(result, ok(anything()));
+}
+
+#[instrument]
+#[rstest::rstest]
+#[tokio::test]
+async fn enterprise_get_locking_ranges(_with_tracing: WithTracing) {
+    let device = Arc::new(sed_virtual_device::VirtualDevice::new_enterprise());
+    let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
+    let tper = Tper::connect(BASE_COM_ID, 0, device, runtime);
+
+    let band_master0 = enterprise_locking::authority::BAND_MASTER.get(0).unwrap();
+    let session =
+        LockingConfigSession::login_on_primary_ssc(&tper, band_master0, Some(sed_virtual_device::INITIAL_SID_PASSWORD))
+            .await
+            .unwrap();
+    let result = session.get_locking_ranges().await;
+    assert_that!(result, ok(len(eq(9))));
 }

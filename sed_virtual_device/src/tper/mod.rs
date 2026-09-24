@@ -4,6 +4,7 @@
 //L-----------------------------------------------------------------------------
 
 mod admin;
+mod enterprise;
 mod locking;
 mod opal_2;
 mod preconfig_shared;
@@ -12,14 +13,15 @@ mod security_provider;
 use std::marker::PhantomData;
 
 pub use admin::Admin;
+pub use enterprise::EnterpriseTper;
 pub use locking::Locking;
 pub use opal_2::Opal2Tper;
 pub use preconfig_shared::{INITIAL_SID_PASSWORD, PSID_PASSWORD};
 pub use security_provider::{SecurityProvider, Table};
 
 use sed_packet::discovery::{
-    BlockSIDAuthDescriptor, Discovery, FeatureDescriptor, GeometryDescriptor, LockingDescriptor, OpalV2Descriptor,
-    OwnerPasswordState, TperDescriptor,
+    BlockSIDAuthDescriptor, Discovery, EnterpriseDescriptor, FeatureDescriptor, GeometryDescriptor, LockingDescriptor,
+    OpalV2Descriptor, OwnerPasswordState, TperDescriptor,
 };
 use sorbit::ser_de::ToBytes;
 
@@ -34,36 +36,42 @@ use sed_spec::{
 #[derive(Debug)]
 pub enum Tper {
     Opal2(Opal2Tper),
+    Enterprise(EnterpriseTper),
 }
 
 impl Tper {
     pub fn sp(&self, uid: SecurityProviderRef) -> Option<&dyn SecurityProvider> {
         match self {
             Tper::Opal2(tper) => tper.sp(uid),
+            Tper::Enterprise(tper) => tper.sp(uid),
         }
     }
 
     pub fn sp_mut(&mut self, uid: SecurityProviderRef) -> Option<&mut dyn SecurityProvider> {
         match self {
             Tper::Opal2(tper) => tper.sp_mut(uid),
+            Tper::Enterprise(tper) => tper.sp_mut(uid),
         }
     }
 
     pub fn admin_sp(&self) -> &Admin {
         match self {
             Tper::Opal2(tper) => tper.admin_sp(),
+            Tper::Enterprise(tper) => tper.admin_sp(),
         }
     }
 
     pub fn admin_sp_mut(&mut self) -> &mut Admin {
         match self {
             Tper::Opal2(tper) => tper.admin_sp_mut(),
+            Tper::Enterprise(tper) => tper.admin_sp_mut(),
         }
     }
 
     pub fn locking_sp(&self) -> Option<&Locking> {
         match self {
             Tper::Opal2(tper) => tper.locking_sp(),
+            Tper::Enterprise(tper) => tper.locking_sp(),
         }
     }
 
@@ -71,12 +79,14 @@ impl Tper {
     pub fn locking_sp_mut(&mut self) -> Option<&mut Locking> {
         match self {
             Tper::Opal2(tper) => tper.locking_sp_mut(),
+            Tper::Enterprise(tper) => tper.locking_sp_mut(),
         }
     }
 
     pub fn restore_preconfig(&mut self, sp: SecurityProviderRef) -> Result<Vec<SecurityProviderRef>, MethodStatus> {
         match self {
             Tper::Opal2(tper) => tper.restore_preconfig(sp),
+            Tper::Enterprise(tper) => tper.restore_preconfig(sp),
         }
     }
 
@@ -122,10 +132,15 @@ impl Tper {
                 .values()
                 .any(|range| range.read_locked.unwrap_or(false) || range.write_locked.unwrap_or(false));
 
-            let (_, mbr_control) =
-                locking_sp.mbr_control.first_key_value().expect("MBR control missing from preconfig");
-            let mbr_enabled = mbr_control.enable.unwrap_or(false);
-            let mbr_done = mbr_control.done.unwrap_or(false);
+            // Unlike Opal, this SSC may not implement the MBRControl table at
+            // all (e.g. on the Enterprise SSC), in which case MBR shadowing
+            // is simply reported as disabled rather than unsupported: the
+            // "not supported" bit is `Reserved` (and thus always 0) on SSCs
+            // that don't define it.
+            let (mbr_enabled, mbr_done) = match locking_sp.mbr_control.first_key_value() {
+                Some((_, mbr_control)) => (mbr_control.enable.unwrap_or(false), mbr_control.done.unwrap_or(false)),
+                None => (false, false),
+            };
 
             FeatureDescriptor::Locking(LockingDescriptor {
                 version: PhantomData,
@@ -154,6 +169,13 @@ impl Tper {
                 num_locking_users_supported: 8,
                 initial_owner_pw: OwnerPasswordState::SameAsMSID,
                 reverted_owner_pw: OwnerPasswordState::SameAsMSID,
+            }),
+            Tper::Enterprise(_) => FeatureDescriptor::Enterprise(EnterpriseDescriptor {
+                version: 1,
+                length: PhantomData,
+                base_com_id: BASE_COM_ID.0,
+                num_com_ids: NUM_COM_IDS,
+                no_range_crossing: false,
             }),
         }
     }

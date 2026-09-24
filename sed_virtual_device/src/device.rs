@@ -21,7 +21,7 @@ use crate::com_id::{ComId, ComIdExt};
 use crate::com_session::ComSession;
 use crate::internal_error::Expect;
 use crate::packet_session::PacketSession;
-use crate::tper::{Opal2Tper, Tper};
+use crate::tper::{EnterpriseTper, Opal2Tper, Tper};
 
 pub const VIRTUAL_DEVICE_PATH: &str = "/dev/virtual_device";
 pub const BASE_COM_ID: ComId = ComId(3072);
@@ -38,14 +38,22 @@ impl VirtualDevice {
     ///
     /// The device's configuration is the preconfiguration for the Opal 2.0 SSC.
     pub fn new() -> Self {
+        Self::with_tper(Tper::Opal2(Opal2Tper::default()))
+    }
+
+    /// Create a new virtual device.
+    ///
+    /// The device's configuration is the preconfiguration for the Enterprise SSC.
+    pub fn new_enterprise() -> Self {
+        Self::with_tper(Tper::Enterprise(EnterpriseTper::default()))
+    }
+
+    fn with_tper(tper: Tper) -> Self {
         let static_com_ids = (BASE_COM_ID.0..BASE_COM_ID.0 + NUM_COM_IDS).map(|com_id| ComId(com_id));
         let com_sessions = static_com_ids.clone().map(|com_id| (com_id, ComSession::new(com_id))).collect();
         let packet_sessions = static_com_ids.map(|com_id| (com_id, PacketSession::new(com_id, ComIdExt(0)))).collect();
 
-        Self {
-            tper: Tper::Opal2(Opal2Tper::default()).into(),
-            sessions: Sessions { com_sessions, packet_sessions }.into(),
-        }
+        Self { tper: tper.into(), sessions: Sessions { com_sessions, packet_sessions }.into() }
     }
 
     /// Start a session on the smallest base ComID.
