@@ -10,7 +10,7 @@ pub struct Path {
 
 impl Path {
     pub fn new(s: &str) -> &Self {
-        unsafe { &*(s.as_ref() as *const str as *const Path) }
+        unsafe { &*(s as *const str as *const Path) }
     }
 
     pub fn security_provider(&self) -> Option<&str> {

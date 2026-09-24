@@ -35,7 +35,7 @@ impl AlignedArray {
     }
 
     pub fn filled_padded(value: u8, len: usize, align: usize, pad: usize) -> Result<Self, LayoutError> {
-        let capacity = (len + pad - 1) / pad * pad;
+        let capacity = len.next_multiple_of(pad);
         let layout = Layout::from_size_align(capacity, align)?;
         let mut aligned_array = {
             // This block can leak memory if you are not careful!

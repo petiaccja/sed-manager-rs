@@ -75,9 +75,9 @@ impl<'a> TryFrom<&'a [u8]> for Token {
 
     fn try_from(value: &'a [u8]) -> Result<Self, Self::Error> {
         ShortAtom::try_from(value)
-            .map(|atom| Self::ShortAtom(atom))
-            .or_else(|value| MediumAtom::try_from(value).map(|atom| Self::MediumAtom(atom)))
-            .or_else(|value| LongAtom::try_from(value).map(|atom| Self::LongAtom(atom)))
+            .map(Self::ShortAtom)
+            .or_else(|value| MediumAtom::try_from(value).map(Self::MediumAtom))
+            .or_else(|value| LongAtom::try_from(value).map(Self::LongAtom))
     }
 }
 
@@ -86,9 +86,9 @@ impl TryFrom<Vec<u8>> for Token {
 
     fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
         ShortAtom::try_from(value)
-            .map(|atom| Self::ShortAtom(atom))
-            .or_else(|value| MediumAtom::try_from(value).map(|atom| Self::MediumAtom(atom)))
-            .or_else(|value| LongAtom::try_from(value).map(|atom| Self::LongAtom(atom)))
+            .map(Self::ShortAtom)
+            .or_else(|value| MediumAtom::try_from(value).map(Self::MediumAtom))
+            .or_else(|value| LongAtom::try_from(value).map(Self::LongAtom))
     }
 }
 
@@ -123,9 +123,9 @@ impl TryFrom<Token> for Vec<u8> {
 
     fn try_from(value: Token) -> Result<Self, Self::Error> {
         match value {
-            Token::ShortAtom(atom) => Self::try_from(atom).map_err(|atom| Token::ShortAtom(atom)),
-            Token::MediumAtom(atom) => Self::try_from(atom).map_err(|atom| Token::MediumAtom(atom)),
-            Token::LongAtom(atom) => Self::try_from(atom).map_err(|atom| Token::LongAtom(atom)),
+            Token::ShortAtom(atom) => Self::try_from(atom).map_err(Token::ShortAtom),
+            Token::MediumAtom(atom) => Self::try_from(atom).map_err(Token::MediumAtom),
+            Token::LongAtom(atom) => Self::try_from(atom).map_err(Token::LongAtom),
             _ => Err(value),
         }
     }

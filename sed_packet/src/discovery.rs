@@ -794,7 +794,7 @@ impl Discovery {
     {
         self.feature_descriptors
             .iter()
-            .map(|desc| <&'me FeatureDescriptor as TryInto<&'me T>>::try_into(desc))
+            .map(<&'me FeatureDescriptor as TryInto<&'me T>>::try_into)
             .find_map(|result| result.ok())
     }
 

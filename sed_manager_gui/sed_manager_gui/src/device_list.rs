@@ -33,10 +33,10 @@ impl DeviceEntry {
         // Close the session, and issue a stack reset if it fails.
         // The stack reset is needed because otherwise hanging sessions
         // could block closing the Tper.
-        if let Err(_) = session.close().await {
-            if let Some(tper) = device.as_ref() {
-                let _ = tper.stack_reset().await;
-            }
+        if let Err(_) = session.close().await
+            && let Some(tper) = device.as_ref()
+        {
+            let _ = tper.stack_reset().await;
         }
 
         // Close the TPer. This makes sure all session had the chance to terminate.

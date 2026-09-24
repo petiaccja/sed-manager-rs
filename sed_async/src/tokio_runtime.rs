@@ -28,11 +28,11 @@ impl TokioRuntime {
         if let Some(num_threads) = num_threads {
             let _ = builder.worker_threads(num_threads);
         }
-        builder.build().map(|runtime| TokioRuntime::Runtime(runtime))
+        builder.build().map(TokioRuntime::Runtime)
     }
 
     pub fn current() -> Option<TokioRuntime> {
-        tokio::runtime::Handle::try_current().ok().map(|handle| TokioRuntime::Handle(handle))
+        tokio::runtime::Handle::try_current().ok().map(TokioRuntime::Handle)
     }
 
     fn handle(&self) -> &tokio::runtime::Handle {

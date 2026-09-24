@@ -11,7 +11,7 @@ fn rerun_if_slint_changed(dir: &Path) {
         let path = entry.path();
         if path.is_dir() {
             rerun_if_slint_changed(&path);
-        } else if path.extension().map_or(false, |ext| ext == "slint") {
+        } else if path.extension().is_some_and(|ext| ext == "slint") {
             println!("cargo:rerun-if-changed={}", path.display());
         }
     }

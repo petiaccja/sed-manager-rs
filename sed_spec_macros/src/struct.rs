@@ -76,20 +76,19 @@ pub fn detokenize_struct(input: DeriveInput) -> Result<TokenStream, Error> {
     let optional_fields = fields.iter().filter_map(|field| {
         let ident = member_to_ident(field.member.clone());
         let ty = &field.ty;
-        match field.name {
-            None => None,
-            Some(name) => Some(quote! {
+        field.name.map(|name| {
+            quote! {
                 #name => {
                     #ident = Some(<#ty>::detokenize(__detokenizer)?);
                     Ok(())
                 }
-            }),
-        }
+            }
+        })
     });
 
     let construct = fields.iter().map(|Field { name, member, .. }| {
         let ident = member_to_ident(member.clone());
-        let message = format!("mandatory field {} missing", member.to_token_stream().to_string());
+        let message = format!("mandatory field {} missing", member.to_token_stream());
         match name {
             Some(_) => quote! { #member: #ident },
             None => quote! {
@@ -150,7 +149,7 @@ fn parse_fields(struct_item: syn::DataStruct) -> Result<Vec<Field>, Error> {
         .scan(0u16, |name_idx, (index, field)| {
             let member = match field.ident {
                 Some(ident) => Member::from(ident),
-                None => Member::from(index as usize),
+                None => Member::from(index),
             };
             let is_optional = field.ty.is_option();
             if !is_optional && *name_idx != 0 {

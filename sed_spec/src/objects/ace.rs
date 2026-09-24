@@ -71,7 +71,7 @@ where
         for item in self.into_iter() {
             match item {
                 AceOperand::Authority(authority) => {
-                    stack.push(authenticated.contains(&authority));
+                    stack.push(authenticated.contains(authority));
                 }
                 AceOperand::BooleanOp(BooleanOp::And) => {
                     let rhs = stack.pop()?;
@@ -124,7 +124,7 @@ where
                     let rhs = stack.pop()?;
                     let lhs = stack.pop()?;
                     let op = [BooleanOp::And.into()];
-                    let evaled = lhs.into_iter().chain(rhs.into_iter()).chain(op.into_iter());
+                    let evaled = lhs.into_iter().chain(rhs).chain(op);
                     stack.push(evaled.collect());
                 }
                 AceOperand::BooleanOp(BooleanOp::Or) => {
@@ -136,14 +136,14 @@ where
                     } else if rhs.as_slice() == pattern {
                         stack.push(lhs);
                     } else {
-                        let evaled = lhs.into_iter().chain(rhs.into_iter()).chain(op.into_iter());
+                        let evaled = lhs.into_iter().chain(rhs).chain(op);
                         stack.push(evaled.collect());
                     }
                 }
                 AceOperand::BooleanOp(BooleanOp::Not) => {
                     let arg = stack.pop()?;
                     let op = [BooleanOp::Not.into()];
-                    let evaled = arg.into_iter().chain(op.into_iter());
+                    let evaled = arg.into_iter().chain(op);
                     stack.push(evaled.collect());
                 }
             }
@@ -173,7 +173,7 @@ where
                     if lhs.as_slice() == rhs.as_slice() {
                         stack.push(rhs);
                     } else {
-                        let evaled = lhs.into_iter().chain(rhs.into_iter()).chain(op.into_iter());
+                        let evaled = lhs.into_iter().chain(rhs).chain(op);
                         stack.push(evaled.collect());
                     }
                 }
@@ -184,7 +184,7 @@ where
                     if lhs.as_slice() == rhs.as_slice() {
                         stack.push(rhs);
                     } else {
-                        let evaled = lhs.into_iter().chain(rhs.into_iter()).chain(op.into_iter());
+                        let evaled = lhs.into_iter().chain(rhs).chain(op);
                         stack.push(evaled.collect());
                     }
                 }
@@ -195,7 +195,7 @@ where
                         arg.pop();
                         stack.push(arg);
                     } else {
-                        let evaled = arg.into_iter().chain(op.into_iter());
+                        let evaled = arg.into_iter().chain(op);
                         stack.push(evaled.collect());
                     }
                 }

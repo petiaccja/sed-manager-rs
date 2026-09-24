@@ -108,7 +108,9 @@ impl RpcSession {
                             self.sessions.insert(session_id, Session::new(session_id, self.timeout, properties));
                         }
                         StackAction::NotifyAbort { session_id } => {
-                            self.sessions.remove(&session_id).map(|mut session| session.handle_aborted());
+                            if let Some(mut session) = self.sessions.remove(&session_id) {
+                                session.handle_aborted()
+                            }
                         }
                     }
                 }

@@ -358,7 +358,7 @@ impl Limit<Duration> {
     pub fn get(&self) -> Duration {
         match self {
             Limit::Unlimited => Duration::MAX,
-            Limit::Limited(value) => value.clone(),
+            Limit::Limited(value) => *value,
         }
     }
 }

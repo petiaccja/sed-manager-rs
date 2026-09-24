@@ -29,8 +29,7 @@ impl Device {
         let spec = Tper::discover(&*storage_device)
             .await
             .map_err(Error::from)
-            .map(|discovery| Spec::try_from(discovery).map_err(|_| Error::NoSscAvailable))
-            .flatten();
+            .and_then(|discovery| Spec::try_from(discovery).map_err(|_| Error::NoSscAvailable));
         let tper = spec
             .as_ref()
             .ok()

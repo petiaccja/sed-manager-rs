@@ -34,7 +34,7 @@ impl ComSession {
     }
 
     pub fn pop(&mut self) -> &ComIdResponse {
-        self.response_queue.get_or_insert_with(|| ComIdResponse {
+        self.response_queue.get_or_insert(ComIdResponse {
             com_id: self.com_id.0,
             com_id_ext: 0,
             payload: ComIdResponsePayload::NoResponseAvailable { available_data_length: 0 },

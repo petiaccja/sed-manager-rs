@@ -54,13 +54,12 @@ impl Detokenize for AuthenticateResult {
                 return Err(D::Error::message("too many parameters in method result"));
             }
             match detokenizer.peek_kind()? {
-                TokenType::Integer { .. } => bool::detokenize(detokenizer).map(|success| Self::Success(success)),
-                TokenType::Bytes => Bytes::detokenize(detokenizer).map(|bytes| Self::Challenge(bytes)),
+                TokenType::Integer { .. } => bool::detokenize(detokenizer).map(Self::Success),
+                TokenType::Bytes => Bytes::detokenize(detokenizer).map(Self::Challenge),
                 _ => Err(D::Error::message("expected either a boolean or bytes")),
             }
             .map(|result_| {
                 result = Some(result_);
-                ()
             })
         })?;
         match result {

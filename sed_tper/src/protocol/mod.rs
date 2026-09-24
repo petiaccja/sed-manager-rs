@@ -79,7 +79,7 @@ impl Protocol {
         loop {
             let action = state.poll_action(Instant::now());
             let is_idle = matches!(action, Action::None);
-            let command = perform_action_or_recv(&*device, com_id, &mut state, &command_rx, action, &*runtime).await;
+            let command = perform_action_or_recv(&*device, com_id, &mut state, &command_rx, action, &runtime).await;
             if let Some(command) = command {
                 inject_command(&mut state, command);
             } else if is_idle {

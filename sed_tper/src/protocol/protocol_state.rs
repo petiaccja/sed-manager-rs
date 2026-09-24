@@ -245,8 +245,7 @@ impl ProtocolState {
     }
 
     fn handle_iface_com_request_recv_done(&mut self, time: Instant, result: Result<Vec<u8>, Error>) {
-        let response =
-            result.map(|bytes| ComIdResponse::from_bytes(&bytes).map_err(Error::InvalidComIdResponse)).flatten();
+        let response = result.and_then(|bytes| ComIdResponse::from_bytes(&bytes).map_err(Error::InvalidComIdResponse));
 
         self.com_id_protocol.handle_recv(time, response.as_ref());
         if let Ok(response) = response {
@@ -266,7 +265,7 @@ impl ProtocolState {
     }
 
     fn handle_iface_com_packet_recv_done(&mut self, time: Instant, result: Result<Vec<u8>, Error>) {
-        let com_packet = result.map(|bytes| ComPacket::from_bytes(&bytes).map_err(Error::InvalidComPacket)).flatten();
+        let com_packet = result.and_then(|bytes| ComPacket::from_bytes(&bytes).map_err(Error::InvalidComPacket));
 
         self.rpc_protocol.handle_recv(time, com_packet.as_ref());
 

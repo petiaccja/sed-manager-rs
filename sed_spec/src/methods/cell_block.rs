@@ -94,8 +94,8 @@ impl Tokenize for UidOrU64 {
 impl Detokenize for UidOrU64 {
     fn detokenize<D: Detokenizer>(detokenizer: &mut D) -> Result<Self, D::Error> {
         match detokenizer.peek_kind()? {
-            TokenType::Integer { .. } => u64::detokenize(detokenizer).map(|value| Self::U64(value)),
-            TokenType::Bytes => Uid::detokenize(detokenizer).map(|value| Self::Uid(value)),
+            TokenType::Integer { .. } => u64::detokenize(detokenizer).map(Self::U64),
+            TokenType::Bytes => Uid::detokenize(detokenizer).map(Self::Uid),
             _ => Err(D::Error::message("expected either an Uid or an unsigned integer")),
         }
     }
@@ -128,13 +128,13 @@ impl CellBlock {
 
     pub fn bytes(bytes: impl RangeBounds<u64>) -> Self {
         let (start_row, end_row) = Self::map_bounds(bytes);
-        let start_row = start_row.map(|start_row| UidOrU64::U64(start_row));
+        let start_row = start_row.map(UidOrU64::U64);
         Self { table: None, start_row, end_row, start_column: None, end_column: None }
     }
 
     pub fn bytes_with_table(table: TableRef, bytes: impl RangeBounds<u64>) -> Self {
         let (start_row, end_row) = Self::map_bounds(bytes);
-        let start_row = start_row.map(|start_row| UidOrU64::U64(start_row));
+        let start_row = start_row.map(UidOrU64::U64);
         Self { table: Some(table), start_row, end_row, start_column: None, end_column: None }
     }
 
@@ -163,12 +163,10 @@ impl CellBlock {
     pub fn get_target_table(&self, invoking_id: Uid) -> Option<TableRef> {
         if let Ok(table) = TableRef::try_from(invoking_id) {
             Some(table)
-        } else if let Some(Ok(table)) = invoking_id.containing_table().map(|table| TableRef::try_from(table)) {
-            Some(table)
-        } else if let Some(table) = self.table {
+        } else if let Some(Ok(table)) = invoking_id.containing_table().map(TableRef::try_from) {
             Some(table)
         } else {
-            None
+            self.table
         }
     }
 
@@ -183,7 +181,7 @@ impl CellBlock {
         let inv_table = TableRef::try_from(invoking_id).ok();
         let explicit_table = self.table;
         let inv_object = invoking_id.is_object().then_some(invoking_id);
-        let Ok(explicit_object) = self.start_row.map(|value| Uid::try_from(value)).transpose() else {
+        let Ok(explicit_object) = self.start_row.map(Uid::try_from).transpose() else {
             return Err(self);
         };
         let (table, object) = match (inv_table, explicit_table, inv_object, explicit_object) {
@@ -221,7 +219,7 @@ impl CellBlock {
         if self.start_column.is_some() || self.end_column.is_some() {
             Err(self)
         } else {
-            match self.start_row.map(|value| u64::try_from(value)).transpose() {
+            match self.start_row.map(u64::try_from).transpose() {
                 Ok(start_byte) => Ok(ByteCellBlock { table, start_byte, end_byte: self.end_row }),
                 Err(_) => Err(self),
             }

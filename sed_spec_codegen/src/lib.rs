@@ -5,7 +5,6 @@
 
 use std::{collections::HashMap, str::FromStr as _};
 
-use proc_macro2;
 use quote::{format_ident, quote};
 use serde::{Deserialize, Deserializer, de::Error as _};
 use syn::{Expr, File, Ident, ItemConst, ItemMod, parse_quote};
@@ -456,11 +455,11 @@ impl Feature {
         if self.0.contains_key("Shared") {
             sps.push(("Shared", 0));
         }
-        if let Some(admin_sp) = self.0.get("Admin") {
-            if let Some(sp_table) = admin_sp.0.get("SP") {
-                for (name, uid) in &sp_table.0 {
-                    sps.push((name.as_str(), uid.base()));
-                }
+        if let Some(admin_sp) = self.0.get("Admin")
+            && let Some(sp_table) = admin_sp.0.get("SP")
+        {
+            for (name, uid) in &sp_table.0 {
+                sps.push((name.as_str(), uid.base()));
             }
         }
         sps.sort_by_key(|(_, uid)| *uid);
@@ -474,8 +473,8 @@ struct Spec(HashMap<String, Feature>);
 impl Spec {
     pub fn generate(&self) -> Result<File, Error> {
         let mut table_id = HashMap::new();
-        for (_, feature) in &self.0 {
-            for (_, sp) in &feature.0 {
+        for feature in self.0.values() {
+            for sp in feature.0.values() {
                 for (table_name, table) in &sp.0 {
                     if table_name == "TableID" {
                         let tables = table.0.iter().filter_map(|(name, object)| match object {

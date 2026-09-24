@@ -91,11 +91,11 @@ pub fn access_control() -> Table<AccessControl> {
         ),
         // SP
         (
-            AccessControlRef { invoking_id: THIS_SP.into(), method_id: AUTHENTICATE },
+            AccessControlRef { invoking_id: THIS_SP, method_id: AUTHENTICATE },
             AccessControl { acl: vec![ace::ANYBODY], ..Default::default() },
         ),
         (
-            AccessControlRef { invoking_id: THIS_SP.into(), method_id: RANDOM },
+            AccessControlRef { invoking_id: THIS_SP, method_id: RANDOM },
             AccessControl { acl: vec![ace::ANYBODY], ..Default::default() },
         ),
         (
@@ -121,15 +121,15 @@ pub fn access_control() -> Table<AccessControl> {
         [
             (
                 AccessControlRef { invoking_id: authority::ADMIN.get(admin_idx).unwrap().into(), method_id: SET },
-                AccessControl { acl: vec![ace::SET_ENABLED].into(), ..Default::default() },
+                AccessControl { acl: vec![ace::SET_ENABLED], ..Default::default() },
             ),
             (
                 AccessControlRef { invoking_id: c_pin::ADMIN.get(admin_idx).unwrap().into(), method_id: GET },
-                AccessControl { acl: vec![ace::C_PIN_SID_GET_NOPIN].into(), ..Default::default() },
+                AccessControl { acl: vec![ace::C_PIN_SID_GET_NOPIN], ..Default::default() },
             ),
             (
                 AccessControlRef { invoking_id: c_pin::ADMIN.get(admin_idx).unwrap().into(), method_id: SET },
-                AccessControl { acl: vec![ace::C_PIN_ADMINS_SET_PIN].into(), ..Default::default() },
+                AccessControl { acl: vec![ace::C_PIN_ADMINS_SET_PIN], ..Default::default() },
             ),
         ]
     });
@@ -248,7 +248,7 @@ pub fn authority() -> Table<Authority> {
             name: Some("PSID".into()),
             is_class: Some(false),
             class: Some(AuthorityRef::null()),
-            operation: Some(AuthMethod::Password.into()),
+            operation: Some(AuthMethod::Password),
             credential: Some(psid::admin::c_pin::PSID.into()),
             ..Default::default()
         },
@@ -256,7 +256,7 @@ pub fn authority() -> Table<Authority> {
 
     let admins = ADMINS.map(|admin_idx| Authority {
         uid: Some(authority::ADMIN.get(admin_idx).unwrap()),
-        name: Some(format!("Admin{}", admin_idx).into()),
+        name: Some(format!("Admin{}", admin_idx)),
         enabled: Some(false),
         is_class: Some(false),
         class: Some(authority::ADMINS),

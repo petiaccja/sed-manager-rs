@@ -58,7 +58,6 @@ impl Tokenize for MethodStatus {
 impl Detokenize for MethodStatus {
     fn detokenize<D: Detokenizer>(detokenizer: &mut D) -> Result<Self, D::Error> {
         u8::detokenize(detokenizer)
-            .map(|value| Self::try_from(value).map_err(|_| D::Error::message("invalid method status value")))
-            .flatten()
+            .and_then(|value| Self::try_from(value).map_err(|_| D::Error::message("invalid method status value")))
     }
 }

@@ -169,7 +169,7 @@ impl Management {
 
         // Remove timed out & get next deadline.
         let mut deadline = None;
-        for (_, queue) in &mut self.start_session_calls_receiving {
+        for queue in self.start_session_calls_receiving.values_mut() {
             while let Some(record) = queue.pop_front_if(|record| record.deadline < time) {
                 let _ = record.sender.send(Err(Error::TimedOut));
             }

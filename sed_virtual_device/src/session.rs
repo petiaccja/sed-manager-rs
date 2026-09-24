@@ -244,12 +244,13 @@ impl Session {
         {
             match table {
                 table_id::ACE => {
-                    get_slice(sp.ace(), object, start_column, end_column, permitted_columns).map(|s| GetResult::Ace(s))
+                    get_slice(sp.ace(), object, start_column, end_column, permitted_columns).map(GetResult::Ace)
                 }
                 table_id::AUTHORITY => get_slice(sp.authority(), object, start_column, end_column, permitted_columns)
-                    .map(|s| GetResult::Authority(s)),
-                table_id::C_PIN => get_slice(sp.c_pin(), object, start_column, end_column, permitted_columns)
-                    .map(|s| GetResult::CPin(s)),
+                    .map(GetResult::Authority),
+                table_id::C_PIN => {
+                    get_slice(sp.c_pin(), object, start_column, end_column, permitted_columns).map(GetResult::CPin)
+                }
                 table_id::K_AES_256 => get_slice(
                     sp.k_aes_256().ok_or(MethodStatus::InvalidParameter)?,
                     object,
@@ -257,7 +258,7 @@ impl Session {
                     end_column,
                     permitted_columns,
                 )
-                .map(|s| GetResult::KAes256(s)),
+                .map(GetResult::KAes256),
                 table_id::LOCKING => get_slice(
                     sp.locking().ok_or(MethodStatus::InvalidParameter)?,
                     object,
@@ -265,7 +266,7 @@ impl Session {
                     end_column,
                     permitted_columns,
                 )
-                .map(|s| GetResult::LockingRange(s)),
+                .map(GetResult::LockingRange),
                 table_id::MBR_CONTROL => get_slice(
                     sp.mbr_control().ok_or(MethodStatus::InvalidParameter)?,
                     object,
@@ -273,7 +274,7 @@ impl Session {
                     end_column,
                     permitted_columns,
                 )
-                .map(|s| GetResult::MbrControl(s)),
+                .map(GetResult::MbrControl),
                 table_id::SP => get_slice(
                     sp.sp().ok_or(MethodStatus::InvalidParameter)?,
                     object,
@@ -281,9 +282,10 @@ impl Session {
                     end_column,
                     permitted_columns,
                 )
-                .map(|s| GetResult::SecurityProvider(s)),
-                table_id::TABLE => get_slice(sp.table(), object, start_column, end_column, permitted_columns)
-                    .map(|s| GetResult::TableDesc(s)),
+                .map(GetResult::SecurityProvider),
+                table_id::TABLE => {
+                    get_slice(sp.table(), object, start_column, end_column, permitted_columns).map(GetResult::TableDesc)
+                }
                 _ => Err(MethodStatus::InvalidParameter),
             }
         } else if let Ok(ByteCellBlock { table, start_byte, end_byte }) =
@@ -458,7 +460,7 @@ impl Session {
             .is_table()
             .then_some(invoking_id)
             .or(invoking_id.containing_table())
-            .or(params.where_.map(|where_| Uid::from(where_).containing_table()).flatten());
+            .or(params.where_.and_then(|where_| Uid::from(where_).containing_table()));
         let object_uid = <O as Object>::Ref::try_from(invoking_id).ok().or(params.where_);
         let (Some(table_uid), Some(object_uid)) = (table_uid, object_uid) else {
             return Err(MethodStatus::InvalidParameter);
@@ -598,8 +600,7 @@ impl Session {
                     let has_permission = ace
                         .boolean_expr
                         .as_ref()
-                        .map(|expr| expr.eval(authenticated.iter().cloned()))
-                        .flatten()
+                        .and_then(|expr| expr.eval(authenticated.iter().cloned()))
                         .unwrap_or(false);
                     if has_permission {
                         permitted_columns.extend(ace.columns.as_ref().unwrap_or(&HashSet::new()).iter().cloned());

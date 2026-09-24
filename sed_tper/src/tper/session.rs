@@ -412,7 +412,7 @@ impl Session {
         FieldRef<O, TABLE, FIELD>: Field<FIELD>,
         <FieldRef<O, TABLE, FIELD> as Field<FIELD>>::Type: Tokenize + core::fmt::Debug,
     {
-        let parameters = vec![Named { name: 1u16, value: vec![Named { name: FIELD, value: value }] }];
+        let parameters = vec![Named { name: 1u16, value: vec![Named { name: FIELD, value }] }];
         let call = MethodCall {
             invoking_id: field.object().into(),
             method_id: method_id::SET.into(),
