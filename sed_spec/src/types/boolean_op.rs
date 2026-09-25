@@ -5,7 +5,7 @@
 
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 
-use sed_packet::token::{Detokenize, Detokenizer, MessageError, Tokenize, Tokenizer};
+use sed_packet::token_stream::{Detokenize, Detokenizer, MessageError, Tokenize, Tokenizer};
 
 use crate::{objects::TypeRef, types::r#type::Type};
 

@@ -184,7 +184,7 @@ impl<'a> SecurityProviderLookup<'a> {
                     break;
                 }
             }
-            return None;
+            None
         } else {
             let table_lookup = self.table_lookups.get(&table)?;
             table_lookup.by_name(name)

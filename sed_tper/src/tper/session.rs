@@ -7,7 +7,7 @@ use std::ops::RangeBounds;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use sed_packet::session_id::SessionId;
-use sed_packet::token::{Command, Detokenize, Detokenizer, FromTokens, ToTokens, Tokenize};
+use sed_packet::token_stream::{Command, Detokenize, Detokenizer, FromTokens, ToTokens, Tokenize};
 use sed_packet::{Bytes, Field, FieldRef, Ignore, MaxBytes, Named, Object, ObjectRef, TableRef, Uid};
 use sed_spec::methods::{
     Activate, Authenticate, AuthenticateResult, CellBlock, GenKey, Get, GetAcl, GetBytesResult, MethodCall,
@@ -412,7 +412,7 @@ impl Session {
         FieldRef<O, TABLE, FIELD>: Field<FIELD>,
         <FieldRef<O, TABLE, FIELD> as Field<FIELD>>::Type: Tokenize + core::fmt::Debug,
     {
-        let parameters = vec![Named { name: 1u16, value: vec![Named { name: FIELD, value: value }] }];
+        let parameters = vec![Named { name: 1u16, value: vec![Named { name: FIELD, value }] }];
         let call = MethodCall {
             invoking_id: field.object().into(),
             method_id: method_id::SET.into(),
@@ -539,7 +539,9 @@ where
                     |de, name| {
                         match name {
                             x if x == &INDEX => field = Some(T::detokenize(de)?),
-                            _ => drop(Ignore::detokenize(de)?),
+                            _ => {
+                                let _ = Ignore::detokenize(de)?;
+                            }
                         };
                         Ok(())
                     },

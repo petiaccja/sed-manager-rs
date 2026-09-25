@@ -9,7 +9,7 @@ use std::ops::{Add, AddAssign, Sub, SubAssign};
 
 use crate::data_model::table_ref::TableRef;
 use crate::data_model::uid::Uid;
-use crate::token::{Detokenize, Detokenizer, MessageError, Tokenize, Tokenizer};
+use crate::token_stream::{Detokenize, Detokenizer, MessageError, Tokenize, Tokenizer};
 
 //------------------------------------------------------------------------------
 // Traits
@@ -227,7 +227,7 @@ impl<const TABLE: u64> Sub for &ObjectRef<TABLE> {
 
 impl<const TABLE: u64> std::fmt::Display for ObjectRef<TABLE> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", &self.0)
+        write!(f, "{}", self.0)
     }
 }
 
@@ -268,7 +268,7 @@ impl<O, const TABLE: u64, const FIELD: u16> std::fmt::Debug for FieldRef<O, TABL
 
 impl<O, const TABLE: u64, const FIELD: u16> std::fmt::Display for FieldRef<O, TABLE, FIELD> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}.{}", &self.0, &FIELD)
+        write!(f, "{}.{}", self.0, FIELD)
     }
 }
 

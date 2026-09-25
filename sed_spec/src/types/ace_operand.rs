@@ -5,7 +5,7 @@
 
 use sed_packet::{
     Named,
-    token::{Detokenize, Detokenizer, MessageError, Tokenize, Tokenizer},
+    token_stream::{Detokenize, Detokenizer, MessageError, Tokenize, Tokenizer},
 };
 
 use crate::{
@@ -58,14 +58,12 @@ impl Tokenize for AceOperand {
 impl Detokenize for AceOperand {
     fn detokenize<D: Detokenizer>(detokenizer: &mut D) -> Result<Self, D::Error> {
         let (_, value) = detokenizer.detokenize_named(
-            |detokenizer| <[u8; 4]>::detokenize(detokenizer).map(|bytes| u32::from_be_bytes(bytes)),
+            |detokenizer| <[u8; 4]>::detokenize(detokenizer).map(u32::from_be_bytes),
             |detokenizer, name| match *name {
                 x if x == AuthorityRef::UID.to_half() => {
-                    AuthorityRef::detokenize(detokenizer).map(|auth_ref| AceOperand::Authority(auth_ref))
+                    AuthorityRef::detokenize(detokenizer).map(AceOperand::Authority)
                 }
-                x if x == BooleanOp::UID.to_half() => {
-                    BooleanOp::detokenize(detokenizer).map(|bool_op| AceOperand::BooleanOp(bool_op))
-                }
+                x if x == BooleanOp::UID.to_half() => BooleanOp::detokenize(detokenizer).map(AceOperand::BooleanOp),
                 _ => Err(D::Error::message("invalid type alternative for ACE operand")),
             },
         )?;

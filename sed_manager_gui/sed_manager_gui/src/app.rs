@@ -38,7 +38,7 @@ use crate::{
 
 pub struct App {
     ui: ui::MainWindow,
-    device_list: Arc<RwLock<DeviceList>>,
+    device_list: Rc<RwLock<DeviceList>>,
     toast_queue: Rc<ToastQueue>,
     host: Arc<Host>,
     runtime: Arc<PolyRuntime>,
@@ -57,7 +57,7 @@ impl App {
         let view_model = Rc::from(Self {
             ui: ui.clone_strong(),
             toast_queue: notification_queue,
-            device_list: Arc::new(RwLock::new(device_list)),
+            device_list: Rc::new(RwLock::new(device_list)),
             host,
             runtime,
         });
@@ -400,7 +400,7 @@ impl App {
             .display(move |mut ui_device, spec, result| match result {
                 Ok((authorities, sp_ref)) => {
                     let (authorities, individual_authority_names, individual_authority_uids) =
-                        display_authorities(spec.clone(), &authorities, Some(sp_ref));
+                        display_authorities(spec, &authorities, Some(sp_ref));
 
                     ui_device.admin_sp.authorities = authorities.into();
                     ui_device.admin_sp.individual_authority_names = Rc::from(individual_authority_names).into();
@@ -433,7 +433,7 @@ impl App {
             .display(move |mut ui_device, spec, result| match result {
                 Ok((authorities, sp_ref)) => {
                     let (authorities, individual_authority_names, individual_authority_uids) =
-                        display_authorities(spec.clone(), &authorities, sp_ref);
+                        display_authorities(spec, &authorities, sp_ref);
 
                     ui_device.locking_sp.authorities = authorities.into();
                     ui_device.locking_sp.individual_authority_names = Rc::from(individual_authority_names).into();
@@ -591,10 +591,10 @@ impl App {
     fn logout(self: Rc<Self>, path: PathBuf) {
         self.command()
             .on_session(path.clone(), async move |device: &Device, session: &mut Session| {
-                if matches!(*session, Session::LockingConfig(_)) {
-                    if let Err(_) = session.close().await {
-                        let _ = device.stack_reset().await;
-                    }
+                if matches!(*session, Session::LockingConfig(_))
+                    && let Err(_) = session.close().await
+                {
+                    let _ = device.stack_reset().await;
                 }
             })
             .display(move |ui_device, _spec, _result| ui_device)
@@ -769,7 +769,7 @@ impl App {
 
     fn try_convert_password(&self, password: &str) -> Option<MaxBytes<32>> {
         let byte_password: MaxBytes<32> = password.as_bytes().into();
-        if byte_password.len() == password.as_bytes().len() {
+        if byte_password.len() == password.len() {
             Some(byte_password)
         } else {
             self.toast_queue.error(

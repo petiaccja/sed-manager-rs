@@ -19,7 +19,7 @@ pub fn tokenize_struct(input: DeriveInput) -> Result<TokenStream, Error> {
 
     let ident = input.ident;
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
-    let where_clause = add_trait_bounds(&struct_item, where_clause, &parse_quote!(sed_packet::token::Tokenize));
+    let where_clause = add_trait_bounds(&struct_item, where_clause, &parse_quote!(sed_packet::token_stream::Tokenize));
 
     let fields = parse_fields(struct_item)?;
 
@@ -35,8 +35,8 @@ pub fn tokenize_struct(input: DeriveInput) -> Result<TokenStream, Error> {
 
     Ok(quote! {
         #[automatically_derived]
-        impl #impl_generics ::sed_packet::token::Tokenize for #ident #ty_generics #where_clause {
-            fn tokenize<T: ::sed_packet::token::Tokenizer>(&self, __tokenizer: &mut T)
+        impl #impl_generics ::sed_packet::token_stream::Tokenize for #ident #ty_generics #where_clause {
+            fn tokenize<T: ::sed_packet::token_stream::Tokenizer>(&self, __tokenizer: &mut T)
                 -> ::core::result::Result<(), T::Error>
             {
                 __tokenizer.tokenize_list(|__tokenizer| {
@@ -55,7 +55,8 @@ pub fn detokenize_struct(input: DeriveInput) -> Result<TokenStream, Error> {
 
     let ident = &input.ident;
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
-    let where_clause = add_trait_bounds(&struct_item, where_clause, &parse_quote!(sed_packet::token::Detokenize));
+    let where_clause =
+        add_trait_bounds(&struct_item, where_clause, &parse_quote!(sed_packet::token_stream::Detokenize));
 
     let fields = parse_fields(struct_item)?;
 
@@ -76,32 +77,31 @@ pub fn detokenize_struct(input: DeriveInput) -> Result<TokenStream, Error> {
     let optional_fields = fields.iter().filter_map(|field| {
         let ident = member_to_ident(field.member.clone());
         let ty = &field.ty;
-        match field.name {
-            None => None,
-            Some(name) => Some(quote! {
+        field.name.map(|name| {
+            quote! {
                 #name => {
                     #ident = Some(<#ty>::detokenize(__detokenizer)?);
                     Ok(())
                 }
-            }),
-        }
+            }
+        })
     });
 
     let construct = fields.iter().map(|Field { name, member, .. }| {
         let ident = member_to_ident(member.clone());
-        let message = format!("mandatory field {} missing", member.to_token_stream().to_string());
+        let message = format!("mandatory field {} missing", member.to_token_stream());
         match name {
             Some(_) => quote! { #member: #ident },
             None => quote! {
-                #member: #ident.ok_or_else(|| <D::Error as ::sed_packet::token::MessageError>::message(#message))?
+                #member: #ident.ok_or_else(|| <D::Error as ::sed_packet::token_stream::MessageError>::message(#message))?
             },
         }
     });
 
     Ok(quote! {
         #[automatically_derived]
-        impl #impl_generics ::sed_packet::token::Detokenize  for #ident  #ty_generics #where_clause {
-            fn detokenize<D: ::sed_packet::token::Detokenizer>(__detokenizer: &mut D)
+        impl #impl_generics ::sed_packet::token_stream::Detokenize  for #ident  #ty_generics #where_clause {
+            fn detokenize<D: ::sed_packet::token_stream::Detokenizer>(__detokenizer: &mut D)
                 -> ::core::result::Result<Self, D::Error>
             {
                 let mut index = 0usize;
@@ -118,7 +118,7 @@ pub fn detokenize_struct(input: DeriveInput) -> Result<TokenStream, Error> {
                                 |__detokenizer, __name| {
                                     match __name {
                                         #(#optional_fields)*
-                                        _ => ::core::result::Result::<(), D::Error>::Err(<D::Error as ::sed_packet::token::MessageError>::message("unknown optional field"))
+                                        _ => ::core::result::Result::<(), D::Error>::Err(<D::Error as ::sed_packet::token_stream::MessageError>::message("unknown optional field"))
                                     }
                                 }
                             )?;
@@ -150,7 +150,7 @@ fn parse_fields(struct_item: syn::DataStruct) -> Result<Vec<Field>, Error> {
         .scan(0u16, |name_idx, (index, field)| {
             let member = match field.ident {
                 Some(ident) => Member::from(ident),
-                None => Member::from(index as usize),
+                None => Member::from(index),
             };
             let is_optional = field.ty.is_option();
             if !is_optional && *name_idx != 0 {

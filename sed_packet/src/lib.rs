@@ -8,7 +8,7 @@ mod data_model;
 pub mod discovery;
 pub mod packet;
 pub mod session_id;
-pub mod token;
+pub mod token_stream;
 
 pub use data_model::bytes::Bytes;
 pub use data_model::ignore::Ignore;

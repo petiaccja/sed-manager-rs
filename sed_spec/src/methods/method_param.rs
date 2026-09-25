@@ -3,7 +3,7 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use sed_packet::{Uid, token::Detokenize, token::Error as TokenError, token::FromTokens as _};
+use sed_packet::{Uid, token_stream::Detokenize, token_stream::Error as TokenError, token_stream::FromTokens as _};
 
 use crate::{
     methods::{MethodCall, MethodResult, MethodStatus},

@@ -36,9 +36,9 @@ fn duration(duration: Duration) -> String {
     } else if duration < Duration::from_secs(120) {
         format!("{} s", duration.as_millis())
     } else if duration < Duration::from_secs(7200) {
-        format!("{} min", (duration.as_secs() + 59) / 60)
+        format!("{} min", duration.as_secs().div_ceil(60))
     } else {
-        format!("{} hr", (duration.as_secs() + 3599) / 3600)
+        format!("{} hr", duration.as_secs().div_ceil(3600))
     }
 }
 
@@ -145,19 +145,19 @@ impl IntoUi for DataRemovalDescriptor {
             },
             ui::DiscoveryProperty {
                 name: "Overwrite time".into(),
-                value: self.removal_time.overwrite().map(|d| duration(d)).unwrap_or("-".into()).into(),
+                value: self.removal_time.overwrite().map(duration).unwrap_or("-".into()).into(),
             },
             ui::DiscoveryProperty {
                 name: "Block erase time".into(),
-                value: self.removal_time.block_erase().map(|d| duration(d)).unwrap_or("-".into()).into(),
+                value: self.removal_time.block_erase().map(duration).unwrap_or("-".into()).into(),
             },
             ui::DiscoveryProperty {
                 name: "Crypto erase time".into(),
-                value: self.removal_time.crypto_erase().map(|d| duration(d)).unwrap_or("-".into()).into(),
+                value: self.removal_time.crypto_erase().map(duration).unwrap_or("-".into()).into(),
             },
             ui::DiscoveryProperty {
                 name: "Vendor erase time".into(),
-                value: self.removal_time.vendor_erase().map(|d| duration(d)).unwrap_or("-".into()).into(),
+                value: self.removal_time.vendor_erase().map(duration).unwrap_or("-".into()).into(),
             },
         ];
         ui::DiscoveryFeature { name: self.name().into(), properties: Rc::from(VecModel::from(properties)).into() }

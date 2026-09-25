@@ -3,7 +3,7 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use crate::token::{Detokenize, Detokenizer, Tokenize, Tokenizer};
+use crate::token_stream::{Detokenize, Detokenizer, Tokenize, Tokenizer};
 
 impl<Item> Tokenize for Vec<Item>
 where
@@ -36,7 +36,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::token::{FromTokens, ToTokens};
+    use crate::token_stream::{FromTokens, ToTokens};
 
     #[test]
     fn tokenize() {

@@ -5,6 +5,7 @@
 
 use std::ops::DerefMut;
 use std::path::PathBuf;
+use std::rc::Rc;
 use std::sync::Arc;
 
 use async_lock::RwLock;
@@ -24,11 +25,11 @@ use crate::ui_ext::{CommandStatusExt, DeviceExt};
 
 pub struct Command {
     runtime: Arc<PolyRuntime>,
-    device_list: Arc<RwLock<DeviceList>>,
+    device_list: Rc<RwLock<DeviceList>>,
 }
 
 impl Command {
-    pub fn new(runtime: Arc<PolyRuntime>, device_list: Arc<RwLock<DeviceList>>) -> Self {
+    pub fn new(runtime: Arc<PolyRuntime>, device_list: Rc<RwLock<DeviceList>>) -> Self {
         Self { runtime, device_list }
     }
 
@@ -133,7 +134,7 @@ pub struct CommandOnDeviceList<RunFn, Output>
 where
     RunFn: for<'a> AsyncFnOnce(&'a mut DeviceList) -> Output + 'static,
 {
-    device_list: Arc<RwLock<DeviceList>>,
+    device_list: Rc<RwLock<DeviceList>>,
     run_fn: RunFn,
 }
 
@@ -155,7 +156,7 @@ where
     RunFn: for<'a> AsyncFnOnce(&'a mut DeviceList) -> Output + 'static,
     UpdateFn: for<'a> FnOnce(&'a mut DeviceList, Output) + 'static,
 {
-    device_list: Arc<RwLock<DeviceList>>,
+    device_list: Rc<RwLock<DeviceList>>,
     run_fn: RunFn,
     update_fn: UpdateFn,
 }
@@ -189,7 +190,7 @@ where
     Output: Send + 'static,
 {
     runtime: Arc<PolyRuntime>,
-    device_list: Arc<RwLock<DeviceList>>,
+    device_list: Rc<RwLock<DeviceList>>,
     device_id: PathBuf,
     run_fn: RunFn,
 }
@@ -217,7 +218,7 @@ where
     UpdateFn: FnOnce(ui::Device, Output) -> ui::Device + 'static,
 {
     runtime: Arc<PolyRuntime>,
-    device_list: Arc<RwLock<DeviceList>>,
+    device_list: Rc<RwLock<DeviceList>>,
     device_id: PathBuf,
     run_fn: RunFn,
     update_fn: UpdateFn,
@@ -262,7 +263,7 @@ where
     Output: Send + 'static,
 {
     runtime: Arc<PolyRuntime>,
-    device_list: Arc<RwLock<DeviceList>>,
+    device_list: Rc<RwLock<DeviceList>>,
     device_id: PathBuf,
     run_fn: RunFn,
 }
@@ -290,7 +291,7 @@ where
     UpdateFn: FnOnce(ui::Device, Output) -> ui::Device + 'static,
 {
     runtime: Arc<PolyRuntime>,
-    device_list: Arc<RwLock<DeviceList>>,
+    device_list: Rc<RwLock<DeviceList>>,
     device_id: PathBuf,
     run_fn: RunFn,
     update_fn: UpdateFn,
@@ -356,7 +357,7 @@ where
     Output: Send + 'static,
 {
     runtime: Arc<PolyRuntime>,
-    device_list: Arc<RwLock<DeviceList>>,
+    device_list: Rc<RwLock<DeviceList>>,
     device_id: PathBuf,
     run_fn: RunFn,
 }
@@ -384,7 +385,7 @@ where
     UpdateFn: for<'spec> FnOnce(ui::Device, Option<&'spec Spec>, Output) -> ui::Device + 'static,
 {
     runtime: Arc<PolyRuntime>,
-    device_list: Arc<RwLock<DeviceList>>,
+    device_list: Rc<RwLock<DeviceList>>,
     device_id: PathBuf,
     run_fn: RunFn,
     update_fn: UpdateFn,
@@ -425,7 +426,7 @@ where
                     .in_current_span(),
                 );
 
-                if let Ok(_) = busy_signal.await {
+                if busy_signal.await.is_ok() {
                     // Indicate to UI that we're busy on the session.
                     device_list.ui.update(&device_id, |value| {
                         let command_status = value.command_status.clone();

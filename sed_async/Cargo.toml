@@ -3,6 +3,9 @@ name = "sed_async"
 version = "0.1.0"
 edition = "2024"
 
+[lints]
+workspace = true
+
 [dependencies]
 oneshot = { workspace = true, features = ["std"] }
 pin-project.workspace = true

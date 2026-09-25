@@ -1,17 +1,22 @@
-#![allow(unused)]
 //L-----------------------------------------------------------------------------
 //L Copyright (C) Péter Kardos
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
-
 use crate::lookup::GlobalLookup;
 
-include!(concat!(env!("OUT_DIR"), "/spec.rs"));
-
-/// The purpose of this is only so that it's easy to jump into the generated
-/// code using "go to definition".
+#[allow(clippy::identity_op, reason = "codegen follow patterns")]
+#[allow(clippy::module_inception, reason = "codegen follow patterns")]
 #[allow(unused)]
-const MARKER: () = GENERATED_MARKER;
+mod spec {
+    include!(concat!(env!("OUT_DIR"), "/spec.rs"));
+
+    /// The purpose of this is only so that it's easy to jump into the generated
+    /// code using "go to definition".
+    #[allow(unused)]
+    const MARKER: () = GENERATED_MARKER;
+}
+
+pub use spec::*;
 
 pub const GLOBAL_LOOKUP: GlobalLookup = GlobalLookup;
 
@@ -20,7 +25,7 @@ mod tests {
     use super::*;
 
     use crate::{
-        lookup::{FeatureLookup, ObjectTableLookup, SecurityProviderLookup, TableLookup},
+        lookup::{FeatureLookup, SecurityProviderLookup, TableLookup},
         path::Path,
     };
     use sed_packet::{TableRef, Uid};
@@ -38,7 +43,7 @@ mod tests {
     #[case(&self::data_store::LOOKUP)]
     #[case(&self::psid::LOOKUP)]
     fn sortedness_feature_lookups(#[case] lookup: &FeatureLookup) {
-        lookup.sp_lookups.items.is_sorted_by_key(|(key, _)| key);
+        assert!(lookup.sp_lookups.items.is_sorted_by_key(|(key, _)| key));
     }
 
     #[rstest]
@@ -46,21 +51,21 @@ mod tests {
     #[case(&self::opal_2::admin::LOOKUP)]
     #[case(&self::opal_2::locking::LOOKUP)]
     fn sortedness_security_provider_lookups(#[case] lookup: &SecurityProviderLookup) {
-        lookup.table_lookups.items.is_sorted_by_key(|(key, _)| key);
+        assert!(lookup.table_lookups.items.is_sorted_by_key(|(key, _)| key));
     }
 
     #[test]
     fn sortedness_object_table_lookups() {
-        self::core::shared::table::LOOKUP.by_name.items.is_sorted_by_key(|(key, _)| key);
-        self::core::shared::table::LOOKUP.by_uid.items.is_sorted_by_key(|(key, _)| key);
+        assert!(self::core::shared::table::LOOKUP.by_name.items.is_sorted_by_key(|(key, _)| key));
+        assert!(self::core::shared::table::LOOKUP.by_uid.items.is_sorted_by_key(|(key, _)| key));
     }
 
     #[test]
     fn sortedness_meta_table_lookups() {
-        self::core::shared::method_id::LOOKUP.by_name.items.is_sorted_by_key(|(key, _)| key);
-        self::core::shared::method_id::LOOKUP.by_uid.items.is_sorted_by_key(|(key, _)| key);
-        self::core::shared::table_id::LOOKUP.by_name.items.is_sorted_by_key(|(key, _)| key);
-        self::core::shared::table_id::LOOKUP.by_uid.items.is_sorted_by_key(|(key, _)| key);
+        assert!(self::core::shared::method_id::LOOKUP.by_name.items.is_sorted_by_key(|(key, _)| key));
+        assert!(self::core::shared::method_id::LOOKUP.by_uid.items.is_sorted_by_key(|(key, _)| key));
+        assert!(self::core::shared::table_id::LOOKUP.by_name.items.is_sorted_by_key(|(key, _)| key));
+        assert!(self::core::shared::table_id::LOOKUP.by_uid.items.is_sorted_by_key(|(key, _)| key));
     }
 
     #[rstest]

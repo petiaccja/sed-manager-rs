@@ -4,7 +4,7 @@
 //L-----------------------------------------------------------------------------
 
 use num_enum::{IntoPrimitive, TryFromPrimitive};
-use sed_packet::token::{Detokenize, Detokenizer, MessageError, Tokenize, Tokenizer};
+use sed_packet::token_stream::{Detokenize, Detokenizer, MessageError, Tokenize, Tokenizer};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error, TryFromPrimitive, IntoPrimitive)]
 #[repr(u8)]
@@ -58,7 +58,6 @@ impl Tokenize for MethodStatus {
 impl Detokenize for MethodStatus {
     fn detokenize<D: Detokenizer>(detokenizer: &mut D) -> Result<Self, D::Error> {
         u8::detokenize(detokenizer)
-            .map(|value| Self::try_from(value).map_err(|_| D::Error::message("invalid method status value")))
-            .flatten()
+            .and_then(|value| Self::try_from(value).map_err(|_| D::Error::message("invalid method status value")))
     }
 }

@@ -94,3 +94,13 @@ slint = { version = "=1.17.1", default-features = false, features = [
 ] }
 slint-build = { version = "=1.17.1" }
 i-slint-backend-testing = { version = "=1.17.1" }
+
+[workspace.lints.clippy]
+correctness = { priority = -1, level = "deny" }
+suspicious = { priority = -1, level = "deny" }
+complexity = { priority = -1, level = "warn" }
+perf = { priority = -1, level = "warn" }
+style = { priority = -1, level = "warn" }
+unusual_byte_groupings = "allow" # Bitfields often grouped by member.
+bool_assert_comparison = "allow" # Sometimes it's more expressive.
+large_enum_variant = "allow" # Simplicity and correctness is more important.

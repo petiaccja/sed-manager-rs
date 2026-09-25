@@ -37,8 +37,9 @@ impl VirtualDevice {
     /// Create a new virtual device.
     ///
     /// The device's configuration is the preconfiguration for the Opal 2.0 SSC.
+    #[expect(clippy::new_without_default, reason = "the SSC cannot be defaulted, even though it's harcoded")]
     pub fn new() -> Self {
-        let static_com_ids = (BASE_COM_ID.0..BASE_COM_ID.0 + NUM_COM_IDS).map(|com_id| ComId(com_id));
+        let static_com_ids = (BASE_COM_ID.0..BASE_COM_ID.0 + NUM_COM_IDS).map(ComId);
         let com_sessions = static_com_ids.clone().map(|com_id| (com_id, ComSession::new(com_id))).collect();
         let packet_sessions = static_com_ids.map(|com_id| (com_id, PacketSession::new(com_id, ComIdExt(0)))).collect();
 
@@ -126,7 +127,10 @@ impl StorageDevice for VirtualDevice {
             // Communication layer
             (0x02, com_id) if let Some(session) = com_sessions.get_mut(&ComId(com_id)) => {
                 match ComIdRequest::from_bytes(data) {
-                    Ok(request) => Ok(session.push(packet_sessions, request)),
+                    Ok(request) => {
+                        let _ = session.push(packet_sessions, request);
+                        Ok(())
+                    }
                     Err(_) => Err(Error::InvalidArgument),
                 }
             }

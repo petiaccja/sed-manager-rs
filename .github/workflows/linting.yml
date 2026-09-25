@@ -1,0 +1,35 @@
+name: linting
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    types: [opened, synchronize, reopened]
+jobs:
+  clippy:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Install dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install libfontconfig-dev
+          sudo apt-get install libfreetype-dev
+          sudo apt-get install xvfb
+
+      - name: Install Rust toolchain
+        run: |
+          rustup toolchain install 1.98 --component clippy
+          rustup default 1.98
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Run clippy
+        run: |
+          cargo clippy -- -Dwarnings

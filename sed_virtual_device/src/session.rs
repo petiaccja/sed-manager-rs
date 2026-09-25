@@ -9,7 +9,7 @@ use std::ops::{Add, Bound, Range};
 use crate::internal_error::Expect;
 use sed_packet::packet::{Packet, SubPacket, SubPacketKind};
 use sed_packet::session_id::SessionId;
-use sed_packet::token::{Command, ToTokens, Tokenize, Tokenizer};
+use sed_packet::token_stream::{Command, ToTokens, Tokenize, Tokenizer};
 use sed_packet::{Bytes, Object, ObjectRef, TableRef, TokenizeField, Uid};
 use sed_spec::methods::{
     Activate, ActivateResult, Authenticate, AuthenticateResult, ByteCellBlock, CloseSession, ExtractResult, GenKey,
@@ -138,7 +138,7 @@ impl Session {
         use sed_spec::preconfig::opal_2::admin;
         use sed_spec::preconfig::opal_2::locking;
 
-        self.check_permission(tper, invoking_id, params.method_id().try_into().unwrap(), [0].into_iter())?;
+        self.check_permission(tper, invoking_id, params.method_id(), [0].into_iter())?;
 
         let sp_uid = SecurityProviderRef::try_from(invoking_id).map_err(|_| MethodStatus::InvalidParameter)?;
         let admin_sp = tper.admin_sp_mut();
@@ -162,7 +162,7 @@ impl Session {
         invoking_id: Uid,
         params: &Authenticate,
     ) -> Result<AuthenticateResult, MethodStatus> {
-        self.check_permission(tper, invoking_id, params.method_id().try_into().unwrap(), [0].into_iter())?;
+        self.check_permission(tper, invoking_id, params.method_id(), [0].into_iter())?;
 
         let this_sp = self.this_sp(tper)?;
 
@@ -193,7 +193,7 @@ impl Session {
     }
 
     fn gen_key(&self, tper: &mut Tper, invoking_id: Uid, params: &GenKey) -> Result<GenKeyResult, MethodStatus> {
-        self.check_permission(tper, invoking_id, params.method_id().try_into().unwrap(), [0].into_iter())?;
+        self.check_permission(tper, invoking_id, params.method_id(), [0].into_iter())?;
 
         let this_sp = self.this_sp_mut(tper)?;
 
@@ -244,12 +244,13 @@ impl Session {
         {
             match table {
                 table_id::ACE => {
-                    get_slice(sp.ace(), object, start_column, end_column, permitted_columns).map(|s| GetResult::Ace(s))
+                    get_slice(sp.ace(), object, start_column, end_column, permitted_columns).map(GetResult::Ace)
                 }
                 table_id::AUTHORITY => get_slice(sp.authority(), object, start_column, end_column, permitted_columns)
-                    .map(|s| GetResult::Authority(s)),
-                table_id::C_PIN => get_slice(sp.c_pin(), object, start_column, end_column, permitted_columns)
-                    .map(|s| GetResult::CPin(s)),
+                    .map(GetResult::Authority),
+                table_id::C_PIN => {
+                    get_slice(sp.c_pin(), object, start_column, end_column, permitted_columns).map(GetResult::CPin)
+                }
                 table_id::K_AES_256 => get_slice(
                     sp.k_aes_256().ok_or(MethodStatus::InvalidParameter)?,
                     object,
@@ -257,7 +258,7 @@ impl Session {
                     end_column,
                     permitted_columns,
                 )
-                .map(|s| GetResult::KAes256(s)),
+                .map(GetResult::KAes256),
                 table_id::LOCKING => get_slice(
                     sp.locking().ok_or(MethodStatus::InvalidParameter)?,
                     object,
@@ -265,7 +266,7 @@ impl Session {
                     end_column,
                     permitted_columns,
                 )
-                .map(|s| GetResult::LockingRange(s)),
+                .map(GetResult::LockingRange),
                 table_id::MBR_CONTROL => get_slice(
                     sp.mbr_control().ok_or(MethodStatus::InvalidParameter)?,
                     object,
@@ -273,7 +274,7 @@ impl Session {
                     end_column,
                     permitted_columns,
                 )
-                .map(|s| GetResult::MbrControl(s)),
+                .map(GetResult::MbrControl),
                 table_id::SP => get_slice(
                     sp.sp().ok_or(MethodStatus::InvalidParameter)?,
                     object,
@@ -281,9 +282,10 @@ impl Session {
                     end_column,
                     permitted_columns,
                 )
-                .map(|s| GetResult::SecurityProvider(s)),
-                table_id::TABLE => get_slice(sp.table(), object, start_column, end_column, permitted_columns)
-                    .map(|s| GetResult::TableDesc(s)),
+                .map(GetResult::SecurityProvider),
+                table_id::TABLE => {
+                    get_slice(sp.table(), object, start_column, end_column, permitted_columns).map(GetResult::TableDesc)
+                }
                 _ => Err(MethodStatus::InvalidParameter),
             }
         } else if let Ok(ByteCellBlock { table, start_byte, end_byte }) =
@@ -307,7 +309,7 @@ impl Session {
     }
 
     fn get_acl(&self, tper: &mut Tper, invoking_id: Uid, params: &GetAcl) -> Result<GetAclResult, MethodStatus> {
-        self.check_permission(tper, invoking_id, params.method_id().try_into().unwrap(), [0].into_iter())?;
+        self.check_permission(tper, invoking_id, params.method_id(), [0].into_iter())?;
 
         if invoking_id == table_id::ACCESS_CONTROL.to_uid() {
             let this_sp = self.this_sp(tper)?;
@@ -345,7 +347,7 @@ impl Session {
             Ok(table.range(range).take(count).map(|(ref_, _)| ref_.to_uid()).collect())
         }
 
-        self.check_permission(tper, invoking_id, params.method_id().try_into().unwrap(), [0].into_iter())?;
+        self.check_permission(tper, invoking_id, params.method_id(), [0].into_iter())?;
 
         let sp = self.this_sp(tper)?;
         let table = TableRef::try_from(invoking_id).map_err(|_| MethodStatus::InvalidParameter)?;
@@ -368,7 +370,7 @@ impl Session {
     fn random(&self, tper: &Tper, invoking_id: Uid, params: &Random) -> Result<RandomResult, MethodStatus> {
         use rand::prelude::*;
 
-        self.check_permission(tper, invoking_id, params.method_id().try_into().unwrap(), [0].into_iter())?;
+        self.check_permission(tper, invoking_id, params.method_id(), [0].into_iter())?;
 
         if invoking_id == THIS_SP {
             let mut rng = rand::rng();
@@ -386,7 +388,7 @@ impl Session {
         invoking_id: Uid,
         params: &Revert,
     ) -> Result<(RevertResult, Vec<SecurityProviderRef>), MethodStatus> {
-        self.check_permission(tper, invoking_id, params.method_id().try_into().unwrap(), [0].into_iter())?;
+        self.check_permission(tper, invoking_id, params.method_id(), [0].into_iter())?;
 
         let this_sp_uid = self.this_sp_uid().ok_or(MethodStatus::Fail)?;
 
@@ -404,7 +406,7 @@ impl Session {
         invoking_id: Uid,
         params: &RevertSp,
     ) -> Result<(RevertSpResult, Vec<SecurityProviderRef>), MethodStatus> {
-        self.check_permission(tper, invoking_id, params.method_id().try_into().unwrap(), [0].into_iter())?;
+        self.check_permission(tper, invoking_id, params.method_id(), [0].into_iter())?;
 
         if invoking_id != THIS_SP {
             return Err(MethodStatus::InvalidParameter);
@@ -451,14 +453,14 @@ impl Session {
     {
         if let Some(values) = &params.values {
             let columns = values.active_fields();
-            self.check_permission(tper, invoking_id, params.method_id().try_into().unwrap(), columns.into_iter())?;
+            self.check_permission(tper, invoking_id, params.method_id(), columns.into_iter())?;
         }
 
         let table_uid = invoking_id
             .is_table()
             .then_some(invoking_id)
             .or(invoking_id.containing_table())
-            .or(params.where_.map(|where_| Uid::from(where_).containing_table()).flatten());
+            .or(params.where_.and_then(|where_| Uid::from(where_).containing_table()));
         let object_uid = <O as Object>::Ref::try_from(invoking_id).ok().or(params.where_);
         let (Some(table_uid), Some(object_uid)) = (table_uid, object_uid) else {
             return Err(MethodStatus::InvalidParameter);
@@ -479,7 +481,7 @@ impl Session {
     }
 
     fn set_bytes(&self, tper: &mut Tper, invoking_id: Uid, params: SetBytes) -> Result<SetResult, MethodStatus> {
-        self.check_permission(tper, invoking_id, params.method_id().try_into().unwrap(), [0].into_iter())?;
+        self.check_permission(tper, invoking_id, params.method_id(), [0].into_iter())?;
 
         let sp = self.this_sp_mut(tper)?;
 
@@ -546,7 +548,7 @@ impl Session {
         }
     }
 
-    pub fn this_sp_uid<'tper>(&self) -> Option<SecurityProviderRef> {
+    pub fn this_sp_uid(&self) -> Option<SecurityProviderRef> {
         match self {
             Session::Open { sp, .. } => Some(*sp),
             Session::Closed => None,
@@ -598,8 +600,7 @@ impl Session {
                     let has_permission = ace
                         .boolean_expr
                         .as_ref()
-                        .map(|expr| expr.eval(authenticated.iter().cloned()))
-                        .flatten()
+                        .and_then(|expr| expr.eval(authenticated.iter().cloned()))
                         .unwrap_or(false);
                     if has_permission {
                         permitted_columns.extend(ace.columns.as_ref().unwrap_or(&HashSet::new()).iter().cloned());

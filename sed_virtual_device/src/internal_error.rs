@@ -20,19 +20,21 @@ impl<T> Expect for Option<T> {
     type Inner = T;
 
     fn expect_object(self, table: impl Display, object: impl Display) -> Self::Inner {
-        self.expect(&format!("internal error: expected object {table}::{object} is not present in TPer configuration"))
+        self.unwrap_or_else(|| {
+            panic!("internal error: expected object {table}::{object} is not present in TPer configuration")
+        })
     }
 
     fn expect_serialize(self) -> Self::Inner {
-        self.expect(&format!("internal error: object serialization must always succeed"))
+        self.expect("internal error: object serialization must always succeed")
     }
 
     fn expect_tokenize(self) -> Self::Inner {
-        self.expect(&format!("internal error: object tokenization must always succeed"))
+        self.expect("internal error: object tokenization must always succeed")
     }
 
     fn expect_sp(self, sp: SecurityProviderRef) -> Self::Inner {
-        self.expect(&format!("internal error: expected TPer to have an SP with UID={sp}"))
+        self.unwrap_or_else(|| panic!("internal error: expected TPer to have an SP with UID={sp}"))
     }
 }
 
@@ -40,18 +42,20 @@ impl<T, E: Debug> Expect for Result<T, E> {
     type Inner = T;
 
     fn expect_object(self, table: impl Display, object: impl Display) -> Self::Inner {
-        self.expect(&format!("internal error: expected object {table}::{object} is not present in TPer configuration"))
+        self.unwrap_or_else(|_| {
+            panic!("internal error: expected object {table}::{object} is not present in TPer configuration")
+        })
     }
 
     fn expect_serialize(self) -> Self::Inner {
-        self.expect(&format!("internal error: object serialization must always succeed"))
+        self.expect("internal error: object serialization must always succeed")
     }
 
     fn expect_tokenize(self) -> Self::Inner {
-        self.expect(&format!("internal error: object tokenization must always succeed"))
+        self.expect("internal error: object tokenization must always succeed")
     }
 
     fn expect_sp(self, sp: SecurityProviderRef) -> Self::Inner {
-        self.expect(&format!("internal error: expected TPer to have an SP with UID={sp}"))
+        self.unwrap_or_else(|_| panic!("internal error: expected TPer to have an SP with UID={sp}"))
     }
 }

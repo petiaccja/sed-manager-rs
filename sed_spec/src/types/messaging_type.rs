@@ -5,7 +5,7 @@
 
 use num_enum::{FromPrimitive, IntoPrimitive};
 
-use sed_packet::token::{Detokenize, Detokenizer, Tokenize, Tokenizer};
+use sed_packet::token_stream::{Detokenize, Detokenizer, Tokenize, Tokenizer};
 
 #[allow(non_camel_case_types)]
 #[derive(PartialEq, Eq, Clone, Copy, Debug, FromPrimitive, IntoPrimitive)]

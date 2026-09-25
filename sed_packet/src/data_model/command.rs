@@ -3,7 +3,7 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use crate::token::{Command, Detokenize, Detokenizer, Tokenize, Tokenizer};
+use crate::token_stream::{Command, Detokenize, Detokenizer, Tokenize, Tokenizer};
 
 impl Tokenize for Command {
     fn tokenize<T: Tokenizer>(&self, tokenizer: &mut T) -> Result<(), T::Error> {

@@ -34,10 +34,10 @@ impl TypeExt for Type {
                     None if path.leading_colon.is_none() => (),
                     _ => return None,
                 };
-                if let Some(PathSegment { arguments: PathArguments::AngleBracketed(args), .. }) = path.segments.last() {
-                    if let (Some(GenericArgument::Type(ty)), 1) = (args.args.first(), args.args.len()) {
-                        return Some(ty);
-                    }
+                if let Some(PathSegment { arguments: PathArguments::AngleBracketed(args), .. }) = path.segments.last()
+                    && let (Some(GenericArgument::Type(ty)), 1) = (args.args.first(), args.args.len())
+                {
+                    return Some(ty);
                 };
                 None
             }

@@ -258,8 +258,7 @@ mod tests {
             &[0x01, 0x00],
         ]
         .iter()
-        .map(|x| x.iter())
-        .flatten()
+        .flat_map(|x| x.iter())
         .cloned()
         .collect();
         assert_eq!(IdentifyController::from_bytes(bytes.as_ref())?, content);

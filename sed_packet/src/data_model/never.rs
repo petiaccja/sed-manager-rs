@@ -5,7 +5,7 @@
 
 use std::convert::Infallible;
 
-use crate::token::{Detokenize, Detokenizer, Tokenize, Tokenizer};
+use crate::token_stream::{Detokenize, Detokenizer, Tokenize, Tokenizer};
 
 impl Tokenize for Infallible {
     fn tokenize<T: Tokenizer>(&self, _tokenizer: &mut T) -> Result<(), T::Error> {

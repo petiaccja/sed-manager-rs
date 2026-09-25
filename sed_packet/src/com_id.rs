@@ -210,7 +210,7 @@ mod tests {
             0x07, 0xDC, 0x06, 0x12, 0x09, 0x20, 0x14, 0x01, 0x28, 0x00, // Expiry date.
             0x07, 0xDC, 0x06, 0x12, 0x09, 0x20, 0x14, 0x01, 0x28, 0x00, // Reset date.
         ];
-        let date = Date { year: 2012, month: 06, day: 18, hour: 9, minute: 32, second: 20, millisecond: 296 };
+        let date = Date { year: 2012, month: 6, day: 18, hour: 9, minute: 32, second: 20, millisecond: 296 };
         let packet = ComIdResponse {
             com_id: 0x0102,
             com_id_ext: 0x0304,

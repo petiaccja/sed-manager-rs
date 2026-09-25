@@ -3,7 +3,7 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use crate::token::{Detokenize, Detokenizer, MessageError, Tokenize, Tokenizer};
+use crate::token_stream::{Detokenize, Detokenizer, MessageError, Tokenize, Tokenizer};
 
 impl<const N: usize> Tokenize for [u8; N] {
     fn tokenize<T: Tokenizer>(&self, tokenizer: &mut T) -> Result<(), T::Error> {

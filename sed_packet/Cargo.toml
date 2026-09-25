@@ -3,6 +3,9 @@ name = "sed_packet"
 version = "0.1.0"
 edition = "2024"
 
+[lints]
+workspace = true
+
 [dependencies]
 sorbit.workspace = true
 smallvec.workspace = true

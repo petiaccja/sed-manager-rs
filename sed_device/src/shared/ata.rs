@@ -225,7 +225,7 @@ impl core::fmt::Display for AtaError {
 }
 
 fn convert_buffer_len(num_bytes: u32) -> Result<u16, DeviceError> {
-    if num_bytes % 512 != 0 {
+    if !num_bytes.is_multiple_of(512) {
         return Err(DeviceError::InvalidAlignment);
     }
     let num_blocks = num_bytes / 512;

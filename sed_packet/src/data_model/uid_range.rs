@@ -34,6 +34,13 @@ impl<U> UidRange<U> {
         }
     }
 
+    pub fn is_empty(&self) -> bool
+    where
+        U: Clone + Sub<U, Output = i64>,
+    {
+        self.len() == 0
+    }
+
     /// The inverse of [`Self::get`]: returns the index of `uid` within the range,
     /// or `None` if `uid` is out of bounds or not aligned with `step`.
     pub fn index_of(&self, uid: U) -> Option<usize>
@@ -122,7 +129,7 @@ mod tests {
         assert_eq!(range.next(), Some(START + 1));
         assert_eq!(range.next(), Some(START + 2));
         assert_eq!(range.next(), Some(START + 3));
-        assert!(range.len() == 0);
+        assert!(range.is_empty());
         assert_eq!(range.next(), None);
         assert_eq!(range.next(), None);
     }
@@ -131,7 +138,7 @@ mod tests {
         let mut range = UidRange { start: START, end: END, step: 2 };
         assert_eq!(range.next(), Some(START));
         assert_eq!(range.next(), Some(START + 2));
-        assert!(range.len() == 0);
+        assert!(range.is_empty());
         assert_eq!(range.next(), None);
         assert_eq!(range.next(), None);
     }
@@ -140,9 +147,9 @@ mod tests {
     fn iter_nth_one() {
         let mut range = UidRange { start: START, end: END, step: 1 };
         assert_eq!(range.nth(2), Some(START + 2));
-        assert!(range.len() == 1);
+        assert_eq!(range.len(), 1);
         assert_eq!(range.nth(2), None);
-        assert!(range.len() == 0);
+        assert_eq!(range.len(), 0);
         assert_eq!(range.nth(2), None);
     }
 
@@ -154,7 +161,7 @@ mod tests {
         assert_eq!(range.nth(2), Some(START + 10));
         assert!(range.len() == 1);
         assert_eq!(range.nth(2), None);
-        assert!(range.len() == 0);
+        assert!(range.is_empty());
         assert_eq!(range.nth(2), None);
     }
 

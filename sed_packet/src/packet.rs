@@ -128,7 +128,7 @@ impl ComPacket {
             transfer_len += PACKET_HEADER_LEN;
             for sub_packet in packet.payload.deref() {
                 transfer_len += SUB_PACKET_HEADER_LEN;
-                transfer_len += (sub_packet.payload.len() + 3) / 4 * 4;
+                transfer_len += sub_packet.payload.len().next_multiple_of(4);
             }
         }
         transfer_len as u32

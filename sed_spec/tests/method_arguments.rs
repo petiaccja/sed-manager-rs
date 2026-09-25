@@ -5,7 +5,7 @@
 
 use rstest::rstest;
 
-use sed_packet::token::{FromTokens, ToTokens};
+use sed_packet::token_stream::{FromTokens, ToTokens};
 use sed_spec_macros::{DetokenizeStruct, TokenizeStruct};
 
 #[derive(Debug, Clone, PartialEq, Eq, DetokenizeStruct, TokenizeStruct)]

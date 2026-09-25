@@ -17,7 +17,7 @@ pub fn tokenize_field(input: DeriveInput) -> Result<TokenStream, Error> {
         let index = index as u16;
         quote! {
             #index => match &self.#member {
-                ::core::option::Option::Some(value) => ::sed_packet::token::Tokenize::tokenize(
+                ::core::option::Option::Some(value) => ::sed_packet::token_stream::Tokenize::tokenize(
                     &::sed_packet::Named{ name: #index, value },
                     tokenizer
                 ),
@@ -31,11 +31,11 @@ pub fn tokenize_field(input: DeriveInput) -> Result<TokenStream, Error> {
 
     Ok(quote! {
         impl #impl_generics ::sed_packet::TokenizeField for #name #ty_generics #where_clause {
-            fn tokenize_field<T: ::sed_packet::token::Tokenizer>(
+            fn tokenize_field<T: ::sed_packet::token_stream::Tokenizer>(
                 &self,
                 field: u16,
                 tokenizer: &mut T,
-            ) -> ::core::result::Result<(), <T as ::sed_packet::token::Tokenizer>::Error> {
+            ) -> ::core::result::Result<(), <T as ::sed_packet::token_stream::Tokenizer>::Error> {
                 match field {
                     #(#fields,)*
                     _ => ::core::result::Result::Ok(()),

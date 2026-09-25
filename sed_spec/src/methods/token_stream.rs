@@ -9,7 +9,7 @@ use sorbit::error::ErrorKind;
 use sorbit::io::{FixedMemoryStream, Seek as _};
 use sorbit::stream_ser_de::StreamDeserializer;
 
-use sed_packet::token::{Command, Detokenize, Error as TokenError, SorbitDetokenizer};
+use sed_packet::token_stream::{Command, Detokenize, Error as TokenError, SorbitDetokenizer};
 
 /// The result of extracting a method from a token stream.
 #[derive(Debug, Clone, PartialEq, Eq)]

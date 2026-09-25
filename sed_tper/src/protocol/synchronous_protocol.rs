@@ -526,6 +526,7 @@ mod tests {
         assert_that!(protocol.phase, pat!(Phase::Recovering));
     }
 
+    #[expect(clippy::type_complexity)]
     fn run_sequence<SendMessage, RecvMessage>(
         protocol: &mut SynchronousProtocol<SendMessage, RecvMessage>,
         time_0: Instant,
@@ -537,7 +538,7 @@ mod tests {
     {
         protocol.handle_send(request);
 
-        for (step, (time, expected_action, received_data)) in sequence.into_iter().enumerate() {
+        for (step, (time, expected_action, received_data)) in sequence.iter().enumerate() {
             let action = protocol.poll_action(*time);
             assert_eq!(&action, expected_action, "step = {}, time = {:?}", step, *time - time_0);
             if let Some(received_data) = received_data {

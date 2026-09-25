@@ -55,11 +55,11 @@ pub fn access_control() -> Table<AccessControl> {
     let fixed = [
         // SP
         (
-            AccessControlRef { invoking_id: THIS_SP.into(), method_id: RANDOM },
+            AccessControlRef { invoking_id: THIS_SP, method_id: RANDOM },
             AccessControl { acl: vec![ace::ANYBODY], ..Default::default() },
         ),
         (
-            AccessControlRef { invoking_id: THIS_SP.into(), method_id: REVERT_SP },
+            AccessControlRef { invoking_id: THIS_SP, method_id: REVERT_SP },
             AccessControl { acl: vec![ace::ADMIN], ..Default::default() },
         ),
         // Table
@@ -590,7 +590,7 @@ pub fn authority() -> Table<Authority> {
 
     let admins = ADMINS.map(|admin_idx| Authority {
         uid: Some(authority::ADMIN.get(admin_idx).unwrap()),
-        name: Some(format!("Admin{}", admin_idx).into()),
+        name: Some(format!("Admin{}", admin_idx)),
         is_class: Some(false),
         class: Some(authority::ADMINS),
         enabled: Some(admin_idx == 0),
@@ -601,7 +601,7 @@ pub fn authority() -> Table<Authority> {
 
     let users = USERS.map(|user_idx| Authority {
         uid: Some(authority::USER.get(user_idx).unwrap()),
-        name: Some(format!("User{}", user_idx).into()),
+        name: Some(format!("User{}", user_idx)),
         is_class: Some(false),
         class: Some(authority::USERS),
         enabled: Some(false),

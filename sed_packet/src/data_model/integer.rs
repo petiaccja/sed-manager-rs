@@ -3,7 +3,7 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use crate::token::{Detokenize, Detokenizer, Tokenize, Tokenizer};
+use crate::token_stream::{Detokenize, Detokenizer, Tokenize, Tokenizer};
 
 macro_rules! impl_tokenize {
     ($type:ty, $fn:ident) => {
