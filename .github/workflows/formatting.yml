@@ -1,0 +1,39 @@
+name: formatting
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    types: [opened, synchronize, reopened]
+jobs:
+  check-code-formatting:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Install Rust toolchain
+        run: |
+          rustup toolchain install 1.98
+          rustup default 1.98
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Verify formatting
+        run: |
+          cargo fmt --check
+
+  check-license-headers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Check license headers
+        run: |
+          cargo install licensesnip
+          ~/.cargo/bin/licensesnip check
