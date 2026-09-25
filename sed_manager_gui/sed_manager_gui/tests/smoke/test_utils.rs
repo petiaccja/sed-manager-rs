@@ -10,10 +10,11 @@ use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
 use futures::FutureExt;
-use i_slint_backend_testing::ElementHandle;
+use i_slint_backend_testing::{ElementHandle, ElementRoot};
 use sed_async::{Runtime, SlintRuntime};
-use sed_manager_gui_slint as ui;
 use sed_telemetry::{create_otlp_provider, init_otlp_subscriber, init_stdout_subscriber};
+use slint::ComponentHandle;
+use slint::platform::PointerEventButton;
 
 use crate::element_handle_ext::ElementHandleEx;
 
@@ -85,16 +86,45 @@ pub async fn sleep_until_condition(mut condition: impl FnMut() -> bool, timeout:
 }
 
 /// Find the first element by its ID. If no element is found, panic.
-pub fn find_element(ui: &ui::MainWindow, id: &str) -> ElementHandle {
+pub fn find_element(ui: &impl ElementRoot, id: &str) -> ElementHandle {
     ElementHandle::find_by_accessible_id(ui, id)
         .next()
         .unwrap_or_else(|| panic!("no element found with accessible-id \"{id}\""))
 }
 
+/// Selects an item from a combo box's popup, which must already be open.
+///
+/// `i-slint-backend-testing` reports the position of elements inside a popup relative to the
+/// popup's own origin rather than to the window, so a plain `ElementHandle::single_click()` on
+/// the popup item misses it. Composing the combo box's own (correctly reported) absolute position
+/// with the item's (incorrectly relative) position happens to cancel out the error and land back
+/// on the right spot.
+pub fn select_combo_box_item(ui: &impl ComponentHandle, combo_box_id: &str, item_label: &str) {
+    let combo_box_pos = find_element(ui, combo_box_id).absolute_position();
+    let item = ElementHandle::find_by_accessible_label(ui, item_label).next().unwrap();
+    let item_pos = item.absolute_position();
+    let item_size = item.size();
+    let click_pos = slint::LogicalPosition::new(
+        combo_box_pos.x + item_pos.x + item_size.width / 2.0,
+        combo_box_pos.y + item_pos.y + item_size.height / 2.0,
+    );
+
+    let window = ui.window();
+    window.dispatch_event(slint::platform::WindowEvent::PointerMoved { position: click_pos });
+    window.dispatch_event(slint::platform::WindowEvent::PointerPressed {
+        position: click_pos,
+        button: PointerEventButton::Left,
+    });
+    window.dispatch_event(slint::platform::WindowEvent::PointerReleased {
+        position: click_pos,
+        button: PointerEventButton::Left,
+    });
+}
+
 /// Assert that a UI element is present or appears within a short time.
 macro_rules! assert_present {
     ($ui:expr, $id:expr) => {
-        let result = $crate::ui_testing::sleep_until_condition(
+        let result = $crate::test_utils::sleep_until_condition(
             || ElementHandle::find_by_accessible_id($ui, $id.as_ref()).next().is_some(),
             Duration::from_secs(5),
         )
@@ -106,10 +136,25 @@ macro_rules! assert_present {
     };
 }
 
+/// Assert that a UI element is absent or disappears within a short time.
+macro_rules! assert_absent {
+    ($ui:expr, $id:expr) => {
+        let result = $crate::test_utils::sleep_until_condition(
+            || ElementHandle::find_by_accessible_id($ui, $id.as_ref()).next().is_none(),
+            Duration::from_secs(5),
+        )
+        .await;
+        match result {
+            Ok(_) => (),
+            Err(_) => panic!("the ui element \"{}\" did not disappear", $id),
+        }
+    };
+}
+
 /// Assert that a toast message is present or appears within a short time.
 macro_rules! assert_toast {
     ($ui:expr, $title:expr) => {
-        let result = $crate::ui_testing::sleep_until_condition(
+        let result = $crate::test_utils::sleep_until_condition(
             || $ui.global::<ui::ToastQueue>().get_queue().iter().any(|item| item.toast.title == $title),
             Duration::from_secs(5),
         )
@@ -121,5 +166,6 @@ macro_rules! assert_toast {
     };
 }
 
+pub(crate) use assert_absent;
 pub(crate) use assert_present;
 pub(crate) use assert_toast;

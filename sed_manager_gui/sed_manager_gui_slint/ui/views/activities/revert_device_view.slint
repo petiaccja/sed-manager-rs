@@ -25,6 +25,7 @@ export component RevertDeviceView {
         }
 
         scope := ComboBox {
+            accessible-id: "revert-scope";
             model: ["Locking configuration", "Everything"];
             current-index: 0;
         }
@@ -51,6 +52,7 @@ export component RevertDeviceView {
 
         password := LineEdit {
             input-type: InputType.password;
+            accessible-id: "revert-password";
         }
 
         ToastCard {
@@ -64,6 +66,7 @@ export component RevertDeviceView {
 
         Button {
             text: scope.current-index == 0 ? "Revert locking" : "Revert everything";
+            accessible-id: "revert-submit";
             primary: true;
             enabled: !command-status.session-busy && !command-status.tper-busy;
             clicked => {
