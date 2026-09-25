@@ -6,7 +6,7 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
 jobs:
-  check-code-formatting:
+  rustfmt:
     strategy:
       fail-fast: false
       matrix:
@@ -26,7 +26,7 @@ jobs:
         run: |
           cargo fmt --check
 
-  check-license-headers:
+  licensesnip:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

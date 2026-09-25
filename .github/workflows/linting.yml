@@ -6,7 +6,7 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
 jobs:
-  run-clippy:
+  clippy:
     strategy:
       fail-fast: false
       matrix:
@@ -24,4 +24,4 @@ jobs:
 
       - name: Run clippy
         run: |
-          cargo clippy --check
+          cargo clippy
