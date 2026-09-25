@@ -125,8 +125,8 @@ pub fn select_combo_box_item(ui: &impl ComponentHandle, combo_box_id: &str, item
 macro_rules! assert_present {
     ($ui:expr, $id:expr) => {
         let result = $crate::test_utils::sleep_until_condition(
-            || ElementHandle::find_by_accessible_id($ui, $id.as_ref()).next().is_some(),
-            Duration::from_secs(5),
+            || ::i_slint_backend_testing::ElementHandle::find_by_accessible_id($ui, $id.as_ref()).next().is_some(),
+            ::core::time::Duration::from_secs(5),
         )
         .await;
         match result {
@@ -140,8 +140,8 @@ macro_rules! assert_present {
 macro_rules! assert_absent {
     ($ui:expr, $id:expr) => {
         let result = $crate::test_utils::sleep_until_condition(
-            || ElementHandle::find_by_accessible_id($ui, $id.as_ref()).next().is_none(),
-            Duration::from_secs(5),
+            || ::i_slint_backend_testing::ElementHandle::find_by_accessible_id($ui, $id.as_ref()).next().is_none(),
+            ::core::time::Duration::from_secs(5),
         )
         .await;
         match result {
@@ -156,7 +156,7 @@ macro_rules! assert_toast {
     ($ui:expr, $title:expr) => {
         let result = $crate::test_utils::sleep_until_condition(
             || $ui.global::<ui::ToastQueue>().get_queue().iter().any(|item| item.toast.title == $title),
-            Duration::from_secs(5),
+            ::core::time::Duration::from_secs(5),
         )
         .await;
         match result {

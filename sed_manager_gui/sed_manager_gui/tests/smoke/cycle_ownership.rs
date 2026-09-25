@@ -4,9 +4,7 @@
 //L-----------------------------------------------------------------------------
 
 use std::sync::Arc;
-use std::time::Duration;
 
-use i_slint_backend_testing::ElementHandle;
 use sed_async::{PolyRuntime, SlintRuntime};
 use sed_manager::Host;
 use sed_manager_gui::{app::App, toast::ToastQueue};
