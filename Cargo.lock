@@ -4522,6 +4522,7 @@ dependencies = [
 name = "sed_async"
 version = "0.1.0"
 dependencies = [
+ "futures",
  "googletest",
  "i-slint-backend-testing",
  "oneshot",

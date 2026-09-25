@@ -12,6 +12,7 @@ pin-project.workspace = true
 tokio = { workspace = true, features = ["rt", "time"], optional = true }
 slint = { workspace = true, optional = true }
 thiserror.workspace = true
+futures.workspace = true
 
 [dev-dependencies]
 googletest.workspace = true
