@@ -3,6 +3,9 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
+use std::sync::Arc;
+use std::time::Duration;
+
 use sed_async::{PolyRuntime, SlintRuntime};
 use sed_manager::Host;
 use sed_manager_gui::{app::App, toast::ToastQueue};
@@ -10,10 +13,11 @@ use sed_manager_gui_slint as ui;
 use sed_virtual_device::INITIAL_SID_PASSWORD;
 use slint::platform::PointerEventButton;
 use slint::{ComponentHandle as _, Model as _};
-use std::sync::Arc;
 
 use crate::element_handle_ext::ElementHandleEx;
-use crate::test_utils::{assert_present, assert_toast, find_element, run_test, select_combo_box_item};
+use crate::test_utils::{
+    assert_present, assert_toast, find_element, run_test, select_combo_box_item, sleep_until_condition,
+};
 
 const TEST_PASSWORD: &str = "test-password-1234";
 
@@ -41,11 +45,19 @@ fn change_password() {
         assert_present!(&ui, "activity-change-password");
 
         // Switch to the "Change password" activity. Selecting it triggers a silent, background
-        // listing of the admin SP's authorities, but refreshing explicitly gives us a toast to
-        // wait on, so we know the authority combo box is populated before we touch it.
+        // listing of the admin SP's authorities; wait for that to populate the authority combo
+        // box before interacting with it (there's no toast to wait on, since it's silent).
         find_element(&ui, "activity-change-password").single_click(PointerEventButton::Left).await;
-        find_element(&ui, "change-password-refresh").single_click(PointerEventButton::Left).await;
-        assert_toast!(&ui, "Admin authorities updated");
+        sleep_until_condition(
+            || {
+                find_element(&ui, "change-password-authority")
+                    .accessible_value()
+                    .is_some_and(|value| !value.is_empty())
+            },
+            Duration::from_secs(5),
+        )
+        .await
+        .unwrap_or_else(|_| panic!("the admin SP's authorities did not load"));
 
         // Select the SID authority (the security provider combo box already defaults to the
         // admin SP, which is the one that owns the SID authority).
