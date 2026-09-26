@@ -128,6 +128,7 @@ impl Runtime for SlintRuntime {
 pub enum SlintJoinHandle<T> {
     Spawn(
         #[pin]
+        #[expect(clippy::type_complexity, reason = "this is hard to read, but not a design defect. fix it")]
         SyncWrapper<oneshot::AsyncReceiver<Result<slint::JoinHandle<Result<T, Box<dyn Any + Send>>>, EventLoopError>>>,
     ),
     Join(#[pin] slint::JoinHandle<Result<T, Box<dyn Any + Send>>>),
@@ -148,7 +149,7 @@ impl<T> Future for SlintJoinHandle<T> {
                 Poll::Pending => Poll::Pending,
             },
             SlintJoinHandleProj::Join(join_handle) => match join_handle.poll(cx) {
-                Poll::Ready(value) => Poll::Ready(value.map_err(|err| JoinError::Panicked(err))),
+                Poll::Ready(value) => Poll::Ready(value.map_err(JoinError::Panicked)),
                 Poll::Pending => Poll::Pending,
             },
         }
