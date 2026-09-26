@@ -22,15 +22,18 @@ export component LoginPanel {
         }
 
         authority := ComboBox {
+            accessible-id: "login-authority";
             model: locking-sp.individual-authority-names;
         }
 
         password := LineEdit {
             input-type: InputType.password;
             placeholder-text: "Password";
+            accessible-id: "login-password";
         }
 
         Button {
+            accessible-id: "login-submit";
             primary: true;
             text: "Login";
             icon: Icons.login;
