@@ -21,9 +21,8 @@ use crate::test_utils::{
 
 const TEST_PASSWORD: &str = "test-password-1234";
 
-/// This test changes the SID authority's password on a freshly-factory device, without ever
-/// taking ownership. It exploits the fact that the virtual device's SID password starts out equal
-/// to the (hardcoded, well-known) MSID password.
+/// This is a narrow test just for the *change password* functionality. No need
+/// to take ownership, we know the initial SID password for the virtual device.
 ///
 /// This test exercises the following functionality:
 /// - Change password
