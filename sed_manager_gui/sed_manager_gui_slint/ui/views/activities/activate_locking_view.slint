@@ -21,10 +21,12 @@ export component ActivateLockingView {
 
         password := LineEdit {
             input-type: InputType.password;
+            accessible-id: "activate-locking-password";
         }
 
         Button {
             text: "Activate locking";
+            accessible-id: "activate-locking-submit";
             primary: true;
             clicked => {
                 activate-locking(password.text)

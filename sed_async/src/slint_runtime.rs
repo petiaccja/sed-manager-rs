@@ -4,11 +4,14 @@
 //L-----------------------------------------------------------------------------
 
 use std::{
+    any::Any,
+    panic::AssertUnwindSafe,
     pin::Pin,
     task::{Context, Poll},
     time::{Duration, Instant},
 };
 
+use futures::future::FutureExt as _;
 use pin_project::pin_project;
 use slint::EventLoopError;
 
@@ -55,7 +58,7 @@ impl Runtime for SlintRuntime {
     {
         let (spawn_tx, spawn_rx) = oneshot::async_channel();
         let invoke_result = slint::invoke_from_event_loop(move || {
-            let _ = spawn_tx.send(slint::spawn_local(f));
+            let _ = spawn_tx.send(slint::spawn_local(AssertUnwindSafe(f).catch_unwind()));
         });
         match invoke_result {
             Ok(_) => SlintJoinHandle::Spawn(SyncWrapper::new(spawn_rx)),
@@ -123,8 +126,12 @@ impl Runtime for SlintRuntime {
 
 #[pin_project(project = SlintJoinHandleProj)]
 pub enum SlintJoinHandle<T> {
-    Spawn(#[pin] SyncWrapper<oneshot::AsyncReceiver<Result<slint::JoinHandle<T>, EventLoopError>>>),
-    Join(#[pin] slint::JoinHandle<T>),
+    Spawn(
+        #[pin]
+        #[expect(clippy::type_complexity, reason = "this is hard to read, but not a design defect. fix it")]
+        SyncWrapper<oneshot::AsyncReceiver<Result<slint::JoinHandle<Result<T, Box<dyn Any + Send>>>, EventLoopError>>>,
+    ),
+    Join(#[pin] slint::JoinHandle<Result<T, Box<dyn Any + Send>>>),
 }
 
 impl<T> Future for SlintJoinHandle<T> {
@@ -142,7 +149,7 @@ impl<T> Future for SlintJoinHandle<T> {
                 Poll::Pending => Poll::Pending,
             },
             SlintJoinHandleProj::Join(join_handle) => match join_handle.poll(cx) {
-                Poll::Ready(value) => Poll::Ready(Ok(value)),
+                Poll::Ready(value) => Poll::Ready(value.map_err(JoinError::Panicked)),
                 Poll::Pending => Poll::Pending,
             },
         }

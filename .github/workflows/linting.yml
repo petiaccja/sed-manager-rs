@@ -32,4 +32,4 @@ jobs:
 
       - name: Run clippy
         run: |
-          cargo clippy -- -Dwarnings
+          cargo clippy --all-targets -- -Dwarnings

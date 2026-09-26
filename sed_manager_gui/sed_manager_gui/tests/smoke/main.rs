@@ -3,5 +3,9 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
+mod change_password;
+mod configure_locking;
+mod cycle_ownership;
 mod element_handle_ext;
-mod take_ownership;
+mod reset_stack;
+mod test_utils;
