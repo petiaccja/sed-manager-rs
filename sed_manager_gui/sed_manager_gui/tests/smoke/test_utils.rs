@@ -31,21 +31,28 @@ where
 {
     init_event_loop();
 
-    let (tx, rx) = oneshot::channel();
+    let (result_tx, result_rx) = oneshot::channel();
+    let (handle_tx, handle_rx) = oneshot::channel();
     slint::invoke_from_event_loop(move || {
-        slint::spawn_local(async move {
+        let handle = slint::spawn_local(async move {
             let result = AssertUnwindSafe(test()).catch_unwind().await;
-            tx.send(result).unwrap();
+            result_tx.send(result).unwrap();
         })
         .unwrap();
+        handle_tx.send(handle).unwrap();
     })
     .unwrap();
 
-    let result = rx.recv().unwrap();
+    let handle = handle_rx.recv_timeout(Duration::from_secs(15)).unwrap();
+    let result = result_rx.recv_timeout(Duration::from_secs(30));
 
     match result {
-        Ok(_) => (),
-        Err(panic) => resume_unwind(panic),
+        Ok(Ok(_)) => (),
+        Ok(Err(panic)) => resume_unwind(panic),
+        Err(_) => {
+            handle.abort();
+            panic!("the test timed out");
+        }
     }
 }
 
