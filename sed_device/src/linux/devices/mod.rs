@@ -8,6 +8,7 @@ use std::path::Path;
 use crate::{Error, StorageDevice};
 
 mod ata;
+mod generic;
 mod nvme;
 
 use ata::AtaDevice;

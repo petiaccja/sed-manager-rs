@@ -75,6 +75,14 @@ impl StorageDevice for MockDevice {
         false
     }
 
+    async fn logical_sector_size(&self) -> Result<u32, Error> {
+        Ok(512)
+    }
+
+    async fn logical_sector_count(&self) -> Result<u64, Error> {
+        Ok(1)
+    }
+
     async fn security_send(&self, security_protocol: u8, protocol_specific: [u8; 2], data: &[u8]) -> Result<(), Error> {
         let (index, expected_event) = self.next_event(security_protocol, protocol_specific, data.len());
         let display_name = expected_event.name().to_owned();

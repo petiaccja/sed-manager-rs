@@ -12,6 +12,7 @@ use std::path::Path;
 
 use sorbit::ser_de::FromBytes as _;
 
+use crate::linux::devices::generic::GenericIoctlDevice as _;
 use crate::linux::ioctl_device::IoctlDevice;
 use crate::shared::nvme::{GenericStatusCode, IdentifyController, Opcode, StatusCode, StatusField};
 use crate::{Error, Interface, StorageDevice};
@@ -63,6 +64,14 @@ impl StorageDevice for NvmeDevice {
         // per-namespace, e.g. `/sys/block/nvme0n1/removable`). NVMe SSDs aren't
         // meaningfully removable in practice anyway.
         false
+    }
+
+    async fn logical_sector_size(&self) -> Result<u32, Error> {
+        self.ioctl_device.logical_sector_size().await
+    }
+
+    async fn logical_sector_count(&self) -> Result<u64, Error> {
+        self.ioctl_device.logical_sector_count().await
     }
 
     async fn security_send(&self, security_protocol: u8, protocol_specific: [u8; 2], data: &[u8]) -> Result<(), Error> {

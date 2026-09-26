@@ -16,6 +16,7 @@ use std::path::Path;
 
 use sorbit::ser_de::FromBytes as _;
 
+use crate::linux::devices::generic::GenericIoctlDevice as _;
 use crate::linux::ioctl_device::IoctlDevice;
 use crate::shared::ata::{AtaError, IdentifyDevice};
 use crate::{Error as DeviceError, Interface, StorageDevice};
@@ -68,6 +69,14 @@ impl StorageDevice for AtaDevice {
 
     fn is_removable(&self) -> bool {
         self.is_removable
+    }
+
+    async fn logical_sector_size(&self) -> Result<u32, DeviceError> {
+        self.ioctl_device.logical_sector_size().await
+    }
+
+    async fn logical_sector_count(&self) -> Result<u64, DeviceError> {
+        self.ioctl_device.logical_sector_count().await
     }
 
     async fn security_send(
