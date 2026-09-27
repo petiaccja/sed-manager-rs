@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use googletest::{assert_that, matchers::*};
 use sed_async::{PolyRuntime, TokioRuntime};
-use sed_manager::{LockingConfigSession, SetupSession};
+use sed_manager::{Alignment, LockingConfigSession, SetupSession};
 use sed_packet::MaxBytes;
 use sed_spec::{objects::MbrControl, preconfig::opal_2::locking as opal_locking};
 use sed_telemetry::{WithTracing, with_tracing};
@@ -99,4 +99,19 @@ async fn get_mbr_control(_with_tracing: WithTracing) {
     let session = LockingConfigSession::login_on_primary_ssc(&tper, admin1, Some(NEW_SID_PASSWORD)).await.unwrap();
     let result = session.get_mbr_control().await;
     assert_that!(result, ok(field!(MbrControl.enable, eq(&Some(false)))));
+}
+
+#[instrument]
+#[rstest::rstest]
+#[tokio::test]
+async fn get_alignment(_with_tracing: WithTracing) {
+    let tper = setup().await;
+
+    let admin1 = opal_locking::authority::ADMIN.get(0).unwrap();
+    let session = LockingConfigSession::login_on_primary_ssc(&tper, admin1, Some(NEW_SID_PASSWORD)).await.unwrap();
+    let result = session.get_alignment().await;
+    assert_that!(
+        result,
+        ok(eq(&Alignment { alignment_required: true, alignment_granularity: 8, lowest_aligned_lba: 0 }))
+    );
 }

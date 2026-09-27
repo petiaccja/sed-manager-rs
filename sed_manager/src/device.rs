@@ -12,7 +12,7 @@ use sed_spec::{methods::Properties, objects::AuthorityRef};
 use sed_tper::{PropertiesChanged, Tper};
 use tracing::instrument;
 
-use crate::{Error, LockingConfigSession, SetupSession, Spec};
+use crate::{Error, Geometry, LockingConfigSession, SetupSession, Spec};
 
 #[derive(Debug)]
 pub struct Device {
@@ -64,6 +64,13 @@ impl Device {
     // Return the specification corresponding to the chosen SSC.
     pub fn spec(&self) -> Result<&Spec, Error> {
         self.spec.as_ref().map_err(Clone::clone)
+    }
+
+    /// Get the total size and sector size of the device.
+    pub async fn geometry(&self) -> Result<Geometry, Error> {
+        let logical_sector_size = self.storage_device.logical_sector_size().await?;
+        let logical_sector_count = self.storage_device.logical_sector_count().await?;
+        Ok(Geometry { logical_sector_size, logical_sector_count })
     }
 
     /// Query the status of the ComID on which the device is connected.

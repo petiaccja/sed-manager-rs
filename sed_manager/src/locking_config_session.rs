@@ -5,13 +5,14 @@
 
 use sed_packet::MaxBytes;
 use sed_spec::{
-    objects::{Authority, AuthorityRef, LockingRange, MbrControl, TableDescRefExt},
-    preconfig::core::shared::{mbr_control, table, table_id},
+    methods::MethodStatus,
+    objects::{Authority, AuthorityRef, LockingInfoExt, LockingRange, MbrControl, TableDescRefExt},
+    preconfig::core::shared::{locking_info, mbr_control, table, table_id},
 };
 use sed_tper::{Session, Tper};
 use tracing::instrument;
 
-use crate::{error::Error, spec::Spec};
+use crate::{Alignment, error::Error, spec::Spec};
 
 /// Configures the locking SP of the TPer, like locking ranges and authorities.
 ///
@@ -123,5 +124,28 @@ impl LockingConfigSession {
     #[instrument(level = "info", skip(self), ret, err)]
     pub async fn get_mbr_control(&self) -> Result<MbrControl, Error> {
         self.session.get_object(mbr_control::MBR_CONTROL, ..).await.map_err(|err| err.into())
+    }
+
+    /// Get the locking range alignment requirements.
+    ///
+    /// If the device does not specify the alignment requirements (e.g.
+    /// Enterprise, Opal 1.x), or the device only partially specifies the
+    /// requiements (not actually allowed by spec), the missing fields are
+    /// defaulted (See [`Alignment`]).
+    #[instrument(level = "info", skip(self), ret, err)]
+    pub async fn get_alignment(&self) -> Result<Alignment, Error> {
+        let maybe_locking_info: Result<LockingInfoExt, _> =
+            self.session.get_object(locking_info::LOCKING_INFO, 7..11).await;
+        match maybe_locking_info {
+            Ok(LockingInfoExt { alignmnet_required, alignment_granularity, lowest_aligned_lba, .. }) => Ok(Alignment {
+                alignment_required: alignmnet_required.unwrap_or(Alignment::default().alignment_required),
+                alignment_granularity: alignment_granularity
+                    .unwrap_or(Alignment::default().alignment_granularity)
+                    .max(1),
+                lowest_aligned_lba: lowest_aligned_lba.unwrap_or(Alignment::default().lowest_aligned_lba),
+            }),
+            Err(sed_tper::Error::MethodCallFailed(MethodStatus::InvalidParameter)) => Ok(Alignment::default()),
+            Err(err) => Err(err.into()),
+        }
     }
 }

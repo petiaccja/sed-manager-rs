@@ -7,8 +7,8 @@ use std::{any::Any, collections::BTreeMap};
 
 use sed_packet::Object;
 use sed_spec::objects::{
-    AccessControl, Ace, Authority, CPin, KAes256, LockingRange, MbrControl, SecurityProvider as SecurityProviderObj,
-    TableDesc,
+    AccessControl, Ace, Authority, CPin, KAes256, LockingInfoExt, LockingRange, MbrControl,
+    SecurityProvider as SecurityProviderObj, TableDesc,
 };
 
 pub type Table<T> = BTreeMap<<T as Object>::Ref, T>;
@@ -38,6 +38,13 @@ pub trait SecurityProvider {
         None
     }
     fn locking_mut(&mut self) -> Option<&mut Table<LockingRange>> {
+        None
+    }
+    fn locking_info_ext(&self) -> Option<&Table<LockingInfoExt>> {
+        None
+    }
+    #[expect(unused, reason = "this table might be fully constant in the spec, so unset by TPer functions")]
+    fn locking_info_ext_mut(&mut self) -> Option<&mut Table<LockingInfoExt>> {
         None
     }
     fn mbr_control(&self) -> Option<&Table<MbrControl>> {
