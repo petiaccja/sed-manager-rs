@@ -6,6 +6,7 @@
 mod authority;
 mod device;
 mod discovery;
+mod geometry;
 mod locking_range;
 mod mbr;
 mod primitives;

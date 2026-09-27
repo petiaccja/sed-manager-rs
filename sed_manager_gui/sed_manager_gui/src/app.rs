@@ -12,7 +12,7 @@ use std::{
 
 use async_lock::RwLock;
 use sed_async::PolyRuntime;
-use sed_manager::{Device, Error, Host, Spec};
+use sed_manager::{Device, Error, Geometry, Host, Spec};
 use sed_manager_gui_slint as ui;
 use sed_packet::{MaxBytes, com_id::ComIdState};
 use sed_spec::{
@@ -267,14 +267,18 @@ impl App {
                         let storage_device = device.storage_device();
                         let capabilities = device.capabilities().ok();
                         let properties_changed = device.properties_changed().ok();
+                        let geometry = device
+                            .geometry()
+                            .await
+                            .unwrap_or(Geometry { logical_sector_size: 0, logical_sector_count: 1u64 << 62 });
                         device_entry.device = Some(device);
-                        Ok((storage_device, capabilities, properties_changed))
+                        Ok((storage_device, capabilities, properties_changed, geometry))
                     }
                     Err(err) => Err(err),
                 }
             })
             .display(move |mut ui_device, result| match result {
-                Ok((storage_device, capabilities, properties_changed)) => {
+                Ok((storage_device, capabilities, properties_changed, geometry)) => {
                     if storage_device.is_security_supported() {
                         app.clone().discover(path.clone());
                     }
@@ -291,6 +295,7 @@ impl App {
                         self.clone().query_stack_status(path.clone(), true);
                         self.clone().list_security_providers(path.clone());
                         ui_device.stack_status = status;
+                        ui_device.geometry = geometry.into_ui();
                     }
                     ui_device.identity = storage_device.into_ui();
                     ui_device
@@ -472,6 +477,7 @@ impl App {
             })
             .display(move |ui_device, _spec, result| match result {
                 Ok(_) => {
+                    self.clone().get_alignment(path.clone());
                     self.clone().list_locking_config_authorities(path.clone(), true);
                     self.clone().list_locking_config_ranges(path.clone(), true);
                     self.clone().get_mbr(path.clone(), true);
@@ -481,6 +487,29 @@ impl App {
                     self.toast_queue.error("Login failed".into(), err.to_string());
                     ui_device
                 }
+            })
+            .run();
+    }
+
+    #[instrument(skip(self))]
+    fn get_alignment(self: Rc<Self>, path: PathBuf) {
+        self.command()
+            .on_session(path.clone(), async |_device: &Device, session: &mut Session| {
+                let Session::LockingConfig(locking_config_session) = &*session else {
+                    return None;
+                };
+                Some(locking_config_session.get_alignment().await)
+            })
+            .display(move |mut ui_device, _spec, result| match result {
+                Some(Ok(alignment)) => {
+                    ui_device.alignment = alignment.into_ui();
+                    ui_device
+                }
+                Some(Err(err)) => {
+                    self.toast_queue.error("Failed to update locking authorities".into(), err.to_string());
+                    ui_device
+                }
+                _ => ui_device,
             })
             .run();
     }
@@ -551,9 +580,14 @@ impl App {
     #[instrument(skip(self))]
     fn get_mbr(self: Rc<Self>, path: PathBuf, silent: bool) {
         self.command()
-            .on_session(path.clone(), async |_device: &Device, session: &mut Session| {
+            .on_session(path.clone(), async |device: &Device, session: &mut Session| {
                 let Session::LockingConfig(locking_config_session) = &*session else {
                     return None;
+                };
+
+                let geometry = match device.geometry().await {
+                    Ok(geometry) => geometry,
+                    Err(err) => return Some(Err(err)),
                 };
 
                 let size = match locking_config_session.get_mbr_size().await {
@@ -567,7 +601,11 @@ impl App {
                     Ok(control) => control,
                     Err(err) => return Some(Err(err)),
                 };
-                Some(Ok(MbrDesc { supported: true, size: Some(size), control: Some(control) }))
+                Some(Ok(MbrDesc {
+                    supported: true,
+                    size: Some(size / geometry.logical_sector_size),
+                    control: Some(control),
+                }))
             })
             .display(move |mut ui_device, _spec, result| match result {
                 Some(Ok(mbr)) => {

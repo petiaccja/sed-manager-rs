@@ -3,10 +3,28 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-import { Device, Discovery, StackStatus, SecurityProvider } from "device.slint";
+import {
+    Device,
+    Geometry,
+    Alignment,
+    Discovery,
+    StackStatus,
+    SecurityProvider,
+} from "device.slint";
 import { Status, Outcome } from "status.slint";
 
 export global TestData {
+    private property <Geometry> geometry: {
+        logical_sector_size: 512,
+        logical_sector_count: { value: 1000ms },
+    };
+
+    private property <Alignment> alignment: {
+        alignment_required: true,
+        alignment_granularity: { value: 8ms },
+        lowest_aligned_lba: { value: 0ms },
+    };
+
     private property <Discovery> discovery-opal-1:
         {
         status: { outcome: Outcome.success },
@@ -191,6 +209,8 @@ export global TestData {
                 security_commands: true,
                 is_removable: false,
             },
+            geometry: geometry,
+            alignment: alignment,
             discovery: discovery-opal-1,
             config: { sid_msid_pin_differ: true, locking_enabled: true },
             stack-status: stack-status-normal,
@@ -207,6 +227,8 @@ export global TestData {
                 security_commands: true,
                 is_removable: false,
             },
+            geometry: geometry,
+            alignment: alignment,
             discovery: discovery-opal-1,
             config: { sid_msid_pin_differ: true, locking_enabled: true },
             stack-status: stack-status-normal,
@@ -228,6 +250,8 @@ export global TestData {
                 security_commands: true,
                 is_removable: false,
             },
+            geometry: geometry,
+            alignment: alignment,
             discovery: discovery-opal-1,
             config: { sid_msid_pin_differ: false, locking_enabled: false },
             stack-status: stack-status-normal,
@@ -248,6 +272,7 @@ export global TestData {
                 security_commands: false,
                 is_removable: true,
             },
+            geometry: geometry,
             discovery: {
                 status: { outcome: Outcome.pending },
             },
@@ -262,6 +287,7 @@ export global TestData {
                 security_commands: false,
                 is_removable: true,
             },
+            geometry: geometry,
             discovery: {
                 status: { outcome: Outcome.error, message: "IF-RECV failed yadda yadda." },
             },
@@ -280,9 +306,6 @@ export global TestData {
                 security_commands: false,
                 is_removable: false,
             },
-            discovery: {
-                status: { outcome: Outcome.idle },
-            },
         },
         {
             identity: {
@@ -294,9 +317,6 @@ export global TestData {
                 interface: "",
                 security_commands: false,
                 is_removable: false,
-            },
-            discovery: {
-                status: { outcome: Outcome.idle },
             },
         },
     ];

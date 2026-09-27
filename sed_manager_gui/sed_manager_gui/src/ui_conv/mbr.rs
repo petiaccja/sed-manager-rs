@@ -13,6 +13,7 @@ use crate::ui_conv::IntoUi;
 /// MbrControl table), that's why this helper is needed.
 pub struct MbrDesc {
     pub supported: bool,
+    /// The size of the MBR table in logical sectors.
     pub size: Option<u32>,
     pub control: Option<MbrControl>,
 }

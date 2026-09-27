@@ -13,8 +13,9 @@ import {
     SecurityProvider,
     LockingRange,
     Sector,
-    SectorUtil,
     Uid,
+    Alignment,
+    Geometry,
 } from "../../data/lib.slint";
 import {
     TabWidget,
@@ -33,6 +34,8 @@ import { Icons } from "../../resources/lib.slint";
 
 
 export component ConfigureLockingView {
+    in property <Geometry> geometry;
+    in property <Alignment> alignment;
     in property <CommandStatus> command-status;
     in-out property <SecurityProvider> locking-sp;
 
@@ -67,6 +70,7 @@ export component ConfigureLockingView {
                 padding-top: StyleMetrics.layout-spacing;
 
                 LockingRangesTab {
+                    geometry: geometry;
                     locking-ranges <=> locking-sp.locking-ranges;
                     command-status: command-status;
 
@@ -118,6 +122,7 @@ export component ConfigureLockingView {
                 padding-top: StyleMetrics.layout-spacing;
 
                 ShadowMbrTab {
+                    geometry: geometry;
                     command-status: command-status;
                     mbr <=> locking-sp.mbr;
 

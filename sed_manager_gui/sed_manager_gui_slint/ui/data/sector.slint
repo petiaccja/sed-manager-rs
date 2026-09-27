@@ -10,21 +10,3 @@ export struct Sector {
     // is a bit of a hack, but perhaps the simplest approach.
     value: duration,
 }
-
-export global SectorUtil {
-    pure callback to-string(sector: Sector) -> string;
-    pure callback is-sector(s: string) -> bool;
-    pure callback to-sector(s: string) -> Sector;
-
-    to-string(sector) => {
-        sector.value / 1ms
-    }
-
-    is-sector(s) => {
-        s.is-float()
-    }
-
-    to-sector(s) => {
-        { value: 1ms * s.to-float() }
-    }
-}

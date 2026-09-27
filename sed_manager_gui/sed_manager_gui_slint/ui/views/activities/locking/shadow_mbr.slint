@@ -5,10 +5,11 @@
 
 import {
     Sector,
-    SectorUtil,
     CommandStatus,
     Mbr,
+    Geometry,
 } from "../../../data/lib.slint";
+import { SectorLib } from "../../../algorithm/sector.slint";
 import { Island } from "../../../widgets/island.slint";
 import {
     GroupBox,
@@ -24,6 +25,7 @@ import { Icons } from "../../../resources/icons.slint";
 
 
 export component ShadowMbrTab {
+    in property <Geometry> geometry;
     in property <CommandStatus> command-status;
     in-out property <Mbr> mbr;
 
@@ -92,7 +94,7 @@ export component ShadowMbrTab {
                                 Text {
                                     row: 1;
                                     col: 1;
-                                    text: SectorUtil.to_string(mbr.size);
+                                    text: SectorLib.to-string(mbr.size, geometry);
                                 }
 
                                 Switch {
