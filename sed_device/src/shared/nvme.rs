@@ -13,14 +13,14 @@ use sorbit::{Deserialize, PackInto, UnpackFrom, ser_de::FromBytes as _, ser_de::
 /// NVMe opcodes. These are combined opcodes, containing both the function and the data transfer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Opcode {
-    IdentifyController = 0x06,
+    Identify = 0x06,
     SecuritySend = 0x81,
     SecurityReceive = 0x82,
     /// Send an invalid command to the NVMe controller to test error handling.
     Invalid = 0b101111_00,
 }
 
-/// The data structure returned by the Identify controller Admin command.
+/// The data structure returned by the Identify Admin command called on the controller.
 #[derive(Deserialize, Clone, Debug, PartialEq, Eq)]
 #[sorbit(byte_order=little_endian)]
 pub struct IdentifyController {
@@ -34,6 +34,92 @@ pub struct IdentifyController {
     #[sorbit(bit_field=_oacs, repr=u16, offset=256, bit_numbering=LSB0)]
     #[sorbit(bits = 0)]
     pub security_send_receive_supported: bool,
+}
+
+/// The data structure returned by the Identify Admin command called on a namespace.
+#[derive(Deserialize, Clone, Debug, PartialEq, Eq)]
+#[sorbit(byte_order=little_endian)]
+pub struct IdentifyNamespace {
+    pub namespace_size: u64,
+    pub namespace_capacity: u64,
+    pub namespace_utiliziation: u64,
+    pub namespace_features: u8,
+    pub num_common_lba_formats: u8,
+
+    #[sorbit(bit_field=formatted_lba_size, repr=u8, bits = 5..=6)]
+    pub lba_format_index_upper: u8,
+    #[sorbit(bit_field=formatted_lba_size, bits = 4)]
+    pub lba_metadata_tx_as_ext_lba: bool,
+    #[sorbit(bit_field=formatted_lba_size, bits = 0..=3)]
+    pub lba_format_index_lower: u8,
+
+    #[sorbit(offset = 82)]
+    pub num_uncommon_lba_formats: u8,
+
+    #[sorbit(offset = 128)]
+    pub lba_formats: [LbaFormat; 64],
+}
+
+impl IdentifyNamespace {
+    /// Return the total number of LBA formats the namespace supports. This is
+    /// the sum of the normal and unique attribute format counts.
+    pub fn num_lba_formats(&self) -> u8 {
+        self.num_common_lba_formats + self.num_uncommon_lba_formats
+    }
+
+    /// Returns the namespace's current LBA format.
+    ///
+    /// # Errors
+    ///
+    /// This function can technically fail if the namespace data returned by the
+    /// drive is not correct. This is very unlikely.
+    pub fn lba_format(&self) -> Option<&LbaFormat> {
+        let num_lba_formats = self.num_lba_formats();
+        let lba_format_index = match num_lba_formats {
+            0..=16 => self.lba_format_index_lower,
+            17.. => (self.lba_format_index_upper << 4) + self.lba_format_index_lower,
+        };
+        (lba_format_index < num_lba_formats).then(|| &self.lba_formats[usize::from(lba_format_index)])
+    }
+}
+
+/// Describe an LBA formatting scheme supported by the NVMe device.
+#[derive(Deserialize, Clone, Debug, PartialEq, Eq)]
+#[sorbit(byte_order=little_endian)]
+pub struct LbaFormat {
+    #[sorbit(bit_field = _0, repr = u32, bits = 24..=25)]
+    relative_performance: RelativePerformance,
+    #[sorbit(bit_field = _0, bits = 16..=23)]
+    log_logical_sector_size: u8,
+    #[sorbit(bit_field = _0, bits = 0..=15)]
+    metadata_size: u16,
+}
+
+impl LbaFormat {
+    /// If the log(logical sector size) is zero, the format is not available even
+    /// though it's otherwise supported by the drive.
+    pub fn is_available(&self) -> bool {
+        self.log_logical_sector_size != 0
+    }
+
+    /// Returns the logical sector size (not it's logarithm) if the format is available.
+    pub fn logical_sector_size(&self) -> Option<u32> {
+        match self.log_logical_sector_size {
+            0 => None, // The format is not currently available.
+            log_logical_sector_size @ 1..=32 => Some(1 << log_logical_sector_size),
+            33.. => None, // Sectors over 4 GiB are probably not supported.
+        }
+    }
+}
+
+#[derive(Deserialize, UnpackFrom, Clone, Debug, PartialEq, Eq)]
+#[sorbit(byte_order=little_endian)]
+#[repr(u8)]
+pub enum RelativePerformance {
+    Best = 0b00,
+    Better = 0b01,
+    Good = 0b10,
+    Degraded = 0b11,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]

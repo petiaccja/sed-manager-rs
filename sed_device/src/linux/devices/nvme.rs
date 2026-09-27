@@ -12,7 +12,6 @@ use std::path::Path;
 
 use sorbit::ser_de::FromBytes as _;
 
-use crate::linux::devices::generic::GenericIoctlDevice as _;
 use crate::linux::ioctl_device::IoctlDevice;
 use crate::shared::nvme::{GenericStatusCode, IdentifyController, Opcode, StatusCode, StatusField};
 use crate::{Error, Interface, StorageDevice};
@@ -67,11 +66,16 @@ impl StorageDevice for NvmeDevice {
     }
 
     async fn logical_sector_size(&self) -> Result<u32, Error> {
-        self.ioctl_device.logical_sector_size().await
+        let namespace_identity = self.ioctl_device.identify_namespace(1).await?;
+        namespace_identity
+            .lba_format()
+            .and_then(|lba_format| lba_format.logical_sector_size())
+            .ok_or(Error::NotSupported)
     }
 
     async fn logical_sector_count(&self) -> Result<u64, Error> {
-        self.ioctl_device.logical_sector_count().await
+        let namespace_identity = self.ioctl_device.identify_namespace(1).await?;
+        Ok(namespace_identity.namespace_size)
     }
 
     async fn security_send(&self, security_protocol: u8, protocol_specific: [u8; 2], data: &[u8]) -> Result<(), Error> {
@@ -146,7 +150,7 @@ struct NvmeAdminCommand {
 impl Default for NvmeAdminCommand {
     fn default() -> Self {
         Self {
-            opcode: Opcode::IdentifyController,
+            opcode: Opcode::Identify,
             flags: 0,
             rsvd1: 0,
             nsid: 0,
@@ -169,6 +173,8 @@ impl Default for NvmeAdminCommand {
 }
 
 mod ioctl {
+    use crate::shared::nvme::IdentifyNamespace;
+
     use super::*;
 
     const NVME_ADMIN_CMD_OPCODE: rustix::ioctl::Opcode =
@@ -243,6 +249,8 @@ mod ioctl {
     pub trait NvmeIoctlDevice {
         async fn identify_controller(&self) -> Result<IdentifyController, Error>;
 
+        async fn identify_namespace(&self, namespace: u32) -> Result<IdentifyNamespace, Error>;
+
         async fn security_send(
             &self,
             security_protocol: u8,
@@ -261,11 +269,23 @@ mod ioctl {
     impl NvmeIoctlDevice for IoctlDevice {
         async fn identify_controller(&self) -> Result<IdentifyController, Error> {
             let buffer = vec![0_u8; 4096];
-            let command =
-                NvmeAdminCommand { opcode: Opcode::IdentifyController, cdw10: 0x0000_0001, ..Default::default() };
+            let command = NvmeAdminCommand { opcode: Opcode::Identify, cdw10: 0x0000_0001, ..Default::default() };
             let (ioctl_err, buffer) = self.ioctl(NvmeAdminCommandIoctl::new(command, buffer)).await?;
             check_ioctl_err(ioctl_err)?;
             IdentifyController::from_bytes(&buffer).map_err(|_| Error::InterfaceNotSupported)
+        }
+
+        async fn identify_namespace(&self, namespace: u32) -> Result<IdentifyNamespace, Error> {
+            let buffer = vec![0_u8; 4096];
+            let command = NvmeAdminCommand {
+                opcode: Opcode::Identify,
+                nsid: namespace,
+                cdw10: 0x0000_0000,
+                ..Default::default()
+            };
+            let (ioctl_err, buffer) = self.ioctl(NvmeAdminCommandIoctl::new(command, buffer)).await?;
+            check_ioctl_err(ioctl_err)?;
+            IdentifyNamespace::from_bytes(&buffer).map_err(|_| Error::InterfaceNotSupported)
         }
 
         async fn security_send(
