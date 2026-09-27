@@ -28,6 +28,7 @@ use slint::{
 use tracing::{error, instrument};
 
 use crate::{
+    algorithm::sector_lib,
     command::{Command, ExpectInEventLoop},
     device_list::{DeviceEntry, DeviceList},
     session::Session,
@@ -62,7 +63,13 @@ impl App {
             runtime,
         });
 
-        // Callbacks
+        // Algorithm callbacks.
+        ui.global::<ui::SectorLib>().on_to_string(sector_lib::to_string);
+        ui.global::<ui::SectorLib>().on_is_valid(sector_lib::is_valid);
+        ui.global::<ui::SectorLib>().on_parse(sector_lib::parse);
+        ui.global::<ui::SectorLib>().on_align(sector_lib::align);
+
+        // Action callbacks.
         {
             let view_model = view_model.clone();
             ui.on_scan(move || view_model.clone().scan(false));

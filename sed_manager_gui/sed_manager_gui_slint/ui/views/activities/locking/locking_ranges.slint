@@ -114,10 +114,10 @@ component LockingRangeTable {
                         Cell {
                             TextInput {
                                 text: SectorLib.to_string(locking-range.start, geometry);
-                                color: SectorLib.is-valid(self.text) ? Palette.control-foreground : PaletteExtra.error-foreground;
+                                color: SectorLib.is-valid(self.text, geometry) ? Palette.control-foreground : PaletteExtra.error-foreground;
 
                                 accepted => {
-                                    if SectorLib.is-valid(self.text) {
+                                    if SectorLib.is-valid(self.text, geometry) {
                                         locking-range.start = SectorLib.align(SectorLib.min(SectorLib.parse(self.text, geometry), geometry.logical-sector-count), alignment);
                                         self.text = SectorLib.to-string(locking-range.start, geometry);
                                     }
@@ -133,10 +133,10 @@ component LockingRangeTable {
                         Cell {
                             TextInput {
                                 text: SectorLib.to_string(locking-range.end, geometry);
-                                color: SectorLib.is-valid(self.text) ? Palette.control-foreground : PaletteExtra.error-foreground;
+                                color: SectorLib.is-valid(self.text, geometry) ? Palette.control-foreground : PaletteExtra.error-foreground;
 
                                 accepted => {
-                                    if SectorLib.is-valid(self.text) {
+                                    if SectorLib.is-valid(self.text, geometry) {
                                         locking-range.end = SectorLib.align(SectorLib.min(SectorLib.parse(self.text, geometry), geometry.logical-sector-count), alignment);
                                         self.text = SectorLib.to-string(locking-range.end, geometry);
                                     }

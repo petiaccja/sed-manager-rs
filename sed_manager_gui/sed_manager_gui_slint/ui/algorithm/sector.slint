@@ -8,7 +8,7 @@ export global SectorLib {
 
     // Check if the string can be parsed as a sector.
     // INCOMPLETE: override with host code.
-    pure callback is-valid(str: string) -> bool;
+    pure callback is-valid(str: string, geometry: Geometry) -> bool;
 
     // Parse the string to a sector based on the block size.
     // INCOMPLETE: override with host code.

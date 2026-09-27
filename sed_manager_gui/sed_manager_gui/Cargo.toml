@@ -29,6 +29,7 @@ tokio.workspace = true
 sed_async = { workspace = true, features = ["slint"] }
 i-slint-backend-testing.workspace = true
 sed_manager_gui = { path = ".", features = ["virtual_device"] }
+rstest.workspace = true
 
 [features]
 virtual_device = []

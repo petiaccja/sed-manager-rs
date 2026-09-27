@@ -4579,6 +4579,7 @@ dependencies = [
  "i-slint-backend-testing",
  "oneshot",
  "pin-project",
+ "rstest",
  "sed_async",
  "sed_device",
  "sed_manager",
