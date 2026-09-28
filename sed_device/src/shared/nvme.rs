@@ -62,9 +62,12 @@ pub struct IdentifyNamespace {
 
 impl IdentifyNamespace {
     /// Return the total number of LBA formats the namespace supports. This is
-    /// the sum of the normal and unique attribute format counts.
+    /// the sum of the common and unique attribute format counts.
+    ///
+    /// The number of common formats is a 0's based number, so a value of 0 means
+    /// 1. One is therefore added to the sum.
     pub fn num_lba_formats(&self) -> u8 {
-        self.num_common_lba_formats + self.num_uncommon_lba_formats
+        self.num_common_lba_formats + 1 + self.num_uncommon_lba_formats
     }
 
     /// Returns the namespace's current LBA format.
@@ -87,7 +90,7 @@ impl IdentifyNamespace {
 #[derive(Deserialize, Clone, Debug, PartialEq, Eq)]
 #[sorbit(byte_order=little_endian)]
 pub struct LbaFormat {
-    #[sorbit(bit_field = _0, repr = u32, bits = 24..=25)]
+    #[sorbit(bit_field = _0, bit_numbering = lsb0, repr = u32, bits = 24..=25)]
     relative_performance: RelativePerformance,
     #[sorbit(bit_field = _0, bits = 16..=23)]
     log_logical_sector_size: u8,
@@ -304,6 +307,8 @@ impl StatusField {
 
 #[cfg(test)]
 mod tests {
+    use googletest::{assert_that, matchers::*};
+
     use super::*;
 
     #[test]
@@ -349,5 +354,134 @@ mod tests {
         .collect();
         assert_eq!(IdentifyController::from_bytes(bytes.as_ref())?, content);
         Ok(())
+    }
+
+    #[test]
+    fn serialization_identify_namespace() -> Result<(), Box<dyn std::error::Error>> {
+        let content = IdentifyNamespace {
+            namespace_size: 0x1234,
+            namespace_capacity: 0x1235,
+            namespace_utiliziation: 0x1236,
+            namespace_features: 0xE5,
+            num_common_lba_formats: 0x08,
+            lba_format_index_upper: 0x00,
+            lba_metadata_tx_as_ext_lba: false,
+            lba_format_index_lower: 0x06,
+            num_uncommon_lba_formats: 0x03,
+            lba_formats: std::array::from_fn(|i| LbaFormat {
+                relative_performance: RelativePerformance::Good,
+                log_logical_sector_size: 9 + i as u8 % 4,
+                metadata_size: i as u16,
+            }),
+        };
+
+        fn lba_format_array_byte(byte_idx: usize) -> u8 {
+            let idx = byte_idx / 4;
+            match byte_idx % 4 {
+                0 => idx as u8,
+                1 => (idx as u16 >> 8) as u8,
+                2 => 9 + idx as u8 % 4,
+                _ => 0b0000_0010, // Performance: Good
+            }
+        }
+
+        let bytes: Vec<_> = [
+            [0x34, 0x12, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00].as_slice(), // NSZE
+            [0x35, 0x12, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00].as_slice(), // NCAP
+            [0x36, 0x12, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00].as_slice(), // NUSE
+            [0xE5].as_slice(),                                           // NSFEAT
+            [0x08].as_slice(),                                           // NLBAF
+            [0b0_00_0_0110].as_slice(),                                  // FLBAS
+            [0; 55].as_slice(),                                          // Padding for 27..82
+            [0x03].as_slice(),                                           // NULBAF
+            [0; 45].as_slice(),                                          // Padding for 83..128
+            std::array::from_fn::<u8, 256, _>(|i| lba_format_array_byte(i)).as_slice(), // LBAF0..=LBAF63
+        ]
+        .iter()
+        .flat_map(|x| x.iter())
+        .cloned()
+        .collect();
+
+        assert_that!(IdentifyNamespace::from_bytes(bytes.as_ref())?, eq(&content));
+        Ok(())
+    }
+
+    #[test]
+    fn namespace_identity_properties_regular() {
+        let identity = IdentifyNamespace {
+            namespace_size: 123,
+            namespace_capacity: 123,
+            namespace_utiliziation: 105,
+            namespace_features: 0xE5,
+            num_common_lba_formats: 7,
+            lba_format_index_upper: 0,
+            lba_metadata_tx_as_ext_lba: false,
+            lba_format_index_lower: 6,
+            num_uncommon_lba_formats: 3,
+            lba_formats: std::array::from_fn(|i| LbaFormat {
+                relative_performance: RelativePerformance::Good,
+                log_logical_sector_size: 9 + i as u8 % 4,
+                metadata_size: i as u16,
+            }),
+        };
+
+        assert_that!(identity.num_lba_formats(), eq(11));
+        assert_that!(
+            identity.lba_format(),
+            some(eq(&LbaFormat {
+                relative_performance: RelativePerformance::Good,
+                log_logical_sector_size: 11,
+                metadata_size: 6
+            }))
+        );
+    }
+
+    #[test]
+    fn namespace_identity_properties_single_format() {
+        let identity = IdentifyNamespace {
+            namespace_size: 123,
+            namespace_capacity: 123,
+            namespace_utiliziation: 105,
+            namespace_features: 0xE5,
+            num_common_lba_formats: 0,
+            lba_format_index_upper: 0,
+            lba_metadata_tx_as_ext_lba: false,
+            lba_format_index_lower: 0,
+            num_uncommon_lba_formats: 0,
+            lba_formats: std::array::from_fn(|i| LbaFormat {
+                relative_performance: RelativePerformance::Good,
+                log_logical_sector_size: if i == 0 { 9 } else { 0 },
+                metadata_size: 0,
+            }),
+        };
+
+        assert_that!(identity.num_lba_formats(), eq(1));
+        assert_that!(
+            identity.lba_format(),
+            some(eq(&LbaFormat {
+                relative_performance: RelativePerformance::Good,
+                log_logical_sector_size: 9,
+                metadata_size: 0
+            }))
+        );
+    }
+
+    #[test]
+    fn lba_format_properties_available() {
+        let format = LbaFormat {
+            relative_performance: RelativePerformance::Good,
+            log_logical_sector_size: 11,
+            metadata_size: 6,
+        };
+        assert_that!(format.is_available(), eq(true));
+        assert_that!(format.logical_sector_size(), some(eq(2048)));
+    }
+
+    #[test]
+    fn lba_format_properties_unavailable() {
+        let format =
+            LbaFormat { relative_performance: RelativePerformance::Good, log_logical_sector_size: 0, metadata_size: 6 };
+        assert_that!(format.is_available(), eq(false));
+        assert_that!(format.logical_sector_size(), none());
     }
 }

@@ -12,6 +12,7 @@ use rustix::ioctl::Ioctl;
 
 use crate::Error;
 
+#[derive(Debug)]
 pub struct IoctlDevice {
     fd: Arc<OwnedFd>,
     path: PathBuf,

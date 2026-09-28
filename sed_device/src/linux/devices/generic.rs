@@ -4,6 +4,8 @@
 //L-----------------------------------------------------------------------------
 
 mod ioctl {
+    use tracing::instrument;
+
     use crate::{Error, linux::ioctl_device::IoctlDevice};
 
     /// `BLKSSZGET`. Returns the logical sector size of a block device, in bytes.
@@ -19,6 +21,7 @@ mod ioctl {
     }
 
     impl GenericIoctlDevice for IoctlDevice {
+        #[instrument(skip(self), ret, err)]
         async fn logical_sector_size(&self) -> Result<u32, Error> {
             self.ioctl(unsafe { rustix::ioctl::Getter::<BLKSSZGET, u32>::new() }).await
         }
@@ -32,6 +35,7 @@ mod ioctl {
         /// the sector count can not be obtained.
         ///
         /// [`InvalidArgument`]: Error::InvalidArgument
+        #[instrument(skip(self), ret, err)]
         async fn logical_sector_count(&self) -> Result<u64, Error> {
             let sector_size = u64::from(self.logical_sector_size().await?);
             let total_size = self.ioctl(unsafe { rustix::ioctl::Getter::<BLKGETSIZE64, u64>::new() }).await?;

@@ -15,6 +15,7 @@ use std::io;
 use std::path::Path;
 
 use sorbit::ser_de::FromBytes as _;
+use tracing::instrument;
 
 use crate::linux::devices::generic::GenericIoctlDevice as _;
 use crate::linux::ioctl_device::IoctlDevice;
@@ -23,6 +24,7 @@ use crate::{Error as DeviceError, Interface, StorageDevice};
 
 pub use ioctl::AtaIoctlDevice;
 
+#[derive(Debug)]
 pub struct AtaDevice {
     ioctl_device: IoctlDevice,
     desc: IdentifyDevice,
@@ -30,6 +32,7 @@ pub struct AtaDevice {
 }
 
 impl AtaDevice {
+    #[instrument(fields(path = debug(path.as_ref())), ret, err)]
     pub async fn open(path: impl AsRef<Path>) -> Result<Self, DeviceError> {
         let ioctl_device = IoctlDevice::open(path).await?;
         let desc = ioctl_device.identify_device().await?;
@@ -71,14 +74,17 @@ impl StorageDevice for AtaDevice {
         self.is_removable
     }
 
+    #[instrument(skip(self), ret, err)]
     async fn logical_sector_size(&self) -> Result<u32, DeviceError> {
         self.ioctl_device.logical_sector_size().await
     }
 
+    #[instrument(skip(self), ret, err)]
     async fn logical_sector_count(&self) -> Result<u64, DeviceError> {
         self.ioctl_device.logical_sector_count().await
     }
 
+    #[instrument(skip(self, _data), fields(len = debug(_data.len())), ret, err)]
     async fn security_send(
         &self,
         _security_protocol: u8,
@@ -92,6 +98,7 @@ impl StorageDevice for AtaDevice {
         }
     }
 
+    #[instrument(skip(self), err)]
     async fn security_recv(
         &self,
         _security_protocol: u8,
@@ -130,6 +137,7 @@ mod ioctl {
     }
 
     impl AtaIoctlDevice for IoctlDevice {
+        #[instrument(skip(self), ret, err)]
         async fn identify_device(&self) -> Result<IdentifyDevice, DeviceError> {
             let identity = self.ioctl(unsafe { rustix::ioctl::Getter::<HDIO_GET_IDENTITY, [u8; 512]>::new() }).await?;
             IdentifyDevice::from_bytes(&identity).map_err(|_| DeviceError::ATAError(AtaError::with_error_bit()))

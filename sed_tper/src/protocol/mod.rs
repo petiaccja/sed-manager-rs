@@ -24,6 +24,7 @@ use sed_packet::{
 };
 #[cfg(feature = "test-utils")]
 use sed_spec::methods::Properties;
+use tracing::instrument;
 
 use crate::Error;
 use protocol_state::ProtocolState;
@@ -73,6 +74,7 @@ impl Protocol {
     /// timeouts to ensure a graceful shutdown. This will leave the protocol
     /// stack on the device's side ready for a subsequent session, but might
     /// take a little time.
+    #[instrument]
     pub async fn run(self) {
         let Self { com_id, device, command_rx, mut state, runtime } = self;
 
@@ -173,6 +175,7 @@ fn inject_command(state: &mut ProtocolState, command: Command) {
     }
 }
 
+#[instrument(skip(device, com_id, protocol, rx, runtime))]
 async fn perform_action_or_recv(
     device: &dyn StorageDevice,
     com_id: u16,
