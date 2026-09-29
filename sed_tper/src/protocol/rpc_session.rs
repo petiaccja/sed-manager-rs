@@ -14,6 +14,7 @@ use sed_packet::{
     session_id::SessionId,
 };
 use sed_spec::methods::Properties;
+use tracing::Span;
 
 use crate::{
     Error,
@@ -50,11 +51,17 @@ impl RpcSession {
         }
     }
 
-    pub fn handle_method_call(&mut self, session_id: SessionId, call: Vec<u8>, sender: Sender<Result<Vec<u8>, Error>>) {
+    pub fn handle_method_call(
+        &mut self,
+        session_id: SessionId,
+        call: Vec<u8>,
+        sender: Sender<Result<Vec<u8>, Error>>,
+        span: Span,
+    ) {
         if session_id == SessionId::MANAGEMENT {
-            self.management.handle_method_call(call, sender);
+            self.management.handle_method_call(call, sender, span);
         } else if let Some(session) = self.sessions.get_mut(&session_id) {
-            session.handle_method_call(call, sender);
+            session.handle_method_call(call, sender, span);
         } else {
             let _ = sender.send(Err(Error::Closed));
         }
@@ -225,7 +232,7 @@ mod tests {
         let start_call = start_session_call(SESSION_ID_1);
         let sync_call = sync_session_call(SESSION_ID_1, MethodStatus::Success);
 
-        session.handle_method_call(SessionId::MANAGEMENT, start_call.clone(), sender);
+        session.handle_method_call(SessionId::MANAGEMENT, start_call.clone(), sender, Span::current());
         assert_that!(
             session.poll_action(time),
             pat!(RpcAction::Send(eq(&vec![packetize_one(
@@ -254,7 +261,7 @@ mod tests {
         let call = method_call();
         let response = method_response();
 
-        session.handle_method_call(SESSION_ID_1, call.clone(), sender);
+        session.handle_method_call(SESSION_ID_1, call.clone(), sender, Span::current());
         assert_that!(
             session.poll_action(time),
             pat!(RpcAction::Send(eq(&vec![packetize_one(SESSION_ID_1, SequenceNumber(1), call)])))
@@ -278,7 +285,7 @@ mod tests {
         let call = eos();
         let response = eos();
 
-        session.handle_method_call(SESSION_ID_1, call.clone(), sender);
+        session.handle_method_call(SESSION_ID_1, call.clone(), sender, Span::current());
         assert_that!(
             session.poll_action(time),
             pat!(RpcAction::Send(eq(&vec![packetize_one(SESSION_ID_1, SequenceNumber(1), call)])))

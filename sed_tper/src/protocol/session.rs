@@ -15,6 +15,7 @@ use sed_packet::{
     session_id::SessionId,
 };
 use sed_spec::methods::{ExtractResult, MethodResult, Properties, extract_method};
+use tracing::{Span};
 
 use crate::{
     Error,
@@ -49,7 +50,7 @@ impl Session {
         }
     }
 
-    pub fn handle_method_call(&mut self, call: Vec<u8>, sender: Sender<Result<Vec<u8>, Error>>) {
+    pub fn handle_method_call(&mut self, call: Vec<u8>, sender: Sender<Result<Vec<u8>, Error>>, span: Span) {
         let max_method_call_size =
             self.properties.max_gross_packet_size.get() - PACKET_HEADER_LEN - SUB_PACKET_HEADER_LEN;
         if call.len() > max_method_call_size {
@@ -57,7 +58,7 @@ impl Session {
         } else {
             match &mut self.state {
                 State::Active { method_calls, .. } => {
-                    method_calls.push_back(MethodCallRecord { call, sender });
+                    method_calls.push_back(MethodCallRecord { call, sender, span });
                 }
                 State::Closed | State::Aborting => {
                     let _ = sender.send(Err(Error::Closed));
@@ -79,7 +80,7 @@ impl Session {
             let deadline = time + self.timeout;
             match &result {
                 Ok(_) => {
-                    let record = MethodReceivingRecord { deadline, sender: record.sender };
+                    let record = MethodReceivingRecord { deadline, sender: record.sender, span: record.span };
                     method_calls_receiving.push_back(record);
                 }
                 Err(err) => {
@@ -133,11 +134,11 @@ impl Session {
 
                 // Collect packets ready to be sent.
                 let mut packets = Vec::new();
-                if let Some(MethodCallRecord { call, sender }) = method_calls.pop_front() {
+                if let Some(MethodCallRecord { call, sender, span }) = method_calls.pop_front() {
                     let sn = self.sequence_number.fetch_add();
                     let packet = packetize_one(self.session_id, sn, call);
                     packets.push(packet);
-                    method_calls_sending.push_back(MethodSendingRecord { sequence_number: sn, sender });
+                    method_calls_sending.push_back(MethodSendingRecord { sequence_number: sn, sender, span });
                 }
 
                 // Return next action.
@@ -203,6 +204,7 @@ pub enum Action {
 pub struct MethodCallRecord {
     call: Vec<u8>,
     sender: Sender<Result<Vec<u8>, Error>>,
+    span: Span,
 }
 
 #[derive(Debug)]
@@ -210,6 +212,7 @@ struct MethodSendingRecord {
     /// The sequence number of the packet in which the method is being sent.
     sequence_number: SequenceNumber,
     sender: Sender<Result<Vec<u8>, Error>>,
+    span: Span,
 }
 
 #[derive(Debug)]
@@ -217,6 +220,7 @@ struct MethodReceivingRecord {
     /// The time when the message times out.
     deadline: Instant,
     sender: Sender<Result<Vec<u8>, Error>>,
+    span: Span,
 }
 
 #[cfg(test)]
@@ -242,7 +246,7 @@ mod tests {
         let time = Instant::now();
         let (sender, receiver) = channel();
 
-        session.handle_method_call(method_call(), sender);
+        session.handle_method_call(method_call(), sender, Span::current());
         assert_that!(
             session.poll_action(time),
             matches_pattern!(Action::Send(eq(&vec![Packet {
@@ -271,8 +275,8 @@ mod tests {
         let (sender_2, receiver_2) = channel();
 
         // Enqueue both methods.
-        session.handle_method_call(method_call(), sender_1);
-        session.handle_method_call(method_call(), sender_2);
+        session.handle_method_call(method_call(), sender_1, Span::current());
+        session.handle_method_call(method_call(), sender_2, Span::current());
 
         // Dequeue both associated packets.
         assert_that!(
@@ -318,7 +322,7 @@ mod tests {
         for i in 0..1 {
             let time = time + i * TIMEOUT;
             let (sender, receiver) = channel();
-            session.handle_method_call(method_call(), sender);
+            session.handle_method_call(method_call(), sender, Span::current());
             assert_that!(
                 session.poll_action(time),
                 matches_pattern!(Action::Send(eq(&vec![Packet {
@@ -345,7 +349,7 @@ mod tests {
         let time = Instant::now();
         let (sender, receiver) = channel();
 
-        session.handle_method_call(method_call(), sender);
+        session.handle_method_call(method_call(), sender, Span::current());
         assert_that!(session.poll_action(time), pat!(Action::Send(_)));
 
         session.handle_iface_send_done(time, SequenceNumber(1), Err(Error::NotSupported));
@@ -380,7 +384,7 @@ mod tests {
         let mut first_tokens = method_response();
         let second_tokens = first_tokens.split_off(2);
 
-        session.handle_method_call(method_call(), sender);
+        session.handle_method_call(method_call(), sender, Span::current());
         assert_that!(session.poll_action(time), pat!(&Action::Send(_)));
 
         session.handle_iface_send_done(time, SequenceNumber(1), Ok(()));
@@ -402,7 +406,7 @@ mod tests {
         let (sender, receiver) = channel();
         let invalid_tokens = vec![0xFE, 34, 23, 7, 2, 3, 2];
 
-        session.handle_method_call(method_call(), sender);
+        session.handle_method_call(method_call(), sender, Span::current());
         assert_that!(session.poll_action(time), pat!(&Action::Send(_)));
 
         session.handle_iface_send_done(time, SequenceNumber(1), Ok(()));
@@ -429,7 +433,7 @@ mod tests {
         let time = Instant::now();
         let (sender, receiver) = channel();
 
-        session.handle_method_call(eos(), sender);
+        session.handle_method_call(eos(), sender, Span::current());
         assert_that!(
             session.poll_action(time),
             eq(&Action::Send(vec![Packet {
@@ -455,7 +459,7 @@ mod tests {
         session.handle_aborted();
 
         let (sender, receiver) = channel();
-        session.handle_method_call(eos(), sender);
+        session.handle_method_call(eos(), sender, Span::current());
         assert_that!(session.poll_action(time), eq(&Action::Delete));
         assert_that!(receiver.try_recv(), ok(err(eq(&Error::Closed))));
     }
@@ -466,7 +470,7 @@ mod tests {
         let time = Instant::now();
 
         let (sender, receiver) = channel();
-        session.handle_method_call(vec![0; 1025], sender);
+        session.handle_method_call(vec![0; 1025], sender, Span::current());
         assert_that!(session.poll_action(time), eq(&Action::None));
         assert_that!(receiver.try_recv(), ok(err(pat!(&Error::MethodTooLarge { .. }))));
     }
@@ -477,7 +481,7 @@ mod tests {
         let time = Instant::now();
         let (sender, receiver) = channel();
 
-        session.handle_method_call(method_call(), sender);
+        session.handle_method_call(method_call(), sender, Span::current());
         assert_that!(session.poll_action(time), matches_pattern!(Action::Send(_)));
 
         session.handle_iface_send_done(time, SequenceNumber(1), Ok(()));

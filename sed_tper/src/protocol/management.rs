@@ -21,6 +21,7 @@ use sed_spec::{
     },
     preconfig::core::shared::invoking_id::SESSION_MANAGER,
 };
+use tracing::Span;
 
 use crate::{
     Error,
@@ -64,8 +65,8 @@ impl Management {
         }
     }
 
-    pub fn handle_method_call(&mut self, call: Vec<u8>, sender: Sender<Result<Vec<u8>, Error>>) {
-        self.method_calls.push_back(MethodCallRecord { call, sender });
+    pub fn handle_method_call(&mut self, call: Vec<u8>, sender: Sender<Result<Vec<u8>, Error>>, span: Span) {
+        self.method_calls.push_back(MethodCallRecord { call, sender, span });
     }
 
     pub fn handle_sync_properties(&mut self) {
@@ -216,7 +217,7 @@ impl Management {
         const MAX_METHOD_CALL_SIZE: usize =
             Properties::INITIAL.max_gross_packet_size.get() - PACKET_HEADER_LEN - SUB_PACKET_HEADER_LEN;
 
-        let MethodCallRecord { call, sender } = self.method_calls.pop_front()?;
+        let MethodCallRecord { call, sender, span } = self.method_calls.pop_front()?;
         if call.len() > MAX_METHOD_CALL_SIZE {
             let _ = sender.send(Err(Error::MethodTooLarge { requested: call.len(), maximum: MAX_METHOD_CALL_SIZE }));
             return None;
@@ -268,7 +269,7 @@ impl Management {
                 if status == MethodStatus::Success {
                     let _ = record.sender.send(Ok(tokens));
                     let session_id = SessionId { hsn: sync_session.host_session_id, tsn: sync_session.sp_session_id };
-                    // This is not entirely correct. The properties should be snapshot and saved when
+                    // TODO: This is not entirely correct. The properties should be snapshot and saved when
                     // StartSession is sent out.
                     actions.push(StackAction::Spawn { session_id, properties: self.properties.clone() });
                 } else {
@@ -351,6 +352,7 @@ pub enum Action {
 pub struct MethodCallRecord {
     call: Vec<u8>,
     sender: Sender<Result<Vec<u8>, Error>>,
+    span: Span,
 }
 
 #[derive(Debug)]
@@ -431,7 +433,7 @@ mod tests {
         let time = Instant::now();
         let (sender, receiver) = channel();
 
-        mgmt.handle_method_call(call, sender);
+        mgmt.handle_method_call(call, sender, Span::current());
         assert_that!(mgmt.poll_action(time), matches_pattern!(Action::None));
         assert_that!(receiver.try_recv(), ok(err(pat!(&Error::MethodNotAllowed { .. }))));
     }
@@ -442,7 +444,7 @@ mod tests {
         let time = Instant::now();
         let (sender, receiver) = channel();
 
-        mgmt.handle_method_call(start_session_call(SESSION_ID), sender);
+        mgmt.handle_method_call(start_session_call(SESSION_ID), sender, Span::current());
         assert_that!(
             mgmt.poll_action(time),
             matches_pattern!(Action::Send(eq(&vec![Packet {
@@ -480,7 +482,7 @@ mod tests {
         let time = Instant::now();
         let (sender, receiver) = channel();
 
-        mgmt.handle_method_call(start_session_call(SESSION_ID), sender);
+        mgmt.handle_method_call(start_session_call(SESSION_ID), sender, Span::current());
         assert_that!(mgmt.poll_action(time), matches_pattern!(Action::Send(len(eq(1)))));
 
         mgmt.handle_iface_send_done(time, SequenceNumber(1), Ok(()));
@@ -502,7 +504,7 @@ mod tests {
         let time = Instant::now();
         let (sender, receiver) = channel();
 
-        mgmt.handle_method_call(start_session_call(SESSION_ID), sender);
+        mgmt.handle_method_call(start_session_call(SESSION_ID), sender, Span::current());
         assert_that!(mgmt.poll_action(time), matches_pattern!(Action::Send(len(eq(1)))));
 
         mgmt.handle_iface_send_done(time, SequenceNumber(1), Ok(()));
@@ -522,7 +524,7 @@ mod tests {
         let time = Instant::now();
         let (sender, receiver) = channel();
 
-        mgmt.handle_method_call(start_session_call(SESSION_ID), sender);
+        mgmt.handle_method_call(start_session_call(SESSION_ID), sender, Span::current());
         assert_that!(mgmt.poll_action(time), matches_pattern!(Action::Send(len(eq(1)))));
 
         mgmt.handle_iface_send_done(time, SequenceNumber(1), Err(Error::NotSupported));
@@ -555,7 +557,7 @@ mod tests {
         let mut first_tokens = sync_session_call(SESSION_ID, MethodStatus::Success);
         let second_tokens = first_tokens.split_off(2);
 
-        mgmt.handle_method_call(start_session_call(SESSION_ID), sender);
+        mgmt.handle_method_call(start_session_call(SESSION_ID), sender, Span::current());
         assert_that!(
             mgmt.poll_action(time),
             matches_pattern!(Action::Send(eq(&vec![Packet {
@@ -596,7 +598,7 @@ mod tests {
         let (sender, receiver) = channel();
         let invalid_tokens = vec![0xFE, 34, 23, 7, 2, 3, 2];
 
-        mgmt.handle_method_call(start_session_call(SESSION_ID), sender);
+        mgmt.handle_method_call(start_session_call(SESSION_ID), sender, Span::current());
         assert_that!(
             mgmt.poll_action(time),
             matches_pattern!(Action::Send(eq(&vec![Packet {

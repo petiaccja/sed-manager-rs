@@ -24,7 +24,7 @@ use sed_packet::{
 };
 #[cfg(feature = "test-utils")]
 use sed_spec::methods::Properties;
-use tracing::instrument;
+use tracing::{Span, instrument};
 
 use crate::Error;
 use protocol_state::ProtocolState;
@@ -111,7 +111,8 @@ impl Controller {
     /// Perform an remote procedure call using tokenized methods.
     pub fn call(&self, session_id: SessionId, call: Vec<u8>) -> oneshot::Receiver<Result<Vec<u8>, Error>> {
         let (tx, rx) = oneshot::channel();
-        let _ = self.command_tx.try_send(Command::MethodCall { session_id, call, sender: tx });
+        let span = Span::current();
+        let _ = self.command_tx.try_send(Command::MethodCall { session_id, call, sender: tx, span });
         rx
     }
 
@@ -130,7 +131,7 @@ impl Controller {
     /// Send a ComID request to the device.
     pub fn com_id_request(&self, request: ComIdRequest) -> oneshot::Receiver<Result<ComIdResponse, Error>> {
         let (tx, rx) = oneshot::channel();
-        let _ = self.command_tx.try_send(Command::ComRequest { request, sender: tx });
+        let _ = self.command_tx.try_send(Command::ComRequest { request, sender: tx, span: Span::current() });
         rx
     }
 
@@ -156,9 +157,9 @@ impl Controller {
 #[derive(Debug)]
 #[rustfmt::skip] // Puts everything on a new line with the #[cfg].
 pub enum Command {
-    MethodCall { session_id: SessionId, call: Vec<u8>, sender: oneshot::Sender<Result<Vec<u8>, Error>> },
+    MethodCall { session_id: SessionId, call: Vec<u8>, sender: oneshot::Sender<Result<Vec<u8>, Error>>, span: Span },
     SyncProperties,
-    ComRequest { request: ComIdRequest, sender: oneshot::Sender<Result<ComIdResponse, Error>> },
+    ComRequest { request: ComIdRequest, sender: oneshot::Sender<Result<ComIdResponse, Error>>, span: Span },
     ReportAborted { session_id: SessionId },
     #[cfg(feature = "test-utils")]
     Spawn { session_id: SessionId, properties: Properties },
@@ -166,9 +167,11 @@ pub enum Command {
 
 fn inject_command(state: &mut ProtocolState, command: Command) {
     match command {
-        Command::MethodCall { session_id, call, sender } => state.handle_method_call(session_id, call, sender),
+        Command::MethodCall { session_id, call, sender, span } => {
+            state.handle_method_call(session_id, call, sender, span)
+        }
         Command::SyncProperties => state.handle_sync_properties(),
-        Command::ComRequest { request, sender } => state.handle_com_request(request, sender),
+        Command::ComRequest { request, sender, span } => state.handle_com_request(request, sender, span),
         Command::ReportAborted { session_id } => state.handle_session_aborted(session_id),
         #[cfg(feature = "test-utils")]
         Command::Spawn { session_id, properties } => state.handle_spawn_session(session_id, properties),

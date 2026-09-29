@@ -10,6 +10,7 @@ use std::{
 
 use oneshot::Sender;
 use sed_packet::com_id::{ComIdRequest, ComIdResponse};
+use tracing::Span;
 
 use crate::Error;
 
@@ -26,22 +27,27 @@ impl ComIdSession {
         Self { timeout, requests: VecDeque::new(), request_sending: None, request_receiving: None }
     }
 
-    pub fn handle_com_request(&mut self, request: ComIdRequest, sender: Sender<Result<ComIdResponse, Error>>) {
-        self.requests.push_back(RequestRecord { request, sender });
+    pub fn handle_com_request(
+        &mut self,
+        request: ComIdRequest,
+        sender: Sender<Result<ComIdResponse, Error>>,
+        span: Span,
+    ) {
+        self.requests.push_back(RequestRecord { request, sender, span });
     }
 
     pub fn handle_iface_send_done(&mut self, time: Instant, result: Result<(), Error>) {
-        if let Some(RequestSendingRecord { sender }) = self.request_sending.take() {
+        if let Some(RequestSendingRecord { sender, span }) = self.request_sending.take() {
             let deadline = time + self.timeout;
             match result {
-                Ok(_) => self.request_receiving = Some(RequestReceivingRecord { deadline, sender }),
+                Ok(_) => self.request_receiving = Some(RequestReceivingRecord { deadline, sender, span }),
                 Err(err) => drop(sender.send(Err(err))),
             }
         }
     }
 
     pub fn handle_iface_recv_done(&mut self, response: ComIdResponse) {
-        if let Some(RequestReceivingRecord { sender, .. }) = self.request_receiving.take() {
+        if let Some(RequestReceivingRecord { sender, span, .. }) = self.request_receiving.take() {
             let _ = sender.send(Ok(response));
         }
     }
@@ -50,10 +56,10 @@ impl ComIdSession {
         for RequestRecord { sender, .. } in self.requests.drain(..) {
             let _ = sender.send(Err(Error::Aborted));
         }
-        if let Some(RequestSendingRecord { sender }) = self.request_sending.take() {
+        if let Some(RequestSendingRecord { sender, span }) = self.request_sending.take() {
             let _ = sender.send(Err(Error::Aborted));
         }
-        if let Some(RequestReceivingRecord { sender, .. }) = self.request_receiving.take() {
+        if let Some(RequestReceivingRecord { sender, span, .. }) = self.request_receiving.take() {
             let _ = sender.send(Err(Error::Aborted));
         }
         *self = Self::new(self.timeout);
@@ -68,9 +74,9 @@ impl ComIdSession {
         // Get next action.
         if self.request_sending.is_none()
             && self.request_receiving.is_none()
-            && let Some(RequestRecord { request, sender }) = self.requests.pop_front()
+            && let Some(RequestRecord { request, sender, span }) = self.requests.pop_front()
         {
-            self.request_sending = Some(RequestSendingRecord { sender });
+            self.request_sending = Some(RequestSendingRecord { sender, span });
             ComIdAction::Send(request)
         } else if let Some(deadline) = self.request_receiving.as_ref().map(|record| record.deadline) {
             ComIdAction::Sleep { until: deadline }
@@ -84,17 +90,20 @@ impl ComIdSession {
 struct RequestRecord {
     request: ComIdRequest,
     sender: Sender<Result<ComIdResponse, Error>>,
+    span: Span,
 }
 
 #[derive(Debug)]
 struct RequestSendingRecord {
     sender: Sender<Result<ComIdResponse, Error>>,
+    span: Span,
 }
 
 #[derive(Debug)]
 struct RequestReceivingRecord {
     deadline: Instant,
     sender: Sender<Result<ComIdResponse, Error>>,
+    span: Span,
 }
 
 pub enum ComIdAction {

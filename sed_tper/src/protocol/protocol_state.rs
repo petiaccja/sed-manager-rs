@@ -19,6 +19,7 @@ use sed_packet::{
 };
 use sed_spec::methods::{Limit, Properties};
 use sorbit::ser_de::FromBytes;
+use tracing::Span;
 
 use crate::{
     Error,
@@ -116,8 +117,14 @@ impl ProtocolState {
         }
     }
 
-    pub fn handle_method_call(&mut self, session_id: SessionId, call: Vec<u8>, sender: Sender<Result<Vec<u8>, Error>>) {
-        self.rpc_session.handle_method_call(session_id, call, sender);
+    pub fn handle_method_call(
+        &mut self,
+        session_id: SessionId,
+        call: Vec<u8>,
+        sender: Sender<Result<Vec<u8>, Error>>,
+        span: Span,
+    ) {
+        self.rpc_session.handle_method_call(session_id, call, sender, span);
     }
 
     pub fn handle_sync_properties(&mut self) {
@@ -133,8 +140,13 @@ impl ProtocolState {
         self.rpc_session.handle_spawn_session(session_id, properties);
     }
 
-    pub fn handle_com_request(&mut self, request: ComIdRequest, sender: Sender<Result<ComIdResponse, Error>>) {
-        self.com_id_session.handle_com_request(request, sender);
+    pub fn handle_com_request(
+        &mut self,
+        request: ComIdRequest,
+        sender: Sender<Result<ComIdResponse, Error>>,
+        span: Span,
+    ) {
+        self.com_id_session.handle_com_request(request, sender, span);
     }
 
     pub fn handle_iface_send_done(&mut self, time: Instant, protocol: u8, result: Result<(), Error>) {
@@ -211,7 +223,7 @@ impl ProtocolState {
                 // from becoming "idle" and letting the runner shut down.
                 if !self.stop_requested {
                     let stack_reset_request = ComIdRequest::stack_reset(self.com_id, self.com_id_ext);
-                    self.com_id_session.handle_com_request(stack_reset_request, oneshot::channel().0);
+                    self.com_id_session.handle_com_request(stack_reset_request, oneshot::channel().0, Span::none());
                 }
                 return action;
             }
@@ -224,7 +236,7 @@ impl ProtocolState {
             action @ Action::Recv { .. } => return action,
             action @ Action::Recover => {
                 let stack_reset_request = ComIdRequest::stack_reset(self.com_id, self.com_id_ext);
-                self.com_id_session.handle_com_request(stack_reset_request, oneshot::channel().0);
+                self.com_id_session.handle_com_request(stack_reset_request, oneshot::channel().0, Span::none());
                 return action;
             }
         }
@@ -316,7 +328,7 @@ mod tests {
         };
 
         // Issue request.
-        protocol.handle_com_request(request.clone(), sender);
+        protocol.handle_com_request(request.clone(), sender, Span::current());
 
         // "Send" call to device.
         let action = protocol.poll_action(Instant::now());
@@ -369,7 +381,7 @@ mod tests {
         };
 
         // Issue method call.
-        protocol.handle_method_call(SessionId::MANAGEMENT, call, sender);
+        protocol.handle_method_call(SessionId::MANAGEMENT, call, sender, Span::current());
 
         // "Send" call to device.
         let action = protocol.poll_action(Instant::now());
