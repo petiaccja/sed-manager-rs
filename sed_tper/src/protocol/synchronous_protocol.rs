@@ -87,7 +87,12 @@ where
         self.recv_attempt = 0;
         let min_transfer = message.min_transfer();
         let outstanding_data = message.outstanding_data();
-        let next_transfer_len = min(self.max_transfer_len, max(min_transfer, outstanding_data));
+        // When the response is not ready yet, the TPer reports an outstanding
+        // data of 1, which is not a usable transfer length, as it can't even
+        // fit the header of the response. Never request less than the initial
+        // transfer length.
+        let requested_len = max(RecvMessage::INITIAL_TRANSFER, max(min_transfer, outstanding_data));
+        let next_transfer_len = min(self.max_transfer_len, requested_len);
 
         let new_phase = match self.phase.clone() {
             Phase::Send => Phase::Send,
@@ -222,11 +227,11 @@ impl InterfaceMessage for ComPacket {
     const INITIAL_TRANSFER: usize = 512;
 
     fn outstanding_data(&self) -> usize {
-        self.min_transfer as usize
+        self.outstanding_data as usize
     }
 
     fn min_transfer(&self) -> usize {
-        self.outstanding_data as usize
+        self.min_transfer as usize
     }
 
     fn is_empty(&self) -> bool {
@@ -405,11 +410,11 @@ mod tests {
             (time_0, Action::Recv { protocol, transfer_len: 512 }, None),
             (time_0, Action::None, Some(Ok(response_pending.clone()))),
             (time_0, Action::Sleep { until: time_0 + INITIAL_BACKOFF }, None),
-            (time_0 + INITIAL_BACKOFF, Action::Recv { protocol, transfer_len: 279 }, None),
+            (time_0 + INITIAL_BACKOFF, Action::Recv { protocol, transfer_len: 512 }, None),
             (time_0 + INITIAL_BACKOFF, Action::None, None),
             (time_0 + INITIAL_BACKOFF, Action::None, Some(Ok(response_pending.clone()))),
             (time_0 + INITIAL_BACKOFF, Action::Sleep { until: time_0 + 3 * INITIAL_BACKOFF }, None),
-            (time_0 + 3 * INITIAL_BACKOFF, Action::Recv { protocol, transfer_len: 279 }, None),
+            (time_0 + 3 * INITIAL_BACKOFF, Action::Recv { protocol, transfer_len: 512 }, None),
             (time_0 + 3 * INITIAL_BACKOFF, Action::None, None),
             (time_0 + 3 * INITIAL_BACKOFF, Action::None, Some(Ok(response_done))),
             (time_0 + 3 * INITIAL_BACKOFF, Action::None, None),
@@ -460,6 +465,54 @@ mod tests {
             (time_0, Action::None, Some(Ok(response_inform.clone()))),
             (time_0, Action::Recv { protocol, transfer_len: 2846 }, None),
             (time_0, Action::None, Some(Ok(response_payload.clone()))),
+            (time_0, Action::None, None),
+        ];
+
+        let mut protocol = SynchronousProtocol::new(protocol, 16384);
+        run_sequence(&mut protocol, time_0, request, &sequence);
+    }
+
+    #[test]
+    fn com_packet_response_not_ready() {
+        // Core spec 3.3.10.2.1, rule 8: response not ready yet.
+        let request = ComPacket::default();
+        let response_pending = ComPacket { outstanding_data: 1, min_transfer: 0, ..Default::default() };
+        let protocol = PACKETIZED_PROTOCOL;
+        let time_0 = Instant::now();
+
+        let sequence = [
+            (time_0, Action::Send { protocol, data: request.to_bytes().unwrap() }, None),
+            (time_0, Action::Recv { protocol, transfer_len: 512 }, None),
+            (time_0, Action::None, Some(Ok(response_pending))),
+            (time_0, Action::Sleep { until: time_0 + INITIAL_BACKOFF }, None),
+            (time_0 + INITIAL_BACKOFF, Action::Recv { protocol, transfer_len: 512 }, None),
+        ];
+
+        let mut protocol = SynchronousProtocol::new(protocol, 16384);
+        run_sequence(&mut protocol, time_0, request, &sequence);
+    }
+
+    #[test]
+    fn com_packet_exchanged_fragmented_no_min_transfer() {
+        // Core spec 3.3.10.2.1, rule 10.2: additional responses available, MinTransfer is zero.
+        let request = ComPacket::default();
+        let response_one = ComPacket {
+            outstanding_data: 652,
+            min_transfer: 0,
+            payload: vec![Packet::default()],
+            ..Default::default()
+        };
+        let response_two =
+            ComPacket { outstanding_data: 0, min_transfer: 0, payload: vec![Packet::default()], ..Default::default() };
+        let protocol = PACKETIZED_PROTOCOL;
+        let time_0 = Instant::now();
+
+        let sequence = [
+            (time_0, Action::Send { protocol, data: request.to_bytes().unwrap() }, None),
+            (time_0, Action::Recv { protocol, transfer_len: 512 }, None),
+            (time_0, Action::None, Some(Ok(response_one))),
+            (time_0, Action::Recv { protocol, transfer_len: 652 }, None),
+            (time_0, Action::None, Some(Ok(response_two))),
             (time_0, Action::None, None),
         ];
 
