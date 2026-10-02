@@ -11,6 +11,7 @@ use sed_packet::{
     token_stream::{Command, ToTokens as _},
 };
 use sed_spec::methods::Properties;
+use tracing::Span;
 
 use crate::protocol::sequence_number::SequenceNumber;
 
@@ -27,6 +28,12 @@ pub fn min_deadline(d1: Option<Instant>, d2: Option<Instant>) -> Option<Instant>
         (Some(d), None) => Some(d),
         (Some(d1), Some(d2)) => Some(min(d1, d2)),
     }
+}
+
+/// Links two spans both ways with `follows_from`.
+pub fn link_both_ways(a: &Span, b: &Span) {
+    a.follows_from(b);
+    b.follows_from(a);
 }
 
 pub fn eos() -> Vec<u8> {

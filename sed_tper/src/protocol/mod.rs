@@ -24,11 +24,11 @@ use sed_packet::{
 };
 #[cfg(feature = "test-utils")]
 use sed_spec::methods::Properties;
-use tracing::{Span, instrument};
+use tracing::{Instrument as _, Span, info_span};
 
 use crate::Error;
 use protocol_state::ProtocolState;
-use shared::Action;
+use shared::{Action, link_both_ways};
 
 pub use protocol_state::CAPABILITIES;
 pub use shared::PropertiesChanged;
@@ -74,14 +74,14 @@ impl Protocol {
     /// timeouts to ensure a graceful shutdown. This will leave the protocol
     /// stack on the device's side ready for a subsequent session, but might
     /// take a little time.
-    #[instrument]
     pub async fn run(self) {
         let Self { com_id, device, command_rx, mut state, runtime } = self;
 
         loop {
-            let action = state.poll_action(Instant::now());
+            let (action, spans) = state.poll_action(Instant::now());
             let is_idle = matches!(action, Action::None);
-            let command = perform_action_or_recv(&*device, com_id, &mut state, &command_rx, action, &runtime).await;
+            let command =
+                perform_action_or_recv(&*device, com_id, &mut state, &command_rx, action, spans, &runtime).await;
             if let Some(command) = command {
                 inject_command(&mut state, command);
             } else if is_idle {
@@ -178,26 +178,50 @@ fn inject_command(state: &mut ProtocolState, command: Command) {
     }
 }
 
-#[instrument(skip(device, com_id, protocol, rx, runtime))]
+/// Perform the `action`, or wait for a command if there is nothing to do.
+///
+/// The `spans` are those of the requests carried by an [`Action::Send`].
 async fn perform_action_or_recv(
     device: &dyn StorageDevice,
     com_id: u16,
     protocol: &mut ProtocolState,
     rx: &async_channel::Receiver<Command>,
     action: Action,
+    spans: Vec<Span>,
     runtime: &PolyRuntime,
 ) -> Option<Command> {
     let com_id = com_id.to_be_bytes();
     match action {
         Action::None => rx.recv().await.ok(),
         Action::Send { protocol: sec_proto, data } => {
-            let result = device.security_send(sec_proto, com_id, &data).await;
-            protocol.handle_iface_send_done(Instant::now(), sec_proto, result.map_err(|err| err.into()));
+            // The IF-SEND is parented under the request that triggered it,
+            // which is the last one, and linked with all the others.
+            let parent_idx = spans.iter().rposition(|span| !span.is_disabled());
+            let parent = parent_idx.and_then(|idx| spans[idx].id());
+            let iface = info_span!(parent: parent, "if_send", protocol = sec_proto, len = data.len());
+            for (idx, span) in spans.iter().enumerate() {
+                if Some(idx) != parent_idx {
+                    link_both_ways(&iface, span);
+                }
+            }
+
+            let result = device.security_send(sec_proto, com_id, &data).instrument(iface.clone()).await;
+            iface.in_scope(|| {
+                protocol.handle_iface_send_done(Instant::now(), sec_proto, result.map_err(|err| err.into()))
+            });
             None
         }
         Action::Recv { protocol: sec_proto, transfer_len } => {
-            let result = device.security_recv(sec_proto, com_id, transfer_len).await;
-            protocol.handle_iface_recv_done(Instant::now(), sec_proto, result.map_err(|err| err.into()));
+            // The IF-RECV is parented under the request that was sent the
+            // earliest. The requests it actually delivers to are linked when
+            // the response is processed.
+            let parent = protocol.next_recv_span(sec_proto).and_then(|span| span.id());
+            let iface = info_span!(parent: parent, "if_recv", protocol = sec_proto, transfer_len);
+
+            let result = device.security_recv(sec_proto, com_id, transfer_len).instrument(iface.clone()).await;
+            iface.in_scope(|| {
+                protocol.handle_iface_recv_done(Instant::now(), sec_proto, result.map_err(|err| err.into()), &iface)
+            });
             None
         }
         Action::Sleep { until } => {

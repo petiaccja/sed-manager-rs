@@ -16,6 +16,7 @@ use sed_packet::{
 };
 use sorbit::{error::Error as SorbitError, ser_de::ToBytes};
 use std::time::Instant;
+use tracing::Span;
 
 use crate::{Error, protocol::shared::Action};
 
@@ -46,7 +47,8 @@ where
 {
     protocol: u8,
     max_transfer_len: usize,
-    queue: VecDeque<SendMessage>,
+    /// The messages to send, each paired with the spans of the requests it carries.
+    queue: VecDeque<(SendMessage, Vec<Span>)>,
     recv_attempt: u64,
     phase: Phase,
     _recv: PhantomData<RecvMessage>,
@@ -68,8 +70,10 @@ where
         }
     }
 
-    pub fn handle_send(&mut self, send_message: SendMessage) {
-        self.queue.push_back(send_message);
+    /// Queue a message for sending. The `spans` are those of the requests the
+    /// message carries.
+    pub fn handle_send(&mut self, send_message: SendMessage, spans: Vec<Span>) {
+        self.queue.push_back((send_message, spans));
     }
 
     pub fn handle_recv(&mut self, time: Instant, result: Result<&RecvMessage, &Error>) {
@@ -146,16 +150,23 @@ where
         self.phase = new_phase;
     }
 
-    pub fn poll_action(&mut self, time: Instant) -> Action {
+    /// Returns the next action to perform. When the action is
+    /// [`Action::Send`], it's paired with the spans of the requests carried by
+    /// the message. For all other actions, the spans are empty.
+    pub fn poll_action(&mut self, time: Instant) -> (Action, Vec<Span>) {
+        let mut spans = Vec::new();
         let (action, new_phase) = match self.phase.clone() {
             Phase::Send => match self.queue.pop_front() {
-                Some(message) => (
-                    Action::Send {
-                        protocol: self.protocol,
-                        data: message.to_bytes_interface().expect("can not serialize message"),
-                    },
-                    Phase::Receive { transfer_len: RecvMessage::INITIAL_TRANSFER, backoff: INITIAL_BACKOFF },
-                ),
+                Some((message, message_spans)) => {
+                    spans = message_spans;
+                    (
+                        Action::Send {
+                            protocol: self.protocol,
+                            data: message.to_bytes_interface().expect("can not serialize message"),
+                        },
+                        Phase::Receive { transfer_len: RecvMessage::INITIAL_TRANSFER, backoff: INITIAL_BACKOFF },
+                    )
+                }
                 None => (Action::None, Phase::Send),
             },
             Phase::Receive { transfer_len, backoff } => {
@@ -193,7 +204,7 @@ where
         };
 
         self.phase = new_phase;
-        action
+        (action, spans)
     }
 }
 
@@ -589,10 +600,10 @@ mod tests {
         SendMessage: InterfaceMessage + core::fmt::Debug,
         RecvMessage: InterfaceMessage + core::fmt::Debug,
     {
-        protocol.handle_send(request);
+        protocol.handle_send(request, vec![]);
 
         for (step, (time, expected_action, received_data)) in sequence.iter().enumerate() {
-            let action = protocol.poll_action(*time);
+            let (action, _) = protocol.poll_action(*time);
             assert_eq!(&action, expected_action, "step = {}, time = {:?}", step, *time - time_0);
             if let Some(received_data) = received_data {
                 protocol.handle_recv(*time, received_data.as_ref());

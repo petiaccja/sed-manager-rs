@@ -31,10 +31,14 @@ use super::{
     session::Action as SessionAction,
 };
 
+/// Packets to send in one ComPacket, each paired with the spans of the method
+/// calls it carries.
+type PacketBatch = Vec<(Packet, Vec<Span>)>;
+
 #[derive(Debug)]
 pub struct RpcSession {
     timeout: Duration,
-    packets_to_send: VecDeque<Vec<Packet>>,
+    packets_to_send: VecDeque<PacketBatch>,
     /// `StartSession` methods that are queued for IF-SEND, keyed by HSN.
     management: Management,
     /// Session method calls that are queued for IF-SEND, keyed by session ID.
@@ -105,11 +109,12 @@ impl RpcSession {
         }
     }
 
-    pub fn handle_packet(&mut self, packet: Packet) {
+    /// Process the packet received in the IF-RECV with the span `iface`.
+    pub fn handle_packet(&mut self, packet: Packet, iface: &Span) {
         let session_id = SessionId::of(&packet);
         for sub_packet in packet.payload.into_iter().filter(|s| s.kind == SubPacketKind::Data) {
             if session_id == SessionId::MANAGEMENT {
-                for action in self.management.handle_tokens(sub_packet.payload) {
+                for action in self.management.handle_tokens(sub_packet.payload, iface) {
                     match action {
                         StackAction::Spawn { session_id, properties } => {
                             self.sessions.insert(session_id, Session::new(session_id, self.timeout, properties));
@@ -122,7 +127,7 @@ impl RpcSession {
                     }
                 }
             } else if let Some(session) = self.sessions.get_mut(&session_id) {
-                session.handle_tokens(sub_packet.payload);
+                session.handle_tokens(sub_packet.payload, iface);
             }
         }
     }
@@ -151,6 +156,14 @@ impl RpcSession {
         }
     }
 
+    /// The span of the method call that was sent the earliest among those
+    /// awaiting a response.
+    pub fn next_recv_span(&self) -> Option<(Instant, &Span)> {
+        let management = self.management.next_recv_span();
+        let sessions = self.sessions.values().map(|session| session.next_recv_span());
+        core::iter::once(management).chain(sessions).flatten().min_by_key(|(sent_at, _)| *sent_at)
+    }
+
     pub fn properties_changed(&self) -> async_broadcast::Receiver<PropertiesChanged> {
         self.management.properties_changed()
     }
@@ -159,7 +172,7 @@ impl RpcSession {
 fn reduce_actions(
     management_action: ManagementAction,
     session_actions: Vec<(SessionId, SessionAction)>,
-) -> (Vec<Vec<Packet>>, Vec<SessionId>, Option<Instant>) {
+) -> (Vec<PacketBatch>, Vec<SessionId>, Option<Instant>) {
     let mut packets_to_send = Vec::new();
     let mut deleted_sessions = Vec::new();
 
@@ -190,11 +203,18 @@ fn reduce_actions(
     (packets_to_send, deleted_sessions, deadline)
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub enum RpcAction {
     None,
-    Sleep { until: Instant },
-    Send(Vec<Packet>),
+    Sleep {
+        until: Instant,
+    },
+    /// Each packet is paired with the spans of the method calls it carries.
+    ///
+    /// The packets of different sessions are in arbitrary order. If they
+    /// are ever batched into the same ComPacket, the batching should preserve
+    /// the order in which the method calls were issued.
+    Send(PacketBatch),
 }
 
 #[cfg(test)]
@@ -235,17 +255,17 @@ mod tests {
         session.handle_method_call(SessionId::MANAGEMENT, start_call.clone(), sender, Span::current());
         assert_that!(
             session.poll_action(time),
-            pat!(RpcAction::Send(eq(&vec![packetize_one(
-                SessionId::MANAGEMENT,
-                SequenceNumber(1),
-                start_call
-            )])))
+            pat!(RpcAction::Send(elements_are![(
+                eq(&packetize_one(SessionId::MANAGEMENT, SequenceNumber(1), start_call)),
+                anything()
+            )]))
         );
 
         session.handle_iface_send_done(time, SessionId::MANAGEMENT, SequenceNumber(1), Ok(()));
         assert_that!(session.poll_action(time), pat!(&RpcAction::Sleep { until: eq(time + TIMEOUT) }));
 
-        session.handle_packet(packetize_one(SessionId::MANAGEMENT, SequenceNumber(1), sync_call.clone()));
+        session
+            .handle_packet(packetize_one(SessionId::MANAGEMENT, SequenceNumber(1), sync_call.clone()), &Span::none());
         assert_that!(session.poll_action(time), pat!(&RpcAction::None));
 
         assert_that!(receiver.try_recv(), ok(ok(eq(&sync_call))));
@@ -264,13 +284,16 @@ mod tests {
         session.handle_method_call(SESSION_ID_1, call.clone(), sender, Span::current());
         assert_that!(
             session.poll_action(time),
-            pat!(RpcAction::Send(eq(&vec![packetize_one(SESSION_ID_1, SequenceNumber(1), call)])))
+            pat!(RpcAction::Send(elements_are![(
+                eq(&packetize_one(SESSION_ID_1, SequenceNumber(1), call)),
+                anything()
+            )]))
         );
 
         session.handle_iface_send_done(time, SESSION_ID_1, SequenceNumber(1), Ok(()));
         assert_that!(session.poll_action(time), pat!(&RpcAction::Sleep { until: eq(time + TIMEOUT) }));
 
-        session.handle_packet(packetize_one(SESSION_ID_1, SequenceNumber(1), response.clone()));
+        session.handle_packet(packetize_one(SESSION_ID_1, SequenceNumber(1), response.clone()), &Span::none());
         assert_that!(session.poll_action(time), pat!(&RpcAction::None));
 
         assert_that!(receiver.try_recv(), ok(ok(eq(&response))));
@@ -288,13 +311,16 @@ mod tests {
         session.handle_method_call(SESSION_ID_1, call.clone(), sender, Span::current());
         assert_that!(
             session.poll_action(time),
-            pat!(RpcAction::Send(eq(&vec![packetize_one(SESSION_ID_1, SequenceNumber(1), call)])))
+            pat!(RpcAction::Send(elements_are![(
+                eq(&packetize_one(SESSION_ID_1, SequenceNumber(1), call)),
+                anything()
+            )]))
         );
 
         session.handle_iface_send_done(time, SESSION_ID_1, SequenceNumber(1), Ok(()));
         assert_that!(session.poll_action(time), pat!(&RpcAction::Sleep { until: eq(time + TIMEOUT) }));
 
-        session.handle_packet(packetize_one(SESSION_ID_1, SequenceNumber(1), response.clone()));
+        session.handle_packet(packetize_one(SESSION_ID_1, SequenceNumber(1), response.clone()), &Span::none());
         assert_that!(session.poll_action(time), pat!(&RpcAction::None));
 
         assert_that!(receiver.try_recv(), ok(ok(eq(&response))));
@@ -306,11 +332,10 @@ mod tests {
         let mut session = construct_with_sessions(&[SESSION_ID_1]);
         let time = Instant::now();
 
-        session.handle_packet(packetize_one(
-            SessionId::MANAGEMENT,
-            SequenceNumber(32),
-            close_session_call(SESSION_ID_1),
-        ));
+        session.handle_packet(
+            packetize_one(SessionId::MANAGEMENT, SequenceNumber(32), close_session_call(SESSION_ID_1)),
+            &Span::none(),
+        );
         assert_that!(session.poll_action(time), pat!(&RpcAction::None));
 
         assert!(session.sessions.is_empty());
