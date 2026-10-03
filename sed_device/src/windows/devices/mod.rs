@@ -26,10 +26,10 @@ fn into_boxed<ConcreteDevice: StorageDevice + 'static>(device: ConcreteDevice) -
 pub async fn open_storage_device(path: impl AsRef<Path>) -> Result<Box<dyn StorageDevice>, Error> {
     let generic_device = GenericDevice::open(path).await?;
     match generic_device.interface() {
-        Interface::NVMe => NvmeDevice::from_generic(generic_device).await.map(|dev| into_boxed(dev)),
-        Interface::SCSI => ScsiDevice::from_generic(generic_device).await.map(|dev| into_boxed(dev)),
-        Interface::ATA => AtaDevice::from_generic(generic_device).await.map(|dev| into_boxed(dev)),
-        Interface::SATA => AtaDevice::from_generic(generic_device).await.map(|dev| into_boxed(dev)), // SATA is "same" as ATA.
+        Interface::NVMe => NvmeDevice::from_generic(generic_device).await.map(into_boxed),
+        Interface::SCSI => ScsiDevice::from_generic(generic_device).await.map(into_boxed),
+        Interface::ATA => AtaDevice::from_generic(generic_device).await.map(into_boxed),
+        Interface::SATA => AtaDevice::from_generic(generic_device).await.map(into_boxed), // SATA is "same" as ATA.
         _ => Ok(into_boxed(generic_device)),
     }
 }

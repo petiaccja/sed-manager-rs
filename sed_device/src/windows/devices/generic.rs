@@ -43,7 +43,7 @@ impl GenericDevice {
 #[async_trait::async_trait]
 impl StorageDevice for GenericDevice {
     fn path(&self) -> Option<&Path> {
-        Some(&self.ioctl_device.path())
+        Some(self.ioctl_device.path())
     }
 
     fn interface(&self) -> Interface {
@@ -51,15 +51,15 @@ impl StorageDevice for GenericDevice {
     }
 
     fn model_number(&self) -> String {
-        self.desc.model_number.clone().unwrap_or(String::new())
+        self.desc.model_number.clone().unwrap_or_default()
     }
 
     fn serial_number(&self) -> String {
-        self.desc.serial_number.clone().unwrap_or(String::new())
+        self.desc.serial_number.clone().unwrap_or_default()
     }
 
     fn firmware_revision(&self) -> String {
-        self.desc.firmware_revision.clone().unwrap_or(String::new())
+        self.desc.firmware_revision.clone().unwrap_or_default()
     }
 
     fn is_security_supported(&self) -> bool {
@@ -143,12 +143,10 @@ mod ioctl {
                     AdditionalParameters: [0],
                 };
 
-                let mut request_buffer: [u8; size_of::<STORAGE_PROPERTY_QUERY>()] = unsafe { transmute(request) };
+                let request_buffer: [u8; size_of::<STORAGE_PROPERTY_QUERY>()] = unsafe { transmute(request) };
                 let mut response_buffer = vec![0u8; response_buffer_len];
 
-                self_
-                    .ioctl(IOCTL_STORAGE_QUERY_PROPERTY, Some(&mut request_buffer), Some(&mut response_buffer))
-                    .await?;
+                self_.ioctl(IOCTL_STORAGE_QUERY_PROPERTY, Some(&request_buffer), Some(&mut response_buffer)).await?;
 
                 let descriptor = unsafe { &*(response_buffer.as_ptr() as *const STORAGE_DEVICE_DESCRIPTOR) };
                 if (descriptor.Size as usize) < response_buffer.len() {

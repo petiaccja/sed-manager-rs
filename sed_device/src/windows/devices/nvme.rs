@@ -55,7 +55,7 @@ impl NvmeDevice {
 #[async_trait::async_trait]
 impl StorageDevice for NvmeDevice {
     fn path(&self) -> Option<&Path> {
-        Some(&self.ioctl_device.path())
+        Some(self.ioctl_device.path())
     }
 
     fn interface(&self) -> Interface {

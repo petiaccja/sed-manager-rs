@@ -255,6 +255,6 @@ mod ioctl {
     fn parse_request_buffer(buffer: [u8; REQUEST_BUFFER_LEN]) -> Result<(), AtaError> {
         let command: ATA_PASS_THROUGH_DIRECT = unsafe { transmute(buffer) };
         let status = AtaError::from_task_file(command.CurrentTaskFile);
-        if status.success() { Ok(()) } else { Err(status.into()) }
+        if status.success() { Ok(()) } else { Err(status) }
     }
 }

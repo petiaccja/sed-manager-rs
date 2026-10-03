@@ -130,16 +130,14 @@ where
             state.f.take()
         };
         let f = f.expect("bug: missing function");
-        let output = std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || f()));
+        let output = std::panic::catch_unwind(std::panic::AssertUnwindSafe(f));
         {
             let mut context = match context.lock() {
                 Ok(locked) => locked,
                 Err(poisoned) => poisoned.into_inner(),
             };
-            let state = std::mem::replace(
-                &mut context.state,
-                FutureState::Done(output.map_err(|err| ThreadPoolError::Panic(err))),
-            );
+            let state =
+                std::mem::replace(&mut context.state, FutureState::Done(output.map_err(ThreadPoolError::Panic)));
             if let FutureState::Waiting(waker) = state {
                 waker.wake();
             }

@@ -61,15 +61,15 @@ impl StorageDevice for ScsiDevice {
     }
 
     fn model_number(&self) -> String {
-        self.generic_desc.model_number.clone().unwrap_or(String::new())
+        self.generic_desc.model_number.clone().unwrap_or_default()
     }
 
     fn serial_number(&self) -> String {
-        self.generic_desc.serial_number.clone().unwrap_or(String::new())
+        self.generic_desc.serial_number.clone().unwrap_or_default()
     }
 
     fn firmware_revision(&self) -> String {
-        self.generic_desc.firmware_revision.clone().unwrap_or(String::new())
+        self.generic_desc.firmware_revision.clone().unwrap_or_default()
     }
 
     fn is_security_supported(&self) -> bool {
