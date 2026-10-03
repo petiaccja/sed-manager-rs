@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
-#L-----------------------------------------------------------------------------
-#L Copyright (C) Péter Kardos
-#L Please refer to the full license distributed with this software.
-#L-----------------------------------------------------------------------------
+# Copyright (C) Péter Kardos
+# Please refer to the full license distributed with this software.
 
 # Sets up unprivileged access to the storage devices SEDManager talks to
 # (SATA/SAS disks via /dev/sd*, NVMe via the /dev/nvme[0-9]* controller

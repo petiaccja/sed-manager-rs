@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
-#L-----------------------------------------------------------------------------
-#L Copyright (C) Péter Kardos
-#L Please refer to the full license distributed with this software.
-#L-----------------------------------------------------------------------------
+# Copyright (C) Péter Kardos
+# Please refer to the full license distributed with this software.
 
 # Grants the executable the Linux capabilities it needs to issue TCG security
 # commands (ATA/SCSI/NVMe passthrough ioctls) without running as root.
