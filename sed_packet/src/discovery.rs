@@ -13,6 +13,8 @@ use sorbit::{
     ser_de::{Deserialize, MultiPassSerialize, RevisableSerializer, Serialize, Span},
 };
 
+use crate::com_id::ComId;
+
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
 #[sorbit(byte_order=big_endian)]
@@ -46,14 +48,14 @@ pub trait SecuritySubsystemClass: Feature {
     ///
     /// The range starts at the base ComID and has a length equal to the number
     /// of statically allocated ComIDs specified by the feature descriptor.
-    fn static_com_ids_p1(&self) -> Range<u16>;
+    fn static_com_ids_p1(&self) -> Range<ComId>;
 
     /// The range of statically allocated ComIDs for protocol 0x02.
     ///
     /// The range starts at the base ComID and has a length equal to the number
     /// of statically allocated ComIDs specified by the feature descriptor.
-    fn static_com_ids_p3(&self) -> Range<u16> {
-        0..0
+    fn static_com_ids_p3(&self) -> Range<ComId> {
+        ComId(0)..ComId(0)
     }
 }
 
@@ -285,7 +287,7 @@ pub struct EnterpriseDescriptor {
     #[sorbit(value = constant(0x10))]
     pub length: PhantomData<u8>,
 
-    pub base_com_id: u16,
+    pub base_com_id: ComId,
     pub num_com_ids: u16,
     #[sorbit(bit_field = _0, repr=u8, bits=0)]
     pub no_range_crossing: bool,
@@ -306,7 +308,7 @@ impl Feature for EnterpriseDescriptor {
 }
 
 impl SecuritySubsystemClass for EnterpriseDescriptor {
-    fn static_com_ids_p1(&self) -> Range<u16> {
+    fn static_com_ids_p1(&self) -> Range<ComId> {
         self.base_com_id..self.base_com_id + self.num_com_ids
     }
 }
@@ -319,7 +321,7 @@ pub struct OpalV1Descriptor {
     #[sorbit(value = constant(0x10))]
     pub length: PhantomData<u8>,
 
-    pub base_com_id: u16,
+    pub base_com_id: ComId,
     pub num_com_ids: u16,
     #[sorbit(bit_field = _0, repr = u8, bits=0)]
     pub no_range_crossing: bool,
@@ -340,7 +342,7 @@ impl Feature for OpalV1Descriptor {
 }
 
 impl SecuritySubsystemClass for OpalV1Descriptor {
-    fn static_com_ids_p1(&self) -> Range<u16> {
+    fn static_com_ids_p1(&self) -> Range<ComId> {
         self.base_com_id..self.base_com_id + self.num_com_ids
     }
 }
@@ -353,7 +355,7 @@ pub struct OpalV2Descriptor {
     #[sorbit(value = constant(0x10))]
     pub length: PhantomData<u8>,
 
-    pub base_com_id: u16,
+    pub base_com_id: ComId,
     pub num_com_ids: u16,
     #[sorbit(bit_field = _0, repr=u8, bits=0)]
     pub no_range_crossing: bool,
@@ -378,7 +380,7 @@ impl Feature for OpalV2Descriptor {
 }
 
 impl SecuritySubsystemClass for OpalV2Descriptor {
-    fn static_com_ids_p1(&self) -> Range<u16> {
+    fn static_com_ids_p1(&self) -> Range<ComId> {
         self.base_com_id..self.base_com_id + self.num_com_ids
     }
 }
@@ -391,7 +393,7 @@ pub struct OpaliteDescriptor {
     #[sorbit(value = constant(0x10))]
     pub length: PhantomData<u8>,
 
-    pub base_com_id: u16,
+    pub base_com_id: ComId,
     pub num_com_ids: u16,
     #[sorbit(offset = 11)]
     pub initial_owner_pw: OwnerPasswordState,
@@ -413,7 +415,7 @@ impl Feature for OpaliteDescriptor {
 }
 
 impl SecuritySubsystemClass for OpaliteDescriptor {
-    fn static_com_ids_p1(&self) -> Range<u16> {
+    fn static_com_ids_p1(&self) -> Range<ComId> {
         self.base_com_id..self.base_com_id + self.num_com_ids
     }
 }
@@ -426,7 +428,7 @@ pub struct PyriteV1Descriptor {
     #[sorbit(value = constant(0x10))]
     pub length: PhantomData<u8>,
 
-    pub base_com_id: u16,
+    pub base_com_id: ComId,
     pub num_com_ids: u16,
     #[sorbit(offset = 11)]
     pub initial_owner_pw: OwnerPasswordState,
@@ -448,7 +450,7 @@ impl Feature for PyriteV1Descriptor {
 }
 
 impl SecuritySubsystemClass for PyriteV1Descriptor {
-    fn static_com_ids_p1(&self) -> Range<u16> {
+    fn static_com_ids_p1(&self) -> Range<ComId> {
         self.base_com_id..self.base_com_id + self.num_com_ids
     }
 }
@@ -461,7 +463,7 @@ pub struct PyriteV2Descriptor {
     #[sorbit(value = constant(0x10))]
     pub length: PhantomData<u8>,
 
-    pub base_com_id: u16,
+    pub base_com_id: ComId,
     pub num_com_ids: u16,
     #[sorbit(offset = 11)]
     pub initial_owner_pw: OwnerPasswordState,
@@ -483,7 +485,7 @@ impl Feature for PyriteV2Descriptor {
 }
 
 impl SecuritySubsystemClass for PyriteV2Descriptor {
-    fn static_com_ids_p1(&self) -> Range<u16> {
+    fn static_com_ids_p1(&self) -> Range<ComId> {
         self.base_com_id..self.base_com_id + self.num_com_ids
     }
 }
@@ -496,7 +498,7 @@ pub struct RubyDescriptor {
     #[sorbit(value = constant(0x10))]
     pub length: PhantomData<u8>,
 
-    pub base_com_id: u16,
+    pub base_com_id: ComId,
     pub num_com_ids: u16,
     #[sorbit(bit_field = _0, repr = u8, bits = 0)]
     pub no_range_crossing: bool,
@@ -521,7 +523,7 @@ impl Feature for RubyDescriptor {
 }
 
 impl SecuritySubsystemClass for RubyDescriptor {
-    fn static_com_ids_p1(&self) -> Range<u16> {
+    fn static_com_ids_p1(&self) -> Range<ComId> {
         self.base_com_id..self.base_com_id + self.num_com_ids
     }
 }
@@ -536,9 +538,9 @@ pub struct KeyPerIODescriptor {
     #[sorbit(value = constant(0x10))]
     pub length: PhantomData<u8>,
 
-    pub base_com_id_p1: u16,
+    pub base_com_id_p1: ComId,
     pub num_com_ids_p1: u16,
-    pub base_com_id_p3: u16,
+    pub base_com_id_p3: ComId,
     pub num_com_ids_p3: u16,
     #[sorbit(offset = 10)]
     pub initial_owner_pw: OwnerPasswordState,
@@ -607,11 +609,11 @@ impl Feature for KeyPerIODescriptor {
 }
 
 impl SecuritySubsystemClass for KeyPerIODescriptor {
-    fn static_com_ids_p1(&self) -> Range<u16> {
+    fn static_com_ids_p1(&self) -> Range<ComId> {
         self.base_com_id_p1..self.base_com_id_p1 + self.num_com_ids_p1
     }
 
-    fn static_com_ids_p3(&self) -> Range<u16> {
+    fn static_com_ids_p3(&self) -> Range<ComId> {
         self.base_com_id_p3..self.base_com_id_p3 + self.num_com_ids_p3
     }
 }
@@ -1102,7 +1104,7 @@ mod tests {
         let value = FeatureDescriptor::Enterprise(EnterpriseDescriptor {
             version: 1,
             length: PhantomData,
-            base_com_id: 2,
+            base_com_id: ComId(2),
             num_com_ids: 1,
             no_range_crossing: true,
         });
@@ -1125,7 +1127,7 @@ mod tests {
         let value = FeatureDescriptor::OpalV1(OpalV1Descriptor {
             version: 1,
             length: PhantomData,
-            base_com_id: 2,
+            base_com_id: ComId(2),
             num_com_ids: 1,
             no_range_crossing: true,
         });
@@ -1152,7 +1154,7 @@ mod tests {
         let value = FeatureDescriptor::OpalV2(OpalV2Descriptor {
             version: 1,
             length: PhantomData,
-            base_com_id: 2,
+            base_com_id: ComId(2),
             num_com_ids: 1,
             no_range_crossing: true,
             num_locking_admins_supported: 4,
@@ -1181,7 +1183,7 @@ mod tests {
         let value = FeatureDescriptor::Opalite(OpaliteDescriptor {
             version: 1,
             length: PhantomData,
-            base_com_id: 2,
+            base_com_id: ComId(2),
             num_com_ids: 1,
             initial_owner_pw: OwnerPasswordState::VendorSpecified,
             reverted_owner_pw: OwnerPasswordState::VendorSpecified,
@@ -1207,7 +1209,7 @@ mod tests {
         let value = FeatureDescriptor::PyriteV1(PyriteV1Descriptor {
             version: 1,
             length: PhantomData,
-            base_com_id: 2,
+            base_com_id: ComId(2),
             num_com_ids: 1,
             initial_owner_pw: OwnerPasswordState::VendorSpecified,
             reverted_owner_pw: OwnerPasswordState::VendorSpecified,
@@ -1233,7 +1235,7 @@ mod tests {
         let value = FeatureDescriptor::PyriteV2(PyriteV2Descriptor {
             version: 1,
             length: PhantomData,
-            base_com_id: 2,
+            base_com_id: ComId(2),
             num_com_ids: 1,
             initial_owner_pw: OwnerPasswordState::VendorSpecified,
             reverted_owner_pw: OwnerPasswordState::VendorSpecified,
@@ -1261,7 +1263,7 @@ mod tests {
         let value = FeatureDescriptor::Ruby(RubyDescriptor {
             version: 1,
             length: PhantomData,
-            base_com_id: 2,
+            base_com_id: ComId(2),
             num_com_ids: 1,
             no_range_crossing: true,
             num_locking_admins_supported: 4,
@@ -1309,9 +1311,9 @@ mod tests {
             version: 1,
             minor_version: 0,
             length: PhantomData,
-            base_com_id_p1: 2,
+            base_com_id_p1: ComId(2),
             num_com_ids_p1: 1,
-            base_com_id_p3: 4,
+            base_com_id_p3: ComId(4),
             num_com_ids_p3: 1,
             initial_owner_pw: OwnerPasswordState::VendorSpecified,
             reverted_owner_pw: OwnerPasswordState::VendorSpecified,

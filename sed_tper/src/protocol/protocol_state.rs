@@ -11,7 +11,8 @@ use std::{
 
 use oneshot::Sender;
 use sed_packet::{
-    com_id::{
+    com_id::{ComId, ComIdExt},
+    com_id_request::{
         COM_ID_PROTOCOL, COM_ID_RESPONSE_LEN, ComIdRequest, ComIdResponse, ComIdResponsePayload, StackResetStatus,
     },
     packet::{COM_PACKET_HEADER_LEN, ComPacket, PACKET_HEADER_LEN, PACKETIZED_PROTOCOL, SUB_PACKET_HEADER_LEN},
@@ -92,8 +93,8 @@ pub const CAPABILITIES: Properties = Properties {
 
 #[derive(Debug)]
 pub struct ProtocolState {
-    com_id: u16,
-    com_id_ext: u16,
+    com_id: ComId,
+    com_id_ext: ComIdExt,
     rpc_session: RpcSession,
     com_id_session: ComIdSession,
     rpc_protocol: SynchronousProtocol<ComPacket, ComPacket>,
@@ -103,7 +104,7 @@ pub struct ProtocolState {
 }
 
 impl ProtocolState {
-    pub fn new(com_id: u16, com_id_ext: u16) -> Self {
+    pub fn new(com_id: ComId, com_id_ext: ComIdExt) -> Self {
         let max_transfer_len = CAPABILITIES.max_gross_compacket_size.get();
         Self {
             com_id,
@@ -351,8 +352,8 @@ mod tests {
     use googletest::assert_that;
     use googletest::matchers::*;
     use oneshot::channel;
-    use sed_packet::com_id::ComIdResponsePayload;
-    use sed_packet::com_id::StackResetStatus;
+    use sed_packet::com_id_request::ComIdResponsePayload;
+    use sed_packet::com_id_request::StackResetStatus;
     use sed_spec::methods::MethodStatus;
     use sorbit::ser_de::ToBytes;
 
@@ -365,13 +366,13 @@ mod tests {
 
     #[test]
     fn com_id_request_completed() {
-        let mut protocol = ProtocolState::new(1, 0);
+        let mut protocol = ProtocolState::new(ComId(1), ComIdExt(0));
         let (sender, receiver) = channel();
 
-        let request = ComIdRequest::stack_reset(1, 0);
+        let request = ComIdRequest::stack_reset(ComId(1), ComIdExt(0));
         let response = ComIdResponse {
-            com_id: 1,
-            com_id_ext: 0,
+            com_id: ComId(1),
+            com_id_ext: ComIdExt(0),
             payload: ComIdResponsePayload::StackReset { available_data_length: 4, status: StackResetStatus::Success },
         };
 
@@ -398,14 +399,14 @@ mod tests {
 
     #[test]
     fn method_call_completed() {
-        let mut protocol = ProtocolState::new(1, 0);
+        let mut protocol = ProtocolState::new(ComId(1), ComIdExt(0));
         let (sender, receiver) = channel();
 
         let call = start_session_call(SESSION_ID);
         let response = sync_session_call(SESSION_ID, MethodStatus::Success);
         let call_com_packet = ComPacket {
-            com_id: 1,
-            com_id_ext: 0,
+            com_id: ComId(1),
+            com_id_ext: ComIdExt(0),
             outstanding_data: 0,
             min_transfer: 0,
             length: std::marker::PhantomData,
@@ -416,8 +417,8 @@ mod tests {
             )],
         };
         let response_com_packet = ComPacket {
-            com_id: 1,
-            com_id_ext: 0,
+            com_id: ComId(1),
+            com_id_ext: ComIdExt(0),
             outstanding_data: 0,
             min_transfer: 0,
             length: std::marker::PhantomData,

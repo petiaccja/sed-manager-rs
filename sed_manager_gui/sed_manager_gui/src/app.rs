@@ -14,7 +14,7 @@ use async_lock::RwLock;
 use sed_async::PolyRuntime;
 use sed_manager::{Device, Error, Geometry, Host, Spec};
 use sed_manager_gui_slint as ui;
-use sed_packet::{MaxBytes, com_id::ComIdState};
+use sed_packet::{MaxBytes, com_id_request::ComIdState};
 use sed_spec::{
     methods::MethodStatus,
     objects::{Authority, AuthorityRef, SecurityProviderRef},
@@ -353,14 +353,19 @@ impl App {
                             self.toast_queue.success("Stack status updated".into(), "".to_string());
                         }
                         let status = state.to_shared_string();
-                        ui::ComIdStatus { com_id: com_id.into(), com_id_ext: com_id_ext.into(), status, good }
+                        ui::ComIdStatus { com_id: com_id.0.into(), com_id_ext: com_id_ext.0.into(), status, good }
                     }
                     Ok((com_id, com_id_ext, Err(err))) => {
                         if !silent {
                             self.toast_queue.error("Could not update stack status".into(), err.to_string());
                         }
                         let status = err.to_shared_string();
-                        ui::ComIdStatus { com_id: com_id.into(), com_id_ext: com_id_ext.into(), good: false, status }
+                        ui::ComIdStatus {
+                            com_id: com_id.0.into(),
+                            com_id_ext: com_id_ext.0.into(),
+                            good: false,
+                            status,
+                        }
                     }
                     Err(err) => {
                         if !silent {

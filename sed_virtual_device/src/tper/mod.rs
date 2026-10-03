@@ -147,7 +147,7 @@ impl Tper {
             Tper::Opal2(_) => FeatureDescriptor::OpalV2(OpalV2Descriptor {
                 version: 1,
                 length: PhantomData,
-                base_com_id: BASE_COM_ID.0,
+                base_com_id: BASE_COM_ID,
                 num_com_ids: NUM_COM_IDS,
                 no_range_crossing: false,
                 num_locking_admins_supported: 4,

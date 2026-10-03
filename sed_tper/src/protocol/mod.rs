@@ -19,7 +19,8 @@ use async_channel::RecvError;
 use sed_async::{PolyRuntime, Runtime as _};
 use sed_device::StorageDevice;
 use sed_packet::{
-    com_id::{ComIdRequest, ComIdResponse},
+    com_id::{ComId, ComIdExt},
+    com_id_request::{ComIdRequest, ComIdResponse},
     session_id::SessionId,
 };
 #[cfg(feature = "test-utils")]
@@ -36,7 +37,7 @@ pub use shared::PropertiesChanged;
 /// The full protocol to communicate with the TPer via packets and ComID requests.
 #[derive(Debug)]
 pub struct Protocol {
-    com_id: u16,
+    com_id: ComId,
     device: Arc<dyn StorageDevice>,
     command_rx: async_channel::Receiver<Command>,
     state: ProtocolState,
@@ -50,8 +51,8 @@ impl Protocol {
     /// This initializes the protocol stack, but no messages will be delivered
     /// until you call [`run`](Self::run).
     pub fn new(
-        com_id: u16,
-        com_id_ext: u16,
+        com_id: ComId,
+        com_id_ext: ComIdExt,
         device: Arc<dyn StorageDevice>,
         runtime: Arc<PolyRuntime>,
     ) -> (Self, Controller) {
@@ -183,7 +184,7 @@ fn inject_command(state: &mut ProtocolState, command: Command) {
 /// The `spans` are those of the requests carried by an [`Action::Send`].
 async fn perform_action_or_recv(
     device: &dyn StorageDevice,
-    com_id: u16,
+    com_id: ComId,
     protocol_state: &mut ProtocolState,
     rx: &async_channel::Receiver<Command>,
     action: Action,
@@ -198,8 +199,7 @@ async fn perform_action_or_recv(
             // triggered it. We'll take that as the last span associated with
             // the request.
             let parent = request_spans.iter().rev().find(|span| !span.is_disabled()).and_then(|span| span.id());
-            let send_span =
-                info_span!(parent: parent.clone(), "if_send", device = ?device, com_id, protocol, len = data.len());
+            let send_span = info_span!(parent: parent.clone(), "if_send", ?device, %com_id, protocol, len = data.len());
             for request_span in &request_spans {
                 if request_span.id() != parent {
                     link_both_ways(&send_span, request_span);
@@ -218,7 +218,7 @@ async fn perform_action_or_recv(
             // sent with IF-SEND the earliest. The IF-RECV may actually return
             // a reply to another request!
             let parent = protocol_state.next_recv_span(protocol).and_then(|span| span.id());
-            let recv_span = info_span!(parent: parent, "if_recv", device = ?device, com_id, protocol, transfer_len);
+            let recv_span = info_span!(parent: parent, "if_recv", ?device, %com_id, protocol, transfer_len);
 
             let result = device.security_recv(protocol, com_id_bytes, transfer_len).instrument(recv_span.clone()).await;
             recv_span.in_scope(|| {
@@ -253,6 +253,8 @@ mod tests {
     use googletest::matchers::*;
     use sed_async::TokioRuntime;
     use sed_device::mock_device::{MockDevice, MockEvent};
+    use sed_packet::com_id::ComId;
+    use sed_packet::com_id::ComIdExt;
     use sed_packet::packet::ComPacket;
     use sed_spec::methods::MethodStatus;
     use sorbit::ser_de::ToBytes as _;
@@ -272,8 +274,8 @@ mod tests {
         let call = start_session_call(SESSION_ID);
         let response = sync_session_call(SESSION_ID, MethodStatus::Success);
         let call_packet = ComPacket {
-            com_id: 1,
-            com_id_ext: 0,
+            com_id: ComId(1),
+            com_id_ext: ComIdExt(0),
             outstanding_data: 0,
             min_transfer: 0,
             length: std::marker::PhantomData,
@@ -284,8 +286,8 @@ mod tests {
             )],
         };
         let response_packet = ComPacket {
-            com_id: 1,
-            com_id_ext: 0,
+            com_id: ComId(1),
+            com_id_ext: ComIdExt(0),
             outstanding_data: 0,
             min_transfer: 0,
             length: std::marker::PhantomData,
@@ -314,7 +316,7 @@ mod tests {
 
         let device = MockDevice::new(scenario.into_iter());
         let runtime = PolyRuntime::Tokio(TokioRuntime::current().unwrap());
-        let (protocol, controller) = Protocol::new(1, 0, Arc::new(device), Arc::new(runtime));
+        let (protocol, controller) = Protocol::new(ComId(1), ComIdExt(0), Arc::new(device), Arc::new(runtime));
         let task = tokio::spawn(protocol.run());
 
         let response_rx = controller.call(SessionId::MANAGEMENT, call);

@@ -9,7 +9,8 @@ use std::path::Path;
 use std::sync::Mutex;
 
 use sed_device::{Error, Interface, StorageDevice};
-use sed_packet::com_id::ComIdRequest;
+use sed_packet::com_id::{ComId, ComIdExt};
+use sed_packet::com_id_request::ComIdRequest;
 use sed_packet::discovery::Discovery;
 use sed_packet::packet::ComPacket;
 use sed_packet::session_id::SessionId;
@@ -17,7 +18,6 @@ use sed_spec::methods::MethodStatus;
 use sed_spec::objects::{AuthorityRef, SecurityProviderRef};
 use sorbit::ser_de::{FromBytes, ToBytes as _};
 
-use crate::com_id::{ComId, ComIdExt};
 use crate::com_session::ComSession;
 use crate::internal_error::Expect;
 use crate::packet_session::PacketSession;
@@ -68,11 +68,11 @@ impl VirtualDevice {
     }
 
     /// Return a list of the currently active sessions on the ComID.
-    pub fn sessions(&self, com_id: u16, com_id_ext: u16) -> Result<HashSet<SessionId>, Error> {
+    pub fn sessions(&self, com_id: ComId, com_id_ext: ComIdExt) -> Result<HashSet<SessionId>, Error> {
         let sessions = self.sessions.lock().expect("the virtual device panicked in another thread");
         let Sessions { packet_sessions, .. } = sessions.deref();
-        match packet_sessions.get(&ComId(com_id)) {
-            Some(packet_session) if packet_session.com_id_ext().0 == com_id_ext => Ok(packet_session.sessions()),
+        match packet_sessions.get(&com_id) {
+            Some(packet_session) if packet_session.com_id_ext() == com_id_ext => Ok(packet_session.sessions()),
             _ => Err(Error::InvalidProtocolOrComID),
         }
     }

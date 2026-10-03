@@ -395,7 +395,7 @@ mod tests {
             [0; 55].as_slice(),                                          // Padding for 27..82
             [0x03].as_slice(),                                           // NULBAF
             [0; 45].as_slice(),                                          // Padding for 83..128
-            std::array::from_fn::<u8, 256, _>(|i| lba_format_array_byte(i)).as_slice(), // LBAF0..=LBAF63
+            std::array::from_fn::<u8, 256, _>(lba_format_array_byte).as_slice(), // LBAF0..=LBAF63
         ]
         .iter()
         .flat_map(|x| x.iter())

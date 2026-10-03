@@ -10,10 +10,13 @@ use std::sync::{
 
 use sed_async::{PolyRuntime, Runtime};
 use sed_device::StorageDevice;
-use sed_packet::discovery::Discovery;
 use sed_packet::{
     MaxBytes,
-    com_id::{ComIdRequest, ComIdResponsePayload, ComIdState, StackResetStatus},
+    com_id_request::{ComIdRequest, ComIdResponsePayload, ComIdState, StackResetStatus},
+};
+use sed_packet::{
+    com_id::{ComId, ComIdExt},
+    discovery::Discovery,
 };
 use sed_spec::{
     methods::Properties,
@@ -39,8 +42,8 @@ use crate::{
 /// base ComID.
 #[derive(Debug)]
 pub struct Tper {
-    com_id: u16,
-    com_id_ext: u16,
+    com_id: ComId,
+    com_id_ext: ComIdExt,
     device: Arc<dyn StorageDevice>,
     controller: Controller,
     protocol_task: <PolyRuntime as Runtime>::JoinHandle<()>,
@@ -49,12 +52,12 @@ pub struct Tper {
 
 impl Tper {
     /// The ComID on which the `Tper` is connected.
-    pub fn com_id(&self) -> u16 {
+    pub fn com_id(&self) -> ComId {
         self.com_id
     }
 
     /// The ComID extension on which the `Tper` is connected.
-    pub fn com_id_ext(&self) -> u16 {
+    pub fn com_id_ext(&self) -> ComIdExt {
         self.com_id_ext
     }
 
@@ -96,7 +99,12 @@ impl Tper {
     /// subsequent requests will time out, and you'll likely need to do a stack
     /// reset to get the device's communication stack synchronized again.
     #[instrument(level = "info", skip(runtime))]
-    pub fn connect(com_id: u16, com_id_ext: u16, device: Arc<dyn StorageDevice>, runtime: Arc<PolyRuntime>) -> Self {
+    pub fn connect(
+        com_id: ComId,
+        com_id_ext: ComIdExt,
+        device: Arc<dyn StorageDevice>,
+        runtime: Arc<PolyRuntime>,
+    ) -> Self {
         let (protocol, controller) = Protocol::new(com_id, com_id_ext, device.clone(), runtime.clone());
         let protocol_task = runtime.spawn(protocol.run());
         let host_session_id = Arc::new(AtomicU32::new(1));
@@ -130,7 +138,7 @@ impl Tper {
     /// The argument may be any ComID, it doesn't have to be the one on which
     /// this [`Tper`] is connected. The ComID may also be invalid.
     #[instrument(level = "info", skip(self), ret, err)]
-    pub async fn verify_com_id_valid(&self, com_id: u16, com_id_ext: u16) -> Result<ComIdState, Error> {
+    pub async fn verify_com_id_valid(&self, com_id: ComId, com_id_ext: ComIdExt) -> Result<ComIdState, Error> {
         use ComIdResponsePayload::*;
 
         let request = ComIdRequest::verify_com_id_valid(com_id, com_id_ext);
@@ -147,7 +155,7 @@ impl Tper {
     /// got stuck or desynchronized, and the device is not responding to RPCs as
     /// expected.
     #[instrument(level = "info", skip(self), ret, err)]
-    pub async fn stack_reset(&self, com_id: u16, com_id_ext: u16) -> Result<(), Error> {
+    pub async fn stack_reset(&self, com_id: ComId, com_id_ext: ComIdExt) -> Result<(), Error> {
         use ComIdResponsePayload::*;
         use StackResetStatus::*;
 

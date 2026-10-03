@@ -4,6 +4,7 @@
 //L-----------------------------------------------------------------------------
 
 pub mod com_id;
+pub mod com_id_request;
 mod data_model;
 pub mod discovery;
 pub mod packet;

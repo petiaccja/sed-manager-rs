@@ -11,7 +11,7 @@ use std::{
 };
 
 use sed_packet::{
-    com_id::{COM_ID_RESPONSE_LEN, ComIdRequest, ComIdResponse, ComIdResponsePayload},
+    com_id_request::{COM_ID_RESPONSE_LEN, ComIdRequest, ComIdResponse, ComIdResponsePayload},
     packet::ComPacket,
 };
 use sorbit::{error::Error as SorbitError, ser_de::ToBytes};
@@ -325,23 +325,24 @@ mod tests {
     use super::*;
 
     use googletest::{assert_that, matchers::*};
-    use sed_packet::com_id::{COM_ID_PROTOCOL, ComIdRequest, ComIdState, Date, StackResetStatus};
+    use sed_packet::com_id::{ComId, ComIdExt};
+    use sed_packet::com_id_request::{COM_ID_PROTOCOL, ComIdRequest, ComIdState, Date, StackResetStatus};
     use sed_packet::packet::{PACKETIZED_PROTOCOL, Packet};
 
-    const COM_ID: u16 = 1;
-    const COM_ID_EXT: u16 = 0;
+    const COM_ID: ComId = ComId(1);
+    const COM_ID_EXT: ComIdExt = ComIdExt(0);
 
     #[test]
     fn stack_reset_exchanged_with_delay() {
         const REQUEST: ComIdRequest = ComIdRequest::stack_reset(COM_ID, COM_ID_EXT);
         const RESPONSE_PENDING: ComIdResponse = ComIdResponse {
-            com_id: 1,
-            com_id_ext: 1,
+            com_id: ComId(1),
+            com_id_ext: ComIdExt(1),
             payload: ComIdResponsePayload::StackReset { available_data_length: 0, status: StackResetStatus::Success },
         };
         const RESPONSE_DONE: ComIdResponse = ComIdResponse {
-            com_id: 1,
-            com_id_ext: 1,
+            com_id: ComId(1),
+            com_id_ext: ComIdExt(1),
             payload: ComIdResponsePayload::StackReset { available_data_length: 4, status: StackResetStatus::Success },
         };
 
@@ -368,10 +369,10 @@ mod tests {
 
     #[test]
     fn verify_com_id_exchanged() {
-        const REQUEST: ComIdRequest = ComIdRequest::verify_com_id_valid(1, 0);
+        const REQUEST: ComIdRequest = ComIdRequest::verify_com_id_valid(ComId(1), ComIdExt(0));
         const RESPONSE: ComIdResponse = ComIdResponse {
-            com_id: 1,
-            com_id_ext: 1,
+            com_id: ComId(1),
+            com_id_ext: ComIdExt(1),
             payload: ComIdResponsePayload::Verify {
                 available_data_length: 22,
                 com_id_state: ComIdState::Associated,
@@ -397,10 +398,10 @@ mod tests {
 
     #[test]
     fn interrupted_with_no_response_available() {
-        const REQUEST: ComIdRequest = ComIdRequest::verify_com_id_valid(1, 0);
+        const REQUEST: ComIdRequest = ComIdRequest::verify_com_id_valid(ComId(1), ComIdExt(0));
         const RESPONSE: ComIdResponse = ComIdResponse {
-            com_id: 1,
-            com_id_ext: 1,
+            com_id: ComId(1),
+            com_id_ext: ComIdExt(1),
             payload: ComIdResponsePayload::NoResponseAvailable { available_data_length: 0 },
         };
 

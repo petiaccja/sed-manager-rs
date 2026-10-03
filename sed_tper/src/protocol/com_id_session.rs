@@ -9,7 +9,7 @@ use std::{
 };
 
 use oneshot::Sender;
-use sed_packet::com_id::{ComIdRequest, ComIdResponse};
+use sed_packet::com_id_request::{ComIdRequest, ComIdResponse};
 use tracing::Span;
 
 use crate::{Error, protocol::shared::link_both_ways};

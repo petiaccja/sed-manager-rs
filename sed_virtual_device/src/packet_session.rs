@@ -6,13 +6,13 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 
 use sed_device::Error;
+use sed_packet::com_id::{ComId, ComIdExt};
 use sed_packet::packet::ComPacket;
 use sed_packet::session_id::SessionId;
 use sed_spec::methods::MethodStatus;
 use sed_spec::objects::{AuthorityRef, SecurityProviderRef};
 use sed_spec::preconfig::core::shared::authority::ANYBODY;
 
-use crate::com_id::{ComId, ComIdExt};
 use crate::management_session::ManagementSession;
 use crate::session::Session;
 use crate::tper::Tper;
@@ -106,16 +106,16 @@ impl PacketSession {
         let min_transfer = self.response_queue.front().iter().map(|com_packet| com_packet.transfer_len()).sum();
         match front {
             Some(front) => Ok(ComPacket {
-                com_id: self.com_id.0,
-                com_id_ext: self.com_id_ext().0,
+                com_id: self.com_id,
+                com_id_ext: self.com_id_ext(),
                 outstanding_data,
                 min_transfer,
                 ..front
             }),
             None => {
                 let response = ComPacket {
-                    com_id: self.com_id.0,
-                    com_id_ext: self.com_id_ext().0,
+                    com_id: self.com_id,
+                    com_id_ext: self.com_id_ext(),
                     outstanding_data,
                     min_transfer,
                     length: std::marker::PhantomData,

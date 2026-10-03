@@ -5,6 +5,7 @@
 
 use std::time::Duration;
 
+use sed_packet::com_id::{ComId, ComIdExt};
 use sorbit::ser_de::ToBytes;
 
 use sed_device::Error as DeviceError;
@@ -14,7 +15,7 @@ use sed_packet::token_stream::ToTokens;
 
 pub const TEST_TIMEOUT: Duration = Duration::from_secs(5);
 
-pub fn method_call_event(com_id: u16, hsn: u32, tsn: u32, call: impl ToTokens) -> MockEvent {
+pub fn method_call_event(com_id: ComId, hsn: u32, tsn: u32, call: impl ToTokens) -> MockEvent {
     MockEvent::Send {
         name: Some("method_call".into()),
         security_protocol: 0x01,
@@ -24,7 +25,7 @@ pub fn method_call_event(com_id: u16, hsn: u32, tsn: u32, call: impl ToTokens) -
     }
 }
 
-pub fn method_return_event(com_id: u16, hsn: u32, tsn: u32, return_: impl ToTokens) -> MockEvent {
+pub fn method_return_event(com_id: ComId, hsn: u32, tsn: u32, return_: impl ToTokens) -> MockEvent {
     MockEvent::Recv {
         name: Some("method_return".into()),
         security_protocol: 0x01,
@@ -33,7 +34,7 @@ pub fn method_return_event(com_id: u16, hsn: u32, tsn: u32, return_: impl ToToke
     }
 }
 
-pub fn method_call_fail_event(com_id: u16, hsn: u32, tsn: u32, call: impl ToTokens, error: DeviceError) -> MockEvent {
+pub fn method_call_fail_event(com_id: ComId, hsn: u32, tsn: u32, call: impl ToTokens, error: DeviceError) -> MockEvent {
     MockEvent::Send {
         name: Some("method_call".into()),
         security_protocol: 0x01,
@@ -43,7 +44,7 @@ pub fn method_call_fail_event(com_id: u16, hsn: u32, tsn: u32, call: impl ToToke
     }
 }
 
-pub fn method_return_fail_event(com_id: u16, error: DeviceError) -> MockEvent {
+pub fn method_return_fail_event(com_id: ComId, error: DeviceError) -> MockEvent {
     MockEvent::Recv {
         name: Some("method_return".into()),
         security_protocol: 0x01,
@@ -52,7 +53,7 @@ pub fn method_return_fail_event(com_id: u16, error: DeviceError) -> MockEvent {
     }
 }
 
-pub fn com_id_request_event<const MULTI_PASS: bool>(com_id: u16, request: impl ToBytes<MULTI_PASS>) -> MockEvent {
+pub fn com_id_request_event<const MULTI_PASS: bool>(com_id: ComId, request: impl ToBytes<MULTI_PASS>) -> MockEvent {
     MockEvent::Send {
         name: Some("com_id_request".into()),
         security_protocol: 0x02,
@@ -62,7 +63,7 @@ pub fn com_id_request_event<const MULTI_PASS: bool>(com_id: u16, request: impl T
     }
 }
 
-pub fn com_id_response_event<const MULTI_PASS: bool>(com_id: u16, response: impl ToBytes<MULTI_PASS>) -> MockEvent {
+pub fn com_id_response_event<const MULTI_PASS: bool>(com_id: ComId, response: impl ToBytes<MULTI_PASS>) -> MockEvent {
     MockEvent::Recv {
         name: Some("com_id_response".into()),
         security_protocol: 0x02,
@@ -72,7 +73,7 @@ pub fn com_id_response_event<const MULTI_PASS: bool>(com_id: u16, response: impl
 }
 
 pub fn com_id_request_fail_event<const MULTI_PASS: bool>(
-    com_id: u16,
+    com_id: ComId,
     request: impl ToBytes<MULTI_PASS>,
     error: DeviceError,
 ) -> MockEvent {
@@ -85,7 +86,7 @@ pub fn com_id_request_fail_event<const MULTI_PASS: bool>(
     }
 }
 
-pub fn com_id_response_fail_event(com_id: u16, error: DeviceError) -> MockEvent {
+pub fn com_id_response_fail_event(com_id: ComId, error: DeviceError) -> MockEvent {
     MockEvent::Recv {
         name: Some("com_id_response".into()),
         security_protocol: 0x02,
@@ -94,10 +95,10 @@ pub fn com_id_response_fail_event(com_id: u16, error: DeviceError) -> MockEvent 
     }
 }
 
-fn packetize(com_id: u16, hsn: u32, tsn: u32, value: impl ToTokens) -> ComPacket {
+fn packetize(com_id: ComId, hsn: u32, tsn: u32, value: impl ToTokens) -> ComPacket {
     ComPacket {
         com_id,
-        com_id_ext: 0,
+        com_id_ext: ComIdExt(0),
         payload: vec![Packet {
             tper_session_number: tsn,
             host_session_number: hsn,

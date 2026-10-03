@@ -7,7 +7,12 @@ use std::sync::Arc;
 
 use sed_async::PolyRuntime;
 use sed_device::StorageDevice;
-use sed_packet::{MaxBytes, com_id::ComIdState, discovery::Discovery};
+use sed_packet::{
+    MaxBytes,
+    com_id::{ComId, ComIdExt},
+    com_id_request::ComIdState,
+    discovery::Discovery,
+};
 use sed_spec::{methods::Properties, objects::AuthorityRef};
 use sed_tper::{PropertiesChanged, Tper};
 use tracing::instrument;
@@ -35,7 +40,7 @@ impl Device {
             .ok()
             .and_then(|spec| spec.default_ssc())
             .and_then(|ssc| ssc.as_ssc())
-            .map(|ssc| Tper::connect(ssc.static_com_ids_p1().start, 0, storage_device.clone(), runtime));
+            .map(|ssc| Tper::connect(ssc.static_com_ids_p1().start, ComIdExt(0), storage_device.clone(), runtime));
         Self { storage_device, spec, tper }
     }
 
@@ -52,12 +57,12 @@ impl Device {
     }
 
     // Return the opened storage device.
-    pub fn com_id(&self) -> Result<u16, Error> {
+    pub fn com_id(&self) -> Result<ComId, Error> {
         self.tper.as_ref().map(|tper| tper.com_id()).ok_or(Error::NoSscAvailable)
     }
 
     // Return the opened storage device.
-    pub fn com_id_ext(&self) -> Result<u16, Error> {
+    pub fn com_id_ext(&self) -> Result<ComIdExt, Error> {
         self.tper.as_ref().map(|tper| tper.com_id_ext()).ok_or(Error::NoSscAvailable)
     }
 

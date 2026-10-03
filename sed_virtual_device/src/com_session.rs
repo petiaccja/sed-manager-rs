@@ -5,12 +5,12 @@
 
 use std::collections::HashMap;
 
-use sed_packet::com_id::{
+use sed_packet::com_id::{ComId, ComIdExt};
+use sed_packet::com_id_request::{
     ComIdRequest, ComIdRequestCode, ComIdResponse, ComIdResponsePayload, ComIdState, Date, StackResetStatus,
 };
 
 use crate::NUM_COM_IDS;
-use crate::com_id::{ComId, ComIdExt};
 use crate::device::BASE_COM_ID;
 use crate::packet_session::PacketSession;
 
@@ -35,15 +35,15 @@ impl ComSession {
 
     pub fn pop(&mut self) -> &ComIdResponse {
         self.response_queue.get_or_insert(ComIdResponse {
-            com_id: self.com_id.0,
-            com_id_ext: 0,
+            com_id: self.com_id,
+            com_id_ext: ComIdExt(0),
             payload: ComIdResponsePayload::NoResponseAvailable { available_data_length: 0 },
         })
     }
 
     fn verify_com_id_valid(&mut self, packet_sessions: &HashMap<ComId, PacketSession>, request: &ComIdRequest) {
-        let com_id = ComId(request.com_id);
-        let com_id_ext = ComIdExt(request.com_id_ext);
+        let com_id = request.com_id;
+        let com_id_ext = request.com_id_ext;
         let com_id_state = match packet_sessions.get(&com_id) {
             Some(session) => match session.com_id_ext() {
                 value if value == com_id_ext => match session.is_associated() {
@@ -72,8 +72,8 @@ impl ComSession {
     }
 
     fn stack_reset(&mut self, packet_sessions: &mut HashMap<ComId, PacketSession>, request: ComIdRequest) {
-        let com_id = ComId(request.com_id);
-        let com_id_ext = ComIdExt(request.com_id_ext);
+        let com_id = request.com_id;
+        let com_id_ext = request.com_id_ext;
 
         let status = if let Some(session) = packet_sessions.get_mut(&com_id)
             && session.com_id_ext() == com_id_ext

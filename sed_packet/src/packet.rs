@@ -8,6 +8,8 @@ use std::marker::PhantomData;
 
 use sorbit::{Deserialize, Serialize};
 
+use crate::com_id::{ComId, ComIdExt};
+
 pub const COM_PACKET_HEADER_LEN: usize = 20;
 pub const PACKET_HEADER_LEN: usize = 24;
 pub const SUB_PACKET_HEADER_LEN: usize = 12;
@@ -60,8 +62,8 @@ pub struct Packet {
 #[sorbit(byte_order=big_endian)]
 pub struct ComPacket {
     #[sorbit(offset = 4)]
-    pub com_id: u16,
-    pub com_id_ext: u16,
+    pub com_id: ComId,
+    pub com_id_ext: ComIdExt,
     pub outstanding_data: u32,
     pub min_transfer: u32,
     #[sorbit(value = byte_count(payload))]
@@ -87,8 +89,8 @@ impl Default for Packet {
 impl Default for ComPacket {
     fn default() -> Self {
         Self {
-            com_id: 0,
-            com_id_ext: 0,
+            com_id: ComId(0),
+            com_id_ext: ComIdExt(0),
             outstanding_data: 0,
             min_transfer: 0,
             length: PhantomData,
@@ -227,8 +229,8 @@ mod tests {
             0x00, 0x00, // Padding.
         ];
         let value = ComPacket {
-            com_id: 0x1234,
-            com_id_ext: 0x0034,
+            com_id: ComId(0x1234),
+            com_id_ext: ComIdExt(0x0034),
             outstanding_data: 0x10,
             min_transfer: 0x10,
             length: PhantomData,
