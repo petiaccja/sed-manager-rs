@@ -8,6 +8,7 @@ use std::mem::transmute;
 use std::path::Path;
 
 use sorbit::ser_de::FromBytes;
+use tracing::instrument;
 use windows::Win32::Storage::IscsiDisc::{
     ATA_FLAGS_DATA_IN, ATA_FLAGS_DATA_OUT, ATA_FLAGS_USE_DMA, ATA_PASS_THROUGH_DIRECT, IOCTL_ATA_PASS_THROUGH_DIRECT,
 };
@@ -79,6 +80,17 @@ impl StorageDevice for AtaDevice {
         self.generic_desc.is_removable
     }
 
+    #[instrument(skip(self), ret, err)]
+    async fn logical_sector_size(&self) -> Result<u32, DeviceError> {
+        self.ioctl_device.geometry().await.map(|geometry| geometry.logical_sector_size)
+    }
+
+    #[instrument(skip(self), ret, err)]
+    async fn logical_sector_count(&self) -> Result<u64, DeviceError> {
+        self.ioctl_device.geometry().await.map(|geometry| geometry.logical_sector_count)
+    }
+
+    #[instrument(skip(self, data), fields(len = debug(data.len())), ret, err)]
     async fn security_send(
         &self,
         security_protocol: u8,
@@ -96,6 +108,7 @@ impl StorageDevice for AtaDevice {
             .await?)
     }
 
+    #[instrument(skip(self), err)]
     async fn security_recv(
         &self,
         security_protocol: u8,
@@ -168,6 +181,7 @@ mod ioctl {
             IdentifyDevice::from_bytes(&data_out).map_err(|_| DeviceError::ATAError(AtaError::with_error_bit()))
         }
 
+        #[instrument(skip(self, data_out), fields(len = debug(data_out.len())), ret, err)]
         async fn trusted_send(
             &self,
             security_protocol: u8,
@@ -197,14 +211,15 @@ mod ioctl {
             parse_request_buffer(request_buffer).map_err(|err| err.into())
         }
 
+        #[instrument(skip(self, data_in), fields(len = debug(data_in.len())), ret, err)]
         async fn trusted_receive(
             &self,
             security_protocol: u8,
             security_protocol_specific: u16,
-            data_out: &mut [u8],
+            data_in: &mut [u8],
         ) -> Result<(), DeviceError> {
             let input =
-                Input::trusted_receive_dma(security_protocol, security_protocol_specific, data_out.len() as u32)?;
+                Input::trusted_receive_dma(security_protocol, security_protocol_specific, data_in.len() as u32)?;
             let task_file = input.serialize();
 
             let command = ATA_PASS_THROUGH_DIRECT {
@@ -214,10 +229,10 @@ mod ioctl {
                 TargetId: 0,        // Set by the driver.
                 Lun: 0,             // Set by the driver.
                 ReservedAsUchar: 0, // Reserved for future use.
-                DataTransferLength: data_out.len() as u32,
+                DataTransferLength: data_in.len() as u32,
                 TimeOutValue: TIMEOUT,
                 ReservedAsUlong: 0, // Reserved for future use.
-                DataBuffer: data_out.as_ptr() as *mut c_void,
+                DataBuffer: data_in.as_ptr() as *mut c_void,
                 PreviousTaskFile: [0; 8],
                 CurrentTaskFile: task_file,
             };
