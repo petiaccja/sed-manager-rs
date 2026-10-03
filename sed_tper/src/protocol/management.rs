@@ -74,6 +74,8 @@ impl Management {
     pub fn handle_sync_properties(&mut self, span: Span) {
         if let PropertiesSync::Idle = self.properties_sync {
             self.properties_sync = PropertiesSync::Requested { span };
+        } else {
+            tracing::debug!(parent: &span, "ignored: another properties sync is outstanding");
         }
     }
 
@@ -232,10 +234,13 @@ impl Management {
             parameters: PropertiesMethod::Host { host_properties: Some(self.capabilities.clone()) },
             status: MethodStatus::Success,
         };
-        let Ok(call) = call.to_tokens() else {
-            // TODO: we should probably log this, even though it's not critical.
-            self.properties_sync = PropertiesSync::Idle;
-            return None;
+        let call = match call.to_tokens() {
+            Ok(call) => call,
+            Err(err) => {
+                tracing::error!(parent: span, error = %err);
+                self.properties_sync = PropertiesSync::Idle;
+                return None;
+            }
         };
         // This call is pushed to the FRONT of the queue, NOT to the back.
         // This is fine, as SM methods are paired with the response by key,

@@ -98,10 +98,18 @@ impl Tper {
     #[instrument(level = "info", skip(runtime))]
     pub fn connect(com_id: u16, com_id_ext: u16, device: Arc<dyn StorageDevice>, runtime: Arc<PolyRuntime>) -> Self {
         let (protocol, controller) = Protocol::new(com_id, com_id_ext, device.clone(), runtime.clone());
-        controller.sync_properties();
         let protocol_task = runtime.spawn(protocol.run());
         let host_session_id = Arc::new(AtomicU32::new(1));
-        Self { com_id, com_id_ext, device, controller, protocol_task, host_session_id }
+        let tper = Self { com_id, com_id_ext, device, controller, protocol_task, host_session_id };
+        tper.sync_properties();
+        tper
+    }
+
+    /// Initiate a communication properties synchronization with the device's
+    /// protocol stack.
+    #[instrument(level = "info", skip(self))]
+    fn sync_properties(&self) {
+        self.controller.sync_properties();
     }
 
     /// Discover the capabilities of the provided device.
@@ -147,7 +155,7 @@ impl Tper {
         let response = self.controller.com_id_request(request).await.map_err(|_| Error::Closed)??;
         match response.payload {
             StackReset { status: Success, available_data_length: 1.. } => {
-                self.controller.sync_properties();
+                self.sync_properties();
                 Ok(())
             }
             StackReset { available_data_length: 0, .. } => {
