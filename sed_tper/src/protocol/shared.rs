@@ -15,6 +15,10 @@ use tracing::Span;
 
 use crate::protocol::sequence_number::SequenceNumber;
 
+/// Packets to send in one ComPacket, each paired with the spans of the method
+/// calls it carries.
+pub type PacketBatch = Vec<(Packet, Vec<Span>)>;
+
 pub fn packetize_one(session_id: SessionId, sn: SequenceNumber, call: Vec<u8>) -> Packet {
     let sub_packet = SubPacket { kind: SubPacketKind::Data, length: PhantomData, payload: call };
     let packet = Packet { sequence_number: sn.0, payload: vec![sub_packet], ..Default::default() };

@@ -22,7 +22,7 @@ use crate::{
         management::Management,
         sequence_number::SequenceNumber,
         session::Session,
-        shared::{PropertiesChanged, min_deadline},
+        shared::{PacketBatch, PropertiesChanged, min_deadline},
     },
 };
 
@@ -30,10 +30,6 @@ use super::{
     management::{Action as ManagementAction, StackAction},
     session::Action as SessionAction,
 };
-
-/// Packets to send in one ComPacket, each paired with the spans of the method
-/// calls it carries.
-type PacketBatch = Vec<(Packet, Vec<Span>)>;
 
 #[derive(Debug)]
 pub struct RpcSession {
@@ -109,12 +105,13 @@ impl RpcSession {
         }
     }
 
-    /// Process the packet received in the IF-RECV with the span `iface`.
-    pub fn handle_packet(&mut self, packet: Packet, iface: &Span) {
+    /// Process the packet received in the IF-RECV. The `source` is the span of
+    /// the IF-RECV command.
+    pub fn handle_packet(&mut self, packet: Packet, source: &Span) {
         let session_id = SessionId::of(&packet);
         for sub_packet in packet.payload.into_iter().filter(|s| s.kind == SubPacketKind::Data) {
             if session_id == SessionId::MANAGEMENT {
-                for action in self.management.handle_tokens(sub_packet.payload, iface) {
+                for action in self.management.handle_tokens(sub_packet.payload, source) {
                     match action {
                         StackAction::Spawn { session_id, properties } => {
                             self.sessions.insert(session_id, Session::new(session_id, self.timeout, properties));
@@ -127,7 +124,7 @@ impl RpcSession {
                     }
                 }
             } else if let Some(session) = self.sessions.get_mut(&session_id) {
-                session.handle_tokens(sub_packet.payload, iface);
+                session.handle_tokens(sub_packet.payload, source);
             }
         }
     }
@@ -206,14 +203,7 @@ fn reduce_actions(
 #[derive(Debug)]
 pub enum RpcAction {
     None,
-    Sleep {
-        until: Instant,
-    },
-    /// Each packet is paired with the spans of the method calls it carries.
-    ///
-    /// The packets of different sessions are in arbitrary order. If they
-    /// are ever batched into the same ComPacket, the batching should preserve
-    /// the order in which the method calls were issued.
+    Sleep { until: Instant },
     Send(PacketBatch),
 }
 

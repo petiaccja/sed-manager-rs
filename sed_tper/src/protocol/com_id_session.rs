@@ -48,15 +48,20 @@ impl ComIdSession {
         }
     }
 
-    /// Process the response received in the IF-RECV with the span `iface`.
-    pub fn handle_iface_recv_done(&mut self, response: ComIdResponse, iface: &Span) {
+    /// Process the ComID response returned by the device.
+    ///
+    /// # Parameters
+    ///
+    /// - `response`: the ComID response returned by the IF-RECV command.
+    /// - `source`: the span of the IF-RECV command that returned the response.
+    pub fn handle_iface_recv_done(&mut self, response: ComIdResponse, source: &Span) {
         if let Some(RequestReceivingRecord { sender, span, .. }) = self.request_receiving.take() {
-            link_both_ways(iface, &span);
+            link_both_ways(source, &span);
             let _ = sender.send(Ok(response));
         }
     }
 
-    /// The span of the request awaiting a response.
+    /// The span of the next (earliest) request awaiting a response.
     pub fn next_recv_span(&self) -> Option<(Instant, &Span)> {
         self.request_receiving.as_ref().map(|record| (record.sent_at, &record.span))
     }
@@ -120,9 +125,6 @@ struct RequestReceivingRecord {
 
 pub enum ComIdAction {
     None,
-    Sleep {
-        until: Instant,
-    },
-    /// The request is paired with its span.
+    Sleep { until: Instant },
     Send(ComIdRequest, Span),
 }

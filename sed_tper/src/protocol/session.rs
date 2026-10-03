@@ -11,7 +11,7 @@ use std::{
 use oneshot::Sender;
 use sed_packet::{
     Ignore,
-    packet::{PACKET_HEADER_LEN, Packet, SUB_PACKET_HEADER_LEN},
+    packet::{PACKET_HEADER_LEN, SUB_PACKET_HEADER_LEN},
     session_id::SessionId,
 };
 use sed_spec::methods::{ExtractResult, MethodResult, Properties, extract_method};
@@ -21,7 +21,7 @@ use crate::{
     Error,
     protocol::{
         sequence_number::SequenceNumber,
-        shared::{eos, link_both_ways, packetize_one},
+        shared::{PacketBatch, eos, link_both_ways, packetize_one},
     },
 };
 
@@ -91,28 +91,28 @@ impl Session {
         }
     }
 
-    /// Process the tokens received in the IF-RECV with the span `iface`.
-    pub fn handle_tokens(&mut self, tokens: Vec<u8>, iface: &Span) {
+    /// Process the tokens received in the IF-RECV. The `source` is the span of
+    /// the IF-RECV command.
+    pub fn handle_tokens(&mut self, tokens: Vec<u8>, source: &Span) {
         let State::Active { method_calls_receiving, received_tokens, .. } = &mut self.state else {
             return;
         };
-        let has_new_tokens = !tokens.is_empty();
         received_tokens.extend(tokens);
         loop {
             match extract_method::<MethodResult<Vec<Ignore>>>(received_tokens) {
                 ExtractResult::Ok { value: _, tokens } => {
                     if let Some(record) = method_calls_receiving.pop_front() {
-                        link_both_ways(iface, &record.span);
+                        link_both_ways(source, &record.span);
                         let _ = record.sender.send(Ok(tokens));
                     } else {
                         self.flush(Error::Aborted);
-                        self.state = State::Aborting { cause: iface.clone() };
+                        self.state = State::Aborting { cause: source.clone() };
                         break;
                     }
                 }
                 ExtractResult::EndOfSession => {
                     if let Some(record) = method_calls_receiving.pop_front() {
-                        link_both_ways(iface, &record.span);
+                        link_both_ways(source, &record.span);
                         let _ = record.sender.send(Ok(eos()));
                     }
                     self.state = State::Closed;
@@ -120,20 +120,19 @@ impl Session {
                 }
                 ExtractResult::NeedMoreTokens => {
                     // The tokens of a partial response belong to the next method.
-                    if has_new_tokens
-                        && !received_tokens.is_empty()
+                    if !received_tokens.is_empty()
                         && let Some(record) = method_calls_receiving.front()
                     {
-                        link_both_ways(iface, &record.span);
+                        link_both_ways(source, &record.span);
                     }
                     break;
                 }
                 ExtractResult::InvalidTokens(error) => {
                     if let Some(record) = method_calls_receiving.front() {
-                        link_both_ways(iface, &record.span);
+                        link_both_ways(source, &record.span);
                     }
                     self.flush(error.into());
-                    self.state = State::Aborting { cause: iface.clone() };
+                    self.state = State::Aborting { cause: source.clone() };
                     break;
                 }
             };
@@ -227,11 +226,8 @@ enum State {
 #[must_use]
 pub enum Action {
     None,
-    Sleep {
-        until: Instant,
-    },
-    /// Each packet is paired with the spans of the method calls it carries.
-    Send(Vec<(Packet, Vec<Span>)>),
+    Sleep { until: Instant },
+    Send(PacketBatch),
     Delete,
 }
 
@@ -268,7 +264,7 @@ mod tests {
     use googletest::matchers::*;
     use oneshot::TryRecvError;
     use oneshot::channel;
-    use sed_packet::packet::{SubPacket, SubPacketKind};
+    use sed_packet::packet::{Packet, SubPacket, SubPacketKind};
 
     use super::*;
     use crate::protocol::shared::tests::*;

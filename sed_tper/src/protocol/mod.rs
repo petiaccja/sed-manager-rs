@@ -184,43 +184,50 @@ fn inject_command(state: &mut ProtocolState, command: Command) {
 async fn perform_action_or_recv(
     device: &dyn StorageDevice,
     com_id: u16,
-    protocol: &mut ProtocolState,
+    protocol_state: &mut ProtocolState,
     rx: &async_channel::Receiver<Command>,
     action: Action,
-    spans: Vec<Span>,
+    request_spans: Vec<Span>,
     runtime: &PolyRuntime,
 ) -> Option<Command> {
-    let com_id = com_id.to_be_bytes();
+    let com_id_bytes = com_id.to_be_bytes();
     match action {
         Action::None => rx.recv().await.ok(),
-        Action::Send { protocol: sec_proto, data } => {
-            // The IF-SEND is parented under the request that triggered it,
-            // which is the last one, and linked with all the others.
-            let parent_idx = spans.iter().rposition(|span| !span.is_disabled());
-            let parent = parent_idx.and_then(|idx| spans[idx].id());
-            let iface = info_span!(parent: parent, "if_send", protocol = sec_proto, len = data.len());
-            for (idx, span) in spans.iter().enumerate() {
-                if Some(idx) != parent_idx {
-                    link_both_ways(&iface, span);
+        Action::Send { protocol, data } => {
+            // The span of IF-SEND is the child of the ComID/RPC request that
+            // triggered it. We'll take that as the last span associated with
+            // the request.
+            let parent = request_spans.iter().rev().find(|span| !span.is_disabled()).and_then(|span| span.id());
+            let send_span =
+                info_span!(parent: parent.clone(), "if_send", device = ?device, com_id, protocol, len = data.len());
+            for request_span in &request_spans {
+                if request_span.id() != parent {
+                    link_both_ways(&send_span, request_span);
                 }
             }
 
-            let result = device.security_send(sec_proto, com_id, &data).instrument(iface.clone()).await;
-            iface.in_scope(|| {
-                protocol.handle_iface_send_done(Instant::now(), sec_proto, result.map_err(|err| err.into()))
+            let result = device.security_send(protocol, com_id_bytes, &data).instrument(send_span.clone()).await;
+            send_span.in_scope(|| {
+                protocol_state.handle_iface_send_done(Instant::now(), protocol, result.map_err(|err| err.into()))
             });
             None
         }
-        Action::Recv { protocol: sec_proto, transfer_len } => {
-            // The IF-RECV is parented under the request that was sent the
-            // earliest. The requests it actually delivers to are linked when
-            // the response is processed.
-            let parent = protocol.next_recv_span(sec_proto).and_then(|span| span.id());
-            let iface = info_span!(parent: parent, "if_recv", protocol = sec_proto, transfer_len);
+        Action::Recv { protocol, transfer_len } => {
+            // The span of IF-RECV the child of the next ComID/RPC request that
+            // should be fulfilled. This span is identified as the one that was
+            // sent with IF-SEND the earliest. The IF-RECV may actually return
+            // a reply to another request!
+            let parent = protocol_state.next_recv_span(protocol).and_then(|span| span.id());
+            let recv_span = info_span!(parent: parent, "if_recv", device = ?device, com_id, protocol, transfer_len);
 
-            let result = device.security_recv(sec_proto, com_id, transfer_len).instrument(iface.clone()).await;
-            iface.in_scope(|| {
-                protocol.handle_iface_recv_done(Instant::now(), sec_proto, result.map_err(|err| err.into()), &iface)
+            let result = device.security_recv(protocol, com_id_bytes, transfer_len).instrument(recv_span.clone()).await;
+            recv_span.in_scope(|| {
+                protocol_state.handle_iface_recv_done(
+                    Instant::now(),
+                    protocol,
+                    result.map_err(|err| err.into()),
+                    &recv_span,
+                )
             });
             None
         }

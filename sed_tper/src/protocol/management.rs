@@ -27,7 +27,7 @@ use crate::{
     Error,
     protocol::{
         sequence_number::SequenceNumber,
-        shared::{PropertiesChanged, link_both_ways, min_deadline, packetize_one},
+        shared::{PacketBatch, PropertiesChanged, link_both_ways, min_deadline, packetize_one},
     },
 };
 
@@ -135,9 +135,14 @@ impl Management {
         });
     }
 
-    /// Process the tokens received in the IF-RECV with the span `iface`.
+    /// Process the tokens returned by the device.
+    ///
+    /// # Parameters
+    ///
+    /// - `tokens`: the tokens returned by the IF-RECV command.
+    /// - `source`: the span of the IF-RECV command that returned the tokens.
     #[must_use]
-    pub fn handle_tokens(&mut self, tokens: Vec<u8>, iface: &Span) -> Vec<StackAction> {
+    pub fn handle_tokens(&mut self, tokens: Vec<u8>, source: &Span) -> Vec<StackAction> {
         let mut actions = Vec::new();
         self.received_tokens.extend(tokens);
         loop {
@@ -146,7 +151,7 @@ impl Management {
                     // The host should never receive a `StartSession`.
                     MgmtMethodCallParams::StartSession(_) => (),
                     MgmtMethodCallParams::SyncSession(sync_session) => {
-                        self.handle_sync_session(&mut actions, sync_session, value.status, tokens, iface)
+                        self.handle_sync_session(&mut actions, sync_session, value.status, tokens, source)
                     }
                     MgmtMethodCallParams::CloseSession(close_session) => {
                         Self::handle_close_session(&mut actions, close_session, value.status);
@@ -218,7 +223,8 @@ impl Management {
             .flatten()
     }
 
-    /// Returns the packet to send and the span of the method call it carries.
+    /// Returns the packet to send and the span of the method calls it carries.
+    /// Currently only one method call is inside a packet, there is no batching.
     fn poll_method_calls(&mut self) -> Option<(Packet, Span)> {
         const MAX_METHOD_CALL_SIZE: usize =
             Properties::INITIAL.max_gross_packet_size.get() - PACKET_HEADER_LEN - SUB_PACKET_HEADER_LEN;
@@ -269,11 +275,11 @@ impl Management {
         sync_session: SyncSession,
         status: MethodStatus,
         tokens: Vec<u8>,
-        iface: &Span,
+        source: &Span,
     ) {
         if let Some(queue) = self.start_session_calls_receiving.get_mut(&sync_session.host_session_id) {
             if let Some(record) = queue.pop_front() {
-                link_both_ways(iface, &record.span);
+                link_both_ways(source, &record.span);
                 if status == MethodStatus::Success {
                     let _ = record.sender.send(Ok(tokens));
                     let session_id = SessionId { hsn: sync_session.host_session_id, tsn: sync_session.sp_session_id };
@@ -362,11 +368,8 @@ pub enum StackAction {
 #[must_use]
 pub enum Action {
     None,
-    Sleep {
-        until: Instant,
-    },
-    /// Each packet is paired with the spans of the method calls it carries.
-    Send(Vec<(Packet, Vec<Span>)>),
+    Sleep { until: Instant },
+    Send(PacketBatch),
 }
 
 #[derive(Debug)]

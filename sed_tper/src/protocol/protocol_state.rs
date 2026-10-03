@@ -157,27 +157,34 @@ impl ProtocolState {
         }
     }
 
-    /// Process the result of the IF-RECV with the span `iface`.
+    /// Process the data returned by the device.
+    ///
+    /// # Parameters
+    ///
+    /// - `time`: the time at which the IF-RECV completed.
+    /// - `protocol`: which protocol the IF-RECV used.
+    /// - `result`: the data if the IF-RECV succeeded, otherwise an error.
+    /// - `source`: the span of the IF-RECV command.
     pub fn handle_iface_recv_done(
         &mut self,
         time: Instant,
         protocol: u8,
         result: Result<Vec<u8>, Error>,
-        iface: &Span,
+        source: &Span,
     ) {
         match protocol {
-            COM_ID_PROTOCOL => self.handle_iface_com_request_recv_done(time, result, iface),
-            PACKETIZED_PROTOCOL => self.handle_iface_com_packet_recv_done(time, result, iface),
+            COM_ID_PROTOCOL => self.handle_iface_com_request_recv_done(time, result, source),
+            PACKETIZED_PROTOCOL => self.handle_iface_com_packet_recv_done(time, result, source),
             _ => (),
         }
     }
 
-    /// The span the next IF-RECV on `protocol` should be parented under: the
-    /// span of the request that was sent the earliest among those awaiting a
-    /// response.
+    /// The span of the next ComID request or RPC request that is waiting
+    /// for data from the device. (Chosen by the `protocol`.)
     ///
-    /// Call this after [`poll_action`](Self::poll_action), as polling removes
-    /// the timed out requests.
+    /// This span can be used as the parent of the next IF-RECV command. In that
+    /// case, call this after [`poll_action`](Self::poll_action), as polling
+    /// removes the timed out requests.
     pub fn next_recv_span(&self, protocol: u8) -> Option<Span> {
         let next = match protocol {
             COM_ID_PROTOCOL => self.com_id_session.next_recv_span(),
@@ -297,7 +304,7 @@ impl ProtocolState {
         self.com_id_session.handle_iface_send_done(time, result);
     }
 
-    fn handle_iface_com_request_recv_done(&mut self, time: Instant, result: Result<Vec<u8>, Error>, iface: &Span) {
+    fn handle_iface_com_request_recv_done(&mut self, time: Instant, result: Result<Vec<u8>, Error>, source: &Span) {
         let response = result.and_then(|bytes| ComIdResponse::from_bytes(&bytes).map_err(Error::InvalidComIdResponse));
 
         self.com_id_protocol.handle_recv(time, response.as_ref());
@@ -313,18 +320,18 @@ impl ProtocolState {
                 self.rpc_session.handle_reset();
                 self.com_packets_sending.clear();
             }
-            self.com_id_session.handle_iface_recv_done(response, iface);
+            self.com_id_session.handle_iface_recv_done(response, source);
         }
     }
 
-    fn handle_iface_com_packet_recv_done(&mut self, time: Instant, result: Result<Vec<u8>, Error>, iface: &Span) {
+    fn handle_iface_com_packet_recv_done(&mut self, time: Instant, result: Result<Vec<u8>, Error>, source: &Span) {
         let com_packet = result.and_then(|bytes| ComPacket::from_bytes(&bytes).map_err(Error::InvalidComPacket));
 
         self.rpc_protocol.handle_recv(time, com_packet.as_ref());
 
         if let Ok(com_packet) = com_packet {
             for packet in com_packet.payload {
-                self.rpc_session.handle_packet(packet, iface);
+                self.rpc_session.handle_packet(packet, source);
             }
         }
     }
