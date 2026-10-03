@@ -87,7 +87,7 @@ impl ComSession {
 
         let response = ComIdResponse {
             com_id: request.com_id,
-            com_id_ext: request.com_id,
+            com_id_ext: request.com_id_ext,
             payload: ComIdResponsePayload::StackReset { available_data_length: 0x04, status },
         };
 

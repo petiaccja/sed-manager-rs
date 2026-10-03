@@ -60,6 +60,7 @@ where
     RecvMessage: InterfaceMessage + core::fmt::Debug,
 {
     pub fn new(protocol: u8, max_transfer_len: usize) -> Self {
+        assert!(max_transfer_len >= RecvMessage::INITIAL_TRANSFER, "could not do the initial transfer");
         Self {
             protocol,
             max_transfer_len,
@@ -91,22 +92,26 @@ where
         self.recv_attempt = 0;
         let min_transfer = message.min_transfer();
         let outstanding_data = message.outstanding_data();
-        // When the response is not ready yet, the TPer reports an outstanding
-        // data of 1, which is not a usable transfer length, as it can't even
-        // fit the header of the response. Never request less than the initial
-        // transfer length.
-        let requested_len = max(RecvMessage::INITIAL_TRANSFER, max(min_transfer, outstanding_data));
-        let next_transfer_len = min(self.max_transfer_len, requested_len);
 
         let new_phase = match self.phase.clone() {
             Phase::Send => Phase::Send,
             Phase::Receive { backoff, transfer_len, .. }
             | Phase::ReceiveAfter { backoff, transfer_len, .. }
             | Phase::Receiving { backoff, transfer_len } => {
+                // Transfer at least `INITIAL_TRANSFER` bytes so that it fits the headers
+                // if the device reports a very small `oustanding_data`, like 1.
+                let next_transfer_len =
+                    max(RecvMessage::INITIAL_TRANSFER, min(outstanding_data, self.max_transfer_len));
+
                 if outstanding_data == 0 {
                     // If there is no more data to receive, the receive
                     // phase is over, and we can start sending again.
                     Phase::Send
+                } else if min_transfer > self.max_transfer_len {
+                    // The device expects us to transfer more data than what we
+                    // indicated we're capable of. This is a protocol violation,
+                    // and it should instead fragment its response.
+                    Phase::ProtocolViolation
                 } else if !message.is_empty() || (message.is_empty() && transfer_len < min_transfer) {
                     // If we got some data, the device might have already
                     // prepared some more for us, so let's do a receive again
@@ -124,6 +129,7 @@ where
                     Phase::ReceiveAfter { after, transfer_len: next_transfer_len, backoff }
                 }
             }
+            Phase::ProtocolViolation => Phase::ProtocolViolation,
             Phase::Recovering => Phase::Recovering,
         };
 
@@ -144,6 +150,7 @@ where
                     Phase::ReceiveAfter { after: time + RECV_FAILURE_BACKOFF, transfer_len, backoff }
                 }
             }
+            Phase::ProtocolViolation => Phase::ProtocolViolation,
             Phase::Recovering => Phase::Recovering,
         };
 
@@ -200,6 +207,7 @@ where
                     (Action::Recover, Phase::Recovering)
                 }
             }
+            Phase::ProtocolViolation => (Action::Recover, Phase::Recovering),
             Phase::Recovering => (Action::None, Phase::Recovering),
         };
 
@@ -219,6 +227,8 @@ enum Phase {
     /// The next action will be receive in the future, but first we need to
     /// sleep.
     ReceiveAfter { after: Instant, transfer_len: usize, backoff: Duration },
+    /// The device violated some aspect of the protocol.
+    ProtocolViolation,
     /// When too many failed IF-RECVs get the protocol stack unstable/unknown.
     Recovering,
 }
@@ -481,6 +491,27 @@ mod tests {
 
         let mut protocol = SynchronousProtocol::new(protocol, 16384);
         run_sequence(&mut protocol, time_0, request, &sequence);
+    }
+
+    #[test]
+    fn com_packet_min_transfer_exceeds_max_transfer_len() {
+        // The device should fragment its response to fit the negotiated size.
+        let request = ComPacket::default();
+        let response_inform = ComPacket { outstanding_data: 20000, min_transfer: 20000, ..Default::default() };
+        let protocol = PACKETIZED_PROTOCOL;
+        let time_0 = Instant::now();
+
+        let sequence = [
+            (time_0, Action::Send { protocol, data: request.to_bytes().unwrap() }, None),
+            (time_0, Action::Recv { protocol, transfer_len: 512 }, None),
+            (time_0, Action::None, Some(Ok(response_inform.clone()))),
+            (time_0, Action::Recover, None),
+            (time_0, Action::None, None),
+        ];
+
+        let mut protocol = SynchronousProtocol::new(protocol, 16384);
+        run_sequence(&mut protocol, time_0, request, &sequence);
+        assert_that!(protocol.phase, pat!(Phase::Recovering));
     }
 
     #[test]
