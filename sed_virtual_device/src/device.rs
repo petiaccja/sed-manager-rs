@@ -17,6 +17,7 @@ use sed_packet::session_id::SessionId;
 use sed_spec::methods::MethodStatus;
 use sed_spec::objects::{AuthorityRef, SecurityProviderRef};
 use sorbit::ser_de::{FromBytes, ToBytes as _};
+use tracing::instrument;
 
 use crate::com_session::ComSession;
 use crate::internal_error::Expect;
@@ -115,14 +116,17 @@ impl StorageDevice for VirtualDevice {
         true
     }
 
+    #[instrument(skip(self), ret, err)]
     async fn logical_sector_size(&self) -> Result<u32, Error> {
         Ok(512)
     }
 
+    #[instrument(skip(self), ret, err)]
     async fn logical_sector_count(&self) -> Result<u64, Error> {
         Ok(8_589_934_592) // 4 TiB
     }
 
+    #[instrument(skip(self, data), fields(len = debug(data.len())), ret, err)]
     async fn security_send(&self, security_protocol: u8, protocol_specific: [u8; 2], data: &[u8]) -> Result<(), Error> {
         let mut tper = self.tper.lock().expect("the virtual device panicked in another thread");
         let mut sessions = self.sessions.lock().expect("the virtual device panicked in another thread");
@@ -156,6 +160,7 @@ impl StorageDevice for VirtualDevice {
         }
     }
 
+    #[instrument(skip(self), err)]
     async fn security_recv(
         &self,
         security_protocol: u8,
