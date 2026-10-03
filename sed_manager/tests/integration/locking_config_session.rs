@@ -7,8 +7,8 @@ use std::sync::Arc;
 
 use googletest::{assert_that, matchers::*};
 use sed_async::{PolyRuntime, TokioRuntime};
-use sed_manager::{LockingConfigSession, SetupSession};
-use sed_packet::MaxBytes;
+use sed_manager::{Alignment, LockingConfigSession, SetupSession};
+use sed_packet::{MaxBytes, com_id::ComIdExt};
 use sed_spec::{objects::MbrControl, preconfig::opal_2::locking as opal_locking};
 use sed_telemetry::{WithTracing, with_tracing};
 use sed_tper::Tper;
@@ -21,7 +21,7 @@ const NEW_SID_PASSWORD: MaxBytes<32> =
 async fn setup() -> Tper {
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
     let device = Arc::new(VirtualDevice::new());
-    let tper = Tper::connect(BASE_COM_ID, 0, device.clone(), runtime);
+    let tper = Tper::connect(BASE_COM_ID, ComIdExt(0), device.clone(), runtime);
     let setup_session = SetupSession::new_on_primary_ssc(&tper).await.unwrap();
 
     setup_session.take_owneship(NEW_SID_PASSWORD).await.unwrap();
@@ -99,4 +99,19 @@ async fn get_mbr_control(_with_tracing: WithTracing) {
     let session = LockingConfigSession::login_on_primary_ssc(&tper, admin1, Some(NEW_SID_PASSWORD)).await.unwrap();
     let result = session.get_mbr_control().await;
     assert_that!(result, ok(field!(MbrControl.enable, eq(&Some(false)))));
+}
+
+#[instrument]
+#[rstest::rstest]
+#[tokio::test]
+async fn get_alignment(_with_tracing: WithTracing) {
+    let tper = setup().await;
+
+    let admin1 = opal_locking::authority::ADMIN.get(0).unwrap();
+    let session = LockingConfigSession::login_on_primary_ssc(&tper, admin1, Some(NEW_SID_PASSWORD)).await.unwrap();
+    let result = session.get_alignment().await;
+    assert_that!(
+        result,
+        ok(eq(&Alignment { alignment_required: true, alignment_granularity: 8, lowest_aligned_lba: 0 }))
+    );
 }

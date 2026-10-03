@@ -11,16 +11,17 @@ use std::{
 use oneshot::Sender;
 use sed_packet::{
     Ignore,
-    packet::{PACKET_HEADER_LEN, Packet, SUB_PACKET_HEADER_LEN},
+    packet::{PACKET_HEADER_LEN, SUB_PACKET_HEADER_LEN},
     session_id::SessionId,
 };
 use sed_spec::methods::{ExtractResult, MethodResult, Properties, extract_method};
+use tracing::Span;
 
 use crate::{
     Error,
     protocol::{
         sequence_number::SequenceNumber,
-        shared::{eos, packetize_one},
+        shared::{PacketBatch, eos, link_both_ways, packetize_one},
     },
 };
 
@@ -49,7 +50,7 @@ impl Session {
         }
     }
 
-    pub fn handle_method_call(&mut self, call: Vec<u8>, sender: Sender<Result<Vec<u8>, Error>>) {
+    pub fn handle_method_call(&mut self, call: Vec<u8>, sender: Sender<Result<Vec<u8>, Error>>, span: Span) {
         let max_method_call_size =
             self.properties.max_gross_packet_size.get() - PACKET_HEADER_LEN - SUB_PACKET_HEADER_LEN;
         if call.len() > max_method_call_size {
@@ -57,9 +58,9 @@ impl Session {
         } else {
             match &mut self.state {
                 State::Active { method_calls, .. } => {
-                    method_calls.push_back(MethodCallRecord { call, sender });
+                    method_calls.push_back(MethodCallRecord { call, sender, span });
                 }
-                State::Closed | State::Aborting => {
+                State::Closed | State::Aborting { .. } => {
                     let _ = sender.send(Err(Error::Closed));
                 }
             }
@@ -79,7 +80,8 @@ impl Session {
             let deadline = time + self.timeout;
             match &result {
                 Ok(_) => {
-                    let record = MethodReceivingRecord { deadline, sender: record.sender };
+                    let record =
+                        MethodReceivingRecord { sent_at: time, deadline, sender: record.sender, span: record.span };
                     method_calls_receiving.push_back(record);
                 }
                 Err(err) => {
@@ -89,7 +91,9 @@ impl Session {
         }
     }
 
-    pub fn handle_tokens(&mut self, tokens: Vec<u8>) {
+    /// Process the tokens received in the IF-RECV. The `source` is the span of
+    /// the IF-RECV command.
+    pub fn handle_tokens(&mut self, tokens: Vec<u8>, source: &Span) {
         let State::Active { method_calls_receiving, received_tokens, .. } = &mut self.state else {
             return;
         };
@@ -98,28 +102,51 @@ impl Session {
             match extract_method::<MethodResult<Vec<Ignore>>>(received_tokens) {
                 ExtractResult::Ok { value: _, tokens } => {
                     if let Some(record) = method_calls_receiving.pop_front() {
+                        link_both_ways(source, &record.span);
                         let _ = record.sender.send(Ok(tokens));
                     } else {
                         self.flush(Error::Aborted);
-                        self.state = State::Aborting;
+                        self.state = State::Aborting { cause: source.clone() };
                         break;
                     }
                 }
                 ExtractResult::EndOfSession => {
                     if let Some(record) = method_calls_receiving.pop_front() {
+                        link_both_ways(source, &record.span);
                         let _ = record.sender.send(Ok(eos()));
                     }
                     self.state = State::Closed;
                     break;
                 }
-                ExtractResult::NeedMoreTokens => break,
+                ExtractResult::NeedMoreTokens => {
+                    // The tokens of a partial response belong to the next method.
+                    if !received_tokens.is_empty()
+                        && let Some(record) = method_calls_receiving.front()
+                    {
+                        link_both_ways(source, &record.span);
+                    }
+                    break;
+                }
                 ExtractResult::InvalidTokens(error) => {
+                    if let Some(record) = method_calls_receiving.front() {
+                        link_both_ways(source, &record.span);
+                    }
                     self.flush(error.into());
-                    self.state = State::Aborting;
-
+                    self.state = State::Aborting { cause: source.clone() };
                     break;
                 }
             };
+        }
+    }
+
+    /// The span of the method call that was sent the earliest among those
+    /// awaiting a response.
+    pub fn next_recv_span(&self) -> Option<(Instant, &Span)> {
+        match &self.state {
+            State::Active { method_calls_receiving, .. } => {
+                method_calls_receiving.front().map(|record| (record.sent_at, &record.span))
+            }
+            State::Aborting { .. } | State::Closed => None,
         }
     }
 
@@ -133,11 +160,11 @@ impl Session {
 
                 // Collect packets ready to be sent.
                 let mut packets = Vec::new();
-                if let Some(MethodCallRecord { call, sender }) = method_calls.pop_front() {
+                if let Some(MethodCallRecord { call, sender, span }) = method_calls.pop_front() {
                     let sn = self.sequence_number.fetch_add();
                     let packet = packetize_one(self.session_id, sn, call);
-                    packets.push(packet);
-                    method_calls_sending.push_back(MethodSendingRecord { sequence_number: sn, sender });
+                    packets.push((packet, vec![span.clone()]));
+                    method_calls_sending.push_back(MethodSendingRecord { sequence_number: sn, sender, span });
                 }
 
                 // Return next action.
@@ -149,10 +176,11 @@ impl Session {
                     Action::None
                 }
             }
-            State::Aborting => {
+            State::Aborting { cause } => {
+                let cause = cause.clone();
                 self.state = State::Closed;
                 let eos_packet = packetize_one(self.session_id, self.sequence_number.fetch_add(), eos());
-                Action::Send(vec![eos_packet])
+                Action::Send(vec![(eos_packet, vec![cause])])
             }
             State::Closed => Action::Delete,
         }
@@ -186,16 +214,20 @@ enum State {
         method_calls_receiving: VecDeque<MethodReceivingRecord>,
         received_tokens: VecDeque<u8>,
     },
-    Aborting,
+    /// The session must be aborted by sending an EOS. The `cause` is the
+    /// span of the IF-RECV that delivered the tokens that caused the abort.
+    Aborting {
+        cause: Span,
+    },
     Closed,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 #[must_use]
 pub enum Action {
     None,
     Sleep { until: Instant },
-    Send(Vec<Packet>),
+    Send(PacketBatch),
     Delete,
 }
 
@@ -203,6 +235,7 @@ pub enum Action {
 pub struct MethodCallRecord {
     call: Vec<u8>,
     sender: Sender<Result<Vec<u8>, Error>>,
+    span: Span,
 }
 
 #[derive(Debug)]
@@ -210,13 +243,17 @@ struct MethodSendingRecord {
     /// The sequence number of the packet in which the method is being sent.
     sequence_number: SequenceNumber,
     sender: Sender<Result<Vec<u8>, Error>>,
+    span: Span,
 }
 
 #[derive(Debug)]
 struct MethodReceivingRecord {
+    /// The time when the message was sent.
+    sent_at: Instant,
     /// The time when the message times out.
     deadline: Instant,
     sender: Sender<Result<Vec<u8>, Error>>,
+    span: Span,
 }
 
 #[cfg(test)]
@@ -227,7 +264,7 @@ mod tests {
     use googletest::matchers::*;
     use oneshot::TryRecvError;
     use oneshot::channel;
-    use sed_packet::packet::{SubPacket, SubPacketKind};
+    use sed_packet::packet::{Packet, SubPacket, SubPacketKind};
 
     use super::*;
     use crate::protocol::shared::tests::*;
@@ -242,22 +279,25 @@ mod tests {
         let time = Instant::now();
         let (sender, receiver) = channel();
 
-        session.handle_method_call(method_call(), sender);
+        session.handle_method_call(method_call(), sender, Span::current());
         assert_that!(
             session.poll_action(time),
-            matches_pattern!(Action::Send(eq(&vec![Packet {
-                tper_session_number: 2,
-                host_session_number: 1,
-                sequence_number: 1,
-                payload: vec![SubPacket { kind: SubPacketKind::Data, length: PhantomData, payload: method_call() }],
-                ..Default::default()
-            }])))
+            matches_pattern!(Action::Send(elements_are![(
+                eq(&Packet {
+                    tper_session_number: 2,
+                    host_session_number: 1,
+                    sequence_number: 1,
+                    payload: vec![SubPacket { kind: SubPacketKind::Data, length: PhantomData, payload: method_call() }],
+                    ..Default::default()
+                }),
+                anything()
+            )]))
         );
 
         session.handle_iface_send_done(time, SequenceNumber(1), Ok(()));
         assert_that!(session.poll_action(time), matches_pattern!(&Action::Sleep { until: eq(time + TIMEOUT) }));
 
-        session.handle_tokens(method_response());
+        session.handle_tokens(method_response(), &Span::none());
         assert_that!(session.poll_action(time), matches_pattern!(&Action::None));
         assert_that!(receiver.try_recv(), ok(ok(eq(&method_response()))));
     }
@@ -271,17 +311,17 @@ mod tests {
         let (sender_2, receiver_2) = channel();
 
         // Enqueue both methods.
-        session.handle_method_call(method_call(), sender_1);
-        session.handle_method_call(method_call(), sender_2);
+        session.handle_method_call(method_call(), sender_1, Span::current());
+        session.handle_method_call(method_call(), sender_2, Span::current());
 
         // Dequeue both associated packets.
         assert_that!(
             session.poll_action(time),
-            matches_pattern!(Action::Send(elements_are![field!(&Packet.sequence_number, 1)]))
+            matches_pattern!(Action::Send(elements_are![(field!(&Packet.sequence_number, 1), anything())]))
         );
         assert_that!(
             session.poll_action(time + 1 * delay),
-            matches_pattern!(Action::Send(elements_are![field!(&Packet.sequence_number, 2)]))
+            matches_pattern!(Action::Send(elements_are![(field!(&Packet.sequence_number, 2), anything())]))
         );
 
         // Notify IF-SEND done for both packets.
@@ -298,15 +338,15 @@ mod tests {
         );
 
         // Notify incoming tokens for both methods.
-        session.handle_tokens(method_response());
+        session.handle_tokens(method_response(), &Span::none());
         assert_that!(
             session.poll_action(time + 6 * delay),
             matches_pattern!(&Action::Sleep { until: eq(time + TIMEOUT + 4 * delay) })
         );
         assert_that!(receiver_1.try_recv(), ok(ok(eq(&method_response()))));
 
-        session.handle_tokens(method_response());
-        assert_that!(session.poll_action(time + 7 * delay), eq(&Action::None));
+        session.handle_tokens(method_response(), &Span::none());
+        assert_that!(session.poll_action(time + 7 * delay), matches_pattern!(&Action::None));
         assert_that!(receiver_2.try_recv(), ok(ok(eq(&method_response()))));
     }
 
@@ -318,22 +358,29 @@ mod tests {
         for i in 0..1 {
             let time = time + i * TIMEOUT;
             let (sender, receiver) = channel();
-            session.handle_method_call(method_call(), sender);
+            session.handle_method_call(method_call(), sender, Span::current());
             assert_that!(
                 session.poll_action(time),
-                matches_pattern!(Action::Send(eq(&vec![Packet {
-                    tper_session_number: 2,
-                    host_session_number: 1,
-                    sequence_number: 1,
-                    payload: vec![SubPacket { kind: SubPacketKind::Data, length: PhantomData, payload: method_call() }],
-                    ..Default::default()
-                }])))
+                matches_pattern!(Action::Send(elements_are![(
+                    eq(&Packet {
+                        tper_session_number: 2,
+                        host_session_number: 1,
+                        sequence_number: 1,
+                        payload: vec![SubPacket {
+                            kind: SubPacketKind::Data,
+                            length: PhantomData,
+                            payload: method_call()
+                        }],
+                        ..Default::default()
+                    }),
+                    anything()
+                )]))
             );
 
             session.handle_iface_send_done(time, SequenceNumber(1), Ok(()));
             assert_that!(session.poll_action(time), matches_pattern!(&Action::Sleep { until: eq(time + TIMEOUT) }));
 
-            session.handle_tokens(method_response());
+            session.handle_tokens(method_response(), &Span::none());
             assert_that!(session.poll_action(time), matches_pattern!(&Action::None));
             assert_that!(receiver.try_recv(), ok(ok(eq(&method_response()))));
         }
@@ -345,7 +392,7 @@ mod tests {
         let time = Instant::now();
         let (sender, receiver) = channel();
 
-        session.handle_method_call(method_call(), sender);
+        session.handle_method_call(method_call(), sender, Span::current());
         assert_that!(session.poll_action(time), pat!(Action::Send(_)));
 
         session.handle_iface_send_done(time, SequenceNumber(1), Err(Error::NotSupported));
@@ -358,18 +405,21 @@ mod tests {
         let mut session = Session::new(SESSION_ID, TIMEOUT, PROPERTIES);
         let time = Instant::now();
 
-        session.handle_tokens(method_response());
+        session.handle_tokens(method_response(), &Span::none());
         assert_that!(
             session.poll_action(time),
-            eq(&Action::Send(vec![Packet {
-                tper_session_number: 2,
-                host_session_number: 1,
-                sequence_number: 1,
-                payload: vec![SubPacket { kind: SubPacketKind::Data, length: PhantomData, payload: eos() }],
-                ..Default::default()
-            }]))
+            matches_pattern!(Action::Send(elements_are![(
+                eq(&Packet {
+                    tper_session_number: 2,
+                    host_session_number: 1,
+                    sequence_number: 1,
+                    payload: vec![SubPacket { kind: SubPacketKind::Data, length: PhantomData, payload: eos() }],
+                    ..Default::default()
+                }),
+                anything()
+            )]))
         );
-        assert_that!(session.poll_action(time), eq(&Action::Delete));
+        assert_that!(session.poll_action(time), matches_pattern!(&Action::Delete));
     }
 
     #[test]
@@ -380,18 +430,18 @@ mod tests {
         let mut first_tokens = method_response();
         let second_tokens = first_tokens.split_off(2);
 
-        session.handle_method_call(method_call(), sender);
+        session.handle_method_call(method_call(), sender, Span::current());
         assert_that!(session.poll_action(time), pat!(&Action::Send(_)));
 
         session.handle_iface_send_done(time, SequenceNumber(1), Ok(()));
         assert_that!(session.poll_action(time), pat!(&Action::Sleep { .. }));
 
-        session.handle_tokens(first_tokens);
+        session.handle_tokens(first_tokens, &Span::none());
         assert_that!(session.poll_action(time), pat!(&Action::Sleep { .. }));
         assert_that!(receiver.try_recv(), err(eq(&TryRecvError::Empty)));
 
-        session.handle_tokens(second_tokens);
-        assert_that!(session.poll_action(time), eq(&Action::None));
+        session.handle_tokens(second_tokens, &Span::none());
+        assert_that!(session.poll_action(time), matches_pattern!(&Action::None));
         assert_that!(receiver.try_recv(), ok(ok(eq(&method_response()))));
     }
 
@@ -402,25 +452,28 @@ mod tests {
         let (sender, receiver) = channel();
         let invalid_tokens = vec![0xFE, 34, 23, 7, 2, 3, 2];
 
-        session.handle_method_call(method_call(), sender);
+        session.handle_method_call(method_call(), sender, Span::current());
         assert_that!(session.poll_action(time), pat!(&Action::Send(_)));
 
         session.handle_iface_send_done(time, SequenceNumber(1), Ok(()));
         assert_that!(session.poll_action(time), pat!(&Action::Sleep { .. }));
 
-        session.handle_tokens(invalid_tokens);
+        session.handle_tokens(invalid_tokens, &Span::none());
         assert_that!(
             session.poll_action(time),
-            eq(&Action::Send(vec![Packet {
-                tper_session_number: 2,
-                host_session_number: 1,
-                sequence_number: 2,
-                payload: vec![SubPacket { kind: SubPacketKind::Data, length: PhantomData, payload: eos() }],
-                ..Default::default()
-            }]))
+            matches_pattern!(Action::Send(elements_are![(
+                eq(&Packet {
+                    tper_session_number: 2,
+                    host_session_number: 1,
+                    sequence_number: 2,
+                    payload: vec![SubPacket { kind: SubPacketKind::Data, length: PhantomData, payload: eos() }],
+                    ..Default::default()
+                }),
+                anything()
+            )]))
         );
         assert_that!(receiver.try_recv(), ok(err(matches_pattern!(&Error::TokenError(_)))));
-        assert_that!(session.poll_action(time), eq(&Action::Delete));
+        assert_that!(session.poll_action(time), matches_pattern!(&Action::Delete));
     }
 
     #[test]
@@ -429,21 +482,24 @@ mod tests {
         let time = Instant::now();
         let (sender, receiver) = channel();
 
-        session.handle_method_call(eos(), sender);
+        session.handle_method_call(eos(), sender, Span::current());
         assert_that!(
             session.poll_action(time),
-            eq(&Action::Send(vec![Packet {
-                tper_session_number: 2,
-                host_session_number: 1,
-                sequence_number: 1,
-                payload: vec![SubPacket { kind: SubPacketKind::Data, length: PhantomData, payload: eos() }],
-                ..Default::default()
-            }]))
+            matches_pattern!(Action::Send(elements_are![(
+                eq(&Packet {
+                    tper_session_number: 2,
+                    host_session_number: 1,
+                    sequence_number: 1,
+                    payload: vec![SubPacket { kind: SubPacketKind::Data, length: PhantomData, payload: eos() }],
+                    ..Default::default()
+                }),
+                anything()
+            )]))
         );
 
         session.handle_iface_send_done(time, SequenceNumber(1), Ok(()));
-        session.handle_tokens(eos());
-        assert_that!(session.poll_action(time), eq(&Action::Delete));
+        session.handle_tokens(eos(), &Span::none());
+        assert_that!(session.poll_action(time), matches_pattern!(&Action::Delete));
         assert_that!(receiver.try_recv(), ok(ok(eq(&eos()))));
     }
 
@@ -455,8 +511,8 @@ mod tests {
         session.handle_aborted();
 
         let (sender, receiver) = channel();
-        session.handle_method_call(eos(), sender);
-        assert_that!(session.poll_action(time), eq(&Action::Delete));
+        session.handle_method_call(eos(), sender, Span::current());
+        assert_that!(session.poll_action(time), matches_pattern!(&Action::Delete));
         assert_that!(receiver.try_recv(), ok(err(eq(&Error::Closed))));
     }
 
@@ -466,8 +522,8 @@ mod tests {
         let time = Instant::now();
 
         let (sender, receiver) = channel();
-        session.handle_method_call(vec![0; 1025], sender);
-        assert_that!(session.poll_action(time), eq(&Action::None));
+        session.handle_method_call(vec![0; 1025], sender, Span::current());
+        assert_that!(session.poll_action(time), matches_pattern!(&Action::None));
         assert_that!(receiver.try_recv(), ok(err(pat!(&Error::MethodTooLarge { .. }))));
     }
 
@@ -477,7 +533,7 @@ mod tests {
         let time = Instant::now();
         let (sender, receiver) = channel();
 
-        session.handle_method_call(method_call(), sender);
+        session.handle_method_call(method_call(), sender, Span::current());
         assert_that!(session.poll_action(time), matches_pattern!(Action::Send(_)));
 
         session.handle_iface_send_done(time, SequenceNumber(1), Ok(()));

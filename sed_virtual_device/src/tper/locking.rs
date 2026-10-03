@@ -6,7 +6,8 @@
 use std::any::Any;
 
 use sed_spec::objects::{
-    AccessControl, Ace, Authority, CPin, KAes256, LockingRange, MbrControl, SecurityProviderRef, TableDesc,
+    AccessControl, Ace, Authority, CPin, KAes256, LockingInfoExt, LockingRange, MbrControl, SecurityProviderRef,
+    TableDesc,
 };
 
 use crate::tper::security_provider::{SecurityProvider, Table};
@@ -20,6 +21,7 @@ pub struct Locking {
     pub c_pin: Table<CPin>,
     pub k_aes_256: Table<KAes256>,
     pub locking: Table<LockingRange>,
+    pub locking_info_ext: Table<LockingInfoExt>,
     pub mbr_control: Table<MbrControl>,
     pub table: Table<TableDesc>,
     pub mbr: Vec<u8>,
@@ -81,6 +83,14 @@ impl SecurityProvider for Locking {
 
     fn locking_mut(&mut self) -> Option<&mut Table<LockingRange>> {
         Some(&mut self.locking)
+    }
+
+    fn locking_info_ext(&self) -> Option<&Table<LockingInfoExt>> {
+        Some(&self.locking_info_ext)
+    }
+
+    fn locking_info_ext_mut(&mut self) -> Option<&mut Table<LockingInfoExt>> {
+        Some(&mut self.locking_info_ext)
     }
 
     fn mbr_control(&self) -> Option<&Table<MbrControl>> {

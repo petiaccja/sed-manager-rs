@@ -7,6 +7,8 @@ use std::fs;
 use std::io::ErrorKind;
 use std::path::PathBuf;
 
+use tracing::instrument;
+
 use crate::Error as DeviceError;
 
 pub fn get_nvme_controller(device: PathBuf) -> PathBuf {
@@ -58,6 +60,7 @@ fn list_storage_devices_sync() -> Result<Vec<PathBuf>, DeviceError> {
     Ok(drives)
 }
 
+#[instrument(ret, err)]
 pub async fn list_storage_devices() -> Result<Vec<PathBuf>, DeviceError> {
     blocking::unblock(list_storage_devices_sync).await
 }

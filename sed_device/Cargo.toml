@@ -16,6 +16,7 @@ num_enum.workspace = true
 async-trait.workspace = true
 oneshot.workspace = true
 pin-project.workspace = true
+tracing.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 windows = { workspace = true, features = [

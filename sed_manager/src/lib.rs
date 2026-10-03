@@ -5,6 +5,7 @@
 
 mod device;
 mod error;
+mod geometry;
 mod host;
 mod locking_config_session;
 mod setup_session;
@@ -12,6 +13,7 @@ mod spec;
 
 pub use device::Device;
 pub use error::Error;
+pub use geometry::{Alignment, Geometry};
 pub use host::Host;
 pub use locking_config_session::LockingConfigSession;
 pub use setup_session::SetupSession;

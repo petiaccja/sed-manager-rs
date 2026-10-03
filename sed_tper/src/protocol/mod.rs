@@ -19,15 +19,17 @@ use async_channel::RecvError;
 use sed_async::{PolyRuntime, Runtime as _};
 use sed_device::StorageDevice;
 use sed_packet::{
-    com_id::{ComIdRequest, ComIdResponse},
+    com_id::{ComId, ComIdExt},
+    com_id_request::{ComIdRequest, ComIdResponse},
     session_id::SessionId,
 };
 #[cfg(feature = "test-utils")]
 use sed_spec::methods::Properties;
+use tracing::{Instrument as _, Span, info_span};
 
 use crate::Error;
 use protocol_state::ProtocolState;
-use shared::Action;
+use shared::{Action, link_both_ways};
 
 pub use protocol_state::CAPABILITIES;
 pub use shared::PropertiesChanged;
@@ -35,7 +37,7 @@ pub use shared::PropertiesChanged;
 /// The full protocol to communicate with the TPer via packets and ComID requests.
 #[derive(Debug)]
 pub struct Protocol {
-    com_id: u16,
+    com_id: ComId,
     device: Arc<dyn StorageDevice>,
     command_rx: async_channel::Receiver<Command>,
     state: ProtocolState,
@@ -49,8 +51,8 @@ impl Protocol {
     /// This initializes the protocol stack, but no messages will be delivered
     /// until you call [`run`](Self::run).
     pub fn new(
-        com_id: u16,
-        com_id_ext: u16,
+        com_id: ComId,
+        com_id_ext: ComIdExt,
         device: Arc<dyn StorageDevice>,
         runtime: Arc<PolyRuntime>,
     ) -> (Self, Controller) {
@@ -77,9 +79,10 @@ impl Protocol {
         let Self { com_id, device, command_rx, mut state, runtime } = self;
 
         loop {
-            let action = state.poll_action(Instant::now());
+            let (action, spans) = state.poll_action(Instant::now());
             let is_idle = matches!(action, Action::None);
-            let command = perform_action_or_recv(&*device, com_id, &mut state, &command_rx, action, &runtime).await;
+            let command =
+                perform_action_or_recv(&*device, com_id, &mut state, &command_rx, action, spans, &runtime).await;
             if let Some(command) = command {
                 inject_command(&mut state, command);
             } else if is_idle {
@@ -109,12 +112,13 @@ impl Controller {
     /// Perform an remote procedure call using tokenized methods.
     pub fn call(&self, session_id: SessionId, call: Vec<u8>) -> oneshot::Receiver<Result<Vec<u8>, Error>> {
         let (tx, rx) = oneshot::channel();
-        let _ = self.command_tx.try_send(Command::MethodCall { session_id, call, sender: tx });
+        let span = Span::current();
+        let _ = self.command_tx.try_send(Command::MethodCall { session_id, call, sender: tx, span });
         rx
     }
 
     pub fn sync_properties(&self) {
-        let _ = self.command_tx.try_send(Command::SyncProperties);
+        let _ = self.command_tx.try_send(Command::SyncProperties { span: Span::current() });
     }
 
     /// Notify the protocol stack that a session has been aborted by the device.
@@ -128,7 +132,7 @@ impl Controller {
     /// Send a ComID request to the device.
     pub fn com_id_request(&self, request: ComIdRequest) -> oneshot::Receiver<Result<ComIdResponse, Error>> {
         let (tx, rx) = oneshot::channel();
-        let _ = self.command_tx.try_send(Command::ComRequest { request, sender: tx });
+        let _ = self.command_tx.try_send(Command::ComRequest { request, sender: tx, span: Span::current() });
         rx
     }
 
@@ -154,9 +158,9 @@ impl Controller {
 #[derive(Debug)]
 #[rustfmt::skip] // Puts everything on a new line with the #[cfg].
 pub enum Command {
-    MethodCall { session_id: SessionId, call: Vec<u8>, sender: oneshot::Sender<Result<Vec<u8>, Error>> },
-    SyncProperties,
-    ComRequest { request: ComIdRequest, sender: oneshot::Sender<Result<ComIdResponse, Error>> },
+    MethodCall { session_id: SessionId, call: Vec<u8>, sender: oneshot::Sender<Result<Vec<u8>, Error>>, span: Span },
+    SyncProperties { span: Span },
+    ComRequest { request: ComIdRequest, sender: oneshot::Sender<Result<ComIdResponse, Error>>, span: Span },
     ReportAborted { session_id: SessionId },
     #[cfg(feature = "test-utils")]
     Spawn { session_id: SessionId, properties: Properties },
@@ -164,34 +168,67 @@ pub enum Command {
 
 fn inject_command(state: &mut ProtocolState, command: Command) {
     match command {
-        Command::MethodCall { session_id, call, sender } => state.handle_method_call(session_id, call, sender),
-        Command::SyncProperties => state.handle_sync_properties(),
-        Command::ComRequest { request, sender } => state.handle_com_request(request, sender),
+        Command::MethodCall { session_id, call, sender, span } => {
+            state.handle_method_call(session_id, call, sender, span)
+        }
+        Command::SyncProperties { span } => state.handle_sync_properties(span),
+        Command::ComRequest { request, sender, span } => state.handle_com_request(request, sender, span),
         Command::ReportAborted { session_id } => state.handle_session_aborted(session_id),
         #[cfg(feature = "test-utils")]
         Command::Spawn { session_id, properties } => state.handle_spawn_session(session_id, properties),
     }
 }
 
+/// Perform the `action`, or wait for a command if there is nothing to do.
+///
+/// The `spans` are those of the requests carried by an [`Action::Send`].
 async fn perform_action_or_recv(
     device: &dyn StorageDevice,
-    com_id: u16,
-    protocol: &mut ProtocolState,
+    com_id: ComId,
+    protocol_state: &mut ProtocolState,
     rx: &async_channel::Receiver<Command>,
     action: Action,
+    request_spans: Vec<Span>,
     runtime: &PolyRuntime,
 ) -> Option<Command> {
-    let com_id = com_id.to_be_bytes();
+    let com_id_bytes = com_id.to_be_bytes();
     match action {
         Action::None => rx.recv().await.ok(),
-        Action::Send { protocol: sec_proto, data } => {
-            let result = device.security_send(sec_proto, com_id, &data).await;
-            protocol.handle_iface_send_done(Instant::now(), sec_proto, result.map_err(|err| err.into()));
+        Action::Send { protocol, data } => {
+            // The span of IF-SEND is the child of the ComID/RPC request that
+            // triggered it. We'll take that as the last span associated with
+            // the request.
+            let parent = request_spans.iter().rev().find(|span| !span.is_disabled()).and_then(|span| span.id());
+            let send_span = info_span!(parent: parent.clone(), "if_send", ?device, %com_id, protocol, len = data.len());
+            for request_span in &request_spans {
+                if request_span.id() != parent {
+                    link_both_ways(&send_span, request_span);
+                }
+            }
+
+            let result = device.security_send(protocol, com_id_bytes, &data).instrument(send_span.clone()).await;
+            send_span.in_scope(|| {
+                protocol_state.handle_iface_send_done(Instant::now(), protocol, result.map_err(|err| err.into()))
+            });
             None
         }
-        Action::Recv { protocol: sec_proto, transfer_len } => {
-            let result = device.security_recv(sec_proto, com_id, transfer_len).await;
-            protocol.handle_iface_recv_done(Instant::now(), sec_proto, result.map_err(|err| err.into()));
+        Action::Recv { protocol, transfer_len } => {
+            // The span of IF-RECV the child of the next ComID/RPC request that
+            // should be fulfilled. This span is identified as the one that was
+            // sent with IF-SEND the earliest. The IF-RECV may actually return
+            // a reply to another request!
+            let parent = protocol_state.next_recv_span(protocol).and_then(|span| span.id());
+            let recv_span = info_span!(parent: parent, "if_recv", ?device, %com_id, protocol, transfer_len);
+
+            let result = device.security_recv(protocol, com_id_bytes, transfer_len).instrument(recv_span.clone()).await;
+            recv_span.in_scope(|| {
+                protocol_state.handle_iface_recv_done(
+                    Instant::now(),
+                    protocol,
+                    result.map_err(|err| err.into()),
+                    &recv_span,
+                )
+            });
             None
         }
         Action::Sleep { until } => {
@@ -216,6 +253,8 @@ mod tests {
     use googletest::matchers::*;
     use sed_async::TokioRuntime;
     use sed_device::mock_device::{MockDevice, MockEvent};
+    use sed_packet::com_id::ComId;
+    use sed_packet::com_id::ComIdExt;
     use sed_packet::packet::ComPacket;
     use sed_spec::methods::MethodStatus;
     use sorbit::ser_de::ToBytes as _;
@@ -235,8 +274,8 @@ mod tests {
         let call = start_session_call(SESSION_ID);
         let response = sync_session_call(SESSION_ID, MethodStatus::Success);
         let call_packet = ComPacket {
-            com_id: 1,
-            com_id_ext: 0,
+            com_id: ComId(1),
+            com_id_ext: ComIdExt(0),
             outstanding_data: 0,
             min_transfer: 0,
             length: std::marker::PhantomData,
@@ -247,8 +286,8 @@ mod tests {
             )],
         };
         let response_packet = ComPacket {
-            com_id: 1,
-            com_id_ext: 0,
+            com_id: ComId(1),
+            com_id_ext: ComIdExt(0),
             outstanding_data: 0,
             min_transfer: 0,
             length: std::marker::PhantomData,
@@ -277,7 +316,7 @@ mod tests {
 
         let device = MockDevice::new(scenario.into_iter());
         let runtime = PolyRuntime::Tokio(TokioRuntime::current().unwrap());
-        let (protocol, controller) = Protocol::new(1, 0, Arc::new(device), Arc::new(runtime));
+        let (protocol, controller) = Protocol::new(ComId(1), ComIdExt(0), Arc::new(device), Arc::new(runtime));
         let task = tokio::spawn(protocol.run());
 
         let response_rx = controller.call(SessionId::MANAGEMENT, call);

@@ -3,6 +3,7 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
+mod algorithm;
 pub mod app;
 pub mod associative_model;
 mod command;

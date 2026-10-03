@@ -13,9 +13,12 @@ import {
 import {
     LockingRange,
     Sector,
-    SectorUtil,
     CommandStatus,
+    Geometry,
+    Alignment,
 } from "../../../data/lib.slint";
+import { SectorLib } from "../../../algorithm/sector.slint";
+import { LockingRangeLib } from "../../../algorithm/locking_range.slint";
 import {
     Detached,
     Cell,
@@ -29,6 +32,8 @@ component LockingRangeTable {
     preferred-width: table.preferred-width;
     preferred-height: table.preferred-height;
 
+    in property <Geometry> geometry;
+    in property <Alignment> alignment;
     in-out property <[LockingRange]> locking-ranges;
 
     viewport := ScrollView {
@@ -108,12 +113,13 @@ component LockingRangeTable {
 
                         Cell {
                             TextInput {
-                                text: SectorUtil.to_string(locking-range.start);
-                                color: SectorUtil.is-sector(self.text) ? Palette.control-foreground : PaletteExtra.error-foreground;
+                                text: SectorLib.to_string(locking-range.start, geometry);
+                                color: SectorLib.is-valid(self.text, geometry) ? Palette.control-foreground : PaletteExtra.error-foreground;
 
                                 accepted => {
-                                    if SectorUtil.is-sector(self.text) {
-                                        locking-range.start = SectorUtil.to-sector(self.text)
+                                    if SectorLib.is-valid(self.text, geometry) {
+                                        locking-range.start = SectorLib.align(SectorLib.min(SectorLib.parse(self.text, geometry), geometry.logical-sector-count), alignment);
+                                        self.text = SectorLib.to-string(locking-range.start, geometry);
                                     }
                                 }
                             }
@@ -126,12 +132,13 @@ component LockingRangeTable {
 
                         Cell {
                             TextInput {
-                                text: SectorUtil.to_string(locking-range.end);
-                                color: SectorUtil.is-sector(self.text) ? Palette.control-foreground : PaletteExtra.error-foreground;
+                                text: SectorLib.to_string(locking-range.end, geometry);
+                                color: SectorLib.is-valid(self.text, geometry) ? Palette.control-foreground : PaletteExtra.error-foreground;
 
                                 accepted => {
-                                    if SectorUtil.is-sector(self.text) {
-                                        locking-range.end = SectorUtil.to-sector(self.text)
+                                    if SectorLib.is-valid(self.text, geometry) {
+                                        locking-range.end = SectorLib.align(SectorLib.min(SectorLib.parse(self.text, geometry), geometry.logical-sector-count), alignment);
+                                        self.text = SectorLib.to-string(locking-range.end, geometry);
                                     }
                                 }
                             }
@@ -211,14 +218,14 @@ component LockingRangeStripe inherits Rectangle {
     border-color: CyclicColor.foreground(0).with-alpha(0.45);
 
     in property <[LockingRange]> locking-ranges;
-    in property <Sector> capacity: { value: 1000ms };
+    in property <Geometry> geometry;
 
     function range-x(index: int) -> length {
-        self.width * (0.2 * (index - 1) / (self.locking-ranges.length - 1) + 0.8 * self.locking-ranges[index].start.value / self.capacity.value)
+        self.width * LockingRangeLib.stripe-x-normalized(index, locking-ranges, geometry)
     }
 
     function range-width(index: int) -> length {
-        self.width * (0.2 / (self.locking-ranges.length - 1) + 0.8 * ((self.locking-ranges[index].end.value - self.locking-ranges[index].start.value) / self.capacity.value))
+        self.width * LockingRangeLib.stripe-width-normalized(index, locking-ranges, geometry)
     }
 
     for locking-range[index] in locking-ranges: Rectangle {
@@ -251,6 +258,8 @@ component LockingRangeStripe inherits Rectangle {
 }
 
 export component LockingRangesTab {
+    in property <Geometry> geometry;
+    in property <Alignment> alignment;
     in-out property <[LockingRange]> locking-ranges;
     in property <CommandStatus> command-status;
 
@@ -262,13 +271,34 @@ export component LockingRangesTab {
         spacing: StyleMetrics.layout-spacing * 1.4;
 
         LockingRangeTable {
+            geometry: geometry;
+            alignment: alignment;
             max-height: self.preferred-height;
             locking-ranges <=> locking-ranges;
         }
 
-        LockingRangeStripe {
-            height: 3rem;
-            locking-ranges: locking-ranges;
+        VerticalLayout {
+            spacing: StyleMetrics.layout-spacing * 0.6;
+
+            LockingRangeStripe {
+                height: 3rem;
+                locking-ranges: locking-ranges;
+                geometry: geometry;
+            }
+
+            HorizontalLayout {
+                alignment: space-between;
+
+                Text {
+                    text: SectorLib.to-string({ value: 0 }, geometry);
+                    color: CyclicColor.foreground(0);
+                }
+
+                Text {
+                    text: SectorLib.to-string(geometry.logical-sector-count, geometry);
+                    color: CyclicColor.foreground(0);
+                }
+            }
         }
 
         VerticalLayout {

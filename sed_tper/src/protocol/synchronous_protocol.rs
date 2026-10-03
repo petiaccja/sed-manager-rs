@@ -11,11 +11,12 @@ use std::{
 };
 
 use sed_packet::{
-    com_id::{COM_ID_RESPONSE_LEN, ComIdRequest, ComIdResponse, ComIdResponsePayload},
+    com_id_request::{COM_ID_RESPONSE_LEN, ComIdRequest, ComIdResponse, ComIdResponsePayload},
     packet::ComPacket,
 };
 use sorbit::{error::Error as SorbitError, ser_de::ToBytes};
 use std::time::Instant;
+use tracing::Span;
 
 use crate::{Error, protocol::shared::Action};
 
@@ -46,7 +47,8 @@ where
 {
     protocol: u8,
     max_transfer_len: usize,
-    queue: VecDeque<SendMessage>,
+    /// The messages to send, each paired with the spans of the requests it carries.
+    queue: VecDeque<(SendMessage, Vec<Span>)>,
     recv_attempt: u64,
     phase: Phase,
     _recv: PhantomData<RecvMessage>,
@@ -58,6 +60,7 @@ where
     RecvMessage: InterfaceMessage + core::fmt::Debug,
 {
     pub fn new(protocol: u8, max_transfer_len: usize) -> Self {
+        assert!(max_transfer_len >= RecvMessage::INITIAL_TRANSFER, "could not do the initial transfer");
         Self {
             protocol,
             max_transfer_len,
@@ -68,8 +71,10 @@ where
         }
     }
 
-    pub fn handle_send(&mut self, send_message: SendMessage) {
-        self.queue.push_back(send_message);
+    /// Queue a message for sending. The `spans` are those of the requests the
+    /// message carries.
+    pub fn handle_send(&mut self, send_message: SendMessage, spans: Vec<Span>) {
+        self.queue.push_back((send_message, spans));
     }
 
     pub fn handle_recv(&mut self, time: Instant, result: Result<&RecvMessage, &Error>) {
@@ -87,17 +92,26 @@ where
         self.recv_attempt = 0;
         let min_transfer = message.min_transfer();
         let outstanding_data = message.outstanding_data();
-        let next_transfer_len = min(self.max_transfer_len, max(min_transfer, outstanding_data));
 
         let new_phase = match self.phase.clone() {
             Phase::Send => Phase::Send,
             Phase::Receive { backoff, transfer_len, .. }
             | Phase::ReceiveAfter { backoff, transfer_len, .. }
             | Phase::Receiving { backoff, transfer_len } => {
+                // Transfer at least `INITIAL_TRANSFER` bytes so that it fits the headers
+                // if the device reports a very small `oustanding_data`, like 1.
+                let next_transfer_len =
+                    max(RecvMessage::INITIAL_TRANSFER, min(outstanding_data, self.max_transfer_len));
+
                 if outstanding_data == 0 {
                     // If there is no more data to receive, the receive
                     // phase is over, and we can start sending again.
                     Phase::Send
+                } else if min_transfer > self.max_transfer_len {
+                    // The device expects us to transfer more data than what we
+                    // indicated we're capable of. This is a protocol violation,
+                    // and it should instead fragment its response.
+                    Phase::ProtocolViolation
                 } else if !message.is_empty() || (message.is_empty() && transfer_len < min_transfer) {
                     // If we got some data, the device might have already
                     // prepared some more for us, so let's do a receive again
@@ -115,6 +129,7 @@ where
                     Phase::ReceiveAfter { after, transfer_len: next_transfer_len, backoff }
                 }
             }
+            Phase::ProtocolViolation => Phase::ProtocolViolation,
             Phase::Recovering => Phase::Recovering,
         };
 
@@ -135,22 +150,30 @@ where
                     Phase::ReceiveAfter { after: time + RECV_FAILURE_BACKOFF, transfer_len, backoff }
                 }
             }
+            Phase::ProtocolViolation => Phase::ProtocolViolation,
             Phase::Recovering => Phase::Recovering,
         };
 
         self.phase = new_phase;
     }
 
-    pub fn poll_action(&mut self, time: Instant) -> Action {
+    /// Returns the next action to perform. When the action is
+    /// [`Action::Send`], it's paired with the spans of the requests carried by
+    /// the message. For all other actions, the spans are empty.
+    pub fn poll_action(&mut self, time: Instant) -> (Action, Vec<Span>) {
+        let mut spans = Vec::new();
         let (action, new_phase) = match self.phase.clone() {
             Phase::Send => match self.queue.pop_front() {
-                Some(message) => (
-                    Action::Send {
-                        protocol: self.protocol,
-                        data: message.to_bytes_interface().expect("can not serialize message"),
-                    },
-                    Phase::Receive { transfer_len: RecvMessage::INITIAL_TRANSFER, backoff: INITIAL_BACKOFF },
-                ),
+                Some((message, message_spans)) => {
+                    spans = message_spans;
+                    (
+                        Action::Send {
+                            protocol: self.protocol,
+                            data: message.to_bytes_interface().expect("can not serialize message"),
+                        },
+                        Phase::Receive { transfer_len: RecvMessage::INITIAL_TRANSFER, backoff: INITIAL_BACKOFF },
+                    )
+                }
                 None => (Action::None, Phase::Send),
             },
             Phase::Receive { transfer_len, backoff } => {
@@ -184,11 +207,12 @@ where
                     (Action::Recover, Phase::Recovering)
                 }
             }
+            Phase::ProtocolViolation => (Action::Recover, Phase::Recovering),
             Phase::Recovering => (Action::None, Phase::Recovering),
         };
 
         self.phase = new_phase;
-        action
+        (action, spans)
     }
 }
 
@@ -203,6 +227,8 @@ enum Phase {
     /// The next action will be receive in the future, but first we need to
     /// sleep.
     ReceiveAfter { after: Instant, transfer_len: usize, backoff: Duration },
+    /// The device violated some aspect of the protocol.
+    ProtocolViolation,
     /// When too many failed IF-RECVs get the protocol stack unstable/unknown.
     Recovering,
 }
@@ -222,11 +248,11 @@ impl InterfaceMessage for ComPacket {
     const INITIAL_TRANSFER: usize = 512;
 
     fn outstanding_data(&self) -> usize {
-        self.min_transfer as usize
+        self.outstanding_data as usize
     }
 
     fn min_transfer(&self) -> usize {
-        self.outstanding_data as usize
+        self.min_transfer as usize
     }
 
     fn is_empty(&self) -> bool {
@@ -299,23 +325,24 @@ mod tests {
     use super::*;
 
     use googletest::{assert_that, matchers::*};
-    use sed_packet::com_id::{COM_ID_PROTOCOL, ComIdRequest, ComIdState, Date, StackResetStatus};
+    use sed_packet::com_id::{ComId, ComIdExt};
+    use sed_packet::com_id_request::{COM_ID_PROTOCOL, ComIdRequest, ComIdState, Date, StackResetStatus};
     use sed_packet::packet::{PACKETIZED_PROTOCOL, Packet};
 
-    const COM_ID: u16 = 1;
-    const COM_ID_EXT: u16 = 0;
+    const COM_ID: ComId = ComId(1);
+    const COM_ID_EXT: ComIdExt = ComIdExt(0);
 
     #[test]
     fn stack_reset_exchanged_with_delay() {
         const REQUEST: ComIdRequest = ComIdRequest::stack_reset(COM_ID, COM_ID_EXT);
         const RESPONSE_PENDING: ComIdResponse = ComIdResponse {
-            com_id: 1,
-            com_id_ext: 1,
+            com_id: ComId(1),
+            com_id_ext: ComIdExt(1),
             payload: ComIdResponsePayload::StackReset { available_data_length: 0, status: StackResetStatus::Success },
         };
         const RESPONSE_DONE: ComIdResponse = ComIdResponse {
-            com_id: 1,
-            com_id_ext: 1,
+            com_id: ComId(1),
+            com_id_ext: ComIdExt(1),
             payload: ComIdResponsePayload::StackReset { available_data_length: 4, status: StackResetStatus::Success },
         };
 
@@ -342,10 +369,10 @@ mod tests {
 
     #[test]
     fn verify_com_id_exchanged() {
-        const REQUEST: ComIdRequest = ComIdRequest::verify_com_id_valid(1, 0);
+        const REQUEST: ComIdRequest = ComIdRequest::verify_com_id_valid(ComId(1), ComIdExt(0));
         const RESPONSE: ComIdResponse = ComIdResponse {
-            com_id: 1,
-            com_id_ext: 1,
+            com_id: ComId(1),
+            com_id_ext: ComIdExt(1),
             payload: ComIdResponsePayload::Verify {
                 available_data_length: 22,
                 com_id_state: ComIdState::Associated,
@@ -371,10 +398,10 @@ mod tests {
 
     #[test]
     fn interrupted_with_no_response_available() {
-        const REQUEST: ComIdRequest = ComIdRequest::verify_com_id_valid(1, 0);
+        const REQUEST: ComIdRequest = ComIdRequest::verify_com_id_valid(ComId(1), ComIdExt(0));
         const RESPONSE: ComIdResponse = ComIdResponse {
-            com_id: 1,
-            com_id_ext: 1,
+            com_id: ComId(1),
+            com_id_ext: ComIdExt(1),
             payload: ComIdResponsePayload::NoResponseAvailable { available_data_length: 0 },
         };
 
@@ -405,11 +432,11 @@ mod tests {
             (time_0, Action::Recv { protocol, transfer_len: 512 }, None),
             (time_0, Action::None, Some(Ok(response_pending.clone()))),
             (time_0, Action::Sleep { until: time_0 + INITIAL_BACKOFF }, None),
-            (time_0 + INITIAL_BACKOFF, Action::Recv { protocol, transfer_len: 279 }, None),
+            (time_0 + INITIAL_BACKOFF, Action::Recv { protocol, transfer_len: 512 }, None),
             (time_0 + INITIAL_BACKOFF, Action::None, None),
             (time_0 + INITIAL_BACKOFF, Action::None, Some(Ok(response_pending.clone()))),
             (time_0 + INITIAL_BACKOFF, Action::Sleep { until: time_0 + 3 * INITIAL_BACKOFF }, None),
-            (time_0 + 3 * INITIAL_BACKOFF, Action::Recv { protocol, transfer_len: 279 }, None),
+            (time_0 + 3 * INITIAL_BACKOFF, Action::Recv { protocol, transfer_len: 512 }, None),
             (time_0 + 3 * INITIAL_BACKOFF, Action::None, None),
             (time_0 + 3 * INITIAL_BACKOFF, Action::None, Some(Ok(response_done))),
             (time_0 + 3 * INITIAL_BACKOFF, Action::None, None),
@@ -460,6 +487,75 @@ mod tests {
             (time_0, Action::None, Some(Ok(response_inform.clone()))),
             (time_0, Action::Recv { protocol, transfer_len: 2846 }, None),
             (time_0, Action::None, Some(Ok(response_payload.clone()))),
+            (time_0, Action::None, None),
+        ];
+
+        let mut protocol = SynchronousProtocol::new(protocol, 16384);
+        run_sequence(&mut protocol, time_0, request, &sequence);
+    }
+
+    #[test]
+    fn com_packet_min_transfer_exceeds_max_transfer_len() {
+        // The device should fragment its response to fit the negotiated size.
+        let request = ComPacket::default();
+        let response_inform = ComPacket { outstanding_data: 20000, min_transfer: 20000, ..Default::default() };
+        let protocol = PACKETIZED_PROTOCOL;
+        let time_0 = Instant::now();
+
+        let sequence = [
+            (time_0, Action::Send { protocol, data: request.to_bytes().unwrap() }, None),
+            (time_0, Action::Recv { protocol, transfer_len: 512 }, None),
+            (time_0, Action::None, Some(Ok(response_inform.clone()))),
+            (time_0, Action::Recover, None),
+            (time_0, Action::None, None),
+        ];
+
+        let mut protocol = SynchronousProtocol::new(protocol, 16384);
+        run_sequence(&mut protocol, time_0, request, &sequence);
+        assert_that!(protocol.phase, pat!(Phase::Recovering));
+    }
+
+    #[test]
+    fn com_packet_response_not_ready() {
+        // Core spec 3.3.10.2.1, rule 8: response not ready yet.
+        let request = ComPacket::default();
+        let response_pending = ComPacket { outstanding_data: 1, min_transfer: 0, ..Default::default() };
+        let protocol = PACKETIZED_PROTOCOL;
+        let time_0 = Instant::now();
+
+        let sequence = [
+            (time_0, Action::Send { protocol, data: request.to_bytes().unwrap() }, None),
+            (time_0, Action::Recv { protocol, transfer_len: 512 }, None),
+            (time_0, Action::None, Some(Ok(response_pending))),
+            (time_0, Action::Sleep { until: time_0 + INITIAL_BACKOFF }, None),
+            (time_0 + INITIAL_BACKOFF, Action::Recv { protocol, transfer_len: 512 }, None),
+        ];
+
+        let mut protocol = SynchronousProtocol::new(protocol, 16384);
+        run_sequence(&mut protocol, time_0, request, &sequence);
+    }
+
+    #[test]
+    fn com_packet_exchanged_fragmented_no_min_transfer() {
+        // Core spec 3.3.10.2.1, rule 10.2: additional responses available, MinTransfer is zero.
+        let request = ComPacket::default();
+        let response_one = ComPacket {
+            outstanding_data: 652,
+            min_transfer: 0,
+            payload: vec![Packet::default()],
+            ..Default::default()
+        };
+        let response_two =
+            ComPacket { outstanding_data: 0, min_transfer: 0, payload: vec![Packet::default()], ..Default::default() };
+        let protocol = PACKETIZED_PROTOCOL;
+        let time_0 = Instant::now();
+
+        let sequence = [
+            (time_0, Action::Send { protocol, data: request.to_bytes().unwrap() }, None),
+            (time_0, Action::Recv { protocol, transfer_len: 512 }, None),
+            (time_0, Action::None, Some(Ok(response_one))),
+            (time_0, Action::Recv { protocol, transfer_len: 652 }, None),
+            (time_0, Action::None, Some(Ok(response_two))),
             (time_0, Action::None, None),
         ];
 
@@ -536,10 +632,10 @@ mod tests {
         SendMessage: InterfaceMessage + core::fmt::Debug,
         RecvMessage: InterfaceMessage + core::fmt::Debug,
     {
-        protocol.handle_send(request);
+        protocol.handle_send(request, vec![]);
 
         for (step, (time, expected_action, received_data)) in sequence.iter().enumerate() {
-            let action = protocol.poll_action(*time);
+            let (action, _) = protocol.poll_action(*time);
             assert_eq!(&action, expected_action, "step = {}, time = {:?}", step, *time - time_0);
             if let Some(received_data) = received_data {
                 protocol.handle_recv(*time, received_data.as_ref());

@@ -15,6 +15,7 @@ use crate::windows::devices::generic::{DeviceDesc, GenericIoctlDevice};
 use crate::windows::ioctl_device::IoctlDevice;
 
 use sorbit::ser_de::FromBytes as _;
+use tracing::instrument;
 use windows::Win32::System::Ioctl::{
     IOCTL_STORAGE_QUERY_PROPERTY, PropertyStandardQuery, ProtocolTypeNvme, STORAGE_PROPERTY_QUERY,
     STORAGE_PROTOCOL_SPECIFIC_DATA, StorageAdapterProtocolSpecificProperty,
@@ -54,7 +55,7 @@ impl NvmeDevice {
 #[async_trait::async_trait]
 impl StorageDevice for NvmeDevice {
     fn path(&self) -> Option<&Path> {
-        Some(&self.ioctl_device.path())
+        Some(self.ioctl_device.path())
     }
 
     fn interface(&self) -> Interface {
@@ -81,6 +82,22 @@ impl StorageDevice for NvmeDevice {
         self.generic_desc.is_removable
     }
 
+    #[instrument(skip(self), ret, err)]
+    async fn logical_sector_size(&self) -> Result<u32, DeviceError> {
+        let namespace_identity = self.ioctl_device.identify_namespace(1).await?;
+        namespace_identity
+            .lba_format()
+            .and_then(|lba_format| lba_format.logical_sector_size())
+            .ok_or(DeviceError::NotSupported)
+    }
+
+    #[instrument(skip(self), ret, err)]
+    async fn logical_sector_count(&self) -> Result<u64, DeviceError> {
+        let namespace_identity = self.ioctl_device.identify_namespace(1).await?;
+        Ok(namespace_identity.namespace_size)
+    }
+
+    #[instrument(skip(self, data), fields(len = debug(data.len())), ret, err)]
     async fn security_send(
         &self,
         security_protocol: u8,
@@ -97,6 +114,7 @@ impl StorageDevice for NvmeDevice {
             .await
     }
 
+    #[instrument(skip(self), err)]
     async fn security_recv(
         &self,
         security_protocol: u8,
@@ -116,11 +134,16 @@ impl StorageDevice for NvmeDevice {
 }
 
 mod ioctl {
+    use tracing::instrument;
+    use windows::Win32::System::Ioctl::NVMeDataTypeIdentify;
+
     use super::*;
-    use crate::windows::devices::scsi::ScsiIoctlDevice as _;
+    use crate::{shared::nvme::IdentifyNamespace, windows::devices::scsi::ScsiIoctlDevice as _};
 
     pub trait NvmeIoctlDevice {
         async fn identify_controller(&self) -> Result<IdentifyController, DeviceError>;
+
+        async fn identify_namespace(&self, namespace: u32) -> Result<IdentifyNamespace, DeviceError>;
 
         async fn security_send(
             &self,
@@ -137,9 +160,11 @@ mod ioctl {
         ) -> Result<(), DeviceError>;
     }
 
+    const NVME_MAX_LOG_SIZE: usize = 0x1000;
+
     impl NvmeIoctlDevice for IoctlDevice {
+        #[instrument(skip(self), ret, err)]
         async fn identify_controller(&self) -> Result<IdentifyController, DeviceError> {
-            const NVME_MAX_LOG_SIZE: usize = 0x1000;
             let mut buffer = AlignedArray::zeroed(NVME_MAX_LOG_SIZE + 128, 8).unwrap();
             let data_offset = offset_of!(STORAGE_PROPERTY_QUERY, AdditionalParameters);
             let response_offset = size_of::<STORAGE_PROTOCOL_SPECIFIC_DATA>();
@@ -152,7 +177,7 @@ mod ioctl {
 
             let data = STORAGE_PROTOCOL_SPECIFIC_DATA {
                 ProtocolType: ProtocolTypeNvme,
-                DataType: 1,                 // NVMeDataTypeIdentify
+                DataType: NVMeDataTypeIdentify.0 as u32,
                 ProtocolDataRequestValue: 1, // NVME_IDENTIFY_CNS_CONTROLLER
                 ProtocolDataRequestSubValue: 0,
                 ProtocolDataOffset: response_offset as u32,
@@ -172,6 +197,41 @@ mod ioctl {
             IdentifyController::from_bytes(identify_ctrl_buffer).map_err(|_| DeviceError::InvalidArgument)
         }
 
+        #[instrument(skip(self), ret, err)]
+        async fn identify_namespace(&self, namespace: u32) -> Result<IdentifyNamespace, DeviceError> {
+            let mut buffer = AlignedArray::zeroed(NVME_MAX_LOG_SIZE + 128, 8).unwrap();
+            let data_offset = offset_of!(STORAGE_PROPERTY_QUERY, AdditionalParameters);
+            let response_offset = size_of::<STORAGE_PROTOCOL_SPECIFIC_DATA>();
+
+            let query = STORAGE_PROPERTY_QUERY {
+                PropertyId: StorageAdapterProtocolSpecificProperty,
+                QueryType: PropertyStandardQuery,
+                AdditionalParameters: [0],
+            };
+
+            let data = STORAGE_PROTOCOL_SPECIFIC_DATA {
+                ProtocolType: ProtocolTypeNvme,
+                DataType: NVMeDataTypeIdentify.0 as u32,
+                ProtocolDataRequestValue: 0, // CNS = 0h -- identify namespace
+                ProtocolDataRequestSubValue: namespace,
+                ProtocolDataOffset: response_offset as u32,
+                ProtocolDataLength: NVME_MAX_LOG_SIZE as u32,
+                FixedProtocolReturnData: 0,
+                ProtocolDataRequestSubValue2: 0,
+                ProtocolDataRequestSubValue3: 0,
+                ProtocolDataRequestSubValue4: 0,
+            };
+
+            write_nonoverlapping(&query, &mut buffer);
+            write_nonoverlapping(&data, &mut buffer[data_offset..]);
+
+            let _ = self.ioctl_symmetric(IOCTL_STORAGE_QUERY_PROPERTY, &mut buffer).await?;
+
+            let identify_ns_buffer = &buffer[(data_offset + response_offset)..];
+            IdentifyNamespace::from_bytes(identify_ns_buffer).map_err(|_| DeviceError::InvalidArgument)
+        }
+
+        #[instrument(skip(self, data_out), fields(len = debug(data_out.len())), ret, err)]
         async fn security_send(
             &self,
             security_protocol: u8,
@@ -187,6 +247,7 @@ mod ioctl {
             .await
         }
 
+        #[instrument(skip(self, data_in), fields(len = debug(data_in.len())), ret, err)]
         async fn security_receive(
             &self,
             security_protocol: u8,

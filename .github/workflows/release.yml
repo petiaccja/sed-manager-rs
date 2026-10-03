@@ -36,6 +36,14 @@ jobs:
           github-token: ${{github.token}}
           run-id: ${{ github.event.workflow_run.id }}
 
+      # Artifacts don't preserve file permissions, so restore the executable bits.
+      - name: Prepare Linux package
+        shell: bash
+        working-directory: ${{github.workspace}}
+        run: |
+          cp install/*.sh SEDManager_Linux_x86_64/
+          chmod +x SEDManager_Linux_x86_64/sed_manager_gui SEDManager_Linux_x86_64/*.sh
+
       - name: Zip artifacts
         shell: bash
         working-directory: ${{github.workspace}}

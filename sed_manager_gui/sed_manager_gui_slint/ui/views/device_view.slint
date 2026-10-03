@@ -311,6 +311,8 @@ export component DeviceView {
                 preferred-width: 16rem;
                 command-status: device.command-status;
                 locking-sp <=> device.locking-sp;
+                geometry: device.geometry;
+                alignment: device.alignment;
 
                 login(authority, password) => {
                     login(authority, password)

@@ -39,6 +39,17 @@ export struct Identity {
     is-removable: bool,
 }
 
+export struct Geometry {
+    logical_sector_size: int,
+    logical_sector_count: Sector,
+}
+
+export struct Alignment {
+    alignment_required: bool,
+    alignment_granularity: Sector,
+    lowest_aligned_lba: Sector,
+}
+
 export struct ComIdStatus {
     good: bool,
     com-id: int,
@@ -120,6 +131,8 @@ export struct SecurityProvider {
 
 export struct Device {
     identity: Identity,
+    geometry: Geometry,
+    alignment: Alignment,
     discovery: Discovery,
     config: DeviceConfig,
     stack-status: StackStatus,

@@ -11,7 +11,8 @@ use std::{
 
 use oneshot::Sender;
 use sed_packet::{
-    com_id::{
+    com_id::{ComId, ComIdExt},
+    com_id_request::{
         COM_ID_PROTOCOL, COM_ID_RESPONSE_LEN, ComIdRequest, ComIdResponse, ComIdResponsePayload, StackResetStatus,
     },
     packet::{COM_PACKET_HEADER_LEN, ComPacket, PACKET_HEADER_LEN, PACKETIZED_PROTOCOL, SUB_PACKET_HEADER_LEN},
@@ -19,6 +20,7 @@ use sed_packet::{
 };
 use sed_spec::methods::{Limit, Properties};
 use sorbit::ser_de::FromBytes;
+use tracing::{Span, info_span};
 
 use crate::{
     Error,
@@ -91,8 +93,8 @@ pub const CAPABILITIES: Properties = Properties {
 
 #[derive(Debug)]
 pub struct ProtocolState {
-    com_id: u16,
-    com_id_ext: u16,
+    com_id: ComId,
+    com_id_ext: ComIdExt,
     rpc_session: RpcSession,
     com_id_session: ComIdSession,
     rpc_protocol: SynchronousProtocol<ComPacket, ComPacket>,
@@ -102,7 +104,7 @@ pub struct ProtocolState {
 }
 
 impl ProtocolState {
-    pub fn new(com_id: u16, com_id_ext: u16) -> Self {
+    pub fn new(com_id: ComId, com_id_ext: ComIdExt) -> Self {
         let max_transfer_len = CAPABILITIES.max_gross_compacket_size.get();
         Self {
             com_id,
@@ -116,12 +118,18 @@ impl ProtocolState {
         }
     }
 
-    pub fn handle_method_call(&mut self, session_id: SessionId, call: Vec<u8>, sender: Sender<Result<Vec<u8>, Error>>) {
-        self.rpc_session.handle_method_call(session_id, call, sender);
+    pub fn handle_method_call(
+        &mut self,
+        session_id: SessionId,
+        call: Vec<u8>,
+        sender: Sender<Result<Vec<u8>, Error>>,
+        span: Span,
+    ) {
+        self.rpc_session.handle_method_call(session_id, call, sender, span);
     }
 
-    pub fn handle_sync_properties(&mut self) {
-        self.rpc_session.handle_sync_properties();
+    pub fn handle_sync_properties(&mut self, span: Span) {
+        self.rpc_session.handle_sync_properties(span);
     }
 
     pub fn handle_session_aborted(&mut self, session_id: SessionId) {
@@ -133,8 +141,13 @@ impl ProtocolState {
         self.rpc_session.handle_spawn_session(session_id, properties);
     }
 
-    pub fn handle_com_request(&mut self, request: ComIdRequest, sender: Sender<Result<ComIdResponse, Error>>) {
-        self.com_id_session.handle_com_request(request, sender);
+    pub fn handle_com_request(
+        &mut self,
+        request: ComIdRequest,
+        sender: Sender<Result<ComIdResponse, Error>>,
+        span: Span,
+    ) {
+        self.com_id_session.handle_com_request(request, sender, span);
     }
 
     pub fn handle_iface_send_done(&mut self, time: Instant, protocol: u8, result: Result<(), Error>) {
@@ -145,19 +158,51 @@ impl ProtocolState {
         }
     }
 
-    pub fn handle_iface_recv_done(&mut self, time: Instant, protocol: u8, result: Result<Vec<u8>, Error>) {
+    /// Process the data returned by the device.
+    ///
+    /// # Parameters
+    ///
+    /// - `time`: the time at which the IF-RECV completed.
+    /// - `protocol`: which protocol the IF-RECV used.
+    /// - `result`: the data if the IF-RECV succeeded, otherwise an error.
+    /// - `source`: the span of the IF-RECV command.
+    pub fn handle_iface_recv_done(
+        &mut self,
+        time: Instant,
+        protocol: u8,
+        result: Result<Vec<u8>, Error>,
+        source: &Span,
+    ) {
         match protocol {
-            COM_ID_PROTOCOL => self.handle_iface_com_request_recv_done(time, result),
-            PACKETIZED_PROTOCOL => self.handle_iface_com_packet_recv_done(time, result),
+            COM_ID_PROTOCOL => self.handle_iface_com_request_recv_done(time, result, source),
+            PACKETIZED_PROTOCOL => self.handle_iface_com_packet_recv_done(time, result, source),
             _ => (),
         }
+    }
+
+    /// The span of the next ComID request or RPC request that is waiting
+    /// for data from the device. (Chosen by the `protocol`.)
+    ///
+    /// This span can be used as the parent of the next IF-RECV command. In that
+    /// case, call this after [`poll_action`](Self::poll_action), as polling
+    /// removes the timed out requests.
+    pub fn next_recv_span(&self, protocol: u8) -> Option<Span> {
+        let next = match protocol {
+            COM_ID_PROTOCOL => self.com_id_session.next_recv_span(),
+            PACKETIZED_PROTOCOL => self.rpc_session.next_recv_span(),
+            _ => None,
+        };
+        next.map(|(_, span)| span.clone())
     }
 
     pub fn request_stop(&mut self) {
         self.stop_requested = true;
     }
 
-    pub fn poll_action(&mut self, time: Instant) -> Action {
+    /// Returns the next action to perform. When the action is
+    /// [`Action::Send`], it's paired with the spans of the requests carried by
+    /// the IF-SEND. For all other actions, the spans are empty.
+    pub fn poll_action(&mut self, time: Instant) -> (Action, Vec<Span>) {
         let mut deadline = None;
 
         // Poll the ComID and RPC sessions. At this phase, we're not making any
@@ -166,25 +211,27 @@ impl ProtocolState {
         match self.com_id_session.poll_action(time) {
             ComIdAction::None => (),
             ComIdAction::Sleep { until } => deadline = min_deadline(deadline, Some(until)),
-            ComIdAction::Send(com_id_request) => self.com_id_protocol.handle_send(com_id_request),
+            ComIdAction::Send(com_id_request, span) => self.com_id_protocol.handle_send(com_id_request, vec![span]),
         };
 
         match self.rpc_session.poll_action(time) {
             RpcAction::None => (),
             RpcAction::Sleep { until } => deadline = min_deadline(deadline, Some(until)),
-            RpcAction::Send(packets) => {
+            RpcAction::Send(packets_and_spans) => {
+                let (packets, spans): (Vec<_>, Vec<_>) = packets_and_spans.into_iter().unzip();
                 self.com_packets_sending.push_back(ComPacketSendingRecord {
                     packets: packets
                         .iter()
                         .map(|packet| (SessionId::of(packet), SequenceNumber(packet.sequence_number)))
                         .collect(),
                 });
-                self.rpc_protocol.handle_send(ComPacket {
+                let com_packet = ComPacket {
                     com_id: self.com_id,
                     com_id_ext: self.com_id_ext,
                     payload: packets,
                     ..Default::default()
-                })
+                };
+                self.rpc_protocol.handle_send(com_packet, spans.into_iter().flatten().collect())
             }
         };
 
@@ -199,37 +246,51 @@ impl ProtocolState {
         // issued before all IF-RECVs complete for the token stream protocol.
         // This can be used to interrupt pending RPCs on protocol 0x01.
         match self.com_id_protocol.poll_action(time) {
-            Action::None => (),
-            Action::Sleep { until } => deadline = min_deadline(deadline, Some(until)),
-            action @ Action::Send { .. } => return action,
-            action @ Action::Recv { .. } => return action,
-            action @ Action::Recover => {
-                self.com_id_protocol.handle_reset();
-                self.com_id_session.handle_reset();
+            (Action::None, _) => (),
+            (Action::Sleep { until }, _) => deadline = min_deadline(deadline, Some(until)),
+            (action @ Action::Send { .. }, spans) => return (action, spans),
+            (action @ Action::Recv { .. }, spans) => return (action, spans),
+            (action @ Action::Recover, spans) => {
                 // Unless gated behind a `stop` flag, this can cause an infinite
                 // loop of failed STACK_RESETs. This would keep the protocol
                 // from becoming "idle" and letting the runner shut down.
-                if !self.stop_requested {
+                //
+                // The span must be created before the reset clears the requests.
+                let span = (!self.stop_requested).then(|| self.recovery_span(COM_ID_PROTOCOL));
+                self.com_id_protocol.handle_reset();
+                self.com_id_session.handle_reset();
+                if let Some(span) = span {
                     let stack_reset_request = ComIdRequest::stack_reset(self.com_id, self.com_id_ext);
-                    self.com_id_session.handle_com_request(stack_reset_request, oneshot::channel().0);
+                    self.com_id_session.handle_com_request(stack_reset_request, oneshot::channel().0, span);
                 }
-                return action;
+                return (action, spans);
             }
         }
 
         match self.rpc_protocol.poll_action(time) {
-            Action::None => (),
-            Action::Sleep { until } => deadline = min_deadline(deadline, Some(until)),
-            action @ Action::Send { .. } => return action,
-            action @ Action::Recv { .. } => return action,
-            action @ Action::Recover => {
+            (Action::None, _) => (),
+            (Action::Sleep { until }, _) => deadline = min_deadline(deadline, Some(until)),
+            (action @ Action::Send { .. }, spans) => return (action, spans),
+            (action @ Action::Recv { .. }, spans) => return (action, spans),
+            (action @ Action::Recover, spans) => {
+                let span = self.recovery_span(PACKETIZED_PROTOCOL);
                 let stack_reset_request = ComIdRequest::stack_reset(self.com_id, self.com_id_ext);
-                self.com_id_session.handle_com_request(stack_reset_request, oneshot::channel().0);
-                return action;
+                self.com_id_session.handle_com_request(stack_reset_request, oneshot::channel().0, span);
+                return (action, spans);
             }
         }
 
-        deadline.map(|deadline| Action::Sleep { until: deadline }).unwrap_or(Action::None)
+        let action = deadline.map(|deadline| Action::Sleep { until: deadline }).unwrap_or(Action::None);
+        (action, Vec::new())
+    }
+
+    /// Create the span for a stack reset that recovers `protocol`.
+    ///
+    /// The span is parented under the request whose IF-RECVs failed, or is a
+    /// root span if no request is awaiting a response.
+    fn recovery_span(&self, protocol: u8) -> Span {
+        let parent = self.next_recv_span(protocol).and_then(|span| span.id());
+        info_span!(parent: parent, "stack_reset", reason = "recovery")
     }
 
     fn handle_iface_com_packet_send_done(&mut self, time: Instant, result: Result<(), Error>) {
@@ -244,7 +305,7 @@ impl ProtocolState {
         self.com_id_session.handle_iface_send_done(time, result);
     }
 
-    fn handle_iface_com_request_recv_done(&mut self, time: Instant, result: Result<Vec<u8>, Error>) {
+    fn handle_iface_com_request_recv_done(&mut self, time: Instant, result: Result<Vec<u8>, Error>, source: &Span) {
         let response = result.and_then(|bytes| ComIdResponse::from_bytes(&bytes).map_err(Error::InvalidComIdResponse));
 
         self.com_id_protocol.handle_recv(time, response.as_ref());
@@ -260,18 +321,18 @@ impl ProtocolState {
                 self.rpc_session.handle_reset();
                 self.com_packets_sending.clear();
             }
-            self.com_id_session.handle_iface_recv_done(response);
+            self.com_id_session.handle_iface_recv_done(response, source);
         }
     }
 
-    fn handle_iface_com_packet_recv_done(&mut self, time: Instant, result: Result<Vec<u8>, Error>) {
+    fn handle_iface_com_packet_recv_done(&mut self, time: Instant, result: Result<Vec<u8>, Error>, source: &Span) {
         let com_packet = result.and_then(|bytes| ComPacket::from_bytes(&bytes).map_err(Error::InvalidComPacket));
 
         self.rpc_protocol.handle_recv(time, com_packet.as_ref());
 
         if let Ok(com_packet) = com_packet {
             for packet in com_packet.payload {
-                self.rpc_session.handle_packet(packet);
+                self.rpc_session.handle_packet(packet, source);
             }
         }
     }
@@ -291,8 +352,8 @@ mod tests {
     use googletest::assert_that;
     use googletest::matchers::*;
     use oneshot::channel;
-    use sed_packet::com_id::ComIdResponsePayload;
-    use sed_packet::com_id::StackResetStatus;
+    use sed_packet::com_id_request::ComIdResponsePayload;
+    use sed_packet::com_id_request::StackResetStatus;
     use sed_spec::methods::MethodStatus;
     use sorbit::ser_de::ToBytes;
 
@@ -305,31 +366,31 @@ mod tests {
 
     #[test]
     fn com_id_request_completed() {
-        let mut protocol = ProtocolState::new(1, 0);
+        let mut protocol = ProtocolState::new(ComId(1), ComIdExt(0));
         let (sender, receiver) = channel();
 
-        let request = ComIdRequest::stack_reset(1, 0);
+        let request = ComIdRequest::stack_reset(ComId(1), ComIdExt(0));
         let response = ComIdResponse {
-            com_id: 1,
-            com_id_ext: 0,
+            com_id: ComId(1),
+            com_id_ext: ComIdExt(0),
             payload: ComIdResponsePayload::StackReset { available_data_length: 4, status: StackResetStatus::Success },
         };
 
         // Issue request.
-        protocol.handle_com_request(request.clone(), sender);
+        protocol.handle_com_request(request.clone(), sender, Span::current());
 
         // "Send" call to device.
-        let action = protocol.poll_action(Instant::now());
+        let (action, _) = protocol.poll_action(Instant::now());
         assert_that!(action, eq(&Action::Send { protocol: 0x02, data: request.to_bytes().unwrap() }));
         protocol.handle_iface_send_done(Instant::now(), 0x02, Ok(()));
 
         // "Recv" response from device.
-        let action = protocol.poll_action(Instant::now());
+        let (action, _) = protocol.poll_action(Instant::now());
         assert_that!(action, eq(&Action::Recv { protocol: 0x02, transfer_len: 46 }));
-        protocol.handle_iface_recv_done(Instant::now(), 0x02, Ok(response.to_bytes().unwrap()));
+        protocol.handle_iface_recv_done(Instant::now(), 0x02, Ok(response.to_bytes().unwrap()), &Span::none());
 
         // Poll to completion.
-        let action = protocol.poll_action(Instant::now());
+        let (action, _) = protocol.poll_action(Instant::now());
         assert_that!(action, eq(&Action::None));
 
         // Check if we received the response to the method call.
@@ -338,14 +399,14 @@ mod tests {
 
     #[test]
     fn method_call_completed() {
-        let mut protocol = ProtocolState::new(1, 0);
+        let mut protocol = ProtocolState::new(ComId(1), ComIdExt(0));
         let (sender, receiver) = channel();
 
         let call = start_session_call(SESSION_ID);
         let response = sync_session_call(SESSION_ID, MethodStatus::Success);
         let call_com_packet = ComPacket {
-            com_id: 1,
-            com_id_ext: 0,
+            com_id: ComId(1),
+            com_id_ext: ComIdExt(0),
             outstanding_data: 0,
             min_transfer: 0,
             length: std::marker::PhantomData,
@@ -356,8 +417,8 @@ mod tests {
             )],
         };
         let response_com_packet = ComPacket {
-            com_id: 1,
-            com_id_ext: 0,
+            com_id: ComId(1),
+            com_id_ext: ComIdExt(0),
             outstanding_data: 0,
             min_transfer: 0,
             length: std::marker::PhantomData,
@@ -369,20 +430,25 @@ mod tests {
         };
 
         // Issue method call.
-        protocol.handle_method_call(SessionId::MANAGEMENT, call, sender);
+        protocol.handle_method_call(SessionId::MANAGEMENT, call, sender, Span::current());
 
         // "Send" call to device.
-        let action = protocol.poll_action(Instant::now());
+        let (action, _) = protocol.poll_action(Instant::now());
         assert_that!(action, eq(&Action::Send { protocol: 0x01, data: call_com_packet.to_bytes().unwrap() }));
         protocol.handle_iface_send_done(Instant::now(), 0x01, Ok(()));
 
         // "Recv" response from device.
-        let action = protocol.poll_action(Instant::now());
+        let (action, _) = protocol.poll_action(Instant::now());
         assert_that!(action, eq(&Action::Recv { protocol: 0x01, transfer_len: 512 }));
-        protocol.handle_iface_recv_done(Instant::now(), 0x01, Ok(response_com_packet.to_bytes().unwrap()));
+        protocol.handle_iface_recv_done(
+            Instant::now(),
+            0x01,
+            Ok(response_com_packet.to_bytes().unwrap()),
+            &Span::none(),
+        );
 
         // Poll to completion.
-        let action = protocol.poll_action(Instant::now());
+        let (action, _) = protocol.poll_action(Instant::now());
         assert_that!(action, eq(&Action::None));
 
         // Check if we received the response to the method call.

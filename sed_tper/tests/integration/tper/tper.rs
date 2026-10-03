@@ -7,7 +7,8 @@ use std::sync::Arc;
 
 use sed_async::{PolyRuntime, TokioRuntime};
 use sed_packet::{
-    com_id::ComIdState,
+    com_id::ComIdExt,
+    com_id_request::ComIdState,
     discovery::{GeometryDescriptor, LockingDescriptor, TperDescriptor},
 };
 use sed_telemetry::{WithTracing, with_tracing};
@@ -32,8 +33,8 @@ async fn discovery(_with_tracing: WithTracing) {
 async fn verify_com_id_valid_base(_with_tracing: WithTracing) {
     let device = VirtualDevice::new();
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
-    let tper = Tper::connect(BASE_COM_ID, 0, Arc::new(device), runtime);
-    let result = tper.verify_com_id_valid(BASE_COM_ID, 0).await;
+    let tper = Tper::connect(BASE_COM_ID, ComIdExt(0), Arc::new(device), runtime);
+    let result = tper.verify_com_id_valid(BASE_COM_ID, ComIdExt(0)).await;
     let expected = ComIdState::Issued;
     assert_eq!(result, Ok(expected));
 }
@@ -44,8 +45,8 @@ async fn verify_com_id_valid_base(_with_tracing: WithTracing) {
 async fn verify_com_id_valid_incorrent_id(_with_tracing: WithTracing) {
     let device = VirtualDevice::new();
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
-    let tper = Tper::connect(BASE_COM_ID, 0, Arc::new(device), runtime);
-    let result = tper.verify_com_id_valid(BASE_COM_ID + 1, 0).await;
+    let tper = Tper::connect(BASE_COM_ID, ComIdExt(0), Arc::new(device), runtime);
+    let result = tper.verify_com_id_valid(BASE_COM_ID + 1, ComIdExt(0)).await;
     let expected = ComIdState::Inactive;
     assert_eq!(result, Ok(expected));
 }
@@ -56,8 +57,8 @@ async fn verify_com_id_valid_incorrent_id(_with_tracing: WithTracing) {
 async fn verify_com_id_valid_incorrent_ext(_with_tracing: WithTracing) {
     let device = VirtualDevice::new();
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
-    let tper = Tper::connect(BASE_COM_ID, 0, Arc::new(device), runtime);
-    let result = tper.verify_com_id_valid(BASE_COM_ID, 1).await;
+    let tper = Tper::connect(BASE_COM_ID, ComIdExt(0), Arc::new(device), runtime);
+    let result = tper.verify_com_id_valid(BASE_COM_ID, ComIdExt(1)).await;
     let expected = ComIdState::Invalid;
     assert_eq!(result, Ok(expected));
 }
@@ -68,11 +69,11 @@ async fn verify_com_id_valid_incorrent_ext(_with_tracing: WithTracing) {
 async fn stack_reset_base(_with_tracing: WithTracing) {
     let device = VirtualDevice::new();
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
-    let tper = Tper::connect(BASE_COM_ID, 0, Arc::new(device), runtime);
-    let result = tper.stack_reset(BASE_COM_ID, 0).await;
+    let tper = Tper::connect(BASE_COM_ID, ComIdExt(0), Arc::new(device), runtime);
+    let result = tper.stack_reset(BASE_COM_ID, ComIdExt(0)).await;
     assert_eq!(result, Ok(()));
     // Do another reset just to see that the base ComId was left intact.
-    let result = tper.stack_reset(BASE_COM_ID, 0).await;
+    let result = tper.stack_reset(BASE_COM_ID, ComIdExt(0)).await;
     assert_eq!(result, Ok(()));
 }
 
@@ -82,8 +83,8 @@ async fn stack_reset_base(_with_tracing: WithTracing) {
 async fn stack_reset_incorrent_id(_with_tracing: WithTracing) {
     let device = VirtualDevice::new();
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
-    let tper = Tper::connect(BASE_COM_ID, 0, Arc::new(device), runtime);
-    let result = tper.stack_reset(BASE_COM_ID + 1, 0).await;
+    let tper = Tper::connect(BASE_COM_ID, ComIdExt(0), Arc::new(device), runtime);
+    let result = tper.stack_reset(BASE_COM_ID + 1, ComIdExt(0)).await;
     assert_eq!(result, Err(Error::StackResetFailed));
 }
 
@@ -93,7 +94,7 @@ async fn stack_reset_incorrent_id(_with_tracing: WithTracing) {
 async fn stack_reset_incorrent_ext(_with_tracing: WithTracing) {
     let device = VirtualDevice::new();
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
-    let tper = Tper::connect(BASE_COM_ID, 0, Arc::new(device), runtime);
-    let result = tper.stack_reset(BASE_COM_ID, 1).await;
+    let tper = Tper::connect(BASE_COM_ID, ComIdExt(0), Arc::new(device), runtime);
+    let result = tper.stack_reset(BASE_COM_ID, ComIdExt(1)).await;
     assert_eq!(result, Err(Error::StackResetFailed));
 }

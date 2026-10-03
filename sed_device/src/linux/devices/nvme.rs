@@ -11,6 +11,7 @@ use core::ptr::null_mut;
 use std::path::Path;
 
 use sorbit::ser_de::FromBytes as _;
+use tracing::instrument;
 
 use crate::linux::ioctl_device::IoctlDevice;
 use crate::shared::nvme::{GenericStatusCode, IdentifyController, Opcode, StatusCode, StatusField};
@@ -18,12 +19,14 @@ use crate::{Error, Interface, StorageDevice};
 
 pub use ioctl::NvmeIoctlDevice;
 
+#[derive(Debug)]
 pub struct NvmeDevice {
     ioctl_device: IoctlDevice,
     desc: IdentifyController,
 }
 
 impl NvmeDevice {
+    #[instrument(fields(path = debug(path.as_ref())), ret, err)]
     pub async fn open(path: impl AsRef<Path>) -> Result<Self, Error> {
         let ioctl_device = IoctlDevice::open(path).await?;
         let desc = ioctl_device.identify_controller().await?;
@@ -65,6 +68,22 @@ impl StorageDevice for NvmeDevice {
         false
     }
 
+    #[instrument(skip(self), ret, err)]
+    async fn logical_sector_size(&self) -> Result<u32, Error> {
+        let namespace_identity = self.ioctl_device.identify_namespace(1).await?;
+        namespace_identity
+            .lba_format()
+            .and_then(|lba_format| lba_format.logical_sector_size())
+            .ok_or(Error::NotSupported)
+    }
+
+    #[instrument(skip(self), ret, err)]
+    async fn logical_sector_count(&self) -> Result<u64, Error> {
+        let namespace_identity = self.ioctl_device.identify_namespace(1).await?;
+        Ok(namespace_identity.namespace_size)
+    }
+
+    #[instrument(skip(self, data), fields(len = debug(data.len())), ret, err)]
     async fn security_send(&self, security_protocol: u8, protocol_specific: [u8; 2], data: &[u8]) -> Result<(), Error> {
         if !self.is_security_supported() {
             return Err(Error::SecurityNotSupported);
@@ -73,6 +92,7 @@ impl StorageDevice for NvmeDevice {
         self.ioctl_device.security_send(security_protocol, protocol_specific, data).await
     }
 
+    #[instrument(skip(self), err)]
     async fn security_recv(
         &self,
         security_protocol: u8,
@@ -137,7 +157,7 @@ struct NvmeAdminCommand {
 impl Default for NvmeAdminCommand {
     fn default() -> Self {
         Self {
-            opcode: Opcode::IdentifyController,
+            opcode: Opcode::Identify,
             flags: 0,
             rsvd1: 0,
             nsid: 0,
@@ -160,6 +180,8 @@ impl Default for NvmeAdminCommand {
 }
 
 mod ioctl {
+    use crate::shared::nvme::IdentifyNamespace;
+
     use super::*;
 
     const NVME_ADMIN_CMD_OPCODE: rustix::ioctl::Opcode =
@@ -234,6 +256,8 @@ mod ioctl {
     pub trait NvmeIoctlDevice {
         async fn identify_controller(&self) -> Result<IdentifyController, Error>;
 
+        async fn identify_namespace(&self, namespace: u32) -> Result<IdentifyNamespace, Error>;
+
         async fn security_send(
             &self,
             security_protocol: u8,
@@ -250,15 +274,30 @@ mod ioctl {
     }
 
     impl NvmeIoctlDevice for IoctlDevice {
+        #[instrument(skip(self), ret, err)]
         async fn identify_controller(&self) -> Result<IdentifyController, Error> {
             let buffer = vec![0_u8; 4096];
-            let command =
-                NvmeAdminCommand { opcode: Opcode::IdentifyController, cdw10: 0x0000_0001, ..Default::default() };
+            let command = NvmeAdminCommand { opcode: Opcode::Identify, cdw10: 0x0000_0001, ..Default::default() };
             let (ioctl_err, buffer) = self.ioctl(NvmeAdminCommandIoctl::new(command, buffer)).await?;
             check_ioctl_err(ioctl_err)?;
             IdentifyController::from_bytes(&buffer).map_err(|_| Error::InterfaceNotSupported)
         }
 
+        #[instrument(skip(self), ret, err)]
+        async fn identify_namespace(&self, namespace: u32) -> Result<IdentifyNamespace, Error> {
+            let buffer = vec![0_u8; 4096];
+            let command = NvmeAdminCommand {
+                opcode: Opcode::Identify,
+                nsid: namespace,
+                cdw10: 0x0000_0000,
+                ..Default::default()
+            };
+            let (ioctl_err, buffer) = self.ioctl(NvmeAdminCommandIoctl::new(command, buffer)).await?;
+            check_ioctl_err(ioctl_err)?;
+            IdentifyNamespace::from_bytes(&buffer).map_err(|_| Error::InterfaceNotSupported)
+        }
+
+        #[instrument(skip(self, data_out), fields(len = debug(data_out.len())), ret, err)]
         async fn security_send(
             &self,
             security_protocol: u8,
@@ -280,6 +319,7 @@ mod ioctl {
             check_ioctl_err(ioctl_err)
         }
 
+        #[instrument(skip(self, data_in), fields(len = debug(data_in.len())), ret, err)]
         async fn security_receive(
             &self,
             security_protocol: u8,

@@ -8,6 +8,7 @@ use std::mem::transmute;
 use std::path::Path;
 
 use sorbit::ser_de::{FromBytes as _, ToBytes as _};
+use tracing::instrument;
 use windows::Win32::Storage::IscsiDisc::{
     IOCTL_SCSI_PASS_THROUGH_DIRECT, SCSI_IOCTL_DATA_IN, SCSI_IOCTL_DATA_OUT, SCSI_PASS_THROUGH_DIRECT,
 };
@@ -60,15 +61,15 @@ impl StorageDevice for ScsiDevice {
     }
 
     fn model_number(&self) -> String {
-        self.generic_desc.model_number.clone().unwrap_or(String::new())
+        self.generic_desc.model_number.clone().unwrap_or_default()
     }
 
     fn serial_number(&self) -> String {
-        self.generic_desc.serial_number.clone().unwrap_or(String::new())
+        self.generic_desc.serial_number.clone().unwrap_or_default()
     }
 
     fn firmware_revision(&self) -> String {
-        self.generic_desc.firmware_revision.clone().unwrap_or(String::new())
+        self.generic_desc.firmware_revision.clone().unwrap_or_default()
     }
 
     fn is_security_supported(&self) -> bool {
@@ -82,6 +83,17 @@ impl StorageDevice for ScsiDevice {
         self.generic_desc.is_removable
     }
 
+    #[instrument(skip(self), ret, err)]
+    async fn logical_sector_size(&self) -> Result<u32, DeviceError> {
+        self.ioctl_device.geometry().await.map(|geometry| geometry.logical_sector_size)
+    }
+
+    #[instrument(skip(self), ret, err)]
+    async fn logical_sector_count(&self) -> Result<u64, DeviceError> {
+        self.ioctl_device.geometry().await.map(|geometry| geometry.logical_sector_count)
+    }
+
+    #[instrument(skip(self, data), fields(len = debug(data.len())), ret, err)]
     async fn security_send(
         &self,
         security_protocol: u8,
@@ -100,6 +112,7 @@ impl StorageDevice for ScsiDevice {
             .await
     }
 
+    #[instrument(skip(self), err)]
     async fn security_recv(
         &self,
         security_protocol: u8,
@@ -167,6 +180,7 @@ mod ioctl {
     }
 
     impl ScsiIoctlDevice for IoctlDevice {
+        #[instrument(skip(self, data_in), fields(len = debug(data_in.len())), ret, err)]
         async fn security_protocol_in(
             &self,
             security_protocol: u8,
@@ -205,6 +219,7 @@ mod ioctl {
             parse_request_buffer(&request_buffer).map_err(|err| err.into())
         }
 
+        #[instrument(skip(self, data_out), fields(len = debug(data_out.len())), ret, err)]
         async fn security_protocol_out(
             &self,
             security_protocol: u8,

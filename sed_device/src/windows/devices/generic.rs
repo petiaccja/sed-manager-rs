@@ -7,6 +7,7 @@ use std::ffi::CStr;
 use std::mem::transmute;
 use std::path::Path;
 
+use tracing::instrument;
 use windows::Win32::Storage::FileSystem::*;
 use windows::Win32::System::Ioctl::{
     IOCTL_STORAGE_QUERY_PROPERTY, PropertyStandardQuery, STORAGE_DEVICE_DESCRIPTOR, STORAGE_PROPERTY_QUERY,
@@ -42,7 +43,7 @@ impl GenericDevice {
 #[async_trait::async_trait]
 impl StorageDevice for GenericDevice {
     fn path(&self) -> Option<&Path> {
-        Some(&self.ioctl_device.path())
+        Some(self.ioctl_device.path())
     }
 
     fn interface(&self) -> Interface {
@@ -50,15 +51,15 @@ impl StorageDevice for GenericDevice {
     }
 
     fn model_number(&self) -> String {
-        self.desc.model_number.clone().unwrap_or(String::new())
+        self.desc.model_number.clone().unwrap_or_default()
     }
 
     fn serial_number(&self) -> String {
-        self.desc.serial_number.clone().unwrap_or(String::new())
+        self.desc.serial_number.clone().unwrap_or_default()
     }
 
     fn firmware_revision(&self) -> String {
-        self.desc.firmware_revision.clone().unwrap_or(String::new())
+        self.desc.firmware_revision.clone().unwrap_or_default()
     }
 
     fn is_security_supported(&self) -> bool {
@@ -69,6 +70,17 @@ impl StorageDevice for GenericDevice {
         false
     }
 
+    #[instrument(skip(self), ret, err)]
+    async fn logical_sector_size(&self) -> Result<u32, Error> {
+        self.ioctl_device.geometry().await.map(|geometry| geometry.logical_sector_size)
+    }
+
+    #[instrument(skip(self), ret, err)]
+    async fn logical_sector_count(&self) -> Result<u64, Error> {
+        self.ioctl_device.geometry().await.map(|geometry| geometry.logical_sector_count)
+    }
+
+    #[instrument(skip(self, _data), fields(len = debug(_data.len())), ret, err)]
     async fn security_send(
         &self,
         _security_protocol: u8,
@@ -80,6 +92,7 @@ impl StorageDevice for GenericDevice {
         Err(Error::NotImplemented)
     }
 
+    #[instrument(skip(self), err)]
     async fn security_recv(
         &self,
         _security_protocol: u8,
@@ -91,6 +104,7 @@ impl StorageDevice for GenericDevice {
     }
 }
 
+#[derive(Debug)]
 pub struct DeviceDesc {
     pub interface: Interface,
     pub model_number: Option<String>,
@@ -99,14 +113,25 @@ pub struct DeviceDesc {
     pub is_removable: bool,
 }
 
+#[derive(Debug)]
+pub struct GeometryDesc {
+    pub logical_sector_size: u32,
+    pub logical_sector_count: u64,
+}
+
 mod ioctl {
+    use tracing::instrument;
+    use windows::Win32::System::Ioctl::{IOCTL_STORAGE_READ_CAPACITY, STORAGE_READ_CAPACITY};
+
     use super::*;
 
     pub trait GenericIoctlDevice {
         async fn description(&self) -> Result<DeviceDesc, Error>;
+        async fn geometry(&self) -> Result<GeometryDesc, Error>;
     }
 
     impl GenericIoctlDevice for IoctlDevice {
+        #[instrument(skip(self), ret, err)]
         async fn description(&self) -> Result<DeviceDesc, Error> {
             async fn description_or_len(
                 self_: &IoctlDevice,
@@ -118,12 +143,10 @@ mod ioctl {
                     AdditionalParameters: [0],
                 };
 
-                let mut request_buffer: [u8; size_of::<STORAGE_PROPERTY_QUERY>()] = unsafe { transmute(request) };
+                let request_buffer: [u8; size_of::<STORAGE_PROPERTY_QUERY>()] = unsafe { transmute(request) };
                 let mut response_buffer = vec![0u8; response_buffer_len];
 
-                self_
-                    .ioctl(IOCTL_STORAGE_QUERY_PROPERTY, Some(&mut request_buffer), Some(&mut response_buffer))
-                    .await?;
+                self_.ioctl(IOCTL_STORAGE_QUERY_PROPERTY, Some(&request_buffer), Some(&mut response_buffer)).await?;
 
                 let descriptor = unsafe { &*(response_buffer.as_ptr() as *const STORAGE_DEVICE_DESCRIPTOR) };
                 if (descriptor.Size as usize) < response_buffer.len() {
@@ -139,6 +162,25 @@ mod ioctl {
                     description_or_len(self, output_buffer_len).await?.map_err(|_| Error::BufferTooShort)
                 }
             }
+        }
+
+        #[instrument(skip(self), ret, err)]
+        async fn geometry(&self) -> Result<GeometryDesc, Error> {
+            let mut request = STORAGE_READ_CAPACITY {
+                Version: size_of::<STORAGE_READ_CAPACITY>() as u32,
+                Size: 0,
+                BlockLength: 0,
+                NumberOfBlocks: 0,
+                DiskLength: 0,
+            };
+
+            let request_buffer: &mut [u8; size_of::<STORAGE_READ_CAPACITY>()] = unsafe { transmute(&mut request) };
+            self.ioctl_symmetric(IOCTL_STORAGE_READ_CAPACITY, request_buffer).await?;
+
+            Ok(GeometryDesc {
+                logical_sector_size: request.BlockLength,
+                logical_sector_count: request.NumberOfBlocks as u64,
+            })
         }
     }
 

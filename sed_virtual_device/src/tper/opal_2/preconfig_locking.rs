@@ -8,16 +8,17 @@ use std::ops::Range;
 use sed_spec::{
     ace_expr,
     objects::{
-        AccessControl, AccessControlRef, Ace, Authority, AuthorityRef, CPin, LockingRange, MbrControl, TableDesc,
+        AccessControl, AccessControlRef, Ace, Authority, AuthorityRef, CPin, LockingInfoExt, LockingRange, MbrControl,
+        TableDesc,
     },
     preconfig::{
-        core::shared::{invoking_id::THIS_SP, mbr_control, table},
+        core::shared::{invoking_id::THIS_SP, locking_info, mbr_control, table},
         opal_2::{
             admin::sp,
             locking::{ace, authority, c_pin, k_aes_256, locking},
         },
     },
-    types::{AuthMethod, ResetType, TableKind},
+    types::{AuthMethod, EncryptionSupport, ResetType, TableKind},
 };
 
 use crate::tper::{
@@ -42,6 +43,7 @@ pub fn preconfig() -> Locking {
         c_pin: c_pin(),
         k_aes_256: k_aes_256(),
         locking: locking(),
+        locking_info_ext: locking_info_ext(),
         mbr_control: mbr_control(),
         table: table(),
         mbr: vec![0u8; MBR_SIZE as usize],
@@ -117,6 +119,11 @@ pub fn access_control() -> Table<AccessControl> {
         // Locking
         (
             AccessControlRef { invoking_id: LOCKING.into(), method_id: NEXT },
+            AccessControl { acl: vec![ace::ANYBODY], ..Default::default() },
+        ),
+        // LockingInfo
+        (
+            AccessControlRef { invoking_id: LOCKING_INFO.into(), method_id: GET },
             AccessControl { acl: vec![ace::ANYBODY], ..Default::default() },
         ),
         // MBRControl
@@ -652,6 +659,23 @@ pub fn locking() -> Table<LockingRange> {
     });
 
     fixed.into_iter().chain(ranges).into_table().expect("object missing an UID")
+}
+
+fn locking_info_ext() -> Table<LockingInfoExt> {
+    let locking_info_ = LockingInfoExt {
+        uid: Some(locking_info::LOCKING_INFO),
+        name: None,
+        version: None,
+        encryption_support: Some(EncryptionSupport::MediaEncryption),
+        max_ranges: Some(RANGES.len() as u32),
+        max_re_encryptions: None,
+        keys_available_cfg: None,
+        alignmnet_required: Some(true),
+        logical_block_size: Some(512),
+        alignment_granularity: Some(8),
+        lowest_aligned_lba: Some(0),
+    };
+    [(locking_info::LOCKING_INFO, locking_info_)].into()
 }
 
 pub fn mbr_control() -> Table<MbrControl> {

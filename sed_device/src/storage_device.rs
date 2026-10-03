@@ -29,6 +29,9 @@ pub trait StorageDevice: Send + Sync {
     fn is_security_supported(&self) -> bool;
     fn is_removable(&self) -> bool;
 
+    async fn logical_sector_size(&self) -> Result<u32, Error>;
+    async fn logical_sector_count(&self) -> Result<u64, Error>;
+
     async fn security_send(&self, security_protocol: u8, protocol_specific: [u8; 2], data: &[u8]) -> Result<(), Error>;
     async fn security_recv(
         &self,

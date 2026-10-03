@@ -11,8 +11,13 @@ use sed_packet::{
     token_stream::{Command, ToTokens as _},
 };
 use sed_spec::methods::Properties;
+use tracing::Span;
 
 use crate::protocol::sequence_number::SequenceNumber;
+
+/// Packets to send in one ComPacket, each paired with the spans of the method
+/// calls it carries.
+pub type PacketBatch = Vec<(Packet, Vec<Span>)>;
 
 pub fn packetize_one(session_id: SessionId, sn: SequenceNumber, call: Vec<u8>) -> Packet {
     let sub_packet = SubPacket { kind: SubPacketKind::Data, length: PhantomData, payload: call };
@@ -27,6 +32,12 @@ pub fn min_deadline(d1: Option<Instant>, d2: Option<Instant>) -> Option<Instant>
         (Some(d), None) => Some(d),
         (Some(d1), Some(d2)) => Some(min(d1, d2)),
     }
+}
+
+/// Links two spans both ways with `follows_from`.
+pub fn link_both_ways(a: &Span, b: &Span) {
+    a.follows_from(b);
+    b.follows_from(a);
 }
 
 pub fn eos() -> Vec<u8> {

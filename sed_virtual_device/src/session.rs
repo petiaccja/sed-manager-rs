@@ -19,8 +19,8 @@ use sed_spec::methods::{
     SetResult, extract_method,
 };
 use sed_spec::objects::{
-    AccessControlRef, Ace, AceExpr, Authority, AuthorityRef, CPin, KAes256, KAes256Ref, LockingRange, MbrControl,
-    MethodRef, SecurityProvider as SecurityProviderObj, SecurityProviderRef, TableDesc,
+    AccessControlRef, Ace, AceExpr, Authority, AuthorityRef, CPin, KAes256, KAes256Ref, LockingInfoExt, LockingRange,
+    MbrControl, MethodRef, SecurityProvider as SecurityProviderObj, SecurityProviderRef, TableDesc,
 };
 use sed_spec::preconfig::core::shared::authority::ANYBODY;
 use sed_spec::preconfig::core::shared::invoking_id::THIS_SP;
@@ -267,6 +267,14 @@ impl Session {
                     permitted_columns,
                 )
                 .map(GetResult::LockingRange),
+                table_id::LOCKING_INFO => get_slice(
+                    sp.locking_info_ext().ok_or(MethodStatus::InvalidParameter)?,
+                    object,
+                    start_column,
+                    end_column,
+                    permitted_columns,
+                )
+                .map(GetResult::LockingInfoExt),
                 table_id::MBR_CONTROL => get_slice(
                     sp.mbr_control().ok_or(MethodStatus::InvalidParameter)?,
                     object,
@@ -637,6 +645,7 @@ enum GetResult<'tper> {
     CPin(ObjectSlice<'tper, CPin>),
     KAes256(ObjectSlice<'tper, KAes256>),
     LockingRange(ObjectSlice<'tper, LockingRange>),
+    LockingInfoExt(ObjectSlice<'tper, LockingInfoExt>),
     MbrControl(ObjectSlice<'tper, MbrControl>),
     SecurityProvider(ObjectSlice<'tper, SecurityProviderObj>),
     TableDesc(ObjectSlice<'tper, TableDesc>),
@@ -651,6 +660,7 @@ impl Tokenize for GetResult<'_> {
             GetResult::CPin(value) => value.tokenize(tokenizer),
             GetResult::KAes256(value) => value.tokenize(tokenizer),
             GetResult::LockingRange(value) => value.tokenize(tokenizer),
+            GetResult::LockingInfoExt(value) => value.tokenize(tokenizer),
             GetResult::MbrControl(value) => value.tokenize(tokenizer),
             GetResult::SecurityProvider(value) => value.tokenize(tokenizer),
             GetResult::TableDesc(value) => value.tokenize(tokenizer),

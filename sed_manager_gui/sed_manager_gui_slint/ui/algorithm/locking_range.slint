@@ -1,0 +1,21 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
+import { Sector } from "../data/sector.slint";
+import { Geometry, Alignment } from "../data/device.slint";
+import { LockingRange } from "../data/lib.slint";
+
+export global LockingRangeLib {
+    pure callback stripe-x-normalized(index: int, locking-ranges: [LockingRange], geometry: Geometry) -> float;
+    pure callback stripe-width-normalized(index: int, locking-ranges: [LockingRange], geometry: Geometry) -> float;
+
+    stripe-x-normalized(index, locking-ranges, geometry) => {
+        (10000 * locking-ranges[index].start.value / geometry.logical-sector-count.value) / 10000.0
+    }
+
+    stripe-width-normalized(index, locking-ranges, geometry) => {
+        (10000 * (locking-ranges[index].end.value - locking-ranges[index].start.value) / geometry.logical-sector-count.value) / 10000.0
+    }
+}

@@ -1,0 +1,55 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
+import { Sector } from "../data/sector.slint";
+import { Geometry, Alignment } from "../data/device.slint";
+
+export global SectorLib {
+    // Convert the sector into a string based on the block size.
+    // INCOMPLETE: override with host code.
+    pure callback to-string(sector: Sector, geometry: Geometry) -> string;
+
+    // Check if the string can be parsed as a sector.
+    // INCOMPLETE: override with host code.
+    pure callback is-valid(str: string, geometry: Geometry) -> bool;
+
+    // Parse the string to a sector based on the block size.
+    // INCOMPLETE: override with host code.
+    pure callback parse(str: string, geometry: Geometry) -> Sector;
+
+    // Align the sector according to the requirements.
+    // INCOMPLETE: override with host code.
+    pure callback align(sector: Sector, alignment: Alignment) -> Sector;
+
+    // Return the smallest of the two sectors.
+    pure callback min(lhs: Sector, rhs: Sector) -> Sector;
+
+    // Return the biggest of the two sectors.
+    pure callback max(lhs: Sector, rhs: Sector) -> Sector;
+
+    to-string(sector) => {
+        sector.value / 1ms
+    }
+
+    is-valid(str) => {
+        str.is-float()
+    }
+
+    parse(str) => {
+        { value: 1ms * str.to-float() }
+    }
+
+    align(sector, alignment) => {
+        sector
+    }
+
+    min(lhs, rhs) => {
+        { value: lhs.value.min(rhs.value) }
+    }
+
+    max(lhs, rhs) => {
+        { value: lhs.value.max(rhs.value) }
+    }
+}
