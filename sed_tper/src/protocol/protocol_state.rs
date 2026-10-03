@@ -127,8 +127,8 @@ impl ProtocolState {
         self.rpc_session.handle_method_call(session_id, call, sender, span);
     }
 
-    pub fn handle_sync_properties(&mut self) {
-        self.rpc_session.handle_sync_properties();
+    pub fn handle_sync_properties(&mut self, span: Span) {
+        self.rpc_session.handle_sync_properties(span);
     }
 
     pub fn handle_session_aborted(&mut self, session_id: SessionId) {

@@ -117,7 +117,7 @@ impl Controller {
     }
 
     pub fn sync_properties(&self) {
-        let _ = self.command_tx.try_send(Command::SyncProperties);
+        let _ = self.command_tx.try_send(Command::SyncProperties { span: Span::current() });
     }
 
     /// Notify the protocol stack that a session has been aborted by the device.
@@ -158,7 +158,7 @@ impl Controller {
 #[rustfmt::skip] // Puts everything on a new line with the #[cfg].
 pub enum Command {
     MethodCall { session_id: SessionId, call: Vec<u8>, sender: oneshot::Sender<Result<Vec<u8>, Error>>, span: Span },
-    SyncProperties,
+    SyncProperties { span: Span },
     ComRequest { request: ComIdRequest, sender: oneshot::Sender<Result<ComIdResponse, Error>>, span: Span },
     ReportAborted { session_id: SessionId },
     #[cfg(feature = "test-utils")]
@@ -170,7 +170,7 @@ fn inject_command(state: &mut ProtocolState, command: Command) {
         Command::MethodCall { session_id, call, sender, span } => {
             state.handle_method_call(session_id, call, sender, span)
         }
-        Command::SyncProperties => state.handle_sync_properties(),
+        Command::SyncProperties { span } => state.handle_sync_properties(span),
         Command::ComRequest { request, sender, span } => state.handle_com_request(request, sender, span),
         Command::ReportAborted { session_id } => state.handle_session_aborted(session_id),
         #[cfg(feature = "test-utils")]

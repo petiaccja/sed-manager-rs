@@ -67,8 +67,8 @@ impl RpcSession {
         }
     }
 
-    pub fn handle_sync_properties(&mut self) {
-        self.management.handle_sync_properties();
+    pub fn handle_sync_properties(&mut self, span: Span) {
+        self.management.handle_sync_properties(span);
     }
 
     pub fn handle_session_aborted(&mut self, session_id: SessionId) {

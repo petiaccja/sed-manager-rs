@@ -42,7 +42,7 @@ pub struct Management {
     start_session_calls_sending: HashMap<u32, VecDeque<MethodSendingRecord>>,
     start_session_calls_receiving: HashMap<u32, VecDeque<MethodReceivingRecord>>,
     received_tokens: VecDeque<u8>,
-    sync_properties_requested: bool,
+    properties_sync: PropertiesSync,
     properties_changed_tx: async_broadcast::Sender<PropertiesChanged>,
     properties_changed_rx: async_broadcast::InactiveReceiver<PropertiesChanged>,
 }
@@ -59,7 +59,7 @@ impl Management {
             start_session_calls_sending: HashMap::new(),
             start_session_calls_receiving: HashMap::new(),
             received_tokens: VecDeque::new(),
-            sync_properties_requested: false,
+            properties_sync: PropertiesSync::Idle,
             properties_changed_tx,
             properties_changed_rx: properties_changed_rx.deactivate(),
         }
@@ -69,8 +69,12 @@ impl Management {
         self.method_calls.push_back(MethodCallRecord { call, sender, span });
     }
 
-    pub fn handle_sync_properties(&mut self) {
-        self.sync_properties_requested = true;
+    /// Request synchronizing the connection properties with the TPer. The
+    /// request is ignored while another one is already outstanding.
+    pub fn handle_sync_properties(&mut self, span: Span) {
+        if let PropertiesSync::Idle = self.properties_sync {
+            self.properties_sync = PropertiesSync::Requested { span };
+        }
     }
 
     pub fn handle_iface_send_done(&mut self, time: Instant, sn: SequenceNumber, result: Result<(), Error>) {
@@ -90,6 +94,14 @@ impl Management {
             }
         }
         self.start_session_calls_sending.retain(|_, queue| !queue.is_empty());
+
+        self.properties_sync = match core::mem::replace(&mut self.properties_sync, PropertiesSync::Idle) {
+            PropertiesSync::Sending { sequence_number, span } if sequence_number <= sn => match &result {
+                Ok(_) => PropertiesSync::Receiving { sent_at: time, deadline: time + self.timeout, span },
+                Err(_) => PropertiesSync::Idle,
+            },
+            state => state,
+        };
     }
 
     pub fn handle_reset(&mut self) {
@@ -157,6 +169,10 @@ impl Management {
                         Self::handle_close_session(&mut actions, close_session, value.status);
                     }
                     MgmtMethodCallParams::Properties(properties_method) => {
+                        if let PropertiesSync::Receiving { span, .. } = &self.properties_sync {
+                            link_both_ways(source, span);
+                            self.properties_sync = PropertiesSync::Idle;
+                        }
                         self.handle_properties(properties_method, value.status)
                     }
                 },
@@ -173,12 +189,16 @@ impl Management {
 
     pub fn poll_action(&mut self, time: Instant) -> Action {
         // Get next packet to send.
-        let packet = self
-            .poll_sync_properties()
-            .map(|packet| (packet, vec![]))
-            .or_else(|| self.poll_method_calls().map(|(packet, span)| (packet, vec![span])));
+        let packet = self.poll_sync_properties().or_else(|| self.poll_method_calls());
+        let packet = packet.map(|(packet, span)| (packet, vec![span]));
 
-        // Remove timed out & get next deadline.
+        // Remove timed out & get next deadline. Nobody waits for the response
+        // to `Properties`, so it doesn't need to wake up the protocol.
+        if let PropertiesSync::Receiving { deadline, .. } = &self.properties_sync
+            && *deadline < time
+        {
+            self.properties_sync = PropertiesSync::Idle;
+        }
         let mut deadline = None;
         for queue in self.start_session_calls_receiving.values_mut() {
             while let Some(record) = queue.pop_front_if(|record| record.deadline < time) {
@@ -200,27 +220,31 @@ impl Management {
         }
     }
 
-    fn poll_sync_properties(&mut self) -> Option<Packet> {
-        core::mem::replace(&mut self.sync_properties_requested, false)
-            .then(|| {
-                let call = MethodCall {
-                    invoking_id: SESSION_MANAGER,
-                    method_id: PropertiesMethod::METHOD_ID,
-                    parameters: PropertiesMethod::Host { host_properties: Some(self.capabilities.clone()) },
-                    status: MethodStatus::Success,
-                };
-                if let Ok(call) = call.to_tokens() {
-                    // This call is pushed to the FRONT of the queue, NOT to the back.
-                    // This is fine, as SM methods are paired with the response by key,
-                    // not by order. This gives higher priority to property sync, so the
-                    // retrieved properties can be applied sooner.
-                    Some(packetize_one(SessionId::MANAGEMENT, self.sequence_number.fetch_add(), call))
-                } else {
-                    // TODO: we should probably log this, even though it's not critical.
-                    None
-                }
-            })
-            .flatten()
+    /// Returns the packet to send and the span of the `Properties` method call
+    /// it carries.
+    fn poll_sync_properties(&mut self) -> Option<(Packet, Span)> {
+        let PropertiesSync::Requested { span } = &self.properties_sync else {
+            return None;
+        };
+        let call = MethodCall {
+            invoking_id: SESSION_MANAGER,
+            method_id: PropertiesMethod::METHOD_ID,
+            parameters: PropertiesMethod::Host { host_properties: Some(self.capabilities.clone()) },
+            status: MethodStatus::Success,
+        };
+        let Ok(call) = call.to_tokens() else {
+            // TODO: we should probably log this, even though it's not critical.
+            self.properties_sync = PropertiesSync::Idle;
+            return None;
+        };
+        // This call is pushed to the FRONT of the queue, NOT to the back.
+        // This is fine, as SM methods are paired with the response by key,
+        // not by order. This gives higher priority to property sync, so the
+        // retrieved properties can be applied sooner.
+        let sequence_number = self.sequence_number.fetch_add();
+        let span = span.clone();
+        self.properties_sync = PropertiesSync::Sending { sequence_number, span: span.clone() };
+        Some((packetize_one(SessionId::MANAGEMENT, sequence_number, call), span))
     }
 
     /// Returns the packet to send and the span of the method calls it carries.
@@ -326,6 +350,10 @@ impl Management {
 
     fn flush(&mut self, error: Error) {
         self.received_tokens.clear();
+        // The response to `Properties` may have been among the discarded tokens.
+        if let PropertiesSync::Receiving { .. } = self.properties_sync {
+            self.properties_sync = PropertiesSync::Idle;
+        }
         for (_, queue) in self.start_session_calls_sending.drain() {
             for record in queue {
                 let _ = record.sender.send(Err(error.clone()));
@@ -341,10 +369,15 @@ impl Management {
     /// The span of the method call that was sent the earliest among those
     /// awaiting a response.
     pub fn next_recv_span(&self) -> Option<(Instant, &Span)> {
+        let properties = match &self.properties_sync {
+            PropertiesSync::Receiving { sent_at, span, .. } => Some((*sent_at, span)),
+            _ => None,
+        };
         self.start_session_calls_receiving
             .values()
             .filter_map(|queue| queue.front())
             .map(|record| (record.sent_at, &record.span))
+            .chain(properties)
             .min_by_key(|(sent_at, _)| *sent_at)
     }
 
@@ -370,6 +403,24 @@ pub enum Action {
     None,
     Sleep { until: Instant },
     Send(PacketBatch),
+}
+
+/// The state of the `Properties` method call that synchronizes the connection
+/// properties with the TPer.
+///
+/// The response to `Properties` is processed whenever it arrives, regardless of
+/// this state. Beyond requesting the method call, the state only serves to trace
+/// it, and at most one call is tracked at a time.
+#[derive(Debug)]
+enum PropertiesSync {
+    /// No sync requested or outstanding.
+    Idle,
+    /// Requested by the client, not yet packetized.
+    Requested { span: Span },
+    /// Packetized, waiting for IF-SEND to complete.
+    Sending { sequence_number: SequenceNumber, span: Span },
+    /// Sent, waiting for the TPer's `Properties` response.
+    Receiving { sent_at: Instant, deadline: Instant, span: Span },
 }
 
 #[derive(Debug)]
