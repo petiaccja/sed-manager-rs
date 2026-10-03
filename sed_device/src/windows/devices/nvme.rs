@@ -143,7 +143,7 @@ mod ioctl {
     pub trait NvmeIoctlDevice {
         async fn identify_controller(&self) -> Result<IdentifyController, DeviceError>;
 
-        async fn identify_namespace(&self, index: u32) -> Result<IdentifyNamespace, DeviceError>;
+        async fn identify_namespace(&self, namespace: u32) -> Result<IdentifyNamespace, DeviceError>;
 
         async fn security_send(
             &self,
@@ -227,8 +227,8 @@ mod ioctl {
 
             let _ = self.ioctl_symmetric(IOCTL_STORAGE_QUERY_PROPERTY, &mut buffer).await?;
 
-            let identify_ctrl_buffer = &buffer[(data_offset + response_offset)..];
-            IdentifyNamespace::from_bytes(identify_ctrl_buffer).map_err(|_| DeviceError::InvalidArgument)
+            let identify_ns_buffer = &buffer[(data_offset + response_offset)..];
+            IdentifyNamespace::from_bytes(identify_ns_buffer).map_err(|_| DeviceError::InvalidArgument)
         }
 
         #[instrument(skip(self, data_out), fields(len = debug(data_out.len())), ret, err)]
