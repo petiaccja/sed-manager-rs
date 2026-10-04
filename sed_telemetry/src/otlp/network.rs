@@ -3,87 +3,72 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use std::collections::HashMap;
-use std::str::FromStr;
 use std::time::Duration;
 
-use opentelemetry_otlp::{WithExportConfig, WithTonicConfig};
+use opentelemetry_otlp::{Protocol, WithExportConfig};
+use opentelemetry_sdk::trace::SpanExporter as _;
 
-use tonic::metadata::{MetadataKey, MetadataMap};
+use crate::otlp::Error;
 
-use crate::otlp::{
-    Error::{self, InvalidProtocol},
-    HeaderError,
-};
+const ENDPOINT_VARS: [&str; 2] = [
+    "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT",
+    "OTEL_EXPORTER_OTLP_ENDPOINT",
+];
+const PROTOCOL_VARS: [&str; 2] = [
+    "OTEL_EXPORTER_OTLP_TRACES_PROTOCOL",
+    "OTEL_EXPORTER_OTLP_PROTOCOL",
+];
 
-pub enum ExporterProtocol {
-    Grpc,
-    Http,
+/// Creates an OTLP/HTTP exporter and checks that its endpoint accepts exports.
+///
+/// To configure the endpoint, use the standardized `OTEL_EXPORTER_OTLP_*` env
+/// vars.
+///
+/// # Errors
+///
+/// Invalid or unsupported (i.e. gRPC) endpoints or protocols are checked. The
+/// endpoint is also probed to see if it accepts exports.
+pub fn create_network_exporter() -> Result<opentelemetry_otlp::SpanExporter, Error> {
+    check_endpoint()?;
+    let exporter = opentelemetry_otlp::SpanExporter::builder()
+        .with_http()
+        .with_protocol(get_protocol()?)
+        .with_timeout(Duration::from_millis(500))
+        .build()?;
+    probe(&exporter)?;
+    Ok(exporter)
 }
 
-pub struct NetworkConfig {
-    endpoint: String,
-    protocol: ExporterProtocol,
-    headers: HashMap<String, String>,
-}
-
-impl NetworkConfig {
-    pub fn get() -> Result<Self, Error> {
-        Ok(Self { endpoint: get_endpoint()?, protocol: get_protocol()?, headers: get_headers() })
-    }
-}
-
-pub fn create_network_exporter(config: Option<NetworkConfig>) -> Result<opentelemetry_otlp::SpanExporter, Error> {
-    let NetworkConfig { endpoint, protocol, headers } = match config {
-        Some(config) => config,
-        None => NetworkConfig::get()?,
-    };
-
-    let mut metadata = MetadataMap::new();
-    for (key, value) in headers {
-        let key = MetadataKey::from_str(&key).map_err(HeaderError::InvalidKey)?;
-        metadata.insert(key, value.parse().map_err(HeaderError::InvalidValue)?);
-    }
-
-    Ok(match protocol {
-        ExporterProtocol::Grpc => opentelemetry_otlp::SpanExporter::builder()
-            .with_tonic()
-            .with_metadata(metadata)
-            .with_endpoint(endpoint)
-            .with_timeout(Duration::from_millis(500))
-            .build()?,
-        ExporterProtocol::Http => opentelemetry_otlp::SpanExporter::builder()
-            .with_http()
-            .with_endpoint(endpoint)
-            .with_timeout(Duration::from_millis(500))
-            .build()?,
+/// Sends an empty export request to verify the endpoint, headers, and protocol.
+///
+/// The request is sent from a separate thread because the blocking `reqwest`
+/// HTTP client must not be used from within an async runtime, or else it can
+/// hang or panic.
+fn probe(exporter: &opentelemetry_otlp::SpanExporter) -> Result<(), Error> {
+    std::thread::scope(|scope| {
+        scope
+            .spawn(|| futures::executor::block_on(exporter.export(Vec::new())))
+            .join()
+            .unwrap_or_else(|panic| std::panic::resume_unwind(panic))
     })
+    .map_err(Error::EndpointUnreachable)
 }
 
-fn get_endpoint() -> Result<String, Error> {
-    std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT").map_err(|_| Error::EndpointNotSpecified)
+/// Return the first env var that is defined among the `names`.
+fn get_first_env_var(names: &[&str]) -> Option<String> {
+    names.iter().filter_map(|name| std::env::var(name).ok()).find(|value| !value.trim().is_empty())
 }
 
-fn get_protocol() -> Result<ExporterProtocol, Error> {
-    match std::env::var("OTEL_EXPORTER_OTLP_PROTOCOL") {
-        Ok(value) => match value.to_lowercase().as_str() {
-            "http" => Ok(ExporterProtocol::Http),
-            "grpc" => Ok(ExporterProtocol::Grpc),
-            _ => Err(Error::InvalidProtocol(value)),
-        },
-        Err(_) => Err(InvalidProtocol("<none>".into())),
+fn check_endpoint() -> Result<(), Error> {
+    get_first_env_var(&ENDPOINT_VARS).map(|_| ()).ok_or(Error::EndpointNotSpecified)
+}
+
+/// Resolves the protocol explicitly, because the exporter would silently fall back to HTTP
+/// for `grpc`, and it would default to `http/json` instead of the standard `http/protobuf`.
+fn get_protocol() -> Result<Protocol, Error> {
+    match get_first_env_var(&PROTOCOL_VARS) {
+        Some(protocol) if protocol.trim().eq_ignore_ascii_case("grpc") => Err(Error::UnsupportedProtocol(protocol)),
+        Some(protocol) if protocol.trim().eq_ignore_ascii_case("http/json") => Ok(Protocol::HttpJson),
+        _ => Ok(Protocol::HttpBinary),
     }
-}
-
-fn get_headers() -> HashMap<String, String> {
-    std::env::var("OTEL_EXPORTER_OTLP_HEADERS")
-        .map(|value| {
-            value
-                .split(' ')
-                .filter(|entry| !entry.is_empty())
-                .filter_map(|entry| entry.split_once('='))
-                .map(|(key, value)| (key.to_owned(), value.to_owned()))
-                .collect()
-        })
-        .unwrap_or_default()
 }

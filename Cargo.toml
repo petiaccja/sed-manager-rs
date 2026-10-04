@@ -77,16 +77,9 @@ tracing-subscriber = "0.3.23"
 tracing-opentelemetry = "=0.34.0"
 opentelemetry = "=0.33.0"
 opentelemetry_sdk = { version = "=0.33.0", features = ["rt-tokio"] }
-opentelemetry-otlp = { version = "=0.33.0", features = [
-    "grpc-tonic",
-    "gzip-tonic",
-    "tls-roots",
-    "trace",
-    "gzip-http",
-] }
+opentelemetry-otlp = { version = "=0.33.0", features = ["trace", "http-json", "gzip-http"] }
 opentelemetry-proto = "=0.33.0"
 opentelemetry-semantic-conventions = { version = "=0.33.0", features = ["semconv_experimental"] }
-tonic = { version = "0.14.5", features = ["tls-native-roots", "gzip"] }
 
 # -- Crypto & random
 rand = "0.10.1"

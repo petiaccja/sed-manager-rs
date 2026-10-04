@@ -18,7 +18,7 @@ pub fn with_tracing() -> Option<otlp::FlushGuard> {
         let registry = Registry::default();
 
         // Attempt to set up the network exporter.
-        match otlp::create_network_exporter(None) {
+        match otlp::create_network_exporter() {
             Ok(exporter) => {
                 let (layer, sdk_tracer_provider) = otlp::LayerBuilder::new()
                     .with_batch_exporter(exporter)

@@ -10,13 +10,13 @@ use std::path::Path;
 use opentelemetry::KeyValue;
 use opentelemetry::trace::TracerProvider as _;
 use opentelemetry_otlp::ExporterBuildError;
+use opentelemetry_sdk::error::OTelSdkError;
 use opentelemetry_sdk::trace::{SpanExporter, TracerProviderBuilder};
 use opentelemetry_sdk::{Resource, trace::SdkTracerProvider};
 use opentelemetry_semantic_conventions::attribute::{
     HOST_ARCH, OS_BUILD_ID, OS_NAME, OS_TYPE, OS_VERSION, SERVICE_NAME, SERVICE_VERSION,
 };
 use opentelemetry_semantic_conventions::trace::PROCESS_EXECUTABLE_NAME;
-use tonic::metadata::errors::{InvalidMetadataKey, InvalidMetadataValue};
 use tracing::Metadata;
 use tracing_subscriber::{Layer, Registry, layer::Context};
 
@@ -24,7 +24,7 @@ mod file;
 mod network;
 
 pub use file::create_file_exporter;
-pub use network::{NetworkConfig, create_network_exporter};
+pub use network::create_network_exporter;
 
 const SERVICE_BUILD_TYPE: &str = "service.build_type";
 
@@ -32,22 +32,14 @@ const SERVICE_BUILD_TYPE: &str = "service.build_type";
 pub enum Error {
     #[error("the OTLP endpoint is not specified, please set the `OTEL_EXPORTER_OTLP_ENDPOINT` env var")]
     EndpointNotSpecified,
-    #[error("invalid headers: {0}")]
-    InvalidHeaders(#[from] HeaderError),
-    #[error("invalid protocol: {0}")]
-    InvalidProtocol(String),
-    #[error("invalid headers: {0}")]
+    #[error("the OTLP protocol `{0}` is not supported; use `http/protobuf` or `http/json`")]
+    UnsupportedProtocol(String),
+    #[error("the OTLP endpoint is unreachable: {0}")]
+    EndpointUnreachable(OTelSdkError),
+    #[error("failed to build exporter: {0}")]
     ExporterBuild(#[from] ExporterBuildError),
     #[error("{0}")]
     Io(#[from] io::Error),
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum HeaderError {
-    #[error("{0}")]
-    InvalidKey(#[from] InvalidMetadataKey),
-    #[error("{0}")]
-    InvalidValue(#[from] InvalidMetadataValue),
 }
 
 pub struct LayerBuilder {

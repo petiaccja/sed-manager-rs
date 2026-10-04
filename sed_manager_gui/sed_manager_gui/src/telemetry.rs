@@ -19,7 +19,7 @@ pub fn init_telemetry(log_file: Option<PathBuf>, log_level: Option<&str>) -> Opt
     let (env_filter, maybe_filter_error) = create_env_filter(log_level);
     error_messages.extend(maybe_filter_error.map(|msg| ("create_env_filter", msg)));
 
-    let maybe_network_exporter = otlp::create_network_exporter(None);
+    let maybe_network_exporter = otlp::create_network_exporter();
     let maybe_file_exporter = {
         let path = log_file.unwrap_or_else(default_log_file);
         let maybe_log_file = create_log_file(path).map_err(otlp::Error::Io);
