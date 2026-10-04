@@ -101,12 +101,12 @@ fn collect_default_attributes() -> HashMap<String, String> {
                 .map(|file_name| (PROCESS_EXECUTABLE_NAME.to_owned(), file_name.to_string_lossy().into()))
         }),
         Some((SERVICE_BUILD_TYPE.to_owned(), if cfg!(debug_assertions) { "debug" } else { "release" }.to_owned())),
-        os_name().map(|value| (OS_NAME.into(), value.into())),
-        os_version().map(|value| (OS_VERSION.into(), value.into())),
-        os_build_id().map(|value| (OS_BUILD_ID.into(), value.into())),
+        os_name().map(|value| (OS_NAME.into(), value)),
+        os_version().map(|value| (OS_VERSION.into(), value)),
+        os_build_id().map(|value| (OS_BUILD_ID.into(), value)),
     ]
     .into_iter()
-    .filter_map(|x| x)
+    .flatten()
     .collect()
 }
 

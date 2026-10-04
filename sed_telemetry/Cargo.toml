@@ -29,4 +29,7 @@ rstest = { workspace = true, optional = true }
 windows = { workspace = true, features = [] }
 
 [target.'cfg(unix)'.dependencies]
-rustix.workspace = true
+rustix = { workspace = true, features = ["system"] }
+
+[dev-dependencies]
+googletest.workspace = true

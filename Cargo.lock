@@ -4717,6 +4717,7 @@ name = "sed_telemetry"
 version = "0.1.0"
 dependencies = [
  "blocking",
+ "googletest",
  "opentelemetry",
  "opentelemetry-otlp",
  "opentelemetry-proto",
