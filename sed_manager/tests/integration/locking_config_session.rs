@@ -10,7 +10,7 @@ use sed_async::{PolyRuntime, TokioRuntime};
 use sed_manager::{Alignment, LockingConfigSession, SetupSession};
 use sed_packet::{MaxBytes, com_id::ComIdExt};
 use sed_spec::{objects::MbrControl, preconfig::opal_2::locking as opal_locking};
-use sed_telemetry::{WithTracing, with_tracing};
+use sed_telemetry::with_tracing;
 use sed_tper::Tper;
 use sed_virtual_device::{BASE_COM_ID, VirtualDevice};
 use tracing::instrument;
@@ -31,9 +31,9 @@ async fn setup() -> Tper {
 }
 
 #[instrument]
-#[rstest::rstest]
+#[with_tracing]
 #[tokio::test]
-async fn login(_with_tracing: WithTracing) {
+async fn login() {
     let tper = setup().await;
 
     let admin1 = opal_locking::authority::ADMIN.get(0).unwrap();
@@ -42,9 +42,9 @@ async fn login(_with_tracing: WithTracing) {
 }
 
 #[instrument]
-#[rstest::rstest]
+#[with_tracing]
 #[tokio::test]
-async fn login_wrong_password(_with_tracing: WithTracing) {
+async fn login_wrong_password() {
     let tper = setup().await;
     let wrong_password = MaxBytes::<32>::from(b"wrong_password".as_slice());
 
@@ -54,9 +54,9 @@ async fn login_wrong_password(_with_tracing: WithTracing) {
 }
 
 #[instrument]
-#[rstest::rstest]
+#[with_tracing]
 #[tokio::test]
-async fn get_authorities(_with_tracing: WithTracing) {
+async fn get_authorities() {
     let tper = setup().await;
 
     let admin1 = opal_locking::authority::ADMIN.get(0).unwrap();
@@ -66,9 +66,9 @@ async fn get_authorities(_with_tracing: WithTracing) {
 }
 
 #[instrument]
-#[rstest::rstest]
+#[with_tracing]
 #[tokio::test]
-async fn get_locking_ranges(_with_tracing: WithTracing) {
+async fn get_locking_ranges() {
     let tper = setup().await;
 
     let admin1 = opal_locking::authority::ADMIN.get(0).unwrap();
@@ -78,9 +78,9 @@ async fn get_locking_ranges(_with_tracing: WithTracing) {
 }
 
 #[instrument]
-#[rstest::rstest]
+#[with_tracing]
 #[tokio::test]
-async fn get_mbr_size(_with_tracing: WithTracing) {
+async fn get_mbr_size() {
     let tper = setup().await;
 
     let admin1 = opal_locking::authority::ADMIN.get(0).unwrap();
@@ -90,9 +90,9 @@ async fn get_mbr_size(_with_tracing: WithTracing) {
 }
 
 #[instrument]
-#[rstest::rstest]
+#[with_tracing]
 #[tokio::test]
-async fn get_mbr_control(_with_tracing: WithTracing) {
+async fn get_mbr_control() {
     let tper = setup().await;
 
     let admin1 = opal_locking::authority::ADMIN.get(0).unwrap();
@@ -102,9 +102,9 @@ async fn get_mbr_control(_with_tracing: WithTracing) {
 }
 
 #[instrument]
-#[rstest::rstest]
+#[with_tracing]
 #[tokio::test]
-async fn get_alignment(_with_tracing: WithTracing) {
+async fn get_alignment() {
     let tper = setup().await;
 
     let admin1 = opal_locking::authority::ADMIN.get(0).unwrap();

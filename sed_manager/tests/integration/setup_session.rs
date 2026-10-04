@@ -17,15 +17,15 @@ use sed_spec::preconfig::{
     opal_2::{admin as opal_admin, locking as opal_locking},
     psid,
 };
-use sed_telemetry::{WithTracing, with_tracing};
+use sed_telemetry::with_tracing;
 use sed_tper::Tper;
 use sed_virtual_device::{BASE_COM_ID, INITIAL_SID_PASSWORD, PSID_PASSWORD, VirtualDevice};
 use tracing::instrument;
 
 #[instrument]
-#[rstest::rstest]
+#[with_tracing]
 #[tokio::test]
-async fn take_ownership(_with_tracing: WithTracing) {
+async fn take_ownership() {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
     let tper = Tper::connect(BASE_COM_ID, ComIdExt(0), device.clone(), runtime);
@@ -42,9 +42,9 @@ async fn take_ownership(_with_tracing: WithTracing) {
 }
 
 #[instrument]
-#[rstest::rstest]
+#[with_tracing]
 #[tokio::test]
-async fn take_ownership_already_owned(_with_tracing: WithTracing) {
+async fn take_ownership_already_owned() {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
     let tper = Tper::connect(BASE_COM_ID, ComIdExt(0), device.clone(), runtime);
@@ -56,9 +56,9 @@ async fn take_ownership_already_owned(_with_tracing: WithTracing) {
 }
 
 #[instrument]
-#[rstest::rstest]
+#[with_tracing]
 #[tokio::test]
-async fn activate_secondary_sp(_with_tracing: WithTracing) {
+async fn activate_secondary_sp() {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
     let tper = Tper::connect(BASE_COM_ID, ComIdExt(0), device.clone(), runtime);
@@ -75,9 +75,9 @@ async fn activate_secondary_sp(_with_tracing: WithTracing) {
 }
 
 #[instrument]
-#[rstest::rstest]
+#[with_tracing]
 #[tokio::test]
-async fn activate_secondary_sp_already_activated(_with_tracing: WithTracing) {
+async fn activate_secondary_sp_already_activated() {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
     let tper = Tper::connect(BASE_COM_ID, ComIdExt(0), device.clone(), runtime);
@@ -89,9 +89,9 @@ async fn activate_secondary_sp_already_activated(_with_tracing: WithTracing) {
 }
 
 #[instrument]
-#[rstest::rstest]
+#[with_tracing]
 #[tokio::test]
-async fn revert_tper_with_sid(_with_tracing: WithTracing) {
+async fn revert_tper_with_sid() {
     let new_sid_password = MaxBytes::<32>::from(b"not_default".as_slice());
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
@@ -111,9 +111,9 @@ async fn revert_tper_with_sid(_with_tracing: WithTracing) {
 }
 
 #[instrument]
-#[rstest::rstest]
+#[with_tracing]
 #[tokio::test]
-async fn revert_tper_with_psid(_with_tracing: WithTracing) {
+async fn revert_tper_with_psid() {
     let new_sid_password = MaxBytes::<32>::from(b"not_default".as_slice());
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
@@ -133,9 +133,9 @@ async fn revert_tper_with_psid(_with_tracing: WithTracing) {
 }
 
 #[instrument]
-#[rstest::rstest]
+#[with_tracing]
 #[tokio::test]
-async fn revert_secondary_sp(_with_tracing: WithTracing) {
+async fn revert_secondary_sp() {
     let new_sid_password = MaxBytes::<32>::from(b"not_default".as_slice());
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
@@ -158,9 +158,9 @@ async fn revert_secondary_sp(_with_tracing: WithTracing) {
 }
 
 #[instrument]
-#[rstest::rstest]
+#[with_tracing]
 #[tokio::test]
-async fn revert_secondary_sp_ex(_with_tracing: WithTracing) {
+async fn revert_secondary_sp_ex() {
     let new_sid_password = MaxBytes::<32>::from(b"not_default".as_slice());
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
@@ -184,9 +184,9 @@ async fn revert_secondary_sp_ex(_with_tracing: WithTracing) {
 }
 
 #[instrument]
-#[rstest::rstest]
+#[with_tracing]
 #[tokio::test]
-async fn change_password(_with_tracing: WithTracing) {
+async fn change_password() {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
     let tper = Tper::connect(BASE_COM_ID, ComIdExt(0), device.clone(), runtime);
@@ -207,9 +207,9 @@ async fn change_password(_with_tracing: WithTracing) {
 }
 
 #[instrument]
-#[rstest::rstest]
+#[with_tracing]
 #[tokio::test]
-async fn list_authorities(_with_tracing: WithTracing) {
+async fn list_authorities() {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
     let tper = Tper::connect(BASE_COM_ID, ComIdExt(0), device.clone(), runtime);

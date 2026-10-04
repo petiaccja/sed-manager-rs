@@ -19,15 +19,15 @@ use sed_spec::{
         },
     },
 };
-use sed_telemetry::{WithTracing, with_tracing};
+use sed_telemetry::with_tracing;
 use sed_tper::{Error, Session, Tper, protocol::Protocol};
 use sed_virtual_device::{BASE_COM_ID, INITIAL_SID_PASSWORD, VirtualDevice};
 use tracing::instrument;
 
 #[instrument]
-#[rstest::rstest]
+#[with_tracing]
 #[tokio::test]
-async fn session_lifetime(_with_tracing: WithTracing) {
+async fn session_lifetime() {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
     let tper = Tper::connect(BASE_COM_ID, ComIdExt(0), device.clone(), runtime);
@@ -41,9 +41,9 @@ async fn session_lifetime(_with_tracing: WithTracing) {
 }
 
 #[instrument]
-#[rstest::rstest]
+#[with_tracing]
 #[tokio::test]
-async fn activate(_with_tracing: WithTracing) {
+async fn activate() {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
     let session_id = device.insert_session(1, sp::ADMIN, Some(admin::authority::SID)).unwrap();
@@ -61,9 +61,9 @@ async fn activate(_with_tracing: WithTracing) {
 }
 
 #[instrument]
-#[rstest::rstest]
+#[with_tracing]
 #[tokio::test]
-async fn authenticate(_with_tracing: WithTracing) {
+async fn authenticate() {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
     let session_id = device.insert_session(1, sp::ADMIN, None).unwrap();
@@ -86,9 +86,9 @@ async fn authenticate(_with_tracing: WithTracing) {
 }
 
 #[instrument]
-#[rstest::rstest]
+#[with_tracing]
 #[tokio::test]
-async fn gen_key(_with_tracing: WithTracing) {
+async fn gen_key() {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
     let session_id = device.insert_session(1, sp::LOCKING, Some(locking::authority::ADMIN.get(1).unwrap())).unwrap();
@@ -103,9 +103,9 @@ async fn gen_key(_with_tracing: WithTracing) {
 }
 
 #[instrument]
-#[rstest::rstest]
+#[with_tracing]
 #[tokio::test]
-async fn get_field(_with_tracing: WithTracing) {
+async fn get_field() {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
     let session_id = device.insert_session(1, sp::ADMIN, None).unwrap();
@@ -120,9 +120,9 @@ async fn get_field(_with_tracing: WithTracing) {
 }
 
 #[instrument]
-#[rstest::rstest]
+#[with_tracing]
 #[tokio::test]
-async fn get_object(_with_tracing: WithTracing) {
+async fn get_object() {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
     let session_id = device.insert_session(1, sp::ADMIN, None).unwrap();
@@ -139,9 +139,9 @@ async fn get_object(_with_tracing: WithTracing) {
 }
 
 #[instrument]
-#[rstest::rstest]
+#[with_tracing]
 #[tokio::test]
-async fn get_bytes(_with_tracing: WithTracing) {
+async fn get_bytes() {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
     let session_id = device.insert_session(1, sp::LOCKING, Some(locking::authority::ADMIN.get(0).unwrap())).unwrap();
@@ -156,9 +156,9 @@ async fn get_bytes(_with_tracing: WithTracing) {
 }
 
 #[instrument]
-#[rstest::rstest]
+#[with_tracing]
 #[tokio::test]
-async fn get_acl(_with_tracing: WithTracing) {
+async fn get_acl() {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
     let session_id = device.insert_session(1, sp::ADMIN, None).unwrap();
@@ -173,9 +173,9 @@ async fn get_acl(_with_tracing: WithTracing) {
 }
 
 #[instrument]
-#[rstest::rstest]
+#[with_tracing]
 #[tokio::test]
-async fn next(_with_tracing: WithTracing) {
+async fn next() {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
     let session_id = device.insert_session(1, sp::ADMIN, None).unwrap();
@@ -194,9 +194,9 @@ async fn next(_with_tracing: WithTracing) {
 }
 
 #[instrument]
-#[rstest::rstest]
+#[with_tracing]
 #[tokio::test]
-async fn revert(_with_tracing: WithTracing) {
+async fn revert() {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
     let session_id = device.insert_session(1, sp::ADMIN, Some(admin::authority::SID)).unwrap();
@@ -211,9 +211,9 @@ async fn revert(_with_tracing: WithTracing) {
 }
 
 #[instrument]
-#[rstest::rstest]
+#[with_tracing]
 #[tokio::test]
-async fn revert_sp(_with_tracing: WithTracing) {
+async fn revert_sp() {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
     let session_id = device.insert_session(1, sp::LOCKING, Some(locking::authority::ADMIN.get(1).unwrap())).unwrap();
@@ -233,9 +233,9 @@ async fn revert_sp(_with_tracing: WithTracing) {
 }
 
 #[instrument]
-#[rstest::rstest]
+#[with_tracing]
 #[tokio::test]
-async fn random(_with_tracing: WithTracing) {
+async fn random() {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
     let session_id = device.insert_session(1, sp::ADMIN, None).unwrap();
@@ -250,9 +250,9 @@ async fn random(_with_tracing: WithTracing) {
 }
 
 #[instrument]
-#[rstest::rstest]
+#[with_tracing]
 #[tokio::test]
-async fn set_field(_with_tracing: WithTracing) {
+async fn set_field() {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
     let session_id = device.insert_session(1, sp::ADMIN, Some(admin::authority::SID)).unwrap();
@@ -267,9 +267,9 @@ async fn set_field(_with_tracing: WithTracing) {
 }
 
 #[instrument]
-#[rstest::rstest]
+#[with_tracing]
 #[tokio::test]
-async fn set_object(_with_tracing: WithTracing) {
+async fn set_object() {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
     let session_id = device.insert_session(1, sp::ADMIN, Some(admin::authority::SID)).unwrap();
@@ -285,9 +285,9 @@ async fn set_object(_with_tracing: WithTracing) {
 }
 
 #[instrument]
-#[rstest::rstest]
+#[with_tracing]
 #[tokio::test]
-async fn set_bytes(_with_tracing: WithTracing) {
+async fn set_bytes() {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
     let session_id = device.insert_session(1, sp::LOCKING, Some(locking::authority::ADMIN.get(0).unwrap())).unwrap();

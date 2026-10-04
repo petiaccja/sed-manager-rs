@@ -20,6 +20,7 @@ pin-project.workspace = true
 slint.workspace = true
 tracing.workspace = true
 async-lock.workspace = true
+tracing-subscriber.workspace = true
 async-broadcast.workspace = true
 futures.workspace = true
 oneshot.workspace = true
