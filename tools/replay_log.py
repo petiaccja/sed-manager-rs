@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright (C) Péter Kardos
+# Please refer to the full license distributed with this software.
+
 """Replays a log file written by the OTLP file span exporter to an OTLP/HTTP endpoint.
 
 Each line of the log file is an OTLP/JSON `ExportTraceServiceRequest`, which is
