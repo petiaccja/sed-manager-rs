@@ -16,5 +16,8 @@ pub fn with_tracing(_attr: TokenStream, item: TokenStream) -> TokenStream {
         Ok(item) => item,
         Err(err) => return err.into_compile_error().into(),
     };
-    with_tracing::with_tracing(item).to_token_stream().into()
+    match with_tracing::with_tracing(item) {
+        Ok(item) => item.to_token_stream().into(),
+        Err(err) => err.into_compile_error().into(),
+    }
 }
