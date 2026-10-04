@@ -19,7 +19,7 @@ mod file;
 mod network;
 
 pub use file::create_file_exporter;
-pub use network::create_network_exporter;
+pub use network::{NetworkConfig, create_network_exporter};
 
 const SERVICE_BUILD_TYPE: &str = "service.build_type";
 

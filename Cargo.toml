@@ -100,6 +100,10 @@ slint = { version = "=1.17.1", default-features = false, features = [
 ] }
 slint-build = { version = "=1.17.1" }
 i-slint-backend-testing = { version = "=1.17.1" }
+clap = { version = "4.6.7", features = ["derive"] }
+
+# -- Other
+chrono = "0.4.44"
 
 [workspace.lints.clippy]
 correctness = { priority = -1, level = "deny" }
