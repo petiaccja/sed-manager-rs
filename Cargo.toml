@@ -85,6 +85,7 @@ opentelemetry-otlp = { version = "=0.33.0", features = [
     "gzip-http",
 ] }
 opentelemetry-proto = "=0.33.0"
+opentelemetry-semantic-conventions = { version = "=0.33.0", features = ["semconv_experimental"] }
 tonic = { version = "0.14.5", features = ["tls-native-roots", "gzip"] }
 
 # -- Crypto & random

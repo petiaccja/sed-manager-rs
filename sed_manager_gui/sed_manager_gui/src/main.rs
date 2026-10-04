@@ -37,7 +37,8 @@ fn init_tracing() -> Option<otlp::FlushGuard> {
         Ok(exporter) => {
             let (layer, sdk_tracer_provider) = otlp::LayerBuilder::new()
                 .with_batch_exporter(exporter)
-                .with_service(env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"))
+                .with_service_name(env!("CARGO_PKG_NAME"))
+                .with_service_version(env!("CARGO_PKG_VERSION"))
                 .build();
             let registry = registry.with(layer);
             registry.init();
