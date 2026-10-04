@@ -21,6 +21,8 @@ where
     FileSpanExporter::new(file).map_err(Into::into)
 }
 
+/// Export OTLP spans into a JSONL file. You can pass any stream that implements
+/// [`Write`], not just files.
 #[derive(Debug)]
 pub struct FileSpanExporter<F> {
     file: Mutex<F>,
