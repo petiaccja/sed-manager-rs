@@ -13,5 +13,5 @@
     "OTEL_EXPORTER_OTLP_ENDPOINT": "${localEnv:OTEL_EXPORTER_OTLP_ENDPOINT_DEVCONTAINER}",
     "OTEL_EXPORTER_OTLP_HEADERS": "${localEnv:OTEL_EXPORTER_OTLP_HEADERS}"
   },
-  "postCreateCommand": "sudo chown -R vscode:vscode /home/vscode/.claude && sudo apt install -y libx11-xcb1 libxcb1 libxkbcommon0 libinput10 libgbm1"
+  "postCreateCommand": "sudo chown -R vscode:vscode /home/vscode/.claude && sudo apt install -y libx11-xcb1 libxcb1 libxkbcommon0 libinput10 libgbm1 && cargo install licensesnip"
 }

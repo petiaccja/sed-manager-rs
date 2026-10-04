@@ -12,7 +12,6 @@ use std::time::{Duration, Instant};
 use futures::FutureExt;
 use i_slint_backend_testing::{ElementHandle, ElementRoot};
 use sed_async::{Runtime, SlintRuntime};
-use sed_telemetry::{create_otlp_provider, init_otlp_subscriber, init_stdout_subscriber};
 use slint::ComponentHandle;
 use slint::platform::PointerEventButton;
 
@@ -29,6 +28,9 @@ where
     F: Future + 'static,
     F::Output: Send,
 {
+    // Shouldn't use `macro_support` items normally, but the crates are in the
+    // same workspace so it's not that bad.
+    let _otlp_flush_guard = sed_telemetry::macro_support::with_tracing();
     init_event_loop();
 
     let (result_tx, result_rx) = oneshot::channel();
@@ -60,11 +62,6 @@ where
 fn init_event_loop() {
     EVENT_LOOP.get_or_init(|| {
         let handle = std::thread::spawn(|| {
-            let _tracing_guard = match create_otlp_provider() {
-                Ok(provider) => init_otlp_subscriber(provider),
-                Err(_) => init_stdout_subscriber(),
-            };
-
             i_slint_backend_testing::init_integration_test_with_system_time();
             slint::run_event_loop_until_quit().unwrap();
         });

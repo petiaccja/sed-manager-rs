@@ -11,6 +11,7 @@ members = [
     "sed_spec_codegen",
     "sed_spec_macros",
     "sed_telemetry",
+    "sed_telemetry_macros",
     "sed_tper",
     "sed_virtual_device",
 ]
@@ -28,6 +29,7 @@ sed_spec = { version = "0.1.0", path = "sed_spec" }
 sed_spec_codegen = { version = "0.1.0", path = "sed_spec_codegen" }
 sed_spec_macros = { version = "0.1.0", path = "sed_spec_macros" }
 sed_telemetry = { version = "0.1.0", path = "sed_telemetry" }
+sed_telemetry_macros = { version = "0.1.0", path = "sed_telemetry_macros" }
 sed_tper = { version = "0.1.0", path = "sed_tper" }
 sed_virtual_device = { version = "0.1.0", path = "sed_virtual_device" }
 
@@ -45,6 +47,7 @@ async-lock = "3.4.2"
 pin-project = "1.1.11"
 async-trait = "0.1.89"
 futures = "0.3.32"
+async-fs = "2.2.0"
 
 # -- Data structures
 thiserror = { version = "2.0.18" }
@@ -68,19 +71,15 @@ rstest = { version = "0.26.1" }
 googletest = { version = "0.14.2" }
 
 # -- Tracing
+# The opentelemetry dependencies have to be pinned to the same version.
 tracing = { version = "0.1.44" }
 tracing-subscriber = "0.3.23"
-tracing-opentelemetry = "0.32.1"
-opentelemetry = "0.31.0"
-opentelemetry_sdk = { version = "0.31.0", features = ["rt-tokio"] }
-opentelemetry-otlp = { version = "0.31.1", features = [
-    "grpc-tonic",
-    "gzip-tonic",
-    "tls-roots",
-    "trace",
-    "gzip-http",
-] }
-tonic = { version = "0.14.5", features = ["tls-native-roots", "gzip"] }
+tracing-opentelemetry = "=0.34.0"
+opentelemetry = "=0.33.0"
+opentelemetry_sdk = { version = "=0.33.0", features = ["rt-tokio"] }
+opentelemetry-otlp = { version = "=0.33.0", features = ["trace", "http-json", "gzip-http"] }
+opentelemetry-proto = "=0.33.0"
+opentelemetry-semantic-conventions = { version = "=0.33.0", features = ["semconv_experimental"] }
 
 # -- Crypto & random
 rand = "0.10.1"
@@ -94,6 +93,10 @@ slint = { version = "=1.17.1", default-features = false, features = [
 ] }
 slint-build = { version = "=1.17.1" }
 i-slint-backend-testing = { version = "=1.17.1" }
+clap = { version = "4.6.7", features = ["derive"] }
+
+# -- Other
+chrono = "0.4.44"
 
 [workspace.lints.clippy]
 correctness = { priority = -1, level = "deny" }
