@@ -31,8 +31,8 @@ async fn setup() -> Tper {
 }
 
 #[instrument]
-#[with_tracing]
 #[tokio::test]
+#[with_tracing]
 async fn login() {
     let tper = setup().await;
 
@@ -42,8 +42,8 @@ async fn login() {
 }
 
 #[instrument]
-#[with_tracing]
 #[tokio::test]
+#[with_tracing]
 async fn login_wrong_password() {
     let tper = setup().await;
     let wrong_password = MaxBytes::<32>::from(b"wrong_password".as_slice());
@@ -54,8 +54,8 @@ async fn login_wrong_password() {
 }
 
 #[instrument]
-#[with_tracing]
 #[tokio::test]
+#[with_tracing]
 async fn get_authorities() {
     let tper = setup().await;
 
@@ -66,8 +66,8 @@ async fn get_authorities() {
 }
 
 #[instrument]
-#[with_tracing]
 #[tokio::test]
+#[with_tracing]
 async fn get_locking_ranges() {
     let tper = setup().await;
 
@@ -78,8 +78,8 @@ async fn get_locking_ranges() {
 }
 
 #[instrument]
-#[with_tracing]
 #[tokio::test]
+#[with_tracing]
 async fn get_mbr_size() {
     let tper = setup().await;
 
@@ -90,8 +90,8 @@ async fn get_mbr_size() {
 }
 
 #[instrument]
-#[with_tracing]
 #[tokio::test]
+#[with_tracing]
 async fn get_mbr_control() {
     let tper = setup().await;
 
@@ -102,8 +102,8 @@ async fn get_mbr_control() {
 }
 
 #[instrument]
-#[with_tracing]
 #[tokio::test]
+#[with_tracing]
 async fn get_alignment() {
     let tper = setup().await;
 

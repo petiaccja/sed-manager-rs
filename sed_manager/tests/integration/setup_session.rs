@@ -23,8 +23,8 @@ use sed_virtual_device::{BASE_COM_ID, INITIAL_SID_PASSWORD, PSID_PASSWORD, Virtu
 use tracing::instrument;
 
 #[instrument]
-#[with_tracing]
 #[tokio::test]
+#[with_tracing]
 async fn take_ownership() {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
@@ -42,8 +42,8 @@ async fn take_ownership() {
 }
 
 #[instrument]
-#[with_tracing]
 #[tokio::test]
+#[with_tracing]
 async fn take_ownership_already_owned() {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
@@ -56,8 +56,8 @@ async fn take_ownership_already_owned() {
 }
 
 #[instrument]
-#[with_tracing]
 #[tokio::test]
+#[with_tracing]
 async fn activate_secondary_sp() {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
@@ -75,8 +75,8 @@ async fn activate_secondary_sp() {
 }
 
 #[instrument]
-#[with_tracing]
 #[tokio::test]
+#[with_tracing]
 async fn activate_secondary_sp_already_activated() {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
@@ -89,8 +89,8 @@ async fn activate_secondary_sp_already_activated() {
 }
 
 #[instrument]
-#[with_tracing]
 #[tokio::test]
+#[with_tracing]
 async fn revert_tper_with_sid() {
     let new_sid_password = MaxBytes::<32>::from(b"not_default".as_slice());
     let device = Arc::new(VirtualDevice::new());
@@ -111,8 +111,8 @@ async fn revert_tper_with_sid() {
 }
 
 #[instrument]
-#[with_tracing]
 #[tokio::test]
+#[with_tracing]
 async fn revert_tper_with_psid() {
     let new_sid_password = MaxBytes::<32>::from(b"not_default".as_slice());
     let device = Arc::new(VirtualDevice::new());
@@ -133,8 +133,8 @@ async fn revert_tper_with_psid() {
 }
 
 #[instrument]
-#[with_tracing]
 #[tokio::test]
+#[with_tracing]
 async fn revert_secondary_sp() {
     let new_sid_password = MaxBytes::<32>::from(b"not_default".as_slice());
     let device = Arc::new(VirtualDevice::new());
@@ -158,8 +158,8 @@ async fn revert_secondary_sp() {
 }
 
 #[instrument]
-#[with_tracing]
 #[tokio::test]
+#[with_tracing]
 async fn revert_secondary_sp_ex() {
     let new_sid_password = MaxBytes::<32>::from(b"not_default".as_slice());
     let device = Arc::new(VirtualDevice::new());
@@ -184,8 +184,8 @@ async fn revert_secondary_sp_ex() {
 }
 
 #[instrument]
-#[with_tracing]
 #[tokio::test]
+#[with_tracing]
 async fn change_password() {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
@@ -207,8 +207,8 @@ async fn change_password() {
 }
 
 #[instrument]
-#[with_tracing]
 #[tokio::test]
+#[with_tracing]
 async fn list_authorities() {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));

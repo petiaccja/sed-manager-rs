@@ -34,8 +34,9 @@ struct Args {
 
 fn main() -> Result<(), Box<dyn core::error::Error>> {
     let args = Args::parse();
-    let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::multi_threaded(Some(1))?));
+    // Declared first so that it's dropped last, after the spans of the runtime's tasks have closed.
     let _otlp_flush_guard = init_telemetry(args.log_file, args.log_level.as_deref());
+    let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::multi_threaded(Some(1))?));
     let host = Arc::new(Host::new(runtime.clone()));
     let ui = ui::MainWindow::new()?;
     let notification_queue = ToastQueue::new(ui.clone_strong());

@@ -25,8 +25,8 @@ use sed_virtual_device::{BASE_COM_ID, INITIAL_SID_PASSWORD, VirtualDevice};
 use tracing::instrument;
 
 #[instrument]
-#[with_tracing]
 #[tokio::test]
+#[with_tracing]
 async fn session_lifetime() {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
@@ -41,8 +41,8 @@ async fn session_lifetime() {
 }
 
 #[instrument]
-#[with_tracing]
 #[tokio::test]
+#[with_tracing]
 async fn activate() {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
@@ -61,8 +61,8 @@ async fn activate() {
 }
 
 #[instrument]
-#[with_tracing]
 #[tokio::test]
+#[with_tracing]
 async fn authenticate() {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
@@ -86,8 +86,8 @@ async fn authenticate() {
 }
 
 #[instrument]
-#[with_tracing]
 #[tokio::test]
+#[with_tracing]
 async fn gen_key() {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
@@ -103,8 +103,8 @@ async fn gen_key() {
 }
 
 #[instrument]
-#[with_tracing]
 #[tokio::test]
+#[with_tracing]
 async fn get_field() {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
@@ -120,8 +120,8 @@ async fn get_field() {
 }
 
 #[instrument]
-#[with_tracing]
 #[tokio::test]
+#[with_tracing]
 async fn get_object() {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
@@ -139,8 +139,8 @@ async fn get_object() {
 }
 
 #[instrument]
-#[with_tracing]
 #[tokio::test]
+#[with_tracing]
 async fn get_bytes() {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
@@ -156,8 +156,8 @@ async fn get_bytes() {
 }
 
 #[instrument]
-#[with_tracing]
 #[tokio::test]
+#[with_tracing]
 async fn get_acl() {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
@@ -173,8 +173,8 @@ async fn get_acl() {
 }
 
 #[instrument]
-#[with_tracing]
 #[tokio::test]
+#[with_tracing]
 async fn next() {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
@@ -194,8 +194,8 @@ async fn next() {
 }
 
 #[instrument]
-#[with_tracing]
 #[tokio::test]
+#[with_tracing]
 async fn revert() {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
@@ -211,8 +211,8 @@ async fn revert() {
 }
 
 #[instrument]
-#[with_tracing]
 #[tokio::test]
+#[with_tracing]
 async fn revert_sp() {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
@@ -233,8 +233,8 @@ async fn revert_sp() {
 }
 
 #[instrument]
-#[with_tracing]
 #[tokio::test]
+#[with_tracing]
 async fn random() {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
@@ -250,8 +250,8 @@ async fn random() {
 }
 
 #[instrument]
-#[with_tracing]
 #[tokio::test]
+#[with_tracing]
 async fn set_field() {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
@@ -267,8 +267,8 @@ async fn set_field() {
 }
 
 #[instrument]
-#[with_tracing]
 #[tokio::test]
+#[with_tracing]
 async fn set_object() {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
@@ -285,8 +285,8 @@ async fn set_object() {
 }
 
 #[instrument]
-#[with_tracing]
 #[tokio::test]
+#[with_tracing]
 async fn set_bytes() {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));

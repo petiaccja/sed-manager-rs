@@ -17,8 +17,8 @@ use sed_virtual_device::{BASE_COM_ID, VirtualDevice};
 use tracing::instrument;
 
 #[instrument]
-#[with_tracing]
 #[tokio::test]
+#[with_tracing]
 async fn discovery() {
     let device = VirtualDevice::new();
     let discovery = Tper::discover(&device).await.unwrap();
@@ -28,8 +28,8 @@ async fn discovery() {
 }
 
 #[instrument]
-#[with_tracing]
 #[tokio::test]
+#[with_tracing]
 async fn verify_com_id_valid_base() {
     let device = VirtualDevice::new();
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
@@ -40,8 +40,8 @@ async fn verify_com_id_valid_base() {
 }
 
 #[instrument]
-#[with_tracing]
 #[tokio::test]
+#[with_tracing]
 async fn verify_com_id_valid_incorrent_id() {
     let device = VirtualDevice::new();
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
@@ -52,8 +52,8 @@ async fn verify_com_id_valid_incorrent_id() {
 }
 
 #[instrument]
-#[with_tracing]
 #[tokio::test]
+#[with_tracing]
 async fn verify_com_id_valid_incorrent_ext() {
     let device = VirtualDevice::new();
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
@@ -64,8 +64,8 @@ async fn verify_com_id_valid_incorrent_ext() {
 }
 
 #[instrument]
-#[with_tracing]
 #[tokio::test]
+#[with_tracing]
 async fn stack_reset_base() {
     let device = VirtualDevice::new();
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
@@ -78,8 +78,8 @@ async fn stack_reset_base() {
 }
 
 #[instrument]
-#[with_tracing]
 #[tokio::test]
+#[with_tracing]
 async fn stack_reset_incorrent_id() {
     let device = VirtualDevice::new();
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
@@ -89,8 +89,8 @@ async fn stack_reset_incorrent_id() {
 }
 
 #[instrument]
-#[with_tracing]
 #[tokio::test]
+#[with_tracing]
 async fn stack_reset_incorrent_ext() {
     let device = VirtualDevice::new();
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
