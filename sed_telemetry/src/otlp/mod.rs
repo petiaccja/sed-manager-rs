@@ -1,10 +1,11 @@
+use std::collections::HashMap;
 use std::io;
 use std::path::Path;
 
 use opentelemetry::KeyValue;
 use opentelemetry::trace::TracerProvider as _;
 use opentelemetry_otlp::ExporterBuildError;
-use opentelemetry_sdk::trace::SpanExporter;
+use opentelemetry_sdk::trace::{SpanExporter, TracerProviderBuilder};
 use opentelemetry_sdk::{Resource, trace::SdkTracerProvider};
 use tonic::metadata::errors::{InvalidMetadataKey, InvalidMetadataValue};
 use tracing::Metadata;
@@ -38,26 +39,66 @@ pub enum HeaderError {
     InvalidValue(#[from] InvalidMetadataValue),
 }
 
-pub fn create_layer(exporter: impl SpanExporter + 'static, trace_name: &str) -> impl Layer<Registry> {
-    // Build the SDK tracer provider.
-    let provider = SdkTracerProvider::builder()
-        .with_batch_exporter(exporter)
-        .with_resource(
-            Resource::builder()
-                .with_attributes(
-                    [
-                        KeyValue::new("service.name", trace_name.to_owned()),
-                        KeyValue::new("service.version", "0.1.0"),
-                    ]
-                    .into_iter(),
-                )
-                .build(),
-        )
-        .build();
+pub struct LayerBuilder {
+    trace_provider_builder: TracerProviderBuilder,
+    attributes: HashMap<String, String>,
+}
 
-    // Build the tracing layer.
-    let tracer = provider.tracer(trace_name.to_owned());
-    tracing_opentelemetry::layer().with_tracer(tracer).with_filter(CrateFilter)
+impl LayerBuilder {
+    pub fn new() -> Self {
+        let attributes = [
+            ("service.name".to_owned(), env!("CARGO_PKG_NAME").to_owned()),
+            ("service.version".to_owned(), env!("CARGO_PKG_VERSION").to_owned()),
+        ]
+        .into();
+        Self { trace_provider_builder: SdkTracerProvider::builder(), attributes }
+    }
+
+    pub fn with_batch_exporter(self, exporter: impl SpanExporter + 'static) -> Self {
+        Self { trace_provider_builder: self.trace_provider_builder.with_batch_exporter(exporter), ..self }
+    }
+
+    pub fn with_service(mut self, name: String, version: String) -> Self {
+        self.attributes.insert("service.name".into(), name);
+        self.attributes.insert("service.version".into(), version);
+        self
+    }
+
+    pub fn build(self) -> (impl Layer<Registry>, SdkTracerProvider) {
+        let Self { trace_provider_builder, attributes } = self;
+        let service_name = attributes.get("service.name").cloned().unwrap_or(env!("CARGO_PKG_NAME").to_owned());
+        let resource = Resource::builder()
+            .with_attributes(attributes.into_iter().map(|(key, value)| KeyValue::new(key, value)))
+            .build();
+        let trace_provider_builder = trace_provider_builder.with_resource(resource);
+
+        let sdk_tracer_provider = trace_provider_builder.build();
+        let tracer = sdk_tracer_provider.tracer(service_name);
+        let layer = tracing_opentelemetry::layer().with_tracer(tracer).with_filter(CrateFilter);
+        (layer, sdk_tracer_provider)
+    }
+}
+
+impl Default for LayerBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct FlushGuard {
+    sdk_tracer_provider: SdkTracerProvider,
+}
+impl FlushGuard {
+    pub fn new(sdk_tracer_provider: SdkTracerProvider) -> Self {
+        Self { sdk_tracer_provider }
+    }
+}
+
+impl Drop for FlushGuard {
+    fn drop(&mut self) {
+        let _ = self.sdk_tracer_provider.force_flush();
+    }
 }
 
 struct CrateFilter;

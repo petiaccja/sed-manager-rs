@@ -1,6 +1,6 @@
 use std::fs::File;
 use std::sync::Mutex;
-use std::{future::Future, io, path::Path};
+use std::{io, path::Path};
 
 use opentelemetry_proto::tonic::collector::trace::v1::ExportTraceServiceRequest;
 use opentelemetry_proto::transform::common::tonic::ResourceAttributesWithSchema;
@@ -34,19 +34,16 @@ impl FileSpanExporter {
 }
 
 impl SpanExporter for FileSpanExporter {
-    fn export(&self, batch: Vec<SpanData>) -> impl Future<Output = OTelSdkResult> + Send {
-        async {
-            let resource = ResourceAttributesWithSchema::default();
-            let resource_spans = group_spans_by_resource_and_scope(batch, &resource);
-            let request = ExportTraceServiceRequest { resource_spans };
-            let json_str =
-                serde_json::to_string(&request).map_err(|err| OTelSdkError::InternalFailure(err.to_string()))?;
-            let mut file = match self.file.lock() {
-                Ok(file) => file,
-                Err(panicked) => panicked.into_inner(),
-            };
-            file.write_all(json_str.as_ref()).map_err(|err| OTelSdkError::InternalFailure(err.to_string()))
-        }
+    async fn export(&self, batch: Vec<SpanData>) -> OTelSdkResult {
+        let resource = ResourceAttributesWithSchema::default();
+        let resource_spans = group_spans_by_resource_and_scope(batch, &resource);
+        let request = ExportTraceServiceRequest { resource_spans };
+        let json_str = serde_json::to_string(&request).map_err(|err| OTelSdkError::InternalFailure(err.to_string()))?;
+        let mut file = match self.file.lock() {
+            Ok(file) => file,
+            Err(panicked) => panicked.into_inner(),
+        };
+        file.write_all(json_str.as_ref()).map_err(|err| OTelSdkError::InternalFailure(err.to_string()))
     }
 
     fn force_flush(&self) -> OTelSdkResult {

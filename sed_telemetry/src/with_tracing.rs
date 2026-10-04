@@ -5,18 +5,19 @@ use tracing_subscriber::{Registry, layer::SubscriberExt, util::SubscriberInitExt
 
 use crate::otlp;
 
-static INITIALIZED: OnceLock<()> = OnceLock::new();
+static INITIALIZED: OnceLock<Option<otlp::FlushGuard>> = OnceLock::new();
 
-pub fn with_tracing() {
-    INITIALIZED.get_or_init(|| {
+pub fn with_tracing() -> Option<otlp::FlushGuard> {
+    let maybe_guard = INITIALIZED.get_or_init(|| {
         let registry = Registry::default();
 
         // Attempt to set up the network exporter.
         match otlp::create_network_exporter(None) {
             Ok(exporter) => {
-                let layer = otlp::create_layer(exporter, "with_tracing");
+                let (layer, sdk_tracer_provider) = otlp::LayerBuilder::new().with_batch_exporter(exporter).build();
                 let registry = registry.with(layer);
                 registry.init();
+                Some(otlp::FlushGuard::new(sdk_tracer_provider))
             }
             Err(err) => {
                 // Fall back to an stdout exporter.
@@ -24,9 +25,12 @@ pub fn with_tracing() {
                 registry.init();
                 // Log that setting up the network exporter failed.
                 warn_span!("create_network_exporter").in_scope(|| error!("{err}"));
+                None
             }
         }
     });
+
+    maybe_guard.clone()
 }
 
 #[cfg(test)]

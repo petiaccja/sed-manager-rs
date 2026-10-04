@@ -17,7 +17,7 @@ use tracing_subscriber::{Registry, layer::SubscriberExt as _, util::SubscriberIn
 
 fn main() -> Result<(), Box<dyn core::error::Error>> {
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::multi_threaded(Some(1))?));
-    init_tracing();
+    let _otlp_flush_guard = init_tracing();
     let host = Arc::new(Host::new(runtime.clone()));
     let ui = ui::MainWindow::new()?;
     let notification_queue = ToastQueue::new(ui.clone_strong());
@@ -29,15 +29,16 @@ fn main() -> Result<(), Box<dyn core::error::Error>> {
     Ok(())
 }
 
-fn init_tracing() {
+fn init_tracing() -> Option<otlp::FlushGuard> {
     let registry = Registry::default();
 
     // Attempt to set up the network exporter.
     match otlp::create_network_exporter(None) {
         Ok(exporter) => {
-            let layer = otlp::create_layer(exporter, "with_tracing");
+            let (layer, sdk_tracer_provider) = otlp::LayerBuilder::new().with_batch_exporter(exporter).build();
             let registry = registry.with(layer);
             registry.init();
+            Some(otlp::FlushGuard::new(sdk_tracer_provider))
         }
         Err(err) => {
             // Fall back to an stdout exporter.
@@ -45,6 +46,7 @@ fn init_tracing() {
             registry.init();
             // Log that setting up the network exporter failed.
             warn_span!("create_network_exporter").in_scope(|| error!("{err}"));
+            None
         }
     }
 }
