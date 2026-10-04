@@ -58,9 +58,9 @@ impl LayerBuilder {
         Self { trace_provider_builder: self.trace_provider_builder.with_batch_exporter(exporter), ..self }
     }
 
-    pub fn with_service(mut self, name: String, version: String) -> Self {
-        self.attributes.insert("service.name".into(), name);
-        self.attributes.insert("service.version".into(), version);
+    pub fn with_service(mut self, name: impl Into<String>, version: impl Into<String>) -> Self {
+        self.attributes.insert("service.name".into(), name.into());
+        self.attributes.insert("service.version".into(), version.into());
         self
     }
 
@@ -86,9 +86,11 @@ impl Default for LayerBuilder {
 }
 
 #[derive(Debug, Clone)]
+#[must_use]
 pub struct FlushGuard {
     sdk_tracer_provider: SdkTracerProvider,
 }
+
 impl FlushGuard {
     pub fn new(sdk_tracer_provider: SdkTracerProvider) -> Self {
         Self { sdk_tracer_provider }
@@ -97,7 +99,9 @@ impl FlushGuard {
 
 impl Drop for FlushGuard {
     fn drop(&mut self) {
-        let _ = self.sdk_tracer_provider.force_flush();
+        if let Err(err) = self.sdk_tracer_provider.force_flush() {
+            eprintln!("failed to flush OTLP tracer provider: {err}");
+        }
     }
 }
 

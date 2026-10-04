@@ -7,6 +7,7 @@ use crate::otlp;
 
 static INITIALIZED: OnceLock<Option<otlp::FlushGuard>> = OnceLock::new();
 
+#[must_use]
 pub fn with_tracing() -> Option<otlp::FlushGuard> {
     let maybe_guard = INITIALIZED.get_or_init(|| {
         let registry = Registry::default();
@@ -14,7 +15,10 @@ pub fn with_tracing() -> Option<otlp::FlushGuard> {
         // Attempt to set up the network exporter.
         match otlp::create_network_exporter(None) {
             Ok(exporter) => {
-                let (layer, sdk_tracer_provider) = otlp::LayerBuilder::new().with_batch_exporter(exporter).build();
+                let (layer, sdk_tracer_provider) = otlp::LayerBuilder::new()
+                    .with_batch_exporter(exporter)
+                    .with_service("with_tracing", env!("CARGO_PKG_VERSION"))
+                    .build();
                 let registry = registry.with(layer);
                 registry.init();
                 Some(otlp::FlushGuard::new(sdk_tracer_provider))

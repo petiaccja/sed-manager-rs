@@ -30,7 +30,7 @@ where
 {
     // Shouldn't use `macro_support` items normally, but the crates are in the
     // same workspace so it's not that bad.
-    sed_telemetry::macro_support::with_tracing();
+    let _otlp_flush_guard = sed_telemetry::macro_support::with_tracing();
     init_event_loop();
 
     let (result_tx, result_rx) = oneshot::channel();
