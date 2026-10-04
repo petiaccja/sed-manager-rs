@@ -1,6 +1,5 @@
-use std::fs::File;
+use std::io;
 use std::sync::Mutex;
-use std::{io, path::Path};
 
 use opentelemetry_proto::tonic::collector::trace::v1::ExportTraceServiceRequest;
 use opentelemetry_proto::transform::common::tonic::ResourceAttributesWithSchema;
@@ -15,25 +14,30 @@ use std::io::Write;
 
 use crate::otlp::Error;
 
-pub fn create_file_exporter(path: impl AsRef<Path>) -> Result<FileSpanExporter, Error> {
-    FileSpanExporter::open(path).map_err(Into::into)
+pub fn create_file_exporter<F>(file: F) -> Result<FileSpanExporter<F>, Error>
+where
+    F: Write + Send + core::fmt::Debug,
+{
+    FileSpanExporter::new(file).map_err(Into::into)
 }
 
 #[derive(Debug)]
-pub struct FileSpanExporter {
-    file: Mutex<File>,
+pub struct FileSpanExporter<F> {
+    file: Mutex<F>,
     resource: Resource,
 }
 
-impl FileSpanExporter {
-    pub fn open(path: impl AsRef<Path>) -> Result<Self, io::Error> {
-        let file = File::open(path)?;
+impl<F> FileSpanExporter<F> {
+    pub fn new(file: F) -> Result<Self, io::Error> {
         let file = Mutex::new(file);
         Ok(Self { file, resource: Resource::builder_empty().build() })
     }
 }
 
-impl SpanExporter for FileSpanExporter {
+impl<F> SpanExporter for FileSpanExporter<F>
+where
+    F: Write + Send + core::fmt::Debug,
+{
     async fn export(&self, batch: Vec<SpanData>) -> OTelSdkResult {
         let resource = ResourceAttributesWithSchema::default();
         let resource_spans = group_spans_by_resource_and_scope(batch, &resource);
