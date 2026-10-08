@@ -7,9 +7,12 @@ import { Sector } from "../data/sector.slint";
 import { Geometry, Alignment } from "../data/device.slint";
 import { LockingRange } from "../data/lib.slint";
 
+// See the Rust code for documentation.
 export global LockingRangeLib {
     pure callback stripe-x-normalized(index: int, locking-ranges: [LockingRange], geometry: Geometry) -> float;
     pure callback stripe-width-normalized(index: int, locking-ranges: [LockingRange], geometry: Geometry) -> float;
+    pure callback is-dirty(locking-ranges: [LockingRange]) -> bool;
+    pure callback discard(locking-ranges: [LockingRange]) -> bool;
 
     stripe-x-normalized(index, locking-ranges, geometry) => {
         (10000 * locking-ranges[index].start.value / geometry.logical-sector-count.value) / 10000.0
@@ -18,4 +21,8 @@ export global LockingRangeLib {
     stripe-width-normalized(index, locking-ranges, geometry) => {
         (10000 * (locking-ranges[index].end.value - locking-ranges[index].start.value) / geometry.logical-sector-count.value) / 10000.0
     }
+
+    is-dirty => { true }
+
+    discard => { false }
 }

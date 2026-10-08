@@ -28,9 +28,10 @@ use slint::{
 use tracing::{error, instrument};
 
 use crate::{
-    algorithm::sector_lib,
+    algorithm::{locking_range_lib, sector_lib},
     command::{Command, ExpectInEventLoop},
     device_list::{DeviceEntry, DeviceList},
+    diff_model::DiffModel,
     session::Session,
     toast::ToastQueue,
     ui_conv::{CombinedProperties, IntoUi, IntoUiName, MbrDesc, TryFromUi as _},
@@ -64,6 +65,12 @@ impl App {
         });
 
         // Algorithm callbacks.
+        ui.global::<ui::LockingRangeLib>().on_stripe_x_normalized(locking_range_lib::stripe_x_normalized);
+        ui.global::<ui::LockingRangeLib>()
+            .on_stripe_width_normalized(locking_range_lib::stripe_width_normalized);
+        ui.global::<ui::LockingRangeLib>().on_is_dirty(locking_range_lib::is_dirty);
+        ui.global::<ui::LockingRangeLib>().on_discard(locking_range_lib::discard);
+
         ui.global::<ui::SectorLib>().on_to_string(sector_lib::to_string);
         ui.global::<ui::SectorLib>().on_is_valid(sector_lib::is_valid);
         ui.global::<ui::SectorLib>().on_parse(sector_lib::parse);
@@ -573,7 +580,7 @@ impl App {
                     let features = spec.map(|spec| spec.discovery.feature_descriptors.as_slice()).unwrap_or(&[]);
                     let sp_ref = spec.and_then(|spec| spec.locking.as_ref()).map(|sp| sp.uid);
                     let ranges: Vec<_> = ranges.iter().map(|range| range.into_ui_name(features, sp_ref)).collect();
-                    ui_device.locking_sp.locking_ranges = Rc::from(VecModel::from(ranges)).into();
+                    ui_device.locking_sp.locking_ranges = Rc::from(DiffModel::from(ranges)).into();
 
                     if !silent {
                         self.toast_queue.success("Locking ranges updated".into(), String::new());

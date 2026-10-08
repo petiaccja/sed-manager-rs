@@ -176,7 +176,7 @@ component Header inherits Island {
             }
 
             if device.identity.status.outcome == Outcome.error: ToastCard {
-                notification: {
+                toast: {
                     level: ToastLevel.error,
                     title: "Could not open device",
                     message: device.identity.status.message,
@@ -406,7 +406,7 @@ export component DeviceView {
                 alignment: center;
 
                 ToastCard {
-                    notification: {
+                    toast: {
                         title: "Could not get capabilities",
                         message: device.discovery.status.message,
                         level: ToastLevel.error
