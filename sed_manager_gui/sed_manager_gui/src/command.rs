@@ -3,6 +3,7 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
+use std::fmt::Display;
 use std::ops::DerefMut;
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -10,14 +11,23 @@ use std::sync::Arc;
 
 use async_lock::RwLock;
 use sed_async::{PolyRuntime, Runtime as _};
-use sed_manager::{Device, Spec};
+use sed_manager::{Device, Error, Spec};
 use sed_manager_gui_slint as ui;
 use slint::EventLoopError;
 use tracing::Instrument;
 
 use crate::device_list::{DeviceEntry, DeviceList};
 use crate::session::Session;
+use crate::toast::ToastQueue;
 use crate::ui_ext::{CommandStatusExt, DeviceExt};
+
+#[derive(Debug, thiserror::Error)]
+pub enum CommandError {
+    #[error("The command was skipped.")]
+    Skipped,
+    #[error(transparent)]
+    Failed(#[from] Error),
+}
 
 //------------------------------------------------------------------------------
 // Command initial
@@ -26,19 +36,47 @@ use crate::ui_ext::{CommandStatusExt, DeviceExt};
 pub struct Command {
     runtime: Arc<PolyRuntime>,
     device_list: Rc<RwLock<DeviceList>>,
+    toast_queue: Rc<ToastQueue>,
+    success_msg: Option<String>,
+    error_msg: Option<String>,
 }
 
 impl Command {
-    pub fn new(runtime: Arc<PolyRuntime>, device_list: Rc<RwLock<DeviceList>>) -> Self {
-        Self { runtime, device_list }
+    pub fn new(runtime: Arc<PolyRuntime>, device_list: Rc<RwLock<DeviceList>>, toast_queue: Rc<ToastQueue>) -> Self {
+        Self { runtime, device_list, toast_queue, success_msg: None, error_msg: None }
+    }
+
+    pub fn success_message(self, message: impl Display) -> Self {
+        Self { success_msg: Some(message.to_string()), ..self }
+    }
+
+    pub fn error_message(self, message: impl Display) -> Self {
+        Self { error_msg: Some(message.to_string()), ..self }
+    }
+
+    pub fn success_message_if(self, message: Option<impl Display>) -> Self {
+        Self { success_msg: message.as_ref().map(ToString::to_string), ..self }
+    }
+
+    pub fn error_message_if(self, message: Option<impl Display>) -> Self {
+        Self { error_msg: message.as_ref().map(ToString::to_string), ..self }
     }
 
     pub fn on_device_list<RunFn, Output>(self, run_fn: RunFn) -> CommandOnDeviceList<RunFn, Output>
     where
-        RunFn: for<'a> AsyncFnOnce(&'a mut DeviceList) -> Output + 'static,
+        RunFn: for<'a> AsyncFnOnce(&'a mut DeviceList) -> Result<Output, CommandError> + 'static,
     {
-        let Self { device_list, .. } = self;
-        CommandOnDeviceList { device_list, run_fn }
+        let Self { success_msg, error_msg, device_list, toast_queue, .. } = self;
+        CommandOnDeviceList {
+            device_list,
+            toast_queue,
+            run_fn,
+            update_fn: None,
+            error_fn: None,
+            finally_fn: None,
+            success_msg,
+            error_msg,
+        }
     }
 
     pub fn on_device_entry<RunFn, Output>(self, device: PathBuf, run_fn: RunFn) -> CommandOnDeviceEntry<RunFn, Output>
@@ -47,8 +85,8 @@ impl Command {
         for<'x> <RunFn as OnDeviceEntryRunFn<'x>>::Future: Send,
         Output: Send + 'static,
     {
-        let Self { runtime, device_list } = self;
-        CommandOnDeviceEntry { runtime, device_list, device_id: device, run_fn }
+        let Self { runtime, device_list, toast_queue, success_msg, error_msg } = self;
+        CommandOnDeviceEntry { success_msg, error_msg, runtime, device_list, device_id: device, run_fn }
     }
 
     pub fn on_device<RunFn, Output>(self, device_id: PathBuf, run_fn: RunFn) -> CommandOnDevice<RunFn, Output>
@@ -57,8 +95,8 @@ impl Command {
         for<'x> <RunFn as OnDeviceRunFn<'x>>::Future: Send,
         Output: Send + 'static,
     {
-        let Self { runtime, device_list } = self;
-        CommandOnDevice { runtime, device_list, device_id, run_fn }
+        let Self { runtime, device_list, toast_queue, success_msg, error_msg } = self;
+        CommandOnDevice { success_msg, error_msg, runtime, device_list, device_id, run_fn }
     }
 
     pub fn on_session<RunFn, Output>(self, device_id: PathBuf, run_fn: RunFn) -> CommandOnSession<RunFn, Output>
@@ -67,8 +105,8 @@ impl Command {
         for<'x> <RunFn as OnSessionRunFn<'x>>::Future: Send,
         Output: Send + 'static,
     {
-        let Self { runtime, device_list } = self;
-        CommandOnSession { runtime, device_list, device_id, run_fn }
+        let Self { runtime, device_list, toast_queue, success_msg, error_msg } = self;
+        CommandOnSession { success_msg, error_msg, runtime, device_list, device_id, run_fn }
     }
 }
 
@@ -130,57 +168,74 @@ where
 // Command on device list
 //------------------------------------------------------------------------------
 
-pub struct CommandOnDeviceList<RunFn, Output>
-where
-    RunFn: for<'a> AsyncFnOnce(&'a mut DeviceList) -> Output + 'static,
-{
+pub struct CommandOnDeviceList<RunFn, Output> {
     device_list: Rc<RwLock<DeviceList>>,
+    toast_queue: Rc<ToastQueue>,
     run_fn: RunFn,
+    update_fn: Option<Box<dyn FnOnce(&mut DeviceList, Output)>>,
+    error_fn: Option<Box<dyn FnOnce(&mut DeviceList, Error)>>,
+    finally_fn: Option<Box<dyn FnOnce(&mut DeviceList)>>,
+    success_msg: Option<String>,
+    error_msg: Option<String>,
 }
 
 impl<RunFn, Output> CommandOnDeviceList<RunFn, Output>
 where
-    RunFn: for<'a> AsyncFnOnce(&'a mut DeviceList) -> Output + 'static,
+    RunFn: for<'a> AsyncFnOnce(&'a mut DeviceList) -> Result<Output, CommandError> + 'static,
+    Output: 'static,
 {
-    pub fn display<UpdateFn>(self, update_fn: UpdateFn) -> UpdateOnDeviceList<RunFn, Output, UpdateFn>
+    pub fn on_success<UpdateFn>(self, update_fn: UpdateFn) -> CommandOnDeviceList<RunFn, Output>
     where
         UpdateFn: for<'a> FnOnce(&'a mut DeviceList, Output) + 'static,
     {
-        let Self { device_list, run_fn, .. } = self;
-        UpdateOnDeviceList { device_list, run_fn, update_fn }
+        CommandOnDeviceList { update_fn: Some(Box::new(update_fn)), ..self }
     }
-}
 
-pub struct UpdateOnDeviceList<RunFn, Output, UpdateFn>
-where
-    RunFn: for<'a> AsyncFnOnce(&'a mut DeviceList) -> Output + 'static,
-    UpdateFn: for<'a> FnOnce(&'a mut DeviceList, Output) + 'static,
-{
-    device_list: Rc<RwLock<DeviceList>>,
-    run_fn: RunFn,
-    update_fn: UpdateFn,
-}
+    #[allow(unused)]
+    pub fn on_error<ErrorFn>(self, error_fn: ErrorFn) -> CommandOnDeviceList<RunFn, Output>
+    where
+        ErrorFn: for<'a> FnOnce(&'a mut DeviceList, Error) + 'static,
+    {
+        CommandOnDeviceList { error_fn: Some(Box::new(error_fn)), ..self }
+    }
 
-impl<RunFn, Output, UpdateFn> UpdateOnDeviceList<RunFn, Output, UpdateFn>
-where
-    RunFn: for<'a> AsyncFnOnce(&'a mut DeviceList) -> Output + 'static,
-    UpdateFn: for<'a> FnOnce(&'a mut DeviceList, Output) + 'static,
-{
+    pub fn finally<FinallyFn>(self, finally_fn: FinallyFn) -> CommandOnDeviceList<RunFn, Output>
+    where
+        FinallyFn: for<'a> FnOnce(&'a mut DeviceList) + 'static,
+    {
+        CommandOnDeviceList { finally_fn: Some(Box::new(finally_fn)), ..self }
+    }
+
+    #[expect(clippy::option_map_unit_fn)]
     pub fn run(self) {
-        let Self { device_list, run_fn, update_fn } = self;
-        let _ = slint::spawn_local(
+        let Self { success_msg, error_msg, device_list, toast_queue, run_fn, update_fn, error_fn, finally_fn } = self;
+        slint::spawn_local(
             async move {
                 let mut device_list = device_list.write().await;
-                let output = run_fn(device_list.deref_mut()).await;
-                update_fn(device_list.deref_mut(), output);
+                let result = run_fn(device_list.deref_mut()).await;
+
+                match result {
+                    Ok(output) => {
+                        success_msg.map(|m| toast_queue.success(m, "".into()));
+                        update_fn.map(|f| f(device_list.deref_mut(), output));
+                    }
+                    Err(CommandError::Failed(err)) => {
+                        tracing::error!(error = %err, "command failed");
+                        error_msg.map(|m| toast_queue.error(m, err.to_string()));
+                        error_fn.map(|f| f(device_list.deref_mut(), err));
+                    }
+                    Err(CommandError::Skipped) => tracing::debug!("command skipped"),
+                };
+
+                finally_fn.map(|f| f(device_list.deref_mut()));
             }
             .in_current_span(),
-        );
+        )
+        .expect_in_event_loop();
     }
 }
 
 //------------------------------------------------------------------------------
-
 // Command on device
 //------------------------------------------------------------------------------
 pub struct CommandOnDeviceEntry<RunFn, Output>
@@ -189,6 +244,8 @@ where
     for<'x> <RunFn as OnDeviceEntryRunFn<'x>>::Future: Send,
     Output: Send + 'static,
 {
+    success_msg: Option<String>,
+    error_msg: Option<String>,
     runtime: Arc<PolyRuntime>,
     device_list: Rc<RwLock<DeviceList>>,
     device_id: PathBuf,
@@ -205,8 +262,8 @@ where
     where
         UpdateFn: FnOnce(ui::Device, Output) -> ui::Device + 'static,
     {
-        let Self { runtime, device_list, device_id, run_fn } = self;
-        UpdateOnDeviceEntry { runtime, device_list, device_id, run_fn, update_fn }
+        let Self { success_msg, error_msg, runtime, device_list, device_id, run_fn } = self;
+        UpdateOnDeviceEntry { success_msg, error_msg, runtime, device_list, device_id, run_fn, update_fn }
     }
 }
 
@@ -217,6 +274,8 @@ where
     Output: Send + 'static,
     UpdateFn: FnOnce(ui::Device, Output) -> ui::Device + 'static,
 {
+    success_msg: Option<String>,
+    error_msg: Option<String>,
     runtime: Arc<PolyRuntime>,
     device_list: Rc<RwLock<DeviceList>>,
     device_id: PathBuf,
@@ -232,7 +291,7 @@ where
     UpdateFn: FnOnce(ui::Device, Output) -> ui::Device + 'static,
 {
     pub fn run(self) {
-        let Self { runtime, device_list, device_id, run_fn, update_fn } = self;
+        let Self { success_msg, error_msg, runtime, device_list, device_id, run_fn, update_fn } = self;
         slint::spawn_local(
             async move {
                 let state = device_list.read().await;
@@ -262,6 +321,8 @@ where
     for<'x> <RunFn as OnDeviceRunFn<'x>>::Future: Send,
     Output: Send + 'static,
 {
+    success_msg: Option<String>,
+    error_msg: Option<String>,
     runtime: Arc<PolyRuntime>,
     device_list: Rc<RwLock<DeviceList>>,
     device_id: PathBuf,
@@ -278,8 +339,8 @@ where
     where
         UpdateFn: FnOnce(ui::Device, Output) -> ui::Device + 'static,
     {
-        let Self { runtime, device_list, device_id, run_fn } = self;
-        UpdateOnDevice { runtime, device_list, device_id, run_fn, update_fn }
+        let Self { success_msg, error_msg, runtime, device_list, device_id, run_fn } = self;
+        UpdateOnDevice { success_msg, error_msg, runtime, device_list, device_id, run_fn, update_fn }
     }
 }
 
@@ -290,6 +351,8 @@ where
     Output: Send + 'static,
     UpdateFn: FnOnce(ui::Device, Output) -> ui::Device + 'static,
 {
+    success_msg: Option<String>,
+    error_msg: Option<String>,
     runtime: Arc<PolyRuntime>,
     device_list: Rc<RwLock<DeviceList>>,
     device_id: PathBuf,
@@ -305,7 +368,7 @@ where
     UpdateFn: FnOnce(ui::Device, Output) -> ui::Device + 'static,
 {
     pub fn run(self) {
-        let Self { runtime, device_list, device_id, run_fn, update_fn } = self;
+        let Self { success_msg, error_msg, runtime, device_list, device_id, run_fn, update_fn } = self;
         slint::spawn_local(
             async move {
                 // Acquire resources.
@@ -356,6 +419,8 @@ where
     for<'x> <RunFn as OnSessionRunFn<'x>>::Future: Send,
     Output: Send + 'static,
 {
+    success_msg: Option<String>,
+    error_msg: Option<String>,
     runtime: Arc<PolyRuntime>,
     device_list: Rc<RwLock<DeviceList>>,
     device_id: PathBuf,
@@ -372,8 +437,8 @@ where
     where
         UpdateFn: for<'spec> FnOnce(ui::Device, Option<&'spec Spec>, Output) -> ui::Device + 'static,
     {
-        let Self { runtime, device_list, device_id, run_fn } = self;
-        UpdateOnSession { runtime, device_list, device_id, run_fn, update_fn }
+        let Self { success_msg, error_msg, runtime, device_list, device_id, run_fn } = self;
+        UpdateOnSession { success_msg, error_msg, runtime, device_list, device_id, run_fn, update_fn }
     }
 }
 
@@ -384,6 +449,8 @@ where
     Output: Send + 'static,
     UpdateFn: for<'spec> FnOnce(ui::Device, Option<&'spec Spec>, Output) -> ui::Device + 'static,
 {
+    success_msg: Option<String>,
+    error_msg: Option<String>,
     runtime: Arc<PolyRuntime>,
     device_list: Rc<RwLock<DeviceList>>,
     device_id: PathBuf,
@@ -399,7 +466,7 @@ where
     UpdateFn: for<'spec> FnOnce(ui::Device, Option<&'spec Spec>, Output) -> ui::Device + 'static,
 {
     pub fn run(self) {
-        let Self { runtime, device_list, device_id, run_fn, update_fn } = self;
+        let Self { success_msg, error_msg, runtime, device_list, device_id, run_fn, update_fn } = self;
 
         slint::spawn_local(
             async move {

@@ -27,6 +27,7 @@ futures.workspace = true
 oneshot.workspace = true
 clap.workspace = true
 chrono.workspace = true
+thiserror.workspace = true
 
 [dev-dependencies]
 tokio.workspace = true

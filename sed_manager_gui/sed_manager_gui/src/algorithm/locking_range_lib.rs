@@ -101,6 +101,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[expect(clippy::single_range_in_vec_init)]
     fn placement_single_range_at_start() {
         let (x, width) = stripe_placement_normalized(0, &[0..20], 100);
         assert_eq!(x, 0.0);
@@ -108,6 +109,7 @@ mod tests {
     }
 
     #[test]
+    #[expect(clippy::single_range_in_vec_init)]
     fn placement_single_range_at_end() {
         let (x, width) = stripe_placement_normalized(0, &[80..100], 100);
         assert_eq!(x, 0.56);

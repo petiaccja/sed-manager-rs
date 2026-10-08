@@ -168,14 +168,18 @@ impl App {
     }
 
     fn command(&self) -> Command {
-        Command::new(self.runtime.clone(), self.device_list.clone())
+        Command::new(self.runtime.clone(), self.device_list.clone(), self.toast_queue.clone())
     }
 
     #[instrument(skip(self, silent))]
     pub fn scan(self: Rc<Self>, silent: bool) {
         self.ui.set_scan_outcome(ui::Outcome::Pending);
         let host = self.host.clone();
+        let self_ = self.clone();
+
         self.command()
+            .success_message_if((!silent).then_some("Device list updated"))
+            .error_message("Could not update device list")
             .on_device_list(async move |device_list| {
                 let mut new_paths: HashSet<_> = host.list_devices().await?.into_iter().collect();
 
@@ -198,54 +202,43 @@ impl App {
                     }
                 }
 
-                Ok::<_, Error>((added, removed, non_unicode))
+                Ok((added, removed, non_unicode))
             })
-            .display(move |device_list, result| {
-                self.ui.set_scan_outcome(ui::Outcome::Idle);
-                match result {
-                    Ok((added, removed, non_unicode)) => {
-                        for path in added {
-                            let path_str = path.to_string_lossy().to_shared_string();
-                            device_list.ui.insert(
-                                path.clone(),
-                                ui::Device {
-                                    identity: ui::Identity {
-                                        path: path_str,
-                                        status: ui::Status { outcome: ui::Outcome::Idle, ..Default::default() },
-                                        ..Default::default()
-                                    },
-                                    discovery: ui::Discovery {
-                                        status: ui::Status { outcome: ui::Outcome::Idle, ..Default::default() },
-                                        ..Default::default()
-                                    },
-                                    ..Default::default()
-                                },
-                            );
+            .on_success(move |device_list, (added, removed, non_unicode)| {
+                for path in added {
+                    let path_str = path.to_string_lossy().to_shared_string();
+                    device_list.ui.insert(
+                        path.clone(),
+                        ui::Device {
+                            identity: ui::Identity {
+                                path: path_str,
+                                status: ui::Status { outcome: ui::Outcome::Idle, ..Default::default() },
+                                ..Default::default()
+                            },
+                            discovery: ui::Discovery {
+                                status: ui::Status { outcome: ui::Outcome::Idle, ..Default::default() },
+                                ..Default::default()
+                            },
+                            ..Default::default()
+                        },
+                    );
 
-                            self.clone().open(path);
-                        }
+                    self.clone().open(path);
+                }
 
-                        for path in removed {
-                            device_list.ui.remove(&path);
-                        }
+                for path in removed {
+                    device_list.ui.remove(&path);
+                }
 
-                        for path in non_unicode {
-                            let path = path.to_string_lossy();
-                            self.toast_queue.warning(
-                                "Device ignored".into(),
-                                format!(
-                                    "Device paths must be valid unicode strings. The device {path} will be ignored"
-                                ),
-                            );
-                        }
-
-                        if !silent {
-                            self.toast_queue.success("Device list updated".into(), "".into());
-                        }
-                    }
-                    Err(err) => self.toast_queue.error("Could not update device list".into(), err.to_string()),
+                for path in non_unicode {
+                    let path = path.to_string_lossy();
+                    self.toast_queue.warning(
+                        "Device ignored".into(),
+                        format!("Device paths must be valid unicode strings. The device {path} will be ignored"),
+                    );
                 }
             })
+            .finally(move |_| self_.ui.set_scan_outcome(ui::Outcome::Idle))
             .run();
     }
 
@@ -254,7 +247,6 @@ impl App {
         self.ui.set_scan_outcome(ui::Outcome::Pending);
         let path = PathBuf::from(String::from(path));
 
-        let app = self.clone();
         self.command()
             .on_device_list(async move |device_list| {
                 device_list.ui.remove(&path);
@@ -262,10 +254,9 @@ impl App {
                     let mut device = device.write().await;
                     device.close().await;
                 }
+                Ok(())
             })
-            .display(move |_device_list, _| {
-                app.ui.set_scan_outcome(ui::Outcome::Idle);
-            })
+            .finally(move |_| self.ui.set_scan_outcome(ui::Outcome::Idle))
             .run();
     }
 
@@ -816,8 +807,9 @@ impl App {
                     let mut device = device.write().await;
                     device.close().await;
                 }
+                Ok(())
             })
-            .display(move |_device_list, _| {
+            .finally(move |_| {
                 // Once all device are closed we can quit the event loop.
                 let _ = quit_event_loop();
             })
