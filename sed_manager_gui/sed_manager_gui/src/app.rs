@@ -497,8 +497,8 @@ impl App {
             .display(move |ui_device, _spec, result| match result {
                 Ok(_) => {
                     self.clone().get_alignment(path.clone());
-                    self.clone().list_locking_config_authorities(path.clone(), true);
-                    self.clone().list_locking_config_ranges(path.clone(), true);
+                    self.clone().list_locking_authorities_ext(path.clone(), true);
+                    self.clone().list_locking_ranges(path.clone(), true);
                     self.clone().get_mbr(path.clone(), true);
                     ui_device
                 }
@@ -534,7 +534,7 @@ impl App {
     }
 
     #[instrument(skip(self))]
-    fn list_locking_config_authorities(self: Rc<Self>, path: PathBuf, silent: bool) {
+    fn list_locking_authorities_ext(self: Rc<Self>, path: PathBuf, silent: bool) {
         self.command()
             .on_session(path.clone(), async |_device: &Device, session: &mut Session| {
                 let Session::LockingConfig(locking_config_session) = &*session else {
@@ -567,7 +567,7 @@ impl App {
     }
 
     #[instrument(skip(self))]
-    fn list_locking_config_ranges(self: Rc<Self>, path: PathBuf, silent: bool) {
+    fn list_locking_ranges(self: Rc<Self>, path: PathBuf, silent: bool) {
         self.command()
             .on_session(path.clone(), async |_device: &Device, session: &mut Session| {
                 let Session::LockingConfig(locking_config_session) = &*session else {
