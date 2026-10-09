@@ -296,7 +296,6 @@ where
         Self { update_fn: Some(Box::new(update_fn)), ..self }
     }
 
-    #[allow(unused)]
     pub fn on_error<ErrorFn>(self, error_fn: ErrorFn) -> Self
     where
         ErrorFn: FnOnce(ui::Device, Error) -> ui::Device + 'static,
@@ -374,7 +373,7 @@ fn process_result<Output>(
             if let Some(f) = update_fn { f(value, output) } else { value }
         }
         Err(CommandError::Failed(err)) => {
-            tracing::error!(error = %err, "command failed");
+            tracing::error!(error = %err);
             error_msg.map(|m| toast_queue.error(m, err.to_string()));
             if let Some(f) = error_fn { f(value, err) } else { value }
         }
@@ -482,13 +481,13 @@ where
                             error_msg,
                         )
                     });
-
-                    // Indicate to UI that we're NO LONGER busy.
-                    device_list.ui.update(&device_id, |value| {
-                        let command_status = value.command_status.clone();
-                        value.with_command_status(command_status.with_tper_busy(false))
-                    });
                 }
+
+                // Indicate to UI that we're NO LONGER busy.
+                device_list.ui.update(&device_id, |value| {
+                    let command_status = value.command_status.clone();
+                    value.with_command_status(command_status.with_tper_busy(false))
+                });
             }
             .in_current_span(),
         )

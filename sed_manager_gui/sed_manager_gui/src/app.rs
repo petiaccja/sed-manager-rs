@@ -14,7 +14,7 @@ use async_lock::RwLock;
 use sed_async::PolyRuntime;
 use sed_manager::{Device, Error, Geometry, Host, Spec};
 use sed_manager_gui_slint as ui;
-use sed_packet::MaxBytes;
+use sed_packet::{MaxBytes, com_id_request::ComIdState};
 use sed_spec::{
     methods::MethodStatus,
     objects::{Authority, AuthorityRef, SecurityProviderRef},
@@ -262,7 +262,6 @@ impl App {
 
     #[instrument(skip(self))]
     fn open(self: Rc<Self>, path: PathBuf) {
-        let app = self.clone();
         let path_ = path.clone();
         let host = self.host.clone();
         self.command()
@@ -280,7 +279,7 @@ impl App {
             })
             .on_success(move |mut ui_device, (storage_device, capabilities, properties_changed, geometry)| {
                 if storage_device.is_security_supported() {
-                    app.clone().discover(path.clone());
+                    self.clone().discover(path.clone());
                 }
                 if let (Some(capabilities), Some(properties_changed)) = (capabilities, properties_changed) {
                     let combined_properties = CombinedProperties { host: capabilities, device: None, connection: None };
@@ -328,13 +327,15 @@ impl App {
         self.command()
             .on_device(path.clone(), async |device: &Device| Ok((device.com_id()?, device.com_id_ext()?)))
             .on_success(move |mut ui_device, (com_id, com_id_ext)| {
-                ui_device.stack_status.com_id.good = true;
+                ui_device.stack_status.com_id.connected = true;
                 ui_device.stack_status.com_id.com_id = com_id.0.into();
                 ui_device.stack_status.com_id.com_id_ext = com_id_ext.0.into();
                 ui_device
             })
             .on_error(|mut ui_device, _err| {
-                ui_device.stack_status.com_id.good = false;
+                ui_device.stack_status.com_id.connected = false;
+                ui_device.stack_status.com_id.com_id = 0;
+                ui_device.stack_status.com_id.com_id_ext = 0;
                 ui_device
             })
             .run();
@@ -345,10 +346,13 @@ impl App {
             .error_message_if((!silent).then_some("Could not update stack status"))
             .on_device(path.clone(), async |device: &Device| device.query_com_id_state().await.map_err(Into::into))
             .on_success(move |mut ui_device, com_id_state| {
+                ui_device.stack_status.com_id.receptive =
+                    matches!(com_id_state, ComIdState::Issued | ComIdState::Associated);
                 ui_device.stack_status.com_id.status = com_id_state.to_shared_string();
                 ui_device
             })
             .on_error(|mut ui_device, _err| {
+                ui_device.stack_status.com_id.receptive = false;
                 ui_device.stack_status.com_id.status = "N/A".to_shared_string();
                 ui_device
             })
@@ -378,7 +382,7 @@ impl App {
     #[instrument(skip(self))]
     fn list_admin_authorities(self: Rc<Self>, path: PathBuf, silent: bool) {
         self.command()
-            .error_message_if((!silent).then_some("Admin authorities updated"))
+            .success_message_if((!silent).then_some("Admin authorities updated"))
             .error_message("Failed to list admin authorities")
             .on_session(path.clone(), async |device: &Device, session: &mut Session| {
                 let setup_session = session.start_setup_session(device).await?;
@@ -402,7 +406,7 @@ impl App {
     #[instrument(skip(self))]
     fn list_locking_authorities(self: Rc<Self>, path: PathBuf, silent: bool) {
         self.command()
-            .error_message_if((!silent).then_some("Locking authorities updated"))
+            .success_message_if((!silent).then_some("Locking authorities updated"))
             .error_message("Failed to list locking authorities")
             .on_session(path.clone(), async |device: &Device, session: &mut Session| {
                 let setup_session = session.start_setup_session(device).await?;
