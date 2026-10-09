@@ -622,7 +622,6 @@ mod tests {
         assert_that!(protocol.phase, pat!(Phase::Recovering));
     }
 
-    #[expect(clippy::type_complexity)]
     fn run_sequence<SendMessage, RecvMessage>(
         protocol: &mut SynchronousProtocol<SendMessage, RecvMessage>,
         time_0: Instant,

@@ -14,7 +14,7 @@ use async_lock::RwLock;
 use sed_async::PolyRuntime;
 use sed_manager::{Device, Error, Geometry, Host, Spec};
 use sed_manager_gui_slint as ui;
-use sed_packet::{MaxBytes, com_id_request::ComIdState};
+use sed_packet::MaxBytes;
 use sed_spec::{
     methods::MethodStatus,
     objects::{Authority, AuthorityRef, SecurityProviderRef},
@@ -29,7 +29,7 @@ use tracing::{error, instrument};
 
 use crate::{
     algorithm::{locking_range_lib, sector_lib},
-    command::{Command, ExpectInEventLoop},
+    command::{Command, CommandError, ExpectInEventLoop},
     device_list::{DeviceEntry, DeviceList},
     diff_model::DiffModel,
     session::Session,
@@ -267,51 +267,41 @@ impl App {
         let host = self.host.clone();
         self.command()
             .on_device_entry(path.clone(), async move |device_entry: &mut DeviceEntry| {
-                match host.open_device(path_).await {
-                    Ok(device) => {
-                        let storage_device = device.storage_device();
-                        let capabilities = device.capabilities().ok();
-                        let properties_changed = device.properties_changed().ok();
-                        let geometry = device
-                            .geometry()
-                            .await
-                            .unwrap_or(Geometry { logical_sector_size: 0, logical_sector_count: 1u64 << 62 });
-                        device_entry.device = Some(device);
-                        Ok((storage_device, capabilities, properties_changed, geometry))
-                    }
-                    Err(err) => Err(err),
-                }
+                let device = host.open_device(path_).await?;
+                let storage_device = device.storage_device();
+                let capabilities = device.capabilities().ok();
+                let properties_changed = device.properties_changed().ok();
+                let geometry = device
+                    .geometry()
+                    .await
+                    .unwrap_or(Geometry { logical_sector_size: 0, logical_sector_count: 1u64 << 62 });
+                device_entry.device = Some(device);
+                Ok((storage_device, capabilities, properties_changed, geometry))
             })
-            .display(move |mut ui_device, result| match result {
-                Ok((storage_device, capabilities, properties_changed, geometry)) => {
-                    if storage_device.is_security_supported() {
-                        app.clone().discover(path.clone());
-                    }
-                    if let (Some(capabilities), Some(properties_changed)) = (capabilities, properties_changed) {
-                        let combined_properties =
-                            CombinedProperties { host: capabilities, device: None, connection: None };
-                        let status = ui_device.stack_status.clone().with_protocol(combined_properties.into_ui());
-                        spawn_local(Self::listen_connection_changed(
-                            Rc::downgrade(&self),
-                            path.clone(),
-                            properties_changed,
-                        ))
-                        .expect_in_event_loop();
-                        self.clone().query_stack_status(path.clone(), true);
-                        self.clone().list_security_providers(path.clone());
-                        ui_device.stack_status = status;
-                        ui_device.geometry = geometry.into_ui();
-                    }
-                    ui_device.identity = storage_device.into_ui();
-                    ui_device
+            .on_success(move |mut ui_device, (storage_device, capabilities, properties_changed, geometry)| {
+                if storage_device.is_security_supported() {
+                    app.clone().discover(path.clone());
                 }
-                Err(err) => {
-                    let identity = ui_device.identity.clone();
-                    ui_device.with_identity(ui::Identity {
-                        status: ui::Status { outcome: ui::Outcome::Error, message: err.to_shared_string() },
-                        ..identity
-                    })
+                if let (Some(capabilities), Some(properties_changed)) = (capabilities, properties_changed) {
+                    let combined_properties = CombinedProperties { host: capabilities, device: None, connection: None };
+                    let status = ui_device.stack_status.clone().with_protocol(combined_properties.into_ui());
+                    spawn_local(Self::listen_connection_changed(
+                        Rc::downgrade(&self),
+                        path.clone(),
+                        properties_changed,
+                    ))
+                    .expect_in_event_loop();
+                    self.clone().query_stack_status(path.clone(), true);
+                    self.clone().list_security_providers(path.clone());
+                    ui_device.stack_status = status;
+                    ui_device.geometry = geometry.into_ui();
                 }
+                ui_device.identity = storage_device.into_ui();
+                ui_device
+            })
+            .on_error(move |mut ui_device, err| {
+                ui_device.identity.status = ui::Status { outcome: ui::Outcome::Error, message: err.to_shared_string() };
+                ui_device
             })
             .run();
     }
@@ -319,62 +309,48 @@ impl App {
     #[instrument(skip(self))]
     fn discover(self: Rc<Self>, path: PathBuf) {
         self.command()
-            .on_device(path.clone(), async move |device: &Device| match device.discover().await {
-                Ok(mut discovery) => {
-                    Spec::sort(&mut discovery);
-                    Some(Ok(discovery))
-                }
-                Err(err) => Some(Err(err)),
+            .on_device(path.clone(), async move |device: &Device| {
+                let mut discovery = device.discover().await?;
+                Spec::sort(&mut discovery);
+                Ok(discovery)
             })
-            .display(move |ui_device, result| match result {
-                Some(Ok(discovery)) => {
-                    let (ui_config, ui_discovery) = discovery.into_ui();
-                    ui_device.with_discovery(ui_discovery).with_config(ui_config)
-                }
-                Some(Err(err)) => ui_device.with_discovery(ui::Discovery::error(err.to_string())),
-                None => ui_device,
+            .on_success(move |ui_device, discovery| {
+                let (ui_config, ui_discovery) = discovery.into_ui();
+                ui_device.with_discovery(ui_discovery).with_config(ui_config)
             })
+            .on_error(move |ui_device, err| ui_device.with_discovery(ui::Discovery::error(err.to_string())))
             .run();
     }
 
     #[instrument(skip(self, silent))]
     fn query_stack_status(self: Rc<Self>, path: PathBuf, silent: bool) {
+        // Get the ComID and the ComIDExt if the SSC is available and we're connected.
         self.command()
-            .on_device(path.clone(), async |device: &Device| -> Result<_, Error> {
-                Ok((device.com_id()?, device.com_id_ext()?, device.query_com_id_state().await))
+            .on_device(path.clone(), async |device: &Device| Ok((device.com_id()?, device.com_id_ext()?)))
+            .on_success(move |mut ui_device, (com_id, com_id_ext)| {
+                ui_device.stack_status.com_id.good = true;
+                ui_device.stack_status.com_id.com_id = com_id.0.into();
+                ui_device.stack_status.com_id.com_id_ext = com_id_ext.0.into();
+                ui_device
             })
-            .display(move |ui_device, result| {
-                let ui_status = match result {
-                    Ok((com_id, com_id_ext, Ok(state))) => {
-                        let good = [ComIdState::Issued, ComIdState::Associated].contains(&state);
-                        if !silent {
-                            self.toast_queue.success("Stack status updated".into(), "".to_string());
-                        }
-                        let status = state.to_shared_string();
-                        ui::ComIdStatus { com_id: com_id.0.into(), com_id_ext: com_id_ext.0.into(), status, good }
-                    }
-                    Ok((com_id, com_id_ext, Err(err))) => {
-                        if !silent {
-                            self.toast_queue.error("Could not update stack status".into(), err.to_string());
-                        }
-                        let status = err.to_shared_string();
-                        ui::ComIdStatus {
-                            com_id: com_id.0.into(),
-                            com_id_ext: com_id_ext.0.into(),
-                            good: false,
-                            status,
-                        }
-                    }
-                    Err(err) => {
-                        if !silent {
-                            self.toast_queue.error("Could not update stack status".into(), err.to_string());
-                        }
-                        let status = err.to_shared_string();
-                        ui::ComIdStatus { good: false, status, ..Default::default() }
-                    }
-                };
-                let status = ui_device.stack_status.clone().with_com_id(ui_status);
-                ui_device.with_stack_status(status)
+            .on_error(|mut ui_device, _err| {
+                ui_device.stack_status.com_id.good = false;
+                ui_device
+            })
+            .run();
+
+        // Get the status of the current connection.
+        self.command()
+            .success_message_if((!silent).then_some("Stack status updated"))
+            .error_message_if((!silent).then_some("Could not update stack status"))
+            .on_device(path.clone(), async |device: &Device| device.query_com_id_state().await.map_err(Into::into))
+            .on_success(move |mut ui_device, com_id_state| {
+                ui_device.stack_status.com_id.status = com_id_state.to_shared_string();
+                ui_device
+            })
+            .on_error(|mut ui_device, _err| {
+                ui_device.stack_status.com_id.status = "N/A".to_shared_string();
+                ui_device
             })
             .run();
     }
@@ -383,23 +359,18 @@ impl App {
     fn list_security_providers(self: Rc<Self>, path: PathBuf) {
         self.command()
             .on_device(path.clone(), async |device: &Device| {
-                Spec::try_from(device.discover().await?).map_err(|_| Error::NoSscAvailable)
+                let discovery = device.discover().await?;
+                Spec::try_from(discovery).map_err(|_| Error::NoSscAvailable.into())
             })
-            .display(move |mut ui_device, spec| match spec {
-                Ok(spec) => {
-                    let features = &spec.discovery.feature_descriptors;
-                    ui_device.admin_sp.uid = spec.admin.uid.into_ui();
-                    ui_device.admin_sp.name = spec.admin.uid.into_ui_name(features, Some(spec.admin.uid));
-                    if let Some(locking_sp) = spec.locking {
-                        ui_device.locking_sp.uid = locking_sp.uid.into_ui();
-                        ui_device.locking_sp.name = locking_sp.uid.into_ui_name(features, Some(spec.admin.uid))
-                    }
-                    ui_device
+            .on_success(move |mut ui_device, spec| {
+                let features = &spec.discovery.feature_descriptors;
+                ui_device.admin_sp.uid = spec.admin.uid.into_ui();
+                ui_device.admin_sp.name = spec.admin.uid.into_ui_name(features, Some(spec.admin.uid));
+                if let Some(locking_sp) = spec.locking {
+                    ui_device.locking_sp.uid = locking_sp.uid.into_ui();
+                    ui_device.locking_sp.name = locking_sp.uid.into_ui_name(features, Some(spec.admin.uid))
                 }
-                Err(err) => {
-                    self.toast_queue.error("Can not list SPs".into(), err.to_string());
-                    ui_device
-                }
+                ui_device
             })
             .run();
     }
@@ -407,29 +378,23 @@ impl App {
     #[instrument(skip(self))]
     fn list_admin_authorities(self: Rc<Self>, path: PathBuf, silent: bool) {
         self.command()
+            .error_message_if((!silent).then_some("Admin authorities updated"))
+            .error_message("Failed to list admin authorities")
             .on_session(path.clone(), async |device: &Device, session: &mut Session| {
                 let setup_session = session.start_setup_session(device).await?;
                 let sp_ref = setup_session.spec().admin.uid;
-                setup_session.list_authorities(sp_ref).await.map(|auths| (auths, sp_ref))
+                let authorities = setup_session.list_authorities(sp_ref).await?;
+                Ok((authorities, Some(sp_ref)))
             })
-            .display(move |mut ui_device, spec, result| match result {
-                Ok((authorities, sp_ref)) => {
-                    let (authorities, individual_authority_names, individual_authority_uids) =
-                        display_authorities(spec, &authorities, Some(sp_ref));
+            .on_success(move |mut ui_device, spec, (authorities, sp_ref)| {
+                let (authorities, individual_authority_names, individual_authority_uids) =
+                    display_authorities(spec, &authorities, sp_ref);
 
-                    ui_device.admin_sp.authorities = authorities.into();
-                    ui_device.admin_sp.individual_authority_names = Rc::from(individual_authority_names).into();
-                    ui_device.admin_sp.individual_authority_uids = Rc::from(individual_authority_uids).into();
+                ui_device.admin_sp.authorities = authorities.into();
+                ui_device.admin_sp.individual_authority_names = Rc::from(individual_authority_names).into();
+                ui_device.admin_sp.individual_authority_uids = Rc::from(individual_authority_uids).into();
 
-                    if !silent {
-                        self.toast_queue.success("Admin authorities updated".into(), String::new());
-                    }
-                    ui_device
-                }
-                Err(err) => {
-                    self.toast_queue.error("Failed to update admin authorities".into(), err.to_string());
-                    ui_device
-                }
+                ui_device
             })
             .run();
     }
@@ -437,32 +402,26 @@ impl App {
     #[instrument(skip(self))]
     fn list_locking_authorities(self: Rc<Self>, path: PathBuf, silent: bool) {
         self.command()
+            .error_message_if((!silent).then_some("Locking authorities updated"))
+            .error_message("Failed to list locking authorities")
             .on_session(path.clone(), async |device: &Device, session: &mut Session| {
                 let setup_session = session.start_setup_session(device).await?;
                 if let Some(locking_sp) = &setup_session.spec().locking {
-                    setup_session.list_authorities(locking_sp.uid).await.map(|auths| (auths, Some(locking_sp.uid)))
+                    let authorities = setup_session.list_authorities(locking_sp.uid).await?;
+                    Ok((authorities, Some(locking_sp.uid)))
                 } else {
                     Ok((vec![], None))
                 }
             })
-            .display(move |mut ui_device, spec, result| match result {
-                Ok((authorities, sp_ref)) => {
-                    let (authorities, individual_authority_names, individual_authority_uids) =
-                        display_authorities(spec, &authorities, sp_ref);
+            .on_success(move |mut ui_device, spec, (authorities, sp_ref)| {
+                let (authorities, individual_authority_names, individual_authority_uids) =
+                    display_authorities(spec, &authorities, sp_ref);
 
-                    ui_device.locking_sp.authorities = authorities.into();
-                    ui_device.locking_sp.individual_authority_names = Rc::from(individual_authority_names).into();
-                    ui_device.locking_sp.individual_authority_uids = Rc::from(individual_authority_uids).into();
+                ui_device.locking_sp.authorities = authorities.into();
+                ui_device.locking_sp.individual_authority_names = Rc::from(individual_authority_names).into();
+                ui_device.locking_sp.individual_authority_uids = Rc::from(individual_authority_uids).into();
 
-                    if !silent {
-                        self.toast_queue.success("Locking authorities updated".into(), String::new());
-                    }
-                    ui_device
-                }
-                Err(err) => {
-                    self.toast_queue.error("Failed to update locking authorities".into(), err.to_string());
-                    ui_device
-                }
+                ui_device
             })
             .run();
     }
@@ -482,21 +441,17 @@ impl App {
         };
 
         self.command()
+            .error_message("Could not log in")
             .on_session(path.clone(), async move |device: &Device, session: &mut Session| {
-                session.start_locking_config_session(device, authority, Some(password)).await.map(|_| ())
+                let _ = session.start_locking_config_session(device, authority, Some(password)).await?;
+                Ok(())
             })
-            .display(move |ui_device, _spec, result| match result {
-                Ok(_) => {
-                    self.clone().get_alignment(path.clone());
-                    self.clone().list_locking_authorities_ext(path.clone(), true);
-                    self.clone().list_locking_ranges(path.clone(), true);
-                    self.clone().get_mbr(path.clone(), true);
-                    ui_device
-                }
-                Err(err) => {
-                    self.toast_queue.error("Login failed".into(), err.to_string());
-                    ui_device
-                }
+            .on_success(move |ui_device, _, _| {
+                self.clone().get_alignment(path.clone());
+                self.clone().list_locking_authorities_ext(path.clone(), true);
+                self.clone().list_locking_ranges(path.clone(), true);
+                self.clone().get_mbr(path.clone(), true);
+                ui_device
             })
             .run();
     }
@@ -504,22 +459,16 @@ impl App {
     #[instrument(skip(self))]
     fn get_alignment(self: Rc<Self>, path: PathBuf) {
         self.command()
+            .error_message("Could not get alignment")
             .on_session(path.clone(), async |_device: &Device, session: &mut Session| {
                 let Session::LockingConfig(locking_config_session) = &*session else {
-                    return None;
+                    return Err(CommandError::Skipped);
                 };
-                Some(locking_config_session.get_alignment().await)
+                locking_config_session.get_alignment().await.map_err(Into::into)
             })
-            .display(move |mut ui_device, _spec, result| match result {
-                Some(Ok(alignment)) => {
-                    ui_device.alignment = alignment.into_ui();
-                    ui_device
-                }
-                Some(Err(err)) => {
-                    self.toast_queue.error("Failed to update locking authorities".into(), err.to_string());
-                    ui_device
-                }
-                _ => ui_device,
+            .on_success(move |mut ui_device, _, alignment| {
+                ui_device.alignment = alignment.into_ui();
+                ui_device
             })
             .run();
     }
@@ -527,32 +476,23 @@ impl App {
     #[instrument(skip(self))]
     fn list_locking_authorities_ext(self: Rc<Self>, path: PathBuf, silent: bool) {
         self.command()
+            .success_message_if((!silent).then_some("Locking authorities updated"))
+            .error_message("Failed to list locking authorities")
             .on_session(path.clone(), async |_device: &Device, session: &mut Session| {
                 let Session::LockingConfig(locking_config_session) = &*session else {
-                    return None;
+                    return Err(CommandError::Skipped);
                 };
-                Some(locking_config_session.get_authorities().await)
+                locking_config_session.get_authorities().await.map_err(Into::into)
             })
-            .display(move |mut ui_device, spec, result| match result {
-                Some(Ok(authorities)) => {
-                    let sp_ref = spec.and_then(|spec| spec.locking.as_ref()).map(|sp| sp.uid);
-                    let (authorities, individual_authority_names, individual_authority_uids) =
-                        display_authorities(spec, &authorities, sp_ref);
+            .on_success(move |mut ui_device, spec, authorities| {
+                let sp_ref = spec.and_then(|spec| spec.locking.as_ref()).map(|sp| sp.uid);
+                let (authorities, individual_authority_names, individual_authority_uids) =
+                    display_authorities(spec, &authorities, sp_ref);
 
-                    ui_device.locking_sp.authorities = authorities.into();
-                    ui_device.locking_sp.individual_authority_names = Rc::from(individual_authority_names).into();
-                    ui_device.locking_sp.individual_authority_uids = Rc::from(individual_authority_uids).into();
-
-                    if !silent {
-                        self.toast_queue.success("Locking authorities updated".into(), String::new());
-                    }
-                    ui_device
-                }
-                Some(Err(err)) => {
-                    self.toast_queue.error("Failed to update locking authorities".into(), err.to_string());
-                    ui_device
-                }
-                _ => ui_device,
+                ui_device.locking_sp.authorities = authorities.into();
+                ui_device.locking_sp.individual_authority_names = Rc::from(individual_authority_names).into();
+                ui_device.locking_sp.individual_authority_uids = Rc::from(individual_authority_uids).into();
+                ui_device
             })
             .run();
     }
@@ -560,29 +500,20 @@ impl App {
     #[instrument(skip(self))]
     fn list_locking_ranges(self: Rc<Self>, path: PathBuf, silent: bool) {
         self.command()
+            .success_message_if((!silent).then_some("Locking ranges updated"))
+            .error_message("Failed to update locking ranges")
             .on_session(path.clone(), async |_device: &Device, session: &mut Session| {
                 let Session::LockingConfig(locking_config_session) = &*session else {
-                    return None;
+                    return Err(CommandError::Skipped);
                 };
-                Some(locking_config_session.get_locking_ranges().await)
+                locking_config_session.get_locking_ranges().await.map_err(Into::into)
             })
-            .display(move |mut ui_device, spec, result| match result {
-                Some(Ok(ranges)) => {
-                    let features = spec.map(|spec| spec.discovery.feature_descriptors.as_slice()).unwrap_or(&[]);
-                    let sp_ref = spec.and_then(|spec| spec.locking.as_ref()).map(|sp| sp.uid);
-                    let ranges: Vec<_> = ranges.iter().map(|range| range.into_ui_name(features, sp_ref)).collect();
-                    ui_device.locking_sp.locking_ranges = Rc::from(DiffModel::from(ranges)).into();
-
-                    if !silent {
-                        self.toast_queue.success("Locking ranges updated".into(), String::new());
-                    }
-                    ui_device
-                }
-                Some(Err(err)) => {
-                    self.toast_queue.error("Failed to update locking ranges".into(), err.to_string());
-                    ui_device
-                }
-                _ => ui_device,
+            .on_success(move |mut ui_device, spec, ranges| {
+                let features = spec.map(|spec| spec.discovery.feature_descriptors.as_slice()).unwrap_or(&[]);
+                let sp_ref = spec.and_then(|spec| spec.locking.as_ref()).map(|sp| sp.uid);
+                let ranges: Vec<_> = ranges.iter().map(|range| range.into_ui_name(features, sp_ref)).collect();
+                ui_device.locking_sp.locking_ranges = Rc::from(DiffModel::from(ranges)).into();
+                ui_device
             })
             .run();
     }
@@ -590,47 +521,28 @@ impl App {
     #[instrument(skip(self))]
     fn get_mbr(self: Rc<Self>, path: PathBuf, silent: bool) {
         self.command()
+            .success_message_if((!silent).then_some("Shadow MBR status updated"))
+            .error_message("Failed to update shadow MBR status")
             .on_session(path.clone(), async |device: &Device, session: &mut Session| {
                 let Session::LockingConfig(locking_config_session) = &*session else {
-                    return None;
+                    return Err(CommandError::Skipped);
                 };
 
-                let geometry = match device.geometry().await {
-                    Ok(geometry) => geometry,
-                    Err(err) => return Some(Err(err)),
-                };
+                let geometry = device.geometry().await?;
 
                 let size = match locking_config_session.get_mbr_size().await {
                     Ok(size) => size,
                     Err(Error::TperError(TperError::MethodCallFailed(MethodStatus::InvalidParameter))) => {
-                        return Some(Ok(MbrDesc { supported: false, size: None, control: None }));
+                        return Ok(MbrDesc { supported: false, size: None, control: None });
                     }
-                    Err(err) => return Some(Err(err)),
+                    Err(err) => return Err(err.into()),
                 };
-                let control = match locking_config_session.get_mbr_control().await {
-                    Ok(control) => control,
-                    Err(err) => return Some(Err(err)),
-                };
-                Some(Ok(MbrDesc {
-                    supported: true,
-                    size: Some(size / geometry.logical_sector_size),
-                    control: Some(control),
-                }))
+                let control = locking_config_session.get_mbr_control().await?;
+                Ok(MbrDesc { supported: true, size: Some(size / geometry.logical_sector_size), control: Some(control) })
             })
-            .display(move |mut ui_device, _spec, result| match result {
-                Some(Ok(mbr)) => {
-                    ui_device.locking_sp.mbr = mbr.into_ui();
-
-                    if !silent {
-                        self.toast_queue.success("Shadow MBR status updated".into(), String::new());
-                    }
-                    ui_device
-                }
-                Some(Err(err)) => {
-                    self.toast_queue.error("Failed to update shadow MBR status".into(), err.to_string());
-                    ui_device
-                }
-                _ => ui_device,
+            .on_success(move |mut ui_device, _spec, mbr| {
+                ui_device.locking_sp.mbr = mbr.into_ui();
+                ui_device
             })
             .run();
     }
@@ -640,27 +552,23 @@ impl App {
         self.command()
             .on_session(path.clone(), async move |device: &Device, session: &mut Session| {
                 if matches!(*session, Session::LockingConfig(_))
-                    && let Err(_) = session.close().await
+                    && let Err(close_err) = session.close().await
                 {
-                    let _ = device.stack_reset().await;
+                    device.stack_reset().await?;
+                    Err(close_err.into())
+                } else {
+                    Ok(())
                 }
             })
-            .display(move |ui_device, _spec, _result| ui_device)
             .run();
     }
 
     #[instrument(skip(self))]
     fn reset_stack(self: Rc<Self>, path: PathBuf) {
-        let app = self.clone();
         self.command()
-            .on_device(path.clone(), async |device: &Device| device.stack_reset().await)
-            .display(move |ui_device, result| {
-                match result {
-                    Ok(_) => app.toast_queue.success("Stack has been reset".into(), "".into()),
-                    Err(err) => app.toast_queue.error("Could not reset stack".into(), err.to_string()),
-                };
-                ui_device
-            })
+            .success_message("Stack has been reset")
+            .error_message("Could not reset stack")
+            .on_device(path.clone(), async |device: &Device| device.stack_reset().await.map_err(Into::into))
             .run();
     }
 
@@ -671,18 +579,15 @@ impl App {
         };
 
         self.command()
+            .success_message("Taken ownership")
+            .error_message("Could not take ownership")
             .on_session(path.clone(), async move |device: &Device, session: &mut Session| {
                 let sid_session = session.start_setup_session(device).await?;
-                sid_session.take_owneship(password).await
+                sid_session.take_owneship(password).await?;
+                Ok(())
             })
-            .display(move |ui_device, _, result| {
-                match result {
-                    Ok(_) => {
-                        self.toast_queue.success("Taken ownership".into(), "".into());
-                        self.clone().discover(path.clone());
-                    }
-                    Err(err) => self.toast_queue.error("Could not take ownership".into(), err.to_string()),
-                };
+            .on_success(move |ui_device, _, _| {
+                self.clone().discover(path.clone());
                 ui_device
             })
             .run();
@@ -695,18 +600,15 @@ impl App {
         };
 
         self.command()
+            .success_message("Locking activated")
+            .error_message("Could not activate locking")
             .on_session(path.clone(), async move |device: &Device, session: &mut Session| {
                 let sid_session = session.start_setup_session(device).await?;
-                sid_session.activate_secondary_sp(password).await
+                sid_session.activate_secondary_sp(password).await?;
+                Ok(())
             })
-            .display(move |ui_device, _, result| {
-                match result {
-                    Ok(_) => {
-                        self.toast_queue.success("Locking activated".into(), "".into());
-                        self.clone().discover(path.clone());
-                    }
-                    Err(err) => self.toast_queue.error("Could not activate locking".into(), err.to_string()),
-                };
+            .on_success(move |ui_device, _, _| {
+                self.clone().discover(path.clone());
                 ui_device
             })
             .run();
@@ -743,16 +645,12 @@ impl App {
         };
 
         self.command()
+            .success_message("Password changed")
+            .error_message("Could not change password")
             .on_session(path.clone(), async move |device: &Device, session: &mut Session| {
                 let sid_session = session.start_setup_session(device).await?;
-                sid_session.change_password(sp, authority, current_password, new_password).await
-            })
-            .display(move |ui_device, _, result| {
-                match result {
-                    Ok(_) => self.toast_queue.success("Password changed".into(), "".into()),
-                    Err(err) => self.toast_queue.error("Could not change password".into(), err.to_string()),
-                };
-                ui_device
+                sid_session.change_password(sp, authority, current_password, new_password).await?;
+                Ok(())
             })
             .run();
     }
@@ -770,6 +668,8 @@ impl App {
         };
 
         self.command()
+            .success_message("Reverted device successfully")
+            .error_message("Reverting device failed")
             .on_session(path.clone(), async move |device: &Device, session: &mut Session| {
                 let sid_session = session.start_setup_session(device).await?;
                 let authority = match authority {
@@ -780,15 +680,11 @@ impl App {
                     ui::RevertScope::Locking => sid_session.revert_secondary_sp(password).await,
                     ui::RevertScope::Everything => sid_session.revert_tper(authority, password).await,
                 }
+                .map_err(Into::into)
             })
-            .display(move |ui_device, _, result| {
-                match result {
-                    Ok(_) => {
-                        self.toast_queue.success("Reverted device successfully".into(), "".into());
-                        self.clone().discover(path.clone());
-                    }
-                    Err(err) => self.toast_queue.error("Reverting device failed".into(), err.to_string()),
-                };
+            .on_success(move |ui_device, _, _| {
+                self.clone().discover(path.clone());
+
                 ui_device
             })
             .run();
@@ -839,19 +735,15 @@ impl App {
                 Ok(value) => {
                     let Some(app) = self_.upgrade() else { break };
                     app.command()
-                        .on_device(path.clone(), async |device: &Device| device.capabilities())
-                        .display(move |ui_device, host_capabilities| {
-                            if let Ok(host_capabilities) = host_capabilities {
-                                let combined = CombinedProperties {
-                                    host: host_capabilities,
-                                    device: Some(value.remote_properties),
-                                    connection: Some(value.connection_properties),
-                                };
-                                let status = ui_device.stack_status.clone().with_protocol(combined.into_ui());
-                                ui_device.with_stack_status(status)
-                            } else {
-                                ui_device
-                            }
+                        .on_device(path.clone(), async |device: &Device| device.capabilities().map_err(Into::into))
+                        .on_success(move |ui_device, host_capabilities| {
+                            let combined = CombinedProperties {
+                                host: host_capabilities,
+                                device: Some(value.remote_properties),
+                                connection: Some(value.connection_properties),
+                            };
+                            let status = ui_device.stack_status.clone().with_protocol(combined.into_ui());
+                            ui_device.with_stack_status(status)
                         })
                         .run();
                 }

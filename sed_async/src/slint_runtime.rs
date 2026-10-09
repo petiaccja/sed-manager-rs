@@ -128,7 +128,6 @@ impl Runtime for SlintRuntime {
 pub enum SlintJoinHandle<T> {
     Spawn(
         #[pin]
-        #[expect(clippy::type_complexity, reason = "this is hard to read, but not a design defect. fix it")]
         SyncWrapper<oneshot::AsyncReceiver<Result<slint::JoinHandle<Result<T, Box<dyn Any + Send>>>, EventLoopError>>>,
     ),
     Join(#[pin] slint::JoinHandle<Result<T, Box<dyn Any + Send>>>),
