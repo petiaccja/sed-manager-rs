@@ -253,7 +253,7 @@ where
                         update_fn.map(|f| f(device_list.deref_mut(), output));
                     }
                     Err(CommandError::Failed(err)) => {
-                        tracing::error!(error = %err, "command failed");
+                        tracing::error!(error = %err);
                         error_msg.map(|m| toast_queue.error(m, err.to_string()));
                         error_fn.map(|f| f(device_list.deref_mut(), err));
                     }
@@ -644,7 +644,7 @@ fn process_result_with_spec<Output>(
             if let Some(f) = update_fn { f(value, spec, output) } else { value }
         }
         Err(CommandError::Failed(err)) => {
-            tracing::error!(error = %err, "command failed");
+            tracing::error!(error = %err);
             error_msg.map(|m| toast_queue.error(m, err.to_string()));
             if let Some(f) = error_fn { f(value, spec, err) } else { value }
         }
