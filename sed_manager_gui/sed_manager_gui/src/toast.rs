@@ -9,7 +9,7 @@ use std::{
 };
 
 use sed_manager_gui_slint as ui;
-use slint::{ComponentHandle, Model, ModelExt, ModelRc, VecModel};
+use slint::{ComponentHandle, Model, ModelExt, ModelRc, ToSharedString, VecModel};
 
 pub struct ToastQueue {
     model: Rc<VecModel<ui::ToastQueueItem>>,
@@ -43,20 +43,36 @@ impl ToastQueue {
         self.model.push(ui::ToastQueueItem { id, toast });
     }
 
-    pub fn error(&self, title: String, message: String) {
-        self.push(ui::Toast { title: title.into(), message: message.into(), level: ui::ToastLevel::Error });
+    pub fn error(&self, title: impl core::fmt::Display, message: impl core::fmt::Display) {
+        self.push(ui::Toast {
+            title: title.to_shared_string(),
+            message: message.to_shared_string(),
+            level: ui::ToastLevel::Error,
+        });
     }
 
-    pub fn warning(&self, title: String, message: String) {
-        self.push(ui::Toast { title: title.into(), message: message.into(), level: ui::ToastLevel::Warning });
+    pub fn warning(&self, title: impl core::fmt::Display, message: impl core::fmt::Display) {
+        self.push(ui::Toast {
+            title: title.to_shared_string(),
+            message: message.to_shared_string(),
+            level: ui::ToastLevel::Warning,
+        });
     }
 
-    pub fn info(&self, title: String, message: String) {
-        self.push(ui::Toast { title: title.into(), message: message.into(), level: ui::ToastLevel::Info });
+    pub fn info(&self, title: impl core::fmt::Display, message: impl core::fmt::Display) {
+        self.push(ui::Toast {
+            title: title.to_shared_string(),
+            message: message.to_shared_string(),
+            level: ui::ToastLevel::Info,
+        });
     }
 
-    pub fn success(&self, title: String, message: String) {
-        self.push(ui::Toast { title: title.into(), message: message.into(), level: ui::ToastLevel::Success });
+    pub fn success(&self, title: impl core::fmt::Display, message: impl core::fmt::Display) {
+        self.push(ui::Toast {
+            title: title.to_shared_string(),
+            message: message.to_shared_string(),
+            level: ui::ToastLevel::Success,
+        });
     }
 
     pub fn dismiss(&self, id: i32) {

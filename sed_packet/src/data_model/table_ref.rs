@@ -21,6 +21,10 @@ impl TableRef {
         Self::try_new(value).expect("expected a table reference or a null UID")
     }
 
+    pub const fn null() -> Self {
+        Self::try_new(0).expect("expected a table reference or a null UID")
+    }
+
     pub const fn containing_table(uid: Uid) -> Option<Self> {
         match uid.containing_table() {
             Some(table_uid) => Some(Self(table_uid)),

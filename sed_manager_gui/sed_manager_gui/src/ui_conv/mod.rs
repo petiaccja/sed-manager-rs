@@ -6,6 +6,7 @@
 mod authority;
 mod device;
 mod discovery;
+mod error;
 mod geometry;
 mod locking_range;
 mod mbr;
@@ -15,6 +16,7 @@ mod uid;
 
 use std::convert::Infallible;
 
+pub use error::ConversionError;
 pub use mbr::MbrDesc;
 pub use properties::CombinedProperties;
 use sed_packet::discovery::FeatureDescriptor;
@@ -95,6 +97,7 @@ impl<Backend: FromUi<Ui>, Ui> TryFromUi<Ui> for Backend {
 // Into counterparts.
 //--------------------------------------
 
+#[expect(unused)]
 pub trait IntoBackend<Backend> {
     fn into_backend(self) -> Backend;
 }

@@ -5,6 +5,7 @@
 
 use std::{
     collections::HashSet,
+    fmt::format,
     path::{Path, PathBuf},
     rc::{Rc, Weak},
     sync::Arc,
@@ -17,7 +18,7 @@ use sed_manager_gui_slint as ui;
 use sed_packet::{MaxBytes, com_id_request::ComIdState};
 use sed_spec::{
     methods::MethodStatus,
-    objects::{Authority, AuthorityRef, SecurityProviderRef},
+    objects::{Authority, AuthorityRef, LockingRange, SecurityProviderRef},
     preconfig::{core::shared::authority::ANYBODY, opal_2::locking},
 };
 use sed_tper::{Error as TperError, PropertiesChanged};
@@ -34,7 +35,7 @@ use crate::{
     diff_model::DiffModel,
     session::Session,
     toast::ToastQueue,
-    ui_conv::{CombinedProperties, IntoUi, IntoUiName, MbrDesc, TryFromUi as _},
+    ui_conv::{CombinedProperties, ConversionError, IntoUi, IntoUiName, MbrDesc, TryFromUi as _},
     ui_ext::{DeviceExt as _, DiscoveryExt, StackStatusExt},
 };
 
@@ -237,7 +238,7 @@ impl App {
                 for path in non_unicode {
                     let path = path.to_string_lossy();
                     self.toast_queue.warning(
-                        "Device ignored".into(),
+                        "Device ignored",
                         format!("Device paths must be valid unicode strings. The device {path} will be ignored"),
                     );
                 }
@@ -441,10 +442,8 @@ impl App {
         };
         let Ok(authority) = AuthorityRef::try_from_ui(&authority) else {
             error!(authority_ref = &authority.value, "invalid authority reference");
-            self.toast_queue.error(
-                "Invalid authority reference".into(),
-                "The UID is not an authority reference. Please report this bug.".into(),
-            );
+            self.toast_queue
+                .error("Invalid authority reference", "The UID is not an authority reference. Please report this bug.");
             return;
         };
 
@@ -561,8 +560,20 @@ impl App {
         slint::spawn_local(async move {
             let device_list = self.device_list.read().await;
             if let Some(ui_device) = device_list.ui.get(&path) {
-                let locking_ranges = ui_device.locking_sp.locking_ranges.clone();
+                // Read the locking ranges from the UI and convert it to backend format.
+                let (committed, desired) = match convert_locking_ranges(ui_device.locking_sp.locking_ranges.clone()) {
+                    Ok(diff_locking_ranges) => diff_locking_ranges,
+                    Err(err) => {
+                        error!(error = %err, locking_ranges = ?ui_device.locking_sp.locking_ranges);
+                        self.toast_queue.error(
+                            "Could not write locking ranges",
+                            format!("{err}. This is a bug, please report it."),
+                        );
+                        return;
+                    }
+                };
 
+                // Initiate the actual command.
                 self.command()
                     .success_message("Locking ranges written to device")
                     .error_message("Could not write locking ranges")
@@ -570,6 +581,9 @@ impl App {
                         let Session::LockingConfig(locking_session) = session else {
                             return Err(CommandError::Skipped);
                         };
+                        // TODO: do actual processing.
+                        std::hint::black_box(committed);
+                        std::hint::black_box(desired);
                         Ok(())
                     })
                     .on_success(move |ui_device, _spec, _output| ui_device)
@@ -664,15 +678,13 @@ impl App {
         let Ok(sp) = SecurityProviderRef::try_from_ui(&sp) else {
             error!(sp_ref = &sp.value, "invalid SP reference");
             self.toast_queue
-                .error("Invalid SP reference".into(), "The UID is not an SP reference. Please report this bug.".into());
+                .error("Invalid SP reference", "The UID is not an SP reference. Please report this bug.");
             return;
         };
         let Ok(authority) = AuthorityRef::try_from_ui(&authority) else {
             error!(authority_ref = &authority.value, "invalid authority reference");
-            self.toast_queue.error(
-                "Invalid authority reference".into(),
-                "The UID is not an authority reference. Please report this bug.".into(),
-            );
+            self.toast_queue
+                .error("Invalid authority reference", "The UID is not an authority reference. Please report this bug.");
             return;
         };
 
@@ -749,10 +761,8 @@ impl App {
         if byte_password.len() == password.len() {
             Some(byte_password)
         } else {
-            self.toast_queue.error(
-                "Password too long".into(),
-                "The password cannot be longer than 32 bytes (32 Latin characters)".into(),
-            );
+            self.toast_queue
+                .error("Password too long", "The password cannot be longer than 32 bytes (32 Latin characters)");
             None
         }
     }
@@ -822,4 +832,19 @@ fn retain_unicode(paths: &mut HashSet<PathBuf>) -> Vec<PathBuf> {
     }
 
     paths.extract_if(|path| !is_unicode(path)).collect()
+}
+
+fn convert_locking_ranges(
+    locking_range: ModelRc<ui::LockingRange>,
+) -> Result<(Option<Vec<LockingRange>>, Vec<LockingRange>), ConversionError> {
+    let committed = locking_range
+        .as_any()
+        .downcast_ref::<DiffModel<ui::LockingRange>>()
+        .map(|diff_model| diff_model.committed());
+    let committed = committed
+        .map(|committed| committed.iter().map(|range| LockingRange::try_from_ui(&range)).collect::<Result<Vec<_>, _>>())
+        .transpose();
+    let desired = locking_range.iter().map(|range| LockingRange::try_from_ui(&range)).collect::<Result<Vec<_>, _>>();
+
+    Ok((committed?, desired?))
 }

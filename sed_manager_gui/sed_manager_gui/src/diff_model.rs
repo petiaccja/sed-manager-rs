@@ -4,7 +4,7 @@
 //L-----------------------------------------------------------------------------
 
 use std::{
-    cell::RefCell,
+    cell::{Ref, RefCell},
     sync::atomic::{AtomicBool, Ordering},
 };
 
@@ -64,6 +64,10 @@ impl<T> DiffModel<T> {
     {
         *self.committed.borrow_mut() = self.current.borrow().clone();
         self.is_dirty.store(false, Ordering::Relaxed);
+    }
+
+    pub fn committed(&self) -> Ref<'_, Vec<T>> {
+        self.committed.borrow()
     }
 }
 

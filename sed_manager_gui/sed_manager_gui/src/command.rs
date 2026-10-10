@@ -249,7 +249,7 @@ where
 
                 match result {
                     Ok(output) => {
-                        success_msg.map(|m| toast_queue.success(m, "".into()));
+                        success_msg.map(|m| toast_queue.success(m, ""));
                         success_fn.map(|f| f(device_list.deref_mut(), output));
                     }
                     Err(CommandError::Failed(err)) => {
@@ -369,7 +369,7 @@ fn process_result<Output>(
 ) -> ui::Device {
     let value = match result {
         Ok(output) => {
-            success_msg.map(|m| toast_queue.success(m, "".into()));
+            success_msg.map(|m| toast_queue.success(m, ""));
             if let Some(f) = success_fn { f(value, output) } else { value }
         }
         Err(CommandError::Failed(err)) => {
@@ -642,7 +642,7 @@ fn process_result_with_spec<Output>(
 ) -> ui::Device {
     let value = match result {
         Ok(output) => {
-            success_msg.map(|m| toast_queue.success(m, "".into()));
+            success_msg.map(|m| toast_queue.success(m, ""));
             if let Some(f) = success_fn { f(value, spec, output) } else { value }
         }
         Err(CommandError::Failed(err)) => {

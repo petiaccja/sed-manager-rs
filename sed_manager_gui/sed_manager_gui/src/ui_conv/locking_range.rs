@@ -10,7 +10,7 @@ use sed_packet::discovery::FeatureDescriptor;
 use sed_spec::objects::{LockingRange, LockingRangeRef, SecurityProviderRef};
 use slint::{SharedString, ToSharedString};
 
-use crate::ui_conv::{FromBackend, FromBackendName};
+use crate::ui_conv::{ConversionError, FromBackend, FromBackendName, TryFromUi, TryIntoBackend};
 
 const INVALID_LOCKING_RANGE: LockingRangeRef = LockingRangeRef::from_half(NonZero::new(0xFFFF_FFFF).unwrap());
 
@@ -37,5 +37,52 @@ impl FromBackendName<&LockingRange> for ui::LockingRange {
             // by the user to request an erase on commit.
             erase: false,
         }
+    }
+}
+
+impl TryFromUi<&ui::LockingRange> for LockingRange {
+    type Error = ConversionError;
+
+    fn try_from_ui(value: &ui::LockingRange) -> Result<Self, Self::Error> {
+        Ok(Self {
+            uid: Some((&value.uid).try_into_backend()?),
+            name: None, // The name of the UI object is based on the UID, not on this field.
+            common_name: Some(value.common_name.to_string()),
+            range_start: Some(value.start.value as u64),
+            range_length: Some((value.end.value - value.start.value) as u64),
+            read_lock_enabled: Some(value.read_lock_enabled),
+            write_lock_enabled: Some(value.write_lock_enabled),
+            read_locked: Some(value.read_locked),
+            write_locked: Some(value.write_locked),
+            ..Default::default()
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use sed_spec::preconfig::opal_2;
+
+    use super::*;
+
+    // A sanity check for accidentally mixing up all the booleans and the length
+    // conversion logic.
+    #[test]
+    fn roundtrip() {
+        let locking_range = LockingRange {
+            uid: Some(opal_2::locking::locking::GLOBAL_RANGE),
+            common_name: Some("Global range".into()),
+            range_start: Some(1234),
+            range_length: Some(5678),
+            read_lock_enabled: Some(true),
+            write_lock_enabled: Some(false),
+            read_locked: Some(false),
+            write_locked: Some(true),
+            ..Default::default()
+        };
+
+        let ui_locking_range = ui::LockingRange::from_backend(&locking_range);
+        let roundtrip = LockingRange::try_from_ui(&ui_locking_range).unwrap();
+        assert_eq!(locking_range, roundtrip);
     }
 }

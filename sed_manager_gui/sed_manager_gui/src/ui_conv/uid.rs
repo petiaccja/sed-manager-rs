@@ -4,11 +4,11 @@
 //L-----------------------------------------------------------------------------
 
 use sed_manager_gui_slint as ui;
-use sed_packet::{ObjectRef, Uid, discovery::FeatureDescriptor};
+use sed_packet::{ObjectRef, TableRef, Uid, discovery::FeatureDescriptor};
 use sed_spec::{objects::SecurityProviderRef, path::Path, preconfig::GLOBAL_LOOKUP};
 use slint::SharedString;
 
-use crate::ui_conv::{FromBackend, FromBackendName, FromUi, TryFromUi};
+use crate::ui_conv::{ConversionError, FromBackend, FromBackendName, FromUi, TryFromUi};
 
 impl FromBackend<&Uid> for ui::Uid {
     fn from_backend(value: &Uid) -> Self {
@@ -49,9 +49,12 @@ impl<const TABLE: u64> FromBackendName<&ObjectRef<TABLE>> for SharedString {
 }
 
 impl<'a, const TABLE: u64> TryFromUi<&'a ui::Uid> for ObjectRef<TABLE> {
-    type Error = &'a ui::Uid;
+    type Error = ConversionError;
 
     fn try_from_ui(value: &'a ui::Uid) -> Result<Self, Self::Error> {
-        Self::try_new(value.value.cast_unsigned()).ok_or(value)
+        let uid = Uid::from_ui(value);
+        let expected = TableRef::try_new(TABLE).expect("should always be a table reference");
+        let actual = uid.containing_table().and_then(|uid| TableRef::try_from(uid).ok()).unwrap_or(TableRef::null());
+        Self::try_from(uid).map_err(|_| ConversionError::IncorrectUidTable { expected, actual })
     }
 }
