@@ -6,7 +6,7 @@
 use sed_manager_gui_slint as ui;
 use sed_spec::objects::MbrControl;
 
-use crate::ui_conv::IntoUi;
+use crate::ui_conv::FromBackend;
 
 /// A helper structure with all MBR-related parameters relevant to the UI. The
 /// parameters come from different sources (L0 discovery, Table table,
@@ -18,14 +18,12 @@ pub struct MbrDesc {
     pub control: Option<MbrControl>,
 }
 
-impl IntoUi for MbrDesc {
-    type Ui = ui::Mbr;
-
-    fn into_ui(&self) -> Self::Ui {
-        let control = self.control.as_ref();
+impl FromBackend<&MbrDesc> for ui::Mbr {
+    fn from_backend(value: &MbrDesc) -> Self {
+        let control = value.control.as_ref();
         ui::Mbr {
-            supported: self.supported,
-            size: ui::Sector { value: self.size.unwrap_or(0) as i64 },
+            supported: value.supported,
+            size: ui::Sector { value: value.size.unwrap_or(0) as i64 },
             enabled: control.and_then(|control| control.enable).unwrap_or(false),
             done: control.and_then(|control| control.done).unwrap_or(false),
             ..Default::default()

@@ -13,44 +13,106 @@ mod primitives;
 mod properties;
 mod uid;
 
+use std::convert::Infallible;
+
 pub use mbr::MbrDesc;
 pub use properties::CombinedProperties;
 use sed_packet::discovery::FeatureDescriptor;
 use sed_spec::objects::SecurityProviderRef;
 
-pub trait IntoUi {
-    type Ui;
+//------------------------------------------------------------------------------
+// Backend -> UI
+//------------------------------------------------------------------------------
 
-    #[expect(clippy::wrong_self_convention, reason = "fix later")]
-    fn into_ui(&self) -> Self::Ui;
+pub trait FromBackend<Backend>: Sized {
+    fn from_backend(value: Backend) -> Self;
 }
 
-impl<T: IntoUi> IntoUi for &T {
-    type Ui = <T as IntoUi>::Ui;
-
-    fn into_ui(&self) -> Self::Ui {
-        (*self).into_ui()
+impl<Ui: FromBackendName<Backend>, Backend> FromBackend<Backend> for Ui {
+    fn from_backend(value: Backend) -> Self {
+        Self::from_backend_name(value, &[], None)
     }
 }
 
-pub trait IntoUiName {
-    type Ui;
+//--------------------------------------
+// Into counterparts.
+//--------------------------------------
 
-    #[expect(clippy::wrong_self_convention, reason = "fix later")]
-    fn into_ui_name(&self, features: &[FeatureDescriptor], sp: Option<SecurityProviderRef>) -> Self::Ui;
+pub trait IntoUi<Ui> {
+    fn into_ui(self) -> Ui;
 }
 
-impl<T: IntoUiName> IntoUiName for &T {
-    type Ui = <T as IntoUiName>::Ui;
-
-    fn into_ui_name(&self, features: &[FeatureDescriptor], sp: Option<SecurityProviderRef>) -> Self::Ui {
-        (*self).into_ui_name(features, sp)
+impl<Ui: FromBackend<Backend>, Backend> IntoUi<Ui> for Backend {
+    fn into_ui(self) -> Ui {
+        Ui::from_backend(self)
     }
 }
 
-pub trait TryFromUi<T> {
+//------------------------------------------------------------------------------
+// Backend -> UI (with UID -> Name)
+//------------------------------------------------------------------------------
+
+pub trait FromBackendName<Backend>: Sized {
+    fn from_backend_name(value: Backend, features: &[FeatureDescriptor], sp: Option<SecurityProviderRef>) -> Self;
+}
+
+//--------------------------------------
+// Into counterparts.
+//--------------------------------------
+
+pub trait IntoUiName<Ui> {
+    fn into_ui_name(self, features: &[FeatureDescriptor], sp: Option<SecurityProviderRef>) -> Ui;
+}
+
+impl<Ui: FromBackendName<Backend>, Backend> IntoUiName<Ui> for Backend {
+    fn into_ui_name(self, features: &[FeatureDescriptor], sp: Option<SecurityProviderRef>) -> Ui {
+        Ui::from_backend_name(self, features, sp)
+    }
+}
+
+//------------------------------------------------------------------------------
+// UI -> Backend
+//------------------------------------------------------------------------------
+
+pub trait TryFromUi<Ui>: Sized {
     type Error;
-    fn try_from_ui(value: T) -> Result<Self, Self::Error>
-    where
-        Self: Sized;
+    fn try_from_ui(value: Ui) -> Result<Self, Self::Error>;
+}
+
+pub trait FromUi<Ui>: Sized {
+    fn from_ui(value: Ui) -> Self;
+}
+
+impl<Backend: FromUi<Ui>, Ui> TryFromUi<Ui> for Backend {
+    type Error = Infallible;
+
+    fn try_from_ui(value: Ui) -> Result<Self, Self::Error> {
+        Ok(Self::from_ui(value))
+    }
+}
+
+//--------------------------------------
+// Into counterparts.
+//--------------------------------------
+
+pub trait IntoBackend<Backend> {
+    fn into_backend(self) -> Backend;
+}
+
+impl<Backend: FromUi<Ui>, Ui> IntoBackend<Backend> for Ui {
+    fn into_backend(self) -> Backend {
+        Backend::from_ui(self)
+    }
+}
+
+pub trait TryIntoBackend<Backend> {
+    type Error;
+    fn try_into_backend(self) -> Result<Backend, Self::Error>;
+}
+
+impl<Backend: TryFromUi<Ui>, Ui> TryIntoBackend<Backend> for Ui {
+    type Error = <Backend as TryFromUi<Ui>>::Error;
+    fn try_into_backend(self) -> Result<Backend, Self::Error> {
+        Backend::try_from_ui(self)
+    }
 }

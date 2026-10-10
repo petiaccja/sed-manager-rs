@@ -129,6 +129,10 @@ impl App {
         }
         {
             let view_model = view_model.clone();
+            ui.on_commit_ranges(move |path| view_model.clone().commit_locking_ranges(path.to_string().into()));
+        }
+        {
+            let view_model = view_model.clone();
             ui.on_logout(move |path| view_model.clone().logout(path.to_string().into()));
         }
         {
@@ -283,7 +287,7 @@ impl App {
                 }
                 if let (Some(capabilities), Some(properties_changed)) = (capabilities, properties_changed) {
                     let combined_properties = CombinedProperties { host: capabilities, device: None, connection: None };
-                    let status = ui_device.stack_status.clone().with_protocol(combined_properties.into_ui());
+                    let status = ui_device.stack_status.clone().with_protocol((&combined_properties).into_ui());
                     spawn_local(Self::listen_connection_changed(
                         Rc::downgrade(&self),
                         path.clone(),
@@ -293,9 +297,9 @@ impl App {
                     self.clone().query_stack_status(path.clone(), true);
                     self.clone().list_security_providers(path.clone());
                     ui_device.stack_status = status;
-                    ui_device.geometry = geometry.into_ui();
+                    ui_device.geometry = (&geometry).into_ui();
                 }
-                ui_device.identity = storage_device.into_ui();
+                ui_device.identity = (&*storage_device).into_ui();
                 ui_device
             })
             .on_error(move |mut ui_device, err| {
@@ -314,7 +318,7 @@ impl App {
                 Ok(discovery)
             })
             .on_success(move |ui_device, discovery| {
-                let (ui_config, ui_discovery) = discovery.into_ui();
+                let (ui_config, ui_discovery) = (&discovery).into_ui();
                 ui_device.with_discovery(ui_discovery).with_config(ui_config)
             })
             .on_error(move |ui_device, err| ui_device.with_discovery(ui::Discovery::error(err.to_string())))
@@ -368,11 +372,11 @@ impl App {
             })
             .on_success(move |mut ui_device, spec| {
                 let features = &spec.discovery.feature_descriptors;
-                ui_device.admin_sp.uid = spec.admin.uid.into_ui();
-                ui_device.admin_sp.name = spec.admin.uid.into_ui_name(features, Some(spec.admin.uid));
+                ui_device.admin_sp.uid = (&spec.admin.uid).into_ui();
+                ui_device.admin_sp.name = (&spec.admin.uid).into_ui_name(features, Some(spec.admin.uid));
                 if let Some(locking_sp) = spec.locking {
-                    ui_device.locking_sp.uid = locking_sp.uid.into_ui();
-                    ui_device.locking_sp.name = locking_sp.uid.into_ui_name(features, Some(spec.admin.uid))
+                    ui_device.locking_sp.uid = (&locking_sp.uid).into_ui();
+                    ui_device.locking_sp.name = (&locking_sp.uid).into_ui_name(features, Some(spec.admin.uid))
                 }
                 ui_device
             })
@@ -471,7 +475,7 @@ impl App {
                 locking_config_session.get_alignment().await.map_err(Into::into)
             })
             .on_success(move |mut ui_device, _, alignment| {
-                ui_device.alignment = alignment.into_ui();
+                ui_device.alignment = (&alignment).into_ui();
                 ui_device
             })
             .run();
@@ -515,7 +519,8 @@ impl App {
             .on_success(move |mut ui_device, spec, ranges| {
                 let features = spec.map(|spec| spec.discovery.feature_descriptors.as_slice()).unwrap_or(&[]);
                 let sp_ref = spec.and_then(|spec| spec.locking.as_ref()).map(|sp| sp.uid);
-                let ranges: Vec<_> = ranges.iter().map(|range| range.into_ui_name(features, sp_ref)).collect();
+                let ranges: Vec<ui::LockingRange> =
+                    ranges.iter().map(|range| range.into_ui_name(features, sp_ref)).collect();
                 ui_device.locking_sp.locking_ranges = Rc::from(DiffModel::from(ranges)).into();
                 ui_device
             })
@@ -545,10 +550,33 @@ impl App {
                 Ok(MbrDesc { supported: true, size: Some(size / geometry.logical_sector_size), control: Some(control) })
             })
             .on_success(move |mut ui_device, _spec, mbr| {
-                ui_device.locking_sp.mbr = mbr.into_ui();
+                ui_device.locking_sp.mbr = (&mbr).into_ui();
                 ui_device
             })
             .run();
+    }
+
+    #[instrument(skip(self))]
+    fn commit_locking_ranges(self: Rc<Self>, path: PathBuf) {
+        slint::spawn_local(async move {
+            let device_list = self.device_list.read().await;
+            if let Some(ui_device) = device_list.ui.get(&path) {
+                let locking_ranges = ui_device.locking_sp.locking_ranges.clone();
+
+                self.command()
+                    .success_message("Locking ranges written to device")
+                    .error_message("Could not write locking ranges")
+                    .on_session(path, async move |_device: &Device, session: &mut Session| {
+                        let Session::LockingConfig(locking_session) = session else {
+                            return Err(CommandError::Skipped);
+                        };
+                        Ok(())
+                    })
+                    .on_success(move |ui_device, _spec, _output| ui_device)
+                    .run();
+            }
+        })
+        .expect_in_event_loop();
     }
 
     #[instrument(skip(self))]
@@ -746,7 +774,7 @@ impl App {
                                 device: Some(value.remote_properties),
                                 connection: Some(value.connection_properties),
                             };
-                            let status = ui_device.stack_status.clone().with_protocol(combined.into_ui());
+                            let status = ui_device.stack_status.clone().with_protocol((&combined).into_ui());
                             ui_device.with_stack_status(status)
                         })
                         .run();
@@ -769,7 +797,7 @@ fn display_authorities(
 ) {
     // Convert the authority structures to their UI counterparts.
     let features = spec.map(|spec| spec.discovery.feature_descriptors.as_slice()).unwrap_or(&[]);
-    let authorities: Vec<_> = authorities.iter().map(|auth| auth.into_ui_name(features, sp_ref)).collect();
+    let authorities: Vec<ui::Authority> = authorities.iter().map(|auth| auth.into_ui_name(features, sp_ref)).collect();
     let authorities = Rc::from(VecModel::from(authorities));
 
     // Map and filter user names and UIDs for the password change

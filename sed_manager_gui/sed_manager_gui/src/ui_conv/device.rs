@@ -5,22 +5,20 @@
 
 use sed_device::StorageDevice;
 
-use crate::ui_conv::IntoUi;
+use crate::ui_conv::FromBackend;
 use sed_manager_gui_slint as ui;
 
-impl IntoUi for dyn StorageDevice {
-    type Ui = ui::Identity;
-
-    fn into_ui(&self) -> Self::Ui {
+impl FromBackend<&dyn StorageDevice> for ui::Identity {
+    fn from_backend(value: &dyn StorageDevice) -> Self {
         ui::Identity {
             status: ui::Status::default(),
-            name: self.model_number().into(),
-            serial: self.serial_number().into(),
-            path: self.path().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default().into(),
-            firmware: self.firmware_revision().into(),
-            interface: self.interface().to_string().into(),
-            security_commands: self.is_security_supported(),
-            is_removable: self.is_removable(),
+            name: value.model_number().into(),
+            serial: value.serial_number().into(),
+            path: value.path().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default().into(),
+            firmware: value.firmware_revision().into(),
+            interface: value.interface().to_string().into(),
+            security_commands: value.is_security_supported(),
+            is_removable: value.is_removable(),
         }
     }
 }
