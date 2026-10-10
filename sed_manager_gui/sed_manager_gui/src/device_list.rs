@@ -11,12 +11,14 @@ use sed_manager::Device;
 use sed_manager_gui_slint as ui;
 
 use crate::associative_model::AssociativeModel;
+use crate::busy::BusyCounters;
 use crate::session::Session;
 
 #[derive(Debug, Default)]
 pub struct DeviceList {
     pub ui: AssociativeModel<PathBuf, ui::Device>,
     pub backend: HashMap<PathBuf, Arc<RwLock<DeviceEntry>>>,
+    pub busy: BusyCounters,
 }
 
 #[derive(Debug, Default)]

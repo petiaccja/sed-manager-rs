@@ -16,10 +16,10 @@ use sed_manager_gui_slint as ui;
 use slint::EventLoopError;
 use tracing::Instrument;
 
+use crate::busy::{BusyGuard, Resource};
 use crate::device_list::{DeviceEntry, DeviceList};
 use crate::session::Session;
 use crate::toast::ToastQueue;
-use crate::ui_ext::{CommandStatusExt, DeviceExt};
 
 #[derive(Debug, thiserror::Error)]
 pub enum CommandError {
@@ -71,7 +71,7 @@ impl Command {
             device_list,
             toast_queue,
             run_fn,
-            update_fn: None,
+            success_fn: None,
             error_fn: None,
             finally_fn: None,
             success_msg,
@@ -94,7 +94,7 @@ impl Command {
             toast_queue,
             device_id: device,
             run_fn,
-            update_fn: None,
+            success_fn: None,
             error_fn: None,
             finally_fn: None,
         }
@@ -115,7 +115,7 @@ impl Command {
             toast_queue,
             device_id,
             run_fn,
-            update_fn: None,
+            success_fn: None,
             error_fn: None,
             finally_fn: None,
         }
@@ -136,7 +136,7 @@ impl Command {
             toast_queue,
             device_id,
             run_fn,
-            update_fn: None,
+            success_fn: None,
             error_fn: None,
             finally_fn: None,
         }
@@ -205,7 +205,7 @@ pub struct CommandOnDeviceList<RunFn, Output> {
     device_list: Rc<RwLock<DeviceList>>,
     toast_queue: Rc<ToastQueue>,
     run_fn: RunFn,
-    update_fn: Option<Box<dyn FnOnce(&mut DeviceList, Output)>>,
+    success_fn: Option<Box<dyn FnOnce(&mut DeviceList, Output)>>,
     error_fn: Option<Box<dyn FnOnce(&mut DeviceList, Error)>>,
     finally_fn: Option<Box<dyn FnOnce(&mut DeviceList)>>,
     success_msg: Option<String>,
@@ -217,11 +217,11 @@ where
     RunFn: for<'a> AsyncFnOnce(&'a mut DeviceList) -> Result<Output, CommandError> + 'static,
     Output: 'static,
 {
-    pub fn on_success<UpdateFn>(self, update_fn: UpdateFn) -> Self
+    pub fn on_success<SuccessFn>(self, success_fn: SuccessFn) -> Self
     where
-        UpdateFn: for<'a> FnOnce(&'a mut DeviceList, Output) + 'static,
+        SuccessFn: for<'a> FnOnce(&'a mut DeviceList, Output) + 'static,
     {
-        Self { update_fn: Some(Box::new(update_fn)), ..self }
+        Self { success_fn: Some(Box::new(success_fn)), ..self }
     }
 
     #[expect(unused)]
@@ -241,7 +241,7 @@ where
 
     #[expect(clippy::option_map_unit_fn)]
     pub fn run(self) {
-        let Self { success_msg, error_msg, device_list, toast_queue, run_fn, update_fn, error_fn, finally_fn } = self;
+        let Self { success_msg, error_msg, device_list, toast_queue, run_fn, success_fn, error_fn, finally_fn } = self;
         slint::spawn_local(
             async move {
                 let mut device_list = device_list.write().await;
@@ -250,7 +250,7 @@ where
                 match result {
                     Ok(output) => {
                         success_msg.map(|m| toast_queue.success(m, "".into()));
-                        update_fn.map(|f| f(device_list.deref_mut(), output));
+                        success_fn.map(|f| f(device_list.deref_mut(), output));
                     }
                     Err(CommandError::Failed(err)) => {
                         tracing::error!(error = %err);
@@ -276,7 +276,7 @@ pub struct CommandOnDeviceEntry<RunFn, Output> {
     toast_queue: Rc<ToastQueue>,
     device_id: PathBuf,
     run_fn: RunFn,
-    update_fn: Option<Box<dyn FnOnce(ui::Device, Output) -> ui::Device>>,
+    success_fn: Option<Box<dyn FnOnce(ui::Device, Output) -> ui::Device>>,
     error_fn: Option<Box<dyn FnOnce(ui::Device, Error) -> ui::Device>>,
     finally_fn: Option<Box<dyn FnOnce(ui::Device) -> ui::Device>>,
     success_msg: Option<String>,
@@ -289,11 +289,11 @@ where
     for<'x> <RunFn as OnDeviceEntryRunFn<'x>>::Future: Send,
     Output: Send + 'static,
 {
-    pub fn on_success<UpdateFn>(self, update_fn: UpdateFn) -> Self
+    pub fn on_success<SuccessFn>(self, success_fn: SuccessFn) -> Self
     where
-        UpdateFn: FnOnce(ui::Device, Output) -> ui::Device + 'static,
+        SuccessFn: FnOnce(ui::Device, Output) -> ui::Device + 'static,
     {
-        Self { update_fn: Some(Box::new(update_fn)), ..self }
+        Self { success_fn: Some(Box::new(success_fn)), ..self }
     }
 
     pub fn on_error<ErrorFn>(self, error_fn: ErrorFn) -> Self
@@ -320,7 +320,7 @@ where
             toast_queue,
             device_id,
             run_fn,
-            update_fn,
+            success_fn,
             error_fn,
             finally_fn,
         } = self;
@@ -339,7 +339,7 @@ where
                         process_result(
                             result,
                             toast_queue,
-                            update_fn,
+                            success_fn,
                             error_fn,
                             finally_fn,
                             value,
@@ -360,7 +360,7 @@ where
 fn process_result<Output>(
     result: Result<Output, CommandError>,
     toast_queue: Rc<ToastQueue>,
-    update_fn: Option<Box<dyn FnOnce(ui::Device, Output) -> ui::Device + 'static>>,
+    success_fn: Option<Box<dyn FnOnce(ui::Device, Output) -> ui::Device + 'static>>,
     error_fn: Option<Box<dyn FnOnce(ui::Device, Error) -> ui::Device + 'static>>,
     finally_fn: Option<Box<dyn FnOnce(ui::Device) -> ui::Device + 'static>>,
     value: ui::Device,
@@ -370,7 +370,7 @@ fn process_result<Output>(
     let value = match result {
         Ok(output) => {
             success_msg.map(|m| toast_queue.success(m, "".into()));
-            if let Some(f) = update_fn { f(value, output) } else { value }
+            if let Some(f) = success_fn { f(value, output) } else { value }
         }
         Err(CommandError::Failed(err)) => {
             tracing::error!(error = %err);
@@ -395,7 +395,7 @@ pub struct CommandOnDevice<RunFn, Output> {
     toast_queue: Rc<ToastQueue>,
     device_id: PathBuf,
     run_fn: RunFn,
-    update_fn: Option<Box<dyn FnOnce(ui::Device, Output) -> ui::Device>>,
+    success_fn: Option<Box<dyn FnOnce(ui::Device, Output) -> ui::Device>>,
     error_fn: Option<Box<dyn FnOnce(ui::Device, Error) -> ui::Device>>,
     finally_fn: Option<Box<dyn FnOnce(ui::Device) -> ui::Device>>,
     success_msg: Option<String>,
@@ -408,11 +408,11 @@ where
     for<'x> <RunFn as OnDeviceRunFn<'x>>::Future: Send,
     Output: Send + 'static,
 {
-    pub fn on_success<UpdateFn>(self, update_fn: UpdateFn) -> Self
+    pub fn on_success<SuccessFn>(self, success_fn: SuccessFn) -> Self
     where
-        UpdateFn: FnOnce(ui::Device, Output) -> ui::Device + 'static,
+        SuccessFn: FnOnce(ui::Device, Output) -> ui::Device + 'static,
     {
-        Self { update_fn: Some(Box::new(update_fn)), ..self }
+        Self { success_fn: Some(Box::new(success_fn)), ..self }
     }
 
     pub fn on_error<ErrorFn>(self, error_fn: ErrorFn) -> Self
@@ -439,7 +439,7 @@ where
             toast_queue,
             device_id,
             run_fn,
-            update_fn,
+            success_fn,
             error_fn,
             finally_fn,
         } = self;
@@ -449,31 +449,35 @@ where
                 // Acquire resources.
                 let device_list = device_list.read().await;
                 let Some(device_entry) = device_list.backend.get(&device_id) else { return };
-                let device_entry = device_entry.read_arc().await;
 
-                // Indicate to UI that we're busy on the TPer.
-                device_list.ui.update(&device_id, |value| {
-                    let command_status = value.command_status.clone();
-                    value.with_command_status(command_status.with_tper_busy(true))
-                });
+                // Acquire the lock to the device entry and immediately after
+                // indicate to the UI that we're busy on the TPer.
+                let (device_entry, busy) =
+                    (device_entry.read_arc().await, BusyGuard::new(&device_list, &device_id, Resource::Tper));
 
-                // Execute command and update results.
+                // Apply changes to the device.
                 let run_task = runtime.spawn(
                     async move {
-                        let device = device_entry.device.as_ref()?;
-                        let output = run_fn.call_once(device).await;
-                        Some((output, device_entry))
+                        // The device entry guard is always returned so that the UI thread
+                        // releases it, after clearing the busy flag.
+                        let output = match device_entry.device.as_ref() {
+                            Some(device) => Some(run_fn.call_once(device).await),
+                            None => None,
+                        };
+                        (output, device_entry)
                     }
                     .in_current_span(),
                 );
 
-                if let Some((result, _backend)) = run_task.await.expect("commands should not be cancelled") {
-                    // Execute the update fn.
+                let (result, device_entry) = run_task.await.expect("commands should not be cancelled");
+
+                // Display results on the UI.
+                if let Some(result) = result {
                     device_list.ui.update(&device_id, move |value| {
                         process_result(
                             result,
                             toast_queue,
-                            update_fn,
+                            success_fn,
                             error_fn,
                             finally_fn,
                             value,
@@ -483,11 +487,10 @@ where
                     });
                 }
 
-                // Indicate to UI that we're NO LONGER busy.
-                device_list.ui.update(&device_id, |value| {
-                    let command_status = value.command_status.clone();
-                    value.with_command_status(command_status.with_tper_busy(false))
-                });
+                // Indicate to UI that we're NO LONGER busy, then immediately
+                // after release the device entry lock. The explicit drop is to
+                // ensure drop order.
+                drop((busy, device_entry));
             }
             .in_current_span(),
         )
@@ -505,7 +508,7 @@ pub struct CommandOnSession<RunFn, Output> {
     toast_queue: Rc<ToastQueue>,
     device_id: PathBuf,
     run_fn: RunFn,
-    update_fn: Option<Box<dyn FnOnce(ui::Device, Option<&Spec>, Output) -> ui::Device>>,
+    success_fn: Option<Box<dyn FnOnce(ui::Device, Option<&Spec>, Output) -> ui::Device>>,
     error_fn: Option<Box<dyn FnOnce(ui::Device, Option<&Spec>, Error) -> ui::Device>>,
     finally_fn: Option<Box<dyn FnOnce(ui::Device) -> ui::Device>>,
     success_msg: Option<String>,
@@ -518,11 +521,11 @@ where
     for<'x> <RunFn as OnSessionRunFn<'x>>::Future: Send,
     Output: Send + 'static,
 {
-    pub fn on_success<UpdateFn>(self, update_fn: UpdateFn) -> Self
+    pub fn on_success<SuccessFn>(self, success_fn: SuccessFn) -> Self
     where
-        UpdateFn: FnOnce(ui::Device, Option<&Spec>, Output) -> ui::Device + 'static,
+        SuccessFn: FnOnce(ui::Device, Option<&Spec>, Output) -> ui::Device + 'static,
     {
-        Self { update_fn: Some(Box::new(update_fn)), ..self }
+        Self { success_fn: Some(Box::new(success_fn)), ..self }
     }
 
     #[expect(unused)]
@@ -548,7 +551,7 @@ where
             toast_queue,
             device_id,
             run_fn,
-            update_fn,
+            success_fn,
             error_fn,
             finally_fn,
             success_msg,
@@ -557,46 +560,46 @@ where
 
         slint::spawn_local(
             async move {
+                // Acquire resources.
                 let device_list = device_list.read().await;
                 let Some(device_entry) = device_list.backend.get(&device_id).cloned() else {
                     return;
                 };
                 let device_entry = device_entry.read_arc().await;
 
-                let (busy_sender, busy_signal) = oneshot::async_channel();
+                // Acquire the lock to the session and immediately after
+                // indicate to the UI that we're busy on the session.
+                let (session, busy) = (
+                    device_entry.session.lock_arc().await,
+                    BusyGuard::new(&device_list, &device_id, Resource::Session),
+                );
+
+                // Apply changes to the device.
                 let run_task = runtime.spawn(
                     async move {
-                        // Acquire resources.
-                        let device = device_entry.device.as_ref()?;
-                        let mut session = device_entry.session.lock_arc().await;
-
-                        // Signal that now we're busy on the session.
-                        let _ = busy_sender.send(());
-
-                        // Execute the command and display results.
-                        let output = run_fn.call_once(device, session.deref_mut()).await;
-                        Some((output, device_entry))
+                        // The session guard is always returned so that the UI thread
+                        // releases it, after clearing the busy flag.
+                        let mut session = session;
+                        let output = match device_entry.device.as_ref() {
+                            Some(device) => Some(run_fn.call_once(device, session.deref_mut()).await),
+                            None => None,
+                        };
+                        (output, device_entry, session)
                     }
                     .in_current_span(),
                 );
 
-                if busy_signal.await.is_ok() {
-                    // Indicate to UI that we're busy on the session.
-                    device_list.ui.update(&device_id, |value| {
-                        let command_status = value.command_status.clone();
-                        value.with_command_status(command_status.with_session_busy(true))
-                    });
-                }
+                let (result, device_entry, session) = run_task.await.expect("commands should not be cancelled");
 
-                if let Some((result, device_entry)) = run_task.await.expect("commands should not be cancelled") {
+                // Display results on the UI.
+                if let Some(result) = result {
                     let spec = device_entry.device.as_ref().and_then(|device| device.spec().ok());
-                    // Execute the update fn.
                     device_list.ui.update(&device_id, move |value| {
                         process_result_with_spec(
                             result,
                             spec,
                             toast_queue,
-                            update_fn,
+                            success_fn,
                             error_fn,
                             finally_fn,
                             value,
@@ -604,20 +607,19 @@ where
                             error_msg,
                         )
                     });
-
-                    // Indicate to UI that we're NO LONGER busy.
-                    device_list.ui.update(&device_id, |value| {
-                        let command_status = value.command_status.clone();
-                        value.with_command_status(command_status.with_session_busy(false))
-                    });
-
-                    // Update active session.
-                    let session = device_entry.session.lock_arc().await;
-                    device_list.ui.update(&device_id, |mut value| {
-                        value.command_status.secondary_session_active = matches!(*session, Session::LockingConfig(_));
-                        value
-                    });
                 }
+
+                // Update active session.
+                let secondary_session_active = matches!(*session, Session::LockingConfig(_));
+                device_list.ui.update(&device_id, |mut value| {
+                    value.command_status.secondary_session_active = secondary_session_active;
+                    value
+                });
+
+                // Indicate to UI that we're NO LONGER busy, then immediately
+                // after release the session lock. The explicit drop is to
+                // ensure drop order.
+                drop((busy, session));
             }
             .in_current_span(),
         )
@@ -631,7 +633,7 @@ fn process_result_with_spec<Output>(
     result: Result<Output, CommandError>,
     spec: Option<&Spec>,
     toast_queue: Rc<ToastQueue>,
-    update_fn: Option<Box<dyn FnOnce(ui::Device, Option<&Spec>, Output) -> ui::Device + 'static>>,
+    success_fn: Option<Box<dyn FnOnce(ui::Device, Option<&Spec>, Output) -> ui::Device + 'static>>,
     error_fn: Option<Box<dyn FnOnce(ui::Device, Option<&Spec>, Error) -> ui::Device + 'static>>,
     finally_fn: Option<Box<dyn FnOnce(ui::Device) -> ui::Device + 'static>>,
     value: ui::Device,
@@ -641,7 +643,7 @@ fn process_result_with_spec<Output>(
     let value = match result {
         Ok(output) => {
             success_msg.map(|m| toast_queue.success(m, "".into()));
-            if let Some(f) = update_fn { f(value, spec, output) } else { value }
+            if let Some(f) = success_fn { f(value, spec, output) } else { value }
         }
         Err(CommandError::Failed(err)) => {
             tracing::error!(error = %err);

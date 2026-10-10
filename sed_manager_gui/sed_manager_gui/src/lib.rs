@@ -6,6 +6,7 @@
 mod algorithm;
 pub mod app;
 pub mod associative_model;
+mod busy;
 mod command;
 mod device_list;
 mod diff_model;

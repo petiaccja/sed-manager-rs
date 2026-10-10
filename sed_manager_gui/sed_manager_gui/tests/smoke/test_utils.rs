@@ -155,6 +155,29 @@ macro_rules! assert_absent {
     };
 }
 
+/// Assert that a UI element is enabled or becomes enabled within a short time.
+///
+/// This is helpful to make sure that actions that are disabled while the TPer
+/// or the session is busy get enabled. If you click them too early, while they
+/// are still disabled due to the previous command, the click will be ignored.
+macro_rules! assert_enabled {
+    ($ui:expr, $id:expr) => {
+        let result = $crate::test_utils::sleep_until_condition(
+            || {
+                ::i_slint_backend_testing::ElementHandle::find_by_accessible_id($ui, $id.as_ref())
+                    .next()
+                    .is_some_and(|element| element.accessible_enabled() == Some(true))
+            },
+            ::core::time::Duration::from_secs(5),
+        )
+        .await;
+        match result {
+            Ok(_) => (),
+            Err(_) => panic!("the ui element \"{}\" did not become enabled", $id),
+        }
+    };
+}
+
 /// Assert that a toast message is present or appears within a short time.
 macro_rules! assert_toast {
     ($ui:expr, $title:expr) => {
@@ -171,5 +194,6 @@ macro_rules! assert_toast {
 }
 
 pub(crate) use assert_absent;
+pub(crate) use assert_enabled;
 pub(crate) use assert_present;
 pub(crate) use assert_toast;

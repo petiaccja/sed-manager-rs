@@ -14,7 +14,9 @@ use slint::platform::PointerEventButton;
 use slint::{ComponentHandle as _, Model as _};
 
 use crate::element_handle_ext::ElementHandleEx;
-use crate::test_utils::{assert_absent, assert_present, assert_toast, find_element, run_test, sleep_until_condition};
+use crate::test_utils::{
+    assert_absent, assert_enabled, assert_present, assert_toast, find_element, run_test, sleep_until_condition,
+};
 
 const TEST_PASSWORD: &str = "test-password-1234";
 
@@ -82,6 +84,7 @@ fn enter_config_page() {
         // locking copies the current SID password into Admin1's credential, so it's the same
         // password used to take ownership, not the virtual device's raw factory default.
         find_element(&ui, "login-password").set_accessible_value(TEST_PASSWORD);
+        assert_enabled!(&ui, "login-submit");
         find_element(&ui, "login-submit").single_click(PointerEventButton::Left).await;
 
         // A successful login switches the "Configure locking" page from the login panel to the

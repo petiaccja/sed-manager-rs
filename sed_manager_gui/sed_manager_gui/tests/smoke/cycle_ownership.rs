@@ -13,7 +13,9 @@ use slint::platform::PointerEventButton;
 use slint::{ComponentHandle as _, Model as _};
 
 use crate::element_handle_ext::ElementHandleEx;
-use crate::test_utils::{assert_absent, assert_present, assert_toast, find_element, run_test, select_combo_box_item};
+use crate::test_utils::{
+    assert_absent, assert_enabled, assert_present, assert_toast, find_element, run_test, select_combo_box_item,
+};
 
 const TEST_PASSWORD: &str = "test-password-1234";
 
@@ -65,6 +67,7 @@ fn cycle_ownership() {
         // Switch to the "Revert device" activity and revert just the locking SP.
         find_element(&ui, "activity-revert-device").single_click(PointerEventButton::Left).await;
         find_element(&ui, "revert-password").set_accessible_value(TEST_PASSWORD);
+        assert_enabled!(&ui, "revert-submit");
         find_element(&ui, "revert-submit").single_click(PointerEventButton::Left).await;
         assert_toast!(&ui, "Reverted device successfully");
         assert_absent!(&ui, "revert-password");
@@ -77,6 +80,7 @@ fn cycle_ownership() {
         find_element(&ui, "revert-scope").single_click(PointerEventButton::Left).await;
         select_combo_box_item(&ui, "revert-scope", "Everything");
         find_element(&ui, "revert-password").set_accessible_value(TEST_PASSWORD);
+        assert_enabled!(&ui, "revert-submit");
         find_element(&ui, "revert-submit").single_click(PointerEventButton::Left).await;
         assert_toast!(&ui, "Reverted device successfully");
         // Reverting the whole device restores the factory MSID password, so "Take ownership" reappears.

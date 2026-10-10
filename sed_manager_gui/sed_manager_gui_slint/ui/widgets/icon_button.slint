@@ -18,6 +18,7 @@ export component IconButton inherits IslandButton {
     has-background: false;
     accessible-role: button;
     accessible-label: text;
+    accessible-enabled: root.enabled;
 
     in property <image> icon;
     in property <string> text;
