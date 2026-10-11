@@ -26,36 +26,11 @@ impl LockingRangePlanner {
         Ok(Self { locking_ranges })
     }
 
-    /// Check if the `expected` locking ranges match the current ones as found
-    /// on the device.
-    ///
-    /// It checks if the two locking ranges are equal, with the following nuances:
-    /// - The ordering of the ranges does not matter.
-    /// - Fields not specified (i.e. [`None`]) in the `expected` locking ranges are
-    ///   ignored for comparison, even if they are specified in the `actual` locking
-    ///   range.
-    pub fn is_matching_current<'a>(
-        &self,
-        expected: impl IntoIterator<Item = &'a LockingRange>,
-    ) -> Result<bool, LockingRangePlanError> {
-        for (index, expected) in expected.into_iter().enumerate() {
-            let uid = expected.uid.ok_or(LockingRangePlanError::MissingUid { index, set: "expected" })?;
-            let LockingRangeChange { current, .. } =
-                self.locking_ranges.get(&uid).ok_or(LockingRangePlanError::NotOnDevice { uid, set: "expected" })?;
-            if !is_matching_current(expected, &current) {
-                return Ok(false);
-            }
-        }
-        Ok(true)
-    }
-
     /// Check if the desired value of all ranges respectes alignment requirements.
     pub fn check_alignment(&self, alignment: &Alignment) -> Result<(), LockingRangePlanError> {
-        for LockingRangeChange { desired, .. } in self.locking_ranges.values() {
+        for (uid, LockingRangeChange { desired, .. }) in &self.locking_ranges {
             if !is_aligned(&desired, alignment).expect("missing range span") {
-                return Err(LockingRangePlanError::IncorrectAlignment {
-                    uid: desired.uid.unwrap_or(LockingRangeRef::null()),
-                });
+                return Err(LockingRangePlanError::IncorrectAlignment { uid: *uid });
             }
         }
         Ok(())
@@ -63,11 +38,9 @@ impl LockingRangePlanner {
 
     /// Check if the desired value of all ranges is within the capacity of the device.
     pub fn check_within_capacity(&self, capacity: u64) -> Result<(), LockingRangePlanError> {
-        for LockingRangeChange { desired, .. } in self.locking_ranges.values() {
+        for (uid, LockingRangeChange { desired, .. }) in &self.locking_ranges {
             if !is_within_capacity(&desired, capacity).expect("missing range span") {
-                return Err(LockingRangePlanError::ExceedsCapacity {
-                    uid: desired.uid.unwrap_or(LockingRangeRef::null()),
-                });
+                return Err(LockingRangePlanError::ExceedsCapacity { uid: *uid });
             }
         }
         Ok(())
@@ -108,14 +81,14 @@ pub enum LockingRangePlanError {
     NotOnDevice { uid: LockingRangeRef, set: &'static str },
     #[error("The desired ranges {first} and {second} overlap")]
     OverlappingRanges { first: LockingRangeRef, second: LockingRangeRef },
-    #[error("The actual state of the locking ranges does not match the expected state")]
-    ActualNotMatchingExpected,
+    #[error("The current state of range {uid} does not match the expected state")]
+    CurrentNotMatchingExpected { uid: LockingRangeRef },
     #[error("The start and/or length of the the range {uid} can not be determined")]
     MissingRangeSpan { uid: LockingRangeRef },
-    #[error("The locking range has an improper alignment")]
+    #[error("The locking range {uid} has an improper alignment")]
     IncorrectAlignment { uid: LockingRangeRef },
-    #[error("The locking range exceeds the capacity of the device/namespace")]
-    ExceedsCapacity { uid: sed_packet::ObjectRef<8804682956800> },
+    #[error("The locking range {uid} exceeds the capacity of the device/namespace")]
+    ExceedsCapacity { uid: LockingRangeRef },
     #[error("The desired global range specifies a non-zero start or length")]
     InvalidGlobalRangeSpan,
 }
@@ -139,6 +112,38 @@ fn map_current_by_uid(
             (uid, LockingRangeChange { current, desired: LockingRange { uid: Some(uid), ..Default::default() } })
         })
         .collect()
+}
+
+/// Check if the `expected` locking ranges match the current ones as found
+/// on the device.
+///
+/// It checks if the two locking ranges are equal, with the following nuances:
+/// - The ordering of the ranges does not matter.
+/// - Fields not specified (i.e. [`None`]) in the `expected` locking ranges are
+///   ignored for comparison, even if they are specified in the `actual` locking
+///   range.
+pub fn check_matching_current_all<'a>(
+    expected: impl IntoIterator<Item = &'a LockingRange>,
+    current: impl IntoIterator<Item = &'a LockingRange>,
+) -> Result<(), LockingRangePlanError> {
+    let current: BTreeMap<_, _> = current
+        .into_iter()
+        .map(|current| {
+            let uid = current
+                .uid
+                .expect("current locking ranges should be obtained directly from the device and must always have UIDs");
+            (uid, current)
+        })
+        .collect();
+
+    for (index, expected) in expected.into_iter().enumerate() {
+        let uid = expected.uid.ok_or(LockingRangePlanError::MissingUid { index, set: "expected" })?;
+        let current = current.get(&uid).ok_or(LockingRangePlanError::NotOnDevice { uid, set: "expected" })?;
+        if !is_matching_current(expected, &current) {
+            return Err(LockingRangePlanError::CurrentNotMatchingExpected { uid });
+        }
+    }
+    Ok(())
 }
 
 /// Updated the `desired` values in the change map.

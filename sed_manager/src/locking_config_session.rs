@@ -15,7 +15,7 @@ use tracing::instrument;
 use crate::{
     Alignment,
     error::Error,
-    locking_range_plan::{LockingRangePlanError, LockingRangePlanner},
+    locking_range_plan::{LockingRangePlanner, check_matching_current_all},
     spec::Spec,
 };
 
@@ -178,14 +178,12 @@ impl LockingConfigSession {
         capacity: u64,
     ) -> Result<(), Error> {
         let current = self.get_locking_ranges().await?;
-        let planner = LockingRangePlanner::new(current, desired.iter().cloned())?;
-
-        if let Some(expected) = expected
-            && !planner.is_matching_current(expected)?
-        {
-            return Err(LockingRangePlanError::ActualNotMatchingExpected.into());
+        if let Some(expected) = expected {
+            check_matching_current_all(expected, &current)?;
         }
+
         let alignment = self.get_alignment().await?;
+        let planner = LockingRangePlanner::new(current, desired.iter().cloned())?;
         planner.check_alignment(&alignment)?;
         planner.check_within_capacity(capacity)?;
 
