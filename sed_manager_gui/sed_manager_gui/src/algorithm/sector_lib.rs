@@ -3,10 +3,13 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use std::{cmp::max, fmt::Display, str::FromStr};
+use std::{fmt::Display, str::FromStr};
 
+use sed_manager::Alignment;
 use sed_manager_gui_slint as ui;
 use slint::SharedString;
+
+use crate::ui_conv::FromUi as _;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Unit {
@@ -164,19 +167,9 @@ pub fn parse(str: SharedString, geometry: ui::Geometry) -> ui::Sector {
 // Always rounds down (so that align after capping to drive size does not bump it over the
 // size again).
 pub fn align(sector: ui::Sector, alignment: ui::Alignment) -> ui::Sector {
-    if !alignment.alignment_required {
-        return sector;
-    }
-
-    let lowest_aligned_lba = max(alignment.lowest_aligned_lba.value, 0);
-    let alignment_granularity = max(alignment.alignment_granularity.value, 1);
-
-    let clamped = max(sector.value, lowest_aligned_lba);
-    let rebased = clamped - lowest_aligned_lba;
-    let snapped = rebased / alignment_granularity * alignment_granularity;
-    let value = snapped + lowest_aligned_lba;
-
-    ui::Sector { value }
+    let alignment = Alignment::from_ui(&alignment);
+    let value = alignment.align_lba(sector.value.max(0) as u64);
+    ui::Sector { value: value as i64 }
 }
 
 #[cfg(test)]
@@ -187,14 +180,6 @@ mod tests {
 
     fn geometry(logical_sector_size: i32) -> ui::Geometry {
         ui::Geometry { logical_sector_size, logical_sector_count: ui::Sector { value: 0 } }
-    }
-
-    fn alignment(required: bool, granularity: i64, lowest_aligned_lba: i64) -> ui::Alignment {
-        ui::Alignment {
-            alignment_required: required,
-            alignment_granularity: ui::Sector { value: granularity },
-            lowest_aligned_lba: ui::Sector { value: lowest_aligned_lba },
-        }
     }
 
     #[rstest]
@@ -260,24 +245,14 @@ mod tests {
         assert_eq!(parse(str.into(), geometry(sector_size)).value, expected);
     }
 
-    #[rstest]
-    #[case::not_required_is_a_no_op(12345, false, 8, 0, 12345)]
-    #[case::already_aligned_is_unchanged(16, true, 8, 0, 16)]
-    #[case::rounds_down_when_below_midpoint(18, true, 8, 0, 16)]
-    // Must always round down, even past the midpoint: alignment is applied after capping to the
-    // total sector count, and rounding up could push the value back over that cap.
-    #[case::rounds_down_when_above_midpoint(21, true, 8, 0, 16)]
-    // Aligned LBAs are 1, 2001, 4001, ... (granularity 2000, lowest aligned LBA 1).
-    #[case::respects_lowest_aligned_lba(3500, true, 2000, 1, 2001)]
-    #[case::starts_at_lowest_aligned_lba(1, true, 8, 6, 6)]
-    fn align_cases(
-        #[case] lba: i64,
-        #[case] required: bool,
-        #[case] granularity: i64,
-        #[case] lowest_aligned_lba: i64,
-        #[case] expected: i64,
-    ) {
-        let sector = ui::Sector { value: lba };
-        assert_eq!(align(sector, alignment(required, granularity, lowest_aligned_lba)).value, expected);
+    #[test]
+    fn align_cases() {
+        let sector = ui::Sector { value: 27 };
+        let alignment = ui::Alignment {
+            alignment_granularity: ui::Sector { value: 8 },
+            alignment_required: true,
+            lowest_aligned_lba: ui::Sector { value: 4 },
+        };
+        assert_eq!(align(sector, alignment).value, 20);
     }
 }

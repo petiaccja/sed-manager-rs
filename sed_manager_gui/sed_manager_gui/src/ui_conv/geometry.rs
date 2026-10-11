@@ -5,23 +5,34 @@
 
 use sed_manager::{Alignment, Geometry};
 
-use crate::ui_conv::FromBackend;
+use crate::ui_conv::{FromBackend, FromUi};
 use sed_manager_gui_slint as ui;
 
 impl FromBackend<&Geometry> for ui::Geometry {
     fn from_backend(value: &Geometry) -> Self {
-        ui::Geometry {
+        Self {
             logical_sector_count: ui::Sector { value: value.logical_sector_count as i64 },
             logical_sector_size: value.logical_sector_size as i32,
         }
     }
 }
+
 impl FromBackend<&Alignment> for ui::Alignment {
     fn from_backend(value: &Alignment) -> Self {
-        ui::Alignment {
+        Self {
             alignment_granularity: ui::Sector { value: value.alignment_granularity as i64 },
             alignment_required: value.alignment_required,
             lowest_aligned_lba: ui::Sector { value: value.lowest_aligned_lba as i64 },
+        }
+    }
+}
+
+impl FromUi<&ui::Alignment> for Alignment {
+    fn from_ui(value: &ui::Alignment) -> Self {
+        Self {
+            alignment_required: value.alignment_required,
+            alignment_granularity: value.alignment_granularity.value.max(0) as u64,
+            lowest_aligned_lba: value.lowest_aligned_lba.value.max(0) as u64,
         }
     }
 }
