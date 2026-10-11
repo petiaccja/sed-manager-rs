@@ -287,6 +287,89 @@ mod tests {
         step: 1,
     };
 
+    fn range(index: usize, start: u64, length: u64) -> LockingRange {
+        LockingRange {
+            uid: RANGE_UID.get(index),
+            range_start: Some(start),
+            range_length: Some(length),
+            ..Default::default()
+        }
+    }
+
+    /// The Global Range, a configured range, and an unconfigured (`0..0`) range.
+    fn current_ranges() -> Vec<LockingRange> {
+        vec![range(0, 0, 0), range(1, 12, 16), range(2, 0, 0)]
+    }
+
+    //--------------------------------------------------------------------------
+    // LockingRangePlanner
+    //--------------------------------------------------------------------------
+
+    #[test]
+    fn planner_zero_length_range_inside_other() {
+        let desired = [range(2, 20, 0)];
+        assert_that!(LockingRangePlanner::new(current_ranges(), desired), ok(anything()));
+    }
+
+    #[test]
+    fn planner_untouched_zero_length_range_inside_other() {
+        let current = [range(0, 0, 0), range(1, 12, 16), range(2, 20, 0)];
+        assert_that!(LockingRangePlanner::new(current, []), ok(anything()));
+    }
+
+    #[test]
+    fn planner_overlap() {
+        let desired = [range(2, 20, 16)];
+        assert_that!(
+            LockingRangePlanner::new(current_ranges(), desired),
+            err(eq(&LockingRangePlanError::OverlappingRanges {
+                first: RANGE_UID.get(1).unwrap(),
+                second: RANGE_UID.get(2).unwrap()
+            }))
+        );
+    }
+
+    #[rstest]
+    #[case::lowest_aligned_lba_zero(Alignment { alignment_required: true, alignment_granularity: 4, lowest_aligned_lba: 0 })]
+    #[case::lowest_aligned_lba_non_zero(Alignment { alignment_required: true, alignment_granularity: 8, lowest_aligned_lba: 4 })]
+    fn planner_check_alignment_untouched_global_range(#[case] alignment: Alignment) {
+        // The Global Range and the unconfigured range both span `0..0`, which
+        // is not aligned to the lowest aligned LBA, but must still be accepted.
+        let planner = LockingRangePlanner::new(current_ranges(), []).unwrap();
+        assert_that!(planner.check_alignment(&alignment), ok(eq(&())));
+    }
+
+    #[test]
+    fn planner_check_alignment_unaligned() {
+        let alignment = Alignment { alignment_required: true, alignment_granularity: 8, lowest_aligned_lba: 4 };
+        let planner = LockingRangePlanner::new(current_ranges(), [range(2, 36, 7)]).unwrap();
+        assert_that!(
+            planner.check_alignment(&alignment),
+            err(eq(&LockingRangePlanError::IncorrectAlignment { uid: RANGE_UID.get(2).unwrap() }))
+        );
+    }
+
+    #[test]
+    fn planner_check_within_capacity_overflowing_span() {
+        let planner = LockingRangePlanner::new(current_ranges(), [range(2, 100, u64::MAX)]).unwrap();
+        assert_that!(
+            planner.check_within_capacity(1000),
+            err(eq(&LockingRangePlanError::ExceedsCapacity { uid: RANGE_UID.get(2).unwrap() }))
+        );
+    }
+
+    #[test]
+    fn planner_overflowing_span_overlap() {
+        let desired = [range(1, 0, u64::MAX), range(2, 100, 16)];
+        assert_that!(
+            LockingRangePlanner::new(current_ranges(), desired),
+            err(eq(&LockingRangePlanError::OverlappingRanges {
+                first: RANGE_UID.get(1).unwrap(),
+                second: RANGE_UID.get(2).unwrap()
+            }))
+        );
+    }
+
     //--------------------------------------------------------------------------
     // fill_in_desired_values
     //--------------------------------------------------------------------------
