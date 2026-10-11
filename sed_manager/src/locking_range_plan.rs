@@ -53,16 +53,24 @@ impl LockingRangePlanner {
     /// by the device due to invalid parameters. The execution might still fail
     /// due to unforeseen communication errors.
     pub fn plan(&self) -> Vec<LockingRangeStep> {
-        let mut steps = Vec::new();
-        let changes: Vec<_> = self.locking_ranges.iter().map(|(uid, change)| (*uid, change.diff())).collect();
-        let erase_steps = changes
-            .iter()
-            .filter(|(_, changes)| changes.range_start.is_some() || changes.range_length.is_some())
-            .map(|(uid, _)| LockingRangeStep::Collapse(*uid));
-        steps.extend(erase_steps);
-        let set_steps = changes.into_iter().map(|(uid, changes)| LockingRangeStep::Set { uid, changes });
-        steps.extend(set_steps);
-        steps
+        let mut collapse_steps = Vec::new();
+        let mut set_steps = Vec::new();
+        for (uid, change) in &self.locking_ranges {
+            let diff = change.diff();
+            // Ranges that move are collapsed first, so the parameters have to
+            // be set relative to the collapsed state.
+            let change = if diff.range_start.is_some() || diff.range_length.is_some() {
+                collapse_steps.push(LockingRangeStep::Collapse(*uid));
+                change.collapsed()
+            } else {
+                change.clone()
+            };
+            let changes = change.diff();
+            if changes != (LockingRange { uid: Some(*uid), ..Default::default() }) {
+                set_steps.push(LockingRangeStep::Set { uid: *uid, changes });
+            }
+        }
+        collapse_steps.into_iter().chain(set_steps).collect()
     }
 }
 
@@ -73,6 +81,15 @@ struct LockingRangeChange {
 }
 
 impl LockingRangeChange {
+    /// Returns the change as it looks after the range has been collapsed on
+    /// the device, i.e. its length set to zero.
+    fn collapsed(&self) -> Self {
+        Self {
+            current: LockingRange { range_length: Some(0), ..self.current.clone() },
+            desired: self.desired.clone(),
+        }
+    }
+
     /// Returns the differences between the current and the desired value of the
     /// locking range.
     ///
@@ -430,6 +447,58 @@ mod tests {
                 first: RANGE_UID.get(1).unwrap(),
                 second: RANGE_UID.get(2).unwrap()
             }))
+        );
+    }
+
+    fn collapse(index: usize) -> LockingRangeStep {
+        LockingRangeStep::Collapse(RANGE_UID.get(index).unwrap())
+    }
+
+    fn set(changes: LockingRange) -> LockingRangeStep {
+        LockingRangeStep::Set { uid: changes.uid.unwrap(), changes }
+    }
+
+    #[test]
+    fn planner_plan_no_changes() {
+        let planner = LockingRangePlanner::new(current_ranges(), []).unwrap();
+        assert_that!(planner.plan(), is_empty());
+    }
+
+    #[test]
+    fn planner_plan_without_moving() {
+        let desired = [LockingRange { read_locked: Some(true), ..uid_only(1) }];
+        let planner = LockingRangePlanner::new(current_ranges(), desired.clone()).unwrap();
+        assert_that!(planner.plan(), elements_are![eq(&set(desired[0].clone()))]);
+    }
+
+    #[test]
+    fn planner_plan_moving_start() {
+        // The length must be set again, as it's cleared by the collapse.
+        let planner = LockingRangePlanner::new(current_ranges(), [range(1, 20, 16)]).unwrap();
+        assert_that!(planner.plan(), elements_are![eq(&collapse(1)), eq(&set(range(1, 20, 16)))]);
+    }
+
+    #[test]
+    fn planner_plan_moving_end() {
+        // The start is unaffected by the collapse, so it must not be set again.
+        let planner = LockingRangePlanner::new(current_ranges(), [range(1, 12, 8)]).unwrap();
+        let expected = LockingRange { range_length: Some(8), ..uid_only(1) };
+        assert_that!(planner.plan(), elements_are![eq(&collapse(1)), eq(&set(expected))]);
+    }
+
+    #[test]
+    fn planner_plan_collapses_before_sets() {
+        // Range 2 moves into the space previously occupied by range 1.
+        let desired = [range(1, 40, 16), range(2, 12, 16)];
+        let planner = LockingRangePlanner::new(current_ranges(), desired).unwrap();
+        assert_that!(
+            planner.plan(),
+            elements_are![
+                eq(&collapse(1)),
+                eq(&collapse(2)),
+                eq(&set(range(1, 40, 16))),
+                eq(&set(range(2, 12, 16)))
+            ]
         );
     }
 
