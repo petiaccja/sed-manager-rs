@@ -623,6 +623,54 @@ mod tests {
     }
 
     //--------------------------------------------------------------------------
+    // check_matching_current_all
+    //--------------------------------------------------------------------------
+
+    fn uid_only(index: usize) -> LockingRange {
+        LockingRange { uid: RANGE_UID.get(index), ..Default::default() }
+    }
+
+    fn locked(range: LockingRange) -> LockingRange {
+        LockingRange { read_locked: Some(true), write_locked: Some(true), ..range }
+    }
+
+    #[rstest]
+    #[case::equal(current_ranges(), Ok(()))]
+    #[case::empty(vec![], Ok(()))]
+    #[case::reordered(vec![range(2, 0, 0), range(0, 0, 0), range(1, 12, 16)], Ok(()))]
+    #[case::subset(vec![range(1, 12, 16)], Ok(()))]
+    #[case::unspecified_fields_ignored(vec![uid_only(0), uid_only(1), uid_only(2)], Ok(()))]
+    #[case::additional_field_matching(vec![locked(range(1, 12, 16))], Ok(()))]
+    #[case::additional_field_mismatching(
+        vec![locked(range(2, 0, 0))],
+        Err(LockingRangePlanError::CurrentNotMatchingExpected { uid: RANGE_UID.get(2).unwrap() }),
+    )]
+    #[case::span_mismatching(
+        vec![range(0, 0, 0), range(1, 12, 8)],
+        Err(LockingRangePlanError::CurrentNotMatchingExpected { uid: RANGE_UID.get(1).unwrap() }),
+    )]
+    #[case::first_mismatch_reported(
+        vec![range(2, 4, 4), range(1, 12, 8)],
+        Err(LockingRangePlanError::CurrentNotMatchingExpected { uid: RANGE_UID.get(2).unwrap() }),
+    )]
+    #[case::missing_uid(
+        vec![range(1, 12, 16), LockingRange { range_start: Some(0), ..Default::default() }],
+        Err(LockingRangePlanError::MissingUid { index: 1, set: "expected" }),
+    )]
+    #[case::not_on_device(
+        vec![range(1, 12, 16), range(5, 0, 0)],
+        Err(LockingRangePlanError::NotOnDevice { uid: RANGE_UID.get(5).unwrap(), set: "expected" }),
+    )]
+    fn check_matching_current_all_(
+        #[case] expected: Vec<LockingRange>,
+        #[case] expected_result: Result<(), LockingRangePlanError>,
+    ) {
+        // Range 1 is locked on the device, but range 2 is not.
+        let current = [range(0, 0, 0), locked(range(1, 12, 16)), range(2, 0, 0)];
+        assert_that!(check_matching_current_all(&expected, &current), eq(&expected_result));
+    }
+
+    //--------------------------------------------------------------------------
     // is_matching_current
     //--------------------------------------------------------------------------
     #[rstest]
