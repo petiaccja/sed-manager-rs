@@ -590,7 +590,7 @@ impl App {
                     })
                     .on_success(move |ui_device, _spec, _output| ui_device)
                     .finally(move |ui_device| {
-                        self_.list_locking_ranges(path_, false);
+                        self_.list_locking_ranges(path_, true);
                         ui_device
                     })
                     .run();

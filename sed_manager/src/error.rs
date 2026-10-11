@@ -11,9 +11,9 @@ use crate::locking_range_plan::LockingRangePlanError;
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum Error {
     #[error("{}", .0)]
-    DeviceError(DeviceError),
+    DeviceError(#[from] DeviceError),
     #[error("{}", .0)]
-    TperError(TperError),
+    TperError(#[from] TperError),
     #[error("The feature is not supported by the current TCG SSC")]
     IncompatibleSsc,
     #[error("The device does not support any TCG SSCs")]
@@ -36,18 +36,10 @@ pub enum Error {
     InvalidAceExpression,
     #[error("Not a password authority")]
     NotAPasswordAuthority,
-    #[error("{0}")]
-    LockingRangeUpdate(#[from] LockingRangePlanError),
-}
-
-impl From<TperError> for Error {
-    fn from(value: TperError) -> Self {
-        Self::TperError(value)
-    }
-}
-
-impl From<DeviceError> for Error {
-    fn from(value: DeviceError) -> Self {
-        Self::DeviceError(value)
-    }
+    #[error("The desired locking ranges won't be applied: {0}")]
+    LockingRangeUpdateRejected(#[from] LockingRangePlanError),
+    #[error(
+        "An error occurred while applying the desired locking ranges: {0}. The updates may have been partially applied."
+    )]
+    LockingRangeUpdateFailed(#[source] TperError),
 }

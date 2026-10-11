@@ -9,8 +9,8 @@ use sed_spec::{
     objects::{Authority, AuthorityRef, LockingInfoExt, LockingRange, LockingRangeRef, MbrControl, TableDescRefExt},
     preconfig::core::shared::{locking_info, mbr_control, table, table_id},
 };
-use sed_tper::{Session, Tper};
-use tracing::instrument;
+use sed_tper::{Error as TperError, Session, Tper};
+use tracing::{debug, instrument};
 
 use crate::{
     Alignment,
@@ -171,6 +171,7 @@ impl LockingConfigSession {
     /// partial writes to the device, but the update procedure may still fail
     /// in the middle, leaving some ranges updated and other not. In either cases,
     /// an error is returned.
+    #[instrument(skip(self), err)]
     pub async fn set_locking_ranges(
         &self,
         expected: Option<&[LockingRange]>,
@@ -188,23 +189,27 @@ impl LockingConfigSession {
         planner.check_within_capacity(capacity)?;
 
         let plan = planner.plan();
+        debug!(plan = ?plan);
         for step in plan {
             match step {
-                LockingRangeStep::Collapse(uid) => self.collapse_locking_range(uid).await?,
-                LockingRangeStep::Set { uid, changes } => self.set_locking_range(uid, changes).await?,
+                LockingRangeStep::Collapse(uid) => self.collapse_locking_range(uid).await,
+                LockingRangeStep::Set { uid, changes } => self.set_locking_range(uid, changes).await,
             }
+            .map_err(Error::LockingRangeUpdateFailed)?;
         }
 
-        todo!()
+        Ok(())
     }
 
-    async fn collapse_locking_range(&self, uid: LockingRangeRef) -> Result<(), Error> {
+    #[instrument(skip(self), err)]
+    async fn collapse_locking_range(&self, uid: LockingRangeRef) -> Result<(), TperError> {
         let changes = LockingRange { range_length: Some(0), ..Default::default() };
         self.set_locking_range(uid, changes).await
     }
 
-    async fn set_locking_range(&self, uid: LockingRangeRef, changes: LockingRange) -> Result<(), Error> {
+    #[instrument(skip(self), err)]
+    async fn set_locking_range(&self, uid: LockingRangeRef, changes: LockingRange) -> Result<(), TperError> {
         let changes = LockingRange { uid: None, ..changes };
-        self.session.set_object(uid, changes).await.map_err(Into::into)
+        self.session.set_object(uid, changes).await
     }
 }
