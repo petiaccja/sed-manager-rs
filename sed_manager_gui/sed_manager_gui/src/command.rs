@@ -536,7 +536,6 @@ where
         Self { error_fn: Some(Box::new(error_fn)), ..self }
     }
 
-    #[expect(unused)]
     pub fn finally<FinallyFn>(self, finally_fn: FinallyFn) -> Self
     where
         FinallyFn: FnOnce(ui::Device) -> ui::Device + 'static,

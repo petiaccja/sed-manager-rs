@@ -5,7 +5,6 @@
 
 use std::{
     collections::HashSet,
-    fmt::format,
     path::{Path, PathBuf},
     rc::{Rc, Weak},
     sync::Arc,
@@ -574,19 +573,26 @@ impl App {
                 };
 
                 // Initiate the actual command.
+                let self_ = self.clone();
+                let path_ = path.clone();
                 self.command()
                     .success_message("Locking ranges written to device")
                     .error_message("Could not write locking ranges")
-                    .on_session(path, async move |_device: &Device, session: &mut Session| {
+                    .on_session(path, async move |device: &Device, session: &mut Session| {
                         let Session::LockingConfig(locking_session) = session else {
                             return Err(CommandError::Skipped);
                         };
-                        // TODO: do actual processing.
-                        std::hint::black_box(committed);
-                        std::hint::black_box(desired);
+                        let geometry = device.geometry().await?;
+                        locking_session
+                            .set_locking_ranges(committed.as_deref(), &desired, geometry.logical_sector_count)
+                            .await?;
                         Ok(())
                     })
                     .on_success(move |ui_device, _spec, _output| ui_device)
+                    .finally(move |ui_device| {
+                        self_.list_locking_ranges(path_, false);
+                        ui_device
+                    })
                     .run();
             }
         })
@@ -842,7 +848,7 @@ fn convert_locking_ranges(
         .downcast_ref::<DiffModel<ui::LockingRange>>()
         .map(|diff_model| diff_model.committed());
     let committed = committed
-        .map(|committed| committed.iter().map(|range| LockingRange::try_from_ui(&range)).collect::<Result<Vec<_>, _>>())
+        .map(|committed| committed.iter().map(LockingRange::try_from_ui).collect::<Result<Vec<_>, _>>())
         .transpose();
     let desired = locking_range.iter().map(|range| LockingRange::try_from_ui(&range)).collect::<Result<Vec<_>, _>>();
 

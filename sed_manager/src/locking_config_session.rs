@@ -6,7 +6,7 @@
 use sed_packet::MaxBytes;
 use sed_spec::{
     methods::MethodStatus,
-    objects::{Authority, AuthorityRef, LockingInfoExt, LockingRange, MbrControl, TableDescRefExt},
+    objects::{Authority, AuthorityRef, LockingInfoExt, LockingRange, LockingRangeRef, MbrControl, TableDescRefExt},
     preconfig::core::shared::{locking_info, mbr_control, table, table_id},
 };
 use sed_tper::{Session, Tper};
@@ -15,7 +15,7 @@ use tracing::instrument;
 use crate::{
     Alignment,
     error::Error,
-    locking_range_plan::{LockingRangePlanner, check_matching_current_all},
+    locking_range_plan::{LockingRangePlanner, LockingRangeStep, check_matching_current_all},
     spec::Spec,
 };
 
@@ -187,8 +187,24 @@ impl LockingConfigSession {
         planner.check_alignment(&alignment)?;
         planner.check_within_capacity(capacity)?;
 
-        let _plan = planner.plan();
+        let plan = planner.plan();
+        for step in plan {
+            match step {
+                LockingRangeStep::Collapse(uid) => self.collapse_locking_range(uid).await?,
+                LockingRangeStep::Set { uid, changes } => self.set_locking_range(uid, changes).await?,
+            }
+        }
 
         todo!()
+    }
+
+    async fn collapse_locking_range(&self, uid: LockingRangeRef) -> Result<(), Error> {
+        let changes = LockingRange { range_length: Some(0), ..Default::default() };
+        self.set_locking_range(uid, changes).await
+    }
+
+    async fn set_locking_range(&self, uid: LockingRangeRef, changes: LockingRange) -> Result<(), Error> {
+        let changes = LockingRange { uid: None, ..changes };
+        self.session.set_object(uid, changes).await.map_err(Into::into)
     }
 }
