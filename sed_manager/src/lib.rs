@@ -8,6 +8,7 @@ mod error;
 mod geometry;
 mod host;
 mod locking_config_session;
+mod locking_range_plan;
 mod setup_session;
 mod spec;
 
@@ -16,5 +17,6 @@ pub use error::Error;
 pub use geometry::{Alignment, Geometry};
 pub use host::Host;
 pub use locking_config_session::LockingConfigSession;
+pub use locking_range_plan::LockingRangeUpdateError;
 pub use setup_session::SetupSession;
 pub use spec::Spec;

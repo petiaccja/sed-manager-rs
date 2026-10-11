@@ -12,7 +12,14 @@ use sed_spec::{
 use sed_tper::{Session, Tper};
 use tracing::instrument;
 
-use crate::{Alignment, error::Error, spec::Spec};
+use crate::{
+    Alignment,
+    error::Error,
+    locking_range_plan::{
+        LockingRangeUpdateError, backfill_incomplete_spans, check_correctness, create_plan, expected_matches_actual,
+    },
+    spec::Spec,
+};
 
 /// Configures the locking SP of the TPer, like locking ranges and authorities.
 ///
@@ -147,5 +154,46 @@ impl LockingConfigSession {
             Err(sed_tper::Error::MethodCallFailed(MethodStatus::InvalidParameter)) => Ok(Alignment::default()),
             Err(err) => Err(err.into()),
         }
+    }
+
+    /// Set the locking ranges to their `desired` value.
+    ///
+    /// When `expected` is provided, this function performs a compare-and-swap.
+    /// If the current state of the locking ranges, as retrieved from the device,
+    /// matches that given by `expected`, the ranges are updated to `desired`.
+    /// If there is a mismatch, the ranges aren't updated and an error is returned.
+    ///
+    /// Only the fields of the [`LockingRange`] object of `desired` that are set
+    /// to [`Some`] value are changed. Except for the UID, ranges should not
+    /// attempt to set read-only or unauthorized fields, or else the device will
+    /// reject the request and an error will be returned.
+    ///
+    /// Before writing anything to the device, the `desired` ranges are checked
+    /// and rejected early if the device would reject them anyway. This avoids
+    /// partial writes to the device, but the update procedure may still fail
+    /// in the middle, leaving some ranges updated and other not. In either cases,
+    /// an error is returned.
+    pub async fn set_locking_ranges(
+        &self,
+        expected: Option<&[LockingRange]>,
+        desired: &[LockingRange],
+        capacity: u64,
+    ) -> Result<(), Error> {
+        let actual = self.get_locking_ranges().await?;
+        let mut desired = desired.to_vec();
+        backfill_incomplete_spans(&mut desired, &actual);
+
+        if let Some(expected) = expected
+            && !expected_matches_actual(expected, &actual)
+        {
+            return Err(LockingRangeUpdateError::ActualNotMatchingExpected.into());
+        }
+
+        let alignment = self.get_alignment().await?;
+        check_correctness(&desired, &alignment, capacity).ok_or(LockingRangeUpdateError::MissingRangeSpan)?;
+
+        let plan = create_plan(&desired, &actual);
+
+        todo!()
     }
 }

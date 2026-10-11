@@ -6,6 +6,8 @@
 use sed_device::Error as DeviceError;
 use sed_tper::Error as TperError;
 
+use crate::locking_range_plan::LockingRangeUpdateError;
+
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum Error {
     #[error("{}", .0)]
@@ -34,6 +36,8 @@ pub enum Error {
     InvalidAceExpression,
     #[error("Not a password authority")]
     NotAPasswordAuthority,
+    #[error("{0}")]
+    LockingRangeUpdate(#[from] LockingRangeUpdateError),
 }
 
 impl From<TperError> for Error {

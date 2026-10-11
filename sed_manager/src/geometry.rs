@@ -3,6 +3,8 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
+use std::cmp::max;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Geometry {
     /// The size of a logical sector in bytes.
@@ -22,8 +24,47 @@ pub struct Alignment {
     pub lowest_aligned_lba: u64,
 }
 
+impl Alignment {
+    pub fn align(&self, sector: u64) -> u64 {
+        if !self.alignment_required {
+            return sector;
+        }
+
+        let clamped = max(sector, self.lowest_aligned_lba);
+        let rebased = clamped - self.lowest_aligned_lba;
+        let snapped = rebased / self.alignment_granularity * self.alignment_granularity;
+        snapped + self.lowest_aligned_lba
+    }
+}
+
 impl Default for Alignment {
     fn default() -> Self {
         Self { alignment_required: false, alignment_granularity: 1, lowest_aligned_lba: 0 }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use rstest::rstest;
+
+    // Only because writing it constructor out in rstest cases is too long.
+    fn alignment(alignment_required: bool, alignment_granularity: u64, lowest_aligned_lba: u64) -> Alignment {
+        Alignment { alignment_required, alignment_granularity, lowest_aligned_lba }
+    }
+
+    #[rstest]
+    #[case::not_required_is_a_no_op(12345, alignment(false, 8, 0), 12345)]
+    #[case::already_aligned_is_unchanged(16, alignment(true, 8, 0), 16)]
+    #[case::rounds_down_when_below_midpoint(18, alignment(true, 8, 0), 16)]
+    // Must always round down, even past the midpoint: alignment is applied after capping to the
+    // total sector count, and rounding up could push the value back over that cap.
+    #[case::rounds_down_when_above_midpoint(21, alignment(true, 8, 0), 16)]
+    // Aligned LBAs are 1, 2001, 4001, ... (granularity 2000, lowest aligned LBA 1).
+    #[case::respects_lowest_aligned_lba(3500, alignment(true, 2000, 1), 2001)]
+    #[case::starts_at_lowest_aligned_lba(1, alignment(true, 8, 6), 6)]
+    fn align_cases(#[case] sector: u64, #[case] alignment: Alignment, #[case] expected: u64) {
+        assert_eq!(alignment.align(sector), expected);
     }
 }
