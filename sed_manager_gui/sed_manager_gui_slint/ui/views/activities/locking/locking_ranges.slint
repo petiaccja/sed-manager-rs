@@ -154,6 +154,7 @@ component LockingRangeTable {
                         Cell {
                             horizontal-alignment: space-around;
                             CheckBox {
+                                accessible-id: "locking-range-read-lock-enabled-" + index;
                                 checked <=> locking-range.read-lock-enabled;
                             }
                         }
@@ -303,6 +304,7 @@ export component LockingRangesTab {
                 spacing: 0.8rem;
 
                 Button {
+                    accessible-id: "save-ranges-submit";
                     text: "Save ranges";
                     width: 8rem;
                     primary: true;

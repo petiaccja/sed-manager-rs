@@ -21,12 +21,13 @@ use crate::test_utils::{
 const TEST_PASSWORD: &str = "test-password-1234";
 
 /// This test takes ownership, activates locking, logs into the locking SP as "Admin1" to reach
-/// the "Configure locking" page, then logs back out.
+/// the "Configure locking" page, changes and saves a locking range, then logs back out.
 ///
 /// This test exercises the following functionality:
 /// - Take ownership
 /// - Activate locking
 /// - Login (to the locking SP)
+/// - Listing and writing locking ranges
 /// - Logout
 #[test]
 fn enter_config_page() {
@@ -91,6 +92,31 @@ fn enter_config_page() {
         // locking SP's tabs, landing on "Locking ranges" first, which has its own "Logout" button.
         // Wait for that before proceeding, so the login is confirmed to actually have gone through.
         assert_present!(&ui, "logout-submit");
+
+        // Toggle "Read locking enabled" of the first non-global range (index 0
+        // is the Global Range) and save the ranges.
+        let checkbox_id = "locking-range-read-lock-enabled-1";
+        assert_present!(&ui, checkbox_id);
+        assert_eq!(find_element(&ui, checkbox_id).accessible_checked(), Some(false));
+        find_element(&ui, checkbox_id).invoke_accessible_default_action();
+
+        // Background commands started by the login may briefly make the session
+        // busy, which disables the button. The click is therefore invoked
+        // synchronously right after it's found enabled, as opposed to an
+        // asynchronous mouse click, during which it may get disabled again.
+        assert_enabled!(&ui, "save-ranges-submit");
+        find_element(&ui, "save-ranges-submit").invoke_accessible_default_action();
+        assert_toast!(&ui, "Locking ranges written to device");
+
+        // The ranges are reloaded from the device after saving, so once there
+        // are no unsaved changes, the checkbox reflects the state of the device.
+        sleep_until_condition(
+            || find_element(&ui, "save-ranges-submit").accessible_enabled() == Some(false),
+            Duration::from_secs(5),
+        )
+        .await
+        .unwrap_or_else(|_| panic!("the locking ranges were not reloaded"));
+        assert_eq!(find_element(&ui, checkbox_id).accessible_checked(), Some(true));
 
         // Log back out and wait for the login panel to reappear.
         find_element(&ui, "logout-submit").single_click(PointerEventButton::Left).await;

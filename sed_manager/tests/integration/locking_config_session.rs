@@ -7,12 +7,15 @@ use std::sync::Arc;
 
 use googletest::{assert_that, matchers::*};
 use sed_async::{PolyRuntime, TokioRuntime};
-use sed_manager::{Alignment, LockingConfigSession, SetupSession};
+use sed_manager::{Alignment, Error, LockingConfigSession, LockingRangePlanError, SetupSession};
 use sed_packet::{MaxBytes, com_id::ComIdExt};
-use sed_spec::{objects::MbrControl, preconfig::opal_2::locking as opal_locking};
+use sed_spec::{
+    objects::{AuthorityRef, LockingRange, LockingRangeRef, MbrControl},
+    preconfig::opal_2::locking as opal_locking,
+};
 use sed_telemetry::with_tracing;
 use sed_tper::Tper;
-use sed_virtual_device::{BASE_COM_ID, VirtualDevice};
+use sed_virtual_device::{BASE_COM_ID, LOGICAL_SECTOR_COUNT, VirtualDevice};
 use tracing::instrument;
 
 const NEW_SID_PASSWORD: MaxBytes<32> =
@@ -30,14 +33,39 @@ async fn setup() -> Tper {
     tper
 }
 
+fn locking_admin1() -> AuthorityRef {
+    opal_locking::authority::ADMIN.get(0).unwrap()
+}
+
+async fn login_admin1(tper: &Tper) -> Result<LockingConfigSession, Error> {
+    let admin1 = locking_admin1();
+    LockingConfigSession::login_on_primary_ssc(tper, admin1, Some(NEW_SID_PASSWORD)).await
+}
+
+fn range_uid(index: usize) -> LockingRangeRef {
+    opal_locking::locking::RANGE.get(index).unwrap()
+}
+
+fn make_range_from_span(index: usize, start: u64, length: u64) -> LockingRange {
+    LockingRange {
+        uid: Some(range_uid(index)),
+        range_start: Some(start),
+        range_length: Some(length),
+        ..Default::default()
+    }
+}
+
+fn find_range_by_uid(ranges: &[LockingRange], uid: LockingRangeRef) -> &LockingRange {
+    ranges.iter().find(|range| range.uid == Some(uid)).expect("locking range not found")
+}
+
 #[instrument]
 #[tokio::test]
 #[with_tracing]
 async fn login() {
     let tper = setup().await;
 
-    let admin1 = opal_locking::authority::ADMIN.get(0).unwrap();
-    let result = LockingConfigSession::login_on_primary_ssc(&tper, admin1, Some(NEW_SID_PASSWORD)).await;
+    let result = login_admin1(&tper).await;
     assert_that!(result, ok(anything()));
 }
 
@@ -48,7 +76,7 @@ async fn login_wrong_password() {
     let tper = setup().await;
     let wrong_password = MaxBytes::<32>::from(b"wrong_password".as_slice());
 
-    let admin1 = opal_locking::authority::ADMIN.get(0).unwrap();
+    let admin1 = locking_admin1();
     let result = LockingConfigSession::login_on_primary_ssc(&tper, admin1, Some(wrong_password)).await;
     assert_that!(result, err(anything()));
 }
@@ -59,8 +87,7 @@ async fn login_wrong_password() {
 async fn get_authorities() {
     let tper = setup().await;
 
-    let admin1 = opal_locking::authority::ADMIN.get(0).unwrap();
-    let session = LockingConfigSession::login_on_primary_ssc(&tper, admin1, Some(NEW_SID_PASSWORD)).await.unwrap();
+    let session = login_admin1(&tper).await.unwrap();
     let result = session.get_authorities().await;
     assert_that!(result, ok(len(eq(15))));
 }
@@ -71,8 +98,7 @@ async fn get_authorities() {
 async fn get_locking_ranges() {
     let tper = setup().await;
 
-    let admin1 = opal_locking::authority::ADMIN.get(0).unwrap();
-    let session = LockingConfigSession::login_on_primary_ssc(&tper, admin1, Some(NEW_SID_PASSWORD)).await.unwrap();
+    let session = login_admin1(&tper).await.unwrap();
     let result = session.get_locking_ranges().await;
     assert_that!(result, ok(len(eq(9))));
 }
@@ -83,8 +109,7 @@ async fn get_locking_ranges() {
 async fn get_mbr_size() {
     let tper = setup().await;
 
-    let admin1 = opal_locking::authority::ADMIN.get(0).unwrap();
-    let session = LockingConfigSession::login_on_primary_ssc(&tper, admin1, Some(NEW_SID_PASSWORD)).await.unwrap();
+    let session = login_admin1(&tper).await.unwrap();
     let result = session.get_mbr_size().await;
     assert_that!(result, ok(gt(&1)));
 }
@@ -95,8 +120,7 @@ async fn get_mbr_size() {
 async fn get_mbr_control() {
     let tper = setup().await;
 
-    let admin1 = opal_locking::authority::ADMIN.get(0).unwrap();
-    let session = LockingConfigSession::login_on_primary_ssc(&tper, admin1, Some(NEW_SID_PASSWORD)).await.unwrap();
+    let session = login_admin1(&tper).await.unwrap();
     let result = session.get_mbr_control().await;
     assert_that!(result, ok(field!(MbrControl.enable, eq(&Some(false)))));
 }
@@ -107,11 +131,127 @@ async fn get_mbr_control() {
 async fn get_alignment() {
     let tper = setup().await;
 
-    let admin1 = opal_locking::authority::ADMIN.get(0).unwrap();
-    let session = LockingConfigSession::login_on_primary_ssc(&tper, admin1, Some(NEW_SID_PASSWORD)).await.unwrap();
+    let session = login_admin1(&tper).await.unwrap();
     let result = session.get_alignment().await;
     assert_that!(
         result,
         ok(eq(&Alignment { alignment_required: true, alignment_granularity: 8, lowest_aligned_lba: 0 }))
     );
+}
+
+#[instrument]
+#[tokio::test]
+#[with_tracing]
+async fn set_locking_ranges() {
+    let tper = setup().await;
+    let session = login_admin1(&tper).await.unwrap();
+
+    let current = session.get_locking_ranges().await.unwrap();
+    let desired = [
+        make_range_from_span(0, 64, 128),
+        LockingRange { read_lock_enabled: Some(true), write_locked: Some(true), ..make_range_from_span(1, 256, 64) },
+    ];
+    let result = session.set_locking_ranges(Some(&current), &desired, LOGICAL_SECTOR_COUNT).await;
+    assert_that!(result, ok(anything()));
+
+    let updated = session.get_locking_ranges().await.unwrap();
+    let range_1 = find_range_by_uid(&updated, range_uid(0));
+    let range_2 = find_range_by_uid(&updated, range_uid(1));
+    assert_eq!((range_1.range_start, range_1.range_length), (Some(64), Some(128)));
+    assert_eq!((range_2.range_start, range_2.range_length), (Some(256), Some(64)));
+    assert_eq!(range_2.read_lock_enabled, Some(true));
+    assert_eq!(range_2.write_locked, Some(true));
+}
+
+#[instrument]
+#[tokio::test]
+#[with_tracing]
+async fn set_locking_ranges_swap() {
+    let tper = setup().await;
+    let session = login_admin1(&tper).await.unwrap();
+
+    session
+        .set_locking_ranges(
+            None,
+            &[
+                make_range_from_span(0, 64, 64),
+                make_range_from_span(1, 128, 64),
+            ],
+            LOGICAL_SECTOR_COUNT,
+        )
+        .await
+        .unwrap();
+
+    // The ranges are only allowed to overlap in the final state, not in the
+    // intermediate ones, so this requires collapsing both before moving them.
+    let result = session
+        .set_locking_ranges(
+            None,
+            &[
+                make_range_from_span(0, 128, 64),
+                make_range_from_span(1, 64, 64),
+            ],
+            LOGICAL_SECTOR_COUNT,
+        )
+        .await;
+    assert_that!(result, ok(anything()));
+
+    let updated = session.get_locking_ranges().await.unwrap();
+    let range_1 = find_range_by_uid(&updated, range_uid(0));
+    let range_2 = find_range_by_uid(&updated, range_uid(1));
+    assert_eq!((range_1.range_start, range_1.range_length), (Some(128), Some(64)));
+    assert_eq!((range_2.range_start, range_2.range_length), (Some(64), Some(64)));
+}
+
+#[instrument]
+#[tokio::test]
+#[with_tracing]
+async fn set_locking_ranges_stale_expected() {
+    let tper = setup().await;
+    let session = login_admin1(&tper).await.unwrap();
+
+    let current = session.get_locking_ranges().await.unwrap();
+
+    let mut stale = current.clone();
+    stale[3].common_name = Some("stale".into());
+    let stale_uid = stale[3].uid.unwrap();
+
+    let result = session
+        .set_locking_ranges(Some(&stale), &[make_range_from_span(0, 64, 128)], LOGICAL_SECTOR_COUNT)
+        .await;
+    assert_that!(
+        result,
+        err(eq(&Error::LockingRangeUpdateRejected(LockingRangePlanError::CurrentNotMatchingExpected {
+            uid: stale_uid
+        })))
+    );
+    assert_that!(session.get_locking_ranges().await, ok(eq(&current)));
+}
+
+#[instrument]
+#[tokio::test]
+#[with_tracing]
+async fn set_locking_ranges_invalid_desired() {
+    let tper = setup().await;
+    let session = login_admin1(&tper).await.unwrap();
+
+    let current = session.get_locking_ranges().await.unwrap();
+    let result = session
+        .set_locking_ranges(
+            None,
+            &[
+                make_range_from_span(0, 64, 128),
+                make_range_from_span(1, 128, 64),
+            ],
+            LOGICAL_SECTOR_COUNT,
+        )
+        .await;
+    assert_that!(
+        result,
+        err(eq(&Error::LockingRangeUpdateRejected(LockingRangePlanError::OverlappingRanges {
+            first: range_uid(0),
+            second: range_uid(1)
+        })))
+    );
+    assert_that!(session.get_locking_ranges().await, ok(eq(&current)));
 }
