@@ -53,7 +53,16 @@ impl LockingRangePlanner {
     /// by the device due to invalid parameters. The execution might still fail
     /// due to unforeseen communication errors.
     pub fn plan(&self) -> Vec<LockingRangeStep> {
-        todo!()
+        let mut steps = Vec::new();
+        let changes: Vec<_> = self.locking_ranges.iter().map(|(uid, change)| (*uid, change.diff())).collect();
+        let erase_steps = changes
+            .iter()
+            .filter(|(_, changes)| changes.range_start.is_some() || changes.range_length.is_some())
+            .map(|(uid, _)| LockingRangeStep::Collapse(*uid));
+        steps.extend(erase_steps);
+        let set_steps = changes.into_iter().map(|(uid, changes)| LockingRangeStep::Set { uid, changes });
+        steps.extend(set_steps);
+        steps
     }
 }
 
@@ -63,13 +72,42 @@ struct LockingRangeChange {
     desired: LockingRange,
 }
 
+impl LockingRangeChange {
+    /// Returns the differences between the current and the desired value of the
+    /// locking range.
+    ///
+    /// All fields that are unchanged are set to [`None`] in the
+    /// result. The UID is always filled.
+    pub fn diff(&self) -> LockingRange {
+        let Self { current, desired } = self;
+        LockingRange {
+            uid: self.desired.uid,
+            name: diff(current.name.as_ref(), desired.name.as_ref()).cloned(),
+            common_name: diff(current.common_name.as_ref(), desired.common_name.as_ref()).cloned(),
+            range_start: diff(current.range_start.as_ref(), desired.range_start.as_ref()).cloned(),
+            range_length: diff(current.range_length.as_ref(), desired.range_length.as_ref()).cloned(),
+            read_lock_enabled: diff(current.read_lock_enabled.as_ref(), desired.read_lock_enabled.as_ref()).cloned(),
+            write_lock_enabled: diff(current.write_lock_enabled.as_ref(), desired.write_lock_enabled.as_ref()).cloned(),
+            read_locked: diff(current.read_locked.as_ref(), desired.read_locked.as_ref()).cloned(),
+            write_locked: diff(current.write_locked.as_ref(), desired.write_locked.as_ref()).cloned(),
+            lock_on_reset: diff(current.lock_on_reset.as_ref(), desired.lock_on_reset.as_ref()).cloned(),
+            active_key: diff(current.active_key.as_ref(), desired.active_key.as_ref()).cloned(),
+            next_key: diff(current.next_key.as_ref(), desired.next_key.as_ref()).cloned(),
+            reencrypt_state: diff(current.reencrypt_state.as_ref(), desired.reencrypt_state.as_ref()).cloned(),
+            reencrypt_request: diff(current.reencrypt_request.as_ref(), desired.reencrypt_request.as_ref()).cloned(),
+            adv_key_mode: diff(current.adv_key_mode.as_ref(), desired.adv_key_mode.as_ref()).cloned(),
+            verify_mode: diff(current.verify_mode.as_ref(), desired.verify_mode.as_ref()).cloned(),
+            cont_on_reset: diff(current.cont_on_reset.as_ref(), desired.cont_on_reset.as_ref()).cloned(),
+            last_reencrypt_lba: diff(current.last_reencrypt_lba.as_ref(), desired.last_reencrypt_lba.as_ref()).cloned(),
+            last_reenc_stat: diff(current.last_reenc_stat.as_ref(), desired.last_reenc_stat.as_ref()).cloned(),
+            general_status: diff(current.general_status.as_ref(), desired.general_status.as_ref()).cloned(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LockingRangeStep {
-    #[expect(unused, reason = "step execution not implemented yet")]
-    Erase(LockingRangeRef),
-    #[expect(unused, reason = "step execution not implemented yet")]
     Collapse(LockingRangeRef),
-    #[expect(unused, reason = "step execution not implemented yet")]
     Set { uid: LockingRangeRef, changes: LockingRange },
 }
 
@@ -276,6 +314,23 @@ fn is_aligned(locking_range: &LockingRange, alignment: &Alignment) -> Option<boo
 fn is_within_capacity(locking_range: &LockingRange, capacity: u64) -> Option<bool> {
     let end = locking_range.range_start?.saturating_add(locking_range.range_length?);
     Some(end <= capacity)
+}
+
+fn diff<'a, T>(current: Option<&'a T>, desired: Option<&'a T>) -> Option<&'a T>
+where
+    T: PartialEq,
+{
+    match (current, desired) {
+        (_, None) => None,
+        (None, _) => desired,
+        (Some(current), Some(desired)) => {
+            if current == desired {
+                None
+            } else {
+                Some(desired)
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -789,5 +844,28 @@ mod tests {
     )]
     fn is_within_capacity_(#[case] range: LockingRange, #[case] capacity: u64, #[case] result: Option<bool>) {
         assert_eq!(is_within_capacity(&range, capacity), result);
+    }
+
+    //--------------------------------------------------------------------------
+    // diff
+    //--------------------------------------------------------------------------
+
+    #[rstest]
+    #[case::both_unspecified(None, None, None)]
+    #[case::desired_unspecified(Some(10), None, None)]
+    #[case::current_unspecified(None, Some(10), Some(10))]
+    #[case::equal(Some(10), Some(10), None)]
+    #[case::different(Some(10), Some(20), Some(20))]
+    #[case::changed_to_zero(Some(10), Some(0), Some(0))]
+    fn diff_(#[case] current: Option<u64>, #[case] desired: Option<u64>, #[case] result: Option<u64>) {
+        assert_eq!(diff(current.as_ref(), desired.as_ref()), result.as_ref());
+    }
+
+    #[test]
+    fn diff_returns_desired() {
+        let current = String::from("current");
+        let desired = String::from("desired");
+        let result = diff(Some(&current), Some(&desired));
+        assert!(result.is_some_and(|result| std::ptr::eq(result, &desired)));
     }
 }
