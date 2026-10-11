@@ -17,6 +17,6 @@ pub use error::Error;
 pub use geometry::{Alignment, Geometry};
 pub use host::Host;
 pub use locking_config_session::LockingConfigSession;
-pub use locking_range_plan::LockingRangeUpdateError;
+pub use locking_range_plan::LockingRangePlanError;
 pub use setup_session::SetupSession;
 pub use spec::Spec;

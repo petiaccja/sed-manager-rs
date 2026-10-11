@@ -15,9 +15,7 @@ use tracing::instrument;
 use crate::{
     Alignment,
     error::Error,
-    locking_range_plan::{
-        LockingRangeUpdateError, backfill_incomplete_spans, check_correctness, create_plan, expected_matches_actual,
-    },
+    locking_range_plan::{LockingRangePlanError, LockingRangePlanner},
     spec::Spec,
 };
 
@@ -179,20 +177,19 @@ impl LockingConfigSession {
         desired: &[LockingRange],
         capacity: u64,
     ) -> Result<(), Error> {
-        let actual = self.get_locking_ranges().await?;
-        let mut desired = desired.to_vec();
-        backfill_incomplete_spans(&mut desired, &actual);
+        let current = self.get_locking_ranges().await?;
+        let planner = LockingRangePlanner::new(current, desired.iter().cloned())?;
 
         if let Some(expected) = expected
-            && !expected_matches_actual(expected, &actual)
+            && !planner.is_matching_current(expected)?
         {
-            return Err(LockingRangeUpdateError::ActualNotMatchingExpected.into());
+            return Err(LockingRangePlanError::ActualNotMatchingExpected.into());
         }
-
         let alignment = self.get_alignment().await?;
-        check_correctness(&desired, &alignment, capacity).ok_or(LockingRangeUpdateError::MissingRangeSpan)?;
+        planner.check_alignment(&alignment)?;
+        planner.check_within_capacity(capacity)?;
 
-        let plan = create_plan(&desired, &actual);
+        let _plan = planner.plan();
 
         todo!()
     }

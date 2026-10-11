@@ -1,104 +1,231 @@
-use sed_spec::objects::LockingRange;
-use tracing::warn;
+use std::collections::HashMap;
+
+use sed_spec::objects::{LockingRange, LockingRangeRef};
 
 use crate::Alignment;
 
-
-
-
-///-----------------------------------------------------------------------------
-/// PREVIOUS ATTEMPTS
-///-----------------------------------------------------------------------------
-
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-pub enum LockingRangeUpdateError {
-    #[error("The actual state of the locking ranges does not match the expected state")]
-    ActualNotMatchingExpected,
-    #[error(
-        "The start and length of one or more ranges is not available; nor the device nor the desired state contains the span"
-    )]
-    MissingRangeSpan,
+#[derive(Debug)]
+pub struct LockingRangePlanner {
+    locking_ranges: HashMap<LockingRangeRef, LockingRangeChange>,
 }
 
-/// Check if the expected locking ranges match the actual ones.
-///
-/// In a simplistic view, this checks if the two sets of locking ranges are "the
-/// same". It's a bit more nuanced in practice:
-/// - The ordering of the ranges does not matter.
-/// - Fields not specified (i.e. [`None`]) in the `expected` locking ranges are
-///   ignored for comparison, even if they are specified in the `actual` locking
-///   range.
-pub fn expected_matches_actual(expected: &[LockingRange], actual: &[LockingRange]) -> bool {
-    let mut expected_sorted: Vec<_> = expected.iter().collect();
-    expected_sorted.sort_by_key(|locking_range| locking_range.uid);
-    let mut actual_sorted: Vec<_> = actual.iter().collect();
-    actual_sorted.sort_by_key(|locking_range| locking_range.uid);
-
-    if expected_sorted.len() != actual_sorted.len() {
-        return false;
+impl LockingRangePlanner {
+    pub fn new(
+        current: impl IntoIterator<Item = LockingRange>,
+        desired: impl IntoIterator<Item = LockingRange>,
+    ) -> Result<Self, LockingRangePlanError> {
+        let mut locking_ranges = map_current_by_uid(current);
+        fill_in_desired_values(&mut locking_ranges, desired)?;
+        fill_in_missing_spans(&mut locking_ranges)?;
+        check_overlap(locking_ranges.values().map(|change| &change.desired))?;
+        Ok(Self { locking_ranges })
     }
 
-    expected_sorted
+    /// Check if the `expected` locking ranges match the current ones as found
+    /// on the device.
+    ///
+    /// It checks if the two locking ranges are equal, with the following nuances:
+    /// - The ordering of the ranges does not matter.
+    /// - Fields not specified (i.e. [`None`]) in the `expected` locking ranges are
+    ///   ignored for comparison, even if they are specified in the `actual` locking
+    ///   range.
+    pub fn is_matching_current<'a>(
+        &self,
+        expected: impl IntoIterator<Item = &'a LockingRange>,
+    ) -> Result<bool, LockingRangePlanError> {
+        for (index, expected) in expected.into_iter().enumerate() {
+            let uid = expected.uid.ok_or(LockingRangePlanError::MissingUid { index, set: "expected" })?;
+            let LockingRangeChange { current, .. } =
+                self.locking_ranges.get(&uid).ok_or(LockingRangePlanError::NotOnDevice { uid, set: "expected" })?;
+            if !is_matching_current(expected, &current) {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+
+    /// Check if the desired value of all ranges respectes alignment requirements.
+    pub fn check_alignment(&self, alignment: &Alignment) -> Result<(), LockingRangePlanError> {
+        for LockingRangeChange { desired, .. } in self.locking_ranges.values() {
+            if !is_aligned(&desired, alignment).expect("missing range span") {
+                return Err(LockingRangePlanError::IncorrectAlignment {
+                    uid: desired.uid.unwrap_or(LockingRangeRef::null()),
+                });
+            }
+        }
+        Ok(())
+    }
+
+    /// Check if the desired value of all ranges is within the capacity of the device.
+    pub fn check_within_capacity(&self, capacity: u64) -> Result<(), LockingRangePlanError> {
+        for LockingRangeChange { desired, .. } in self.locking_ranges.values() {
+            if !is_within_capacity(&desired, capacity).expect("missing range span") {
+                return Err(LockingRangePlanError::ExceedsCapacity {
+                    uid: desired.uid.unwrap_or(LockingRangeRef::null()),
+                });
+            }
+        }
+        Ok(())
+    }
+
+    /// Create a list of steps, when executed in order, will change the locking
+    /// ranges on the device to the desired values.
+    ///
+    /// The plan is always valid such that executing it should not be rejected
+    /// by the device due to invalid parameters. The execution might still fail
+    /// due to unforeseen communication errors.
+    pub fn plan(&self) -> Vec<LockingRangeStep> {
+        todo!()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct LockingRangeChange {
+    current: LockingRange,
+    desired: LockingRange,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LockingRangeStep {
+    #[expect(unused, reason = "step execution not implemented yet")]
+    Erase(LockingRangeRef),
+    #[expect(unused, reason = "step execution not implemented yet")]
+    Collapse(LockingRangeRef),
+    #[expect(unused, reason = "step execution not implemented yet")]
+    Set { uid: LockingRangeRef, changes: LockingRange },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum LockingRangePlanError {
+    #[error("The {set} range at index {index} does not specify its UID")]
+    MissingUid { index: usize, set: &'static str },
+    #[error("The {set} range with UID {uid} does not exist on the device")]
+    NotOnDevice { uid: LockingRangeRef, set: &'static str },
+    #[error("The desired ranges {first} and {second} overlap")]
+    OverlappingRanges { first: LockingRangeRef, second: LockingRangeRef },
+
+    #[error("The actual state of the locking ranges does not match the expected state")]
+    ActualNotMatchingExpected,
+    #[error("The start and/or length of the the range {uid} can not be determined")]
+    MissingRangeSpan { uid: LockingRangeRef },
+    #[error("The locking range has an improper alignment")]
+    IncorrectAlignment { uid: LockingRangeRef },
+    #[error("The locking range exceeds the capacity of the device/namespace")]
+    ExceedsCapacity { uid: sed_packet::ObjectRef<8804682956800> },
+}
+
+/// Maps the `current` locking ranges by UID. The set of changes has the
+/// `current` state of the ranges filled in, but the `desired` state is left as
+/// [`Default`] (except for the UID field).
+///
+/// # Panics
+///
+/// If any of the locking ranges don't have a UID. The device should always return the UIDs.
+fn map_current_by_uid(current: impl IntoIterator<Item = LockingRange>) -> HashMap<LockingRangeRef, LockingRangeChange> {
+    current
         .into_iter()
-        .zip(actual_sorted.into_iter())
-        .all(|(expected, actual)| expected_matches_actual_object(expected, actual))
+        .map(|current| {
+            let uid = current
+                .uid
+                .expect("current locking ranges should be obtained directly from the device and must always have UIDs");
+            (uid, LockingRangeChange { current, desired: LockingRange { uid: Some(uid), ..Default::default() } })
+        })
+        .collect()
+}
+
+/// Updated the `desired` values in the change map.
+///
+/// # Errors
+///
+/// - If any of the desired values don't set their UID field.
+/// - If a desired field is not found in the map -- change requested, does not
+///   exist on the device.
+///
+/// The `desired` values don't have to contain an entry for each locking range
+/// found in the map.
+fn fill_in_desired_values(
+    locking_ranges: &mut HashMap<LockingRangeRef, LockingRangeChange>,
+    desired: impl IntoIterator<Item = LockingRange>,
+) -> Result<(), LockingRangePlanError> {
+    Ok(for (index, desired) in desired.into_iter().enumerate() {
+        let uid = desired.uid.ok_or(LockingRangePlanError::MissingUid { index, set: "desired" })?;
+        let entry = locking_ranges.get_mut(&uid).ok_or(LockingRangePlanError::NotOnDevice { uid, set: "desired" })?;
+        entry.desired = desired;
+    })
+}
+
+/// If a `desired` value is missing the `range_start` or `range_end` fields,
+/// they are filled in from the `current` values. This ensures that all
+/// `desired` ranges specify their span and can be checked for overlaps.
+fn fill_in_missing_spans(
+    locking_ranges: &mut HashMap<LockingRangeRef, LockingRangeChange>,
+) -> Result<(), LockingRangePlanError> {
+    for (uid, LockingRangeChange { current, desired }) in locking_ranges {
+        let uid = *uid;
+        if desired.range_start.is_none() {
+            desired.range_start = Some(current.range_start.ok_or(LockingRangePlanError::MissingRangeSpan { uid })?);
+        }
+        if desired.range_length.is_none() {
+            desired.range_length = Some(current.range_length.ok_or(LockingRangePlanError::MissingRangeSpan { uid })?);
+        }
+    }
+    Ok(())
+}
+
+/// Returns an error if any of the `desired` locking ranges overlap.
+///
+/// # Panics
+///
+/// If any of the ranges don't have their `range_start` or `range_length` specified.
+fn check_overlap<'a>(locking_ranges: impl IntoIterator<Item = &'a LockingRange>) -> Result<(), LockingRangePlanError> {
+    let mut entries: Vec<_> = locking_ranges.into_iter().collect();
+    entries.sort_by_key(|locking_range| locking_range.range_start.expect("missing range span"));
+    for window in entries.windows(2) {
+        let first = window[0];
+        let second = window[1];
+        let first_end =
+            first.range_start.expect("missing range span") + first.range_length.expect("missing range span");
+        let second_start = second.range_start.expect("missing range span");
+        if !(first_end <= second_start) {
+            return Err(LockingRangePlanError::OverlappingRanges {
+                first: first.uid.unwrap_or(LockingRangeRef::null()),
+                second: second.uid.unwrap_or(LockingRangeRef::null()),
+            });
+        }
+    }
+
+    Ok(())
 }
 
 /// Check if the `expected` locking range matches the `actual` based on the
 /// rules explained in [`matches_actual`].
-fn expected_matches_actual_object(expected: &LockingRange, actual: &LockingRange) -> bool {
-    if !expected.uid.is_some() {
-        warn!("expected locking range is missing the UID");
-        return false;
-    }
-    if !actual.uid.is_some() {
-        warn!("expected locking range is missing the UID");
-        return false;
+fn is_matching_current(expected: &LockingRange, actual: &LockingRange) -> bool {
+    fn is_matching_current_field<T>(expected: Option<&T>, actual: Option<&T>) -> bool
+    where
+        T: PartialEq,
+    {
+        if let Some(expected) = expected { Some(expected) == actual } else { true }
     }
 
-    expected.uid == actual.uid
-        && expected_matches_actual_field(expected.common_name.as_ref(), actual.common_name.as_ref())
-        && expected_matches_actual_field(expected.range_start.as_ref(), actual.range_start.as_ref())
-        && expected_matches_actual_field(expected.range_length.as_ref(), actual.range_length.as_ref())
-        && expected_matches_actual_field(expected.read_lock_enabled.as_ref(), actual.read_lock_enabled.as_ref())
-        && expected_matches_actual_field(expected.write_lock_enabled.as_ref(), actual.write_lock_enabled.as_ref())
-        && expected_matches_actual_field(expected.read_locked.as_ref(), actual.read_locked.as_ref())
-        && expected_matches_actual_field(expected.write_locked.as_ref(), actual.write_locked.as_ref())
-        && expected_matches_actual_field(expected.lock_on_reset.as_ref(), actual.lock_on_reset.as_ref())
-        && expected_matches_actual_field(expected.active_key.as_ref(), actual.active_key.as_ref())
-        && expected_matches_actual_field(expected.next_key.as_ref(), actual.next_key.as_ref())
-        && expected_matches_actual_field(expected.reencrypt_state.as_ref(), actual.reencrypt_state.as_ref())
-        && expected_matches_actual_field(expected.reencrypt_request.as_ref(), actual.reencrypt_request.as_ref())
-        && expected_matches_actual_field(expected.adv_key_mode.as_ref(), actual.adv_key_mode.as_ref())
-        && expected_matches_actual_field(expected.verify_mode.as_ref(), actual.verify_mode.as_ref())
-        && expected_matches_actual_field(expected.cont_on_reset.as_ref(), actual.cont_on_reset.as_ref())
-        && expected_matches_actual_field(expected.last_reencrypt_lba.as_ref(), actual.last_reencrypt_lba.as_ref())
-        && expected_matches_actual_field(expected.last_reenc_stat.as_ref(), actual.last_reenc_stat.as_ref())
-        && expected_matches_actual_field(expected.general_status.as_ref(), actual.general_status.as_ref())
-}
-
-fn expected_matches_actual_field<T>(expected: Option<&T>, actual: Option<&T>) -> bool
-where
-    T: PartialEq,
-{
-    if let Some(expected) = expected { Some(expected) == actual } else { true }
-}
-
-/// Check if the locking ranges are accepted by the device:
-/// - They must have the proper alignment
-/// - They must not exceed the device's size
-/// - They must not overlap
-///
-/// # Errors
-///
-/// [`None`] is returned if any of the ranges are missing the `range_start` and
-/// `range_length` values. In that case, correctness cannot be determined.
-pub fn check_correctness(locking_ranges: &[LockingRange], alignment: &Alignment, capacity: u64) -> Option<bool> {
-    Some(
-        try_all(locking_ranges.iter().map(|locking_range| is_aligned(locking_range, alignment)))?
-            && try_all(locking_ranges.iter().map(|locking_range| is_within_capacity(locking_range, capacity)))?
-            && !is_overlapping(locking_ranges)?,
-    )
+    is_matching_current_field(expected.uid.as_ref(), actual.uid.as_ref())
+        && is_matching_current_field(expected.common_name.as_ref(), actual.common_name.as_ref())
+        && is_matching_current_field(expected.range_start.as_ref(), actual.range_start.as_ref())
+        && is_matching_current_field(expected.range_length.as_ref(), actual.range_length.as_ref())
+        && is_matching_current_field(expected.read_lock_enabled.as_ref(), actual.read_lock_enabled.as_ref())
+        && is_matching_current_field(expected.write_lock_enabled.as_ref(), actual.write_lock_enabled.as_ref())
+        && is_matching_current_field(expected.read_locked.as_ref(), actual.read_locked.as_ref())
+        && is_matching_current_field(expected.write_locked.as_ref(), actual.write_locked.as_ref())
+        && is_matching_current_field(expected.lock_on_reset.as_ref(), actual.lock_on_reset.as_ref())
+        && is_matching_current_field(expected.active_key.as_ref(), actual.active_key.as_ref())
+        && is_matching_current_field(expected.next_key.as_ref(), actual.next_key.as_ref())
+        && is_matching_current_field(expected.reencrypt_state.as_ref(), actual.reencrypt_state.as_ref())
+        && is_matching_current_field(expected.reencrypt_request.as_ref(), actual.reencrypt_request.as_ref())
+        && is_matching_current_field(expected.adv_key_mode.as_ref(), actual.adv_key_mode.as_ref())
+        && is_matching_current_field(expected.verify_mode.as_ref(), actual.verify_mode.as_ref())
+        && is_matching_current_field(expected.cont_on_reset.as_ref(), actual.cont_on_reset.as_ref())
+        && is_matching_current_field(expected.last_reencrypt_lba.as_ref(), actual.last_reencrypt_lba.as_ref())
+        && is_matching_current_field(expected.last_reenc_stat.as_ref(), actual.last_reenc_stat.as_ref())
+        && is_matching_current_field(expected.general_status.as_ref(), actual.general_status.as_ref())
 }
 
 fn is_aligned(locking_range: &LockingRange, alignment: &Alignment) -> Option<bool> {
@@ -118,56 +245,13 @@ fn is_within_capacity(locking_range: &LockingRange, capacity: u64) -> Option<boo
     Some(end <= capacity)
 }
 
-fn is_overlapping(locking_range: &[LockingRange]) -> Option<bool> {
-    let mut range_spans = locking_range
-        .iter()
-        .map(|LockingRange { range_start, range_length, .. }| match (range_start, range_length) {
-            (Some(start), Some(length)) => Some(*start..(start + length)),
-            _ => None,
-        })
-        .collect::<Option<Vec<_>>>()?;
-
-    range_spans.sort_by_key(|span| span.start);
-    Some(range_spans.windows(2).all(|window| window[0].end > window[1].start))
-}
-
-/// Returns:
-/// - `Some(true)` if ALL values are present and `true`.
-/// - `Some(false)` if ALL values are present BUT ANY of them are `false`.
-/// - `None` if ANY of the values are missing.
-fn try_all(values: impl IntoIterator<Item = Option<bool>>) -> Option<bool> {
-    let mut result = true;
-    for value in values {
-        result = result && value?;
-    }
-    Some(result)
-}
-
-/// If the `desired` ranges don't have the `range_start` and `range_end` values
-/// for some of the ranges, they are filled in from the `actual`.
-pub fn backfill_incomplete_spans(desired: &mut [LockingRange], actual: &[LockingRange]) {
-    for (index, desired) in desired.iter_mut().enumerate() {
-        if let Some(matching_actual) = actual
-            .get(index)
-            .and_then(|actual| (actual.uid == desired.uid).then_some(actual))
-            .or_else(|| actual.iter().find(|actual| actual.uid == desired.uid))
-        {
-            desired.range_start = desired.range_start.or(matching_actual.range_start);
-            desired.range_length = desired.range_length.or(matching_actual.range_length);
-        }
-    }
-}
-
-pub fn create_plan(desired: &[LockingRange], actual: &[LockingRange]) {
-
-}
-
 #[cfg(test)]
 mod tests {
     use std::num::NonZero;
 
     use super::*;
 
+    use googletest::{assert_that, matchers::*};
     use rstest::rstest;
     use sed_packet::UidRange;
     use sed_spec::objects::LockingRangeRef;
@@ -178,63 +262,204 @@ mod tests {
         step: 1,
     };
 
+    //--------------------------------------------------------------------------
+    // fill_in_desired_values
+    //--------------------------------------------------------------------------
+
+    #[rstest]
+    #[case::success(
+        &[
+            RANGE_UID.get(1).unwrap(),
+        ],
+        &[
+            LockingRange{ uid: RANGE_UID.get(1), range_start: Some(10), ..Default::default() }
+        ],
+        Ok::<_, LockingRangePlanError>(
+            [
+                LockingRange{ uid: RANGE_UID.get(1), range_start: Some(10), ..Default::default() }
+            ]
+        ),
+    )]
+    #[case::missing_uid(
+        &[
+            RANGE_UID.get(1).unwrap(),
+        ],
+        &[
+            LockingRange{ range_start: Some(10), ..Default::default() }
+        ],
+        Err::<[_; 0], _>(LockingRangePlanError::MissingUid{ index: 0, set: "desired" }),
+    )]
+    #[case::not_on_device(
+        &[
+            RANGE_UID.get(1).unwrap(),
+        ],
+        &[
+            LockingRange{ uid: RANGE_UID.get(34), range_start: Some(10), ..Default::default() }
+        ],
+        Err::<[_; 0], _>(LockingRangePlanError::NotOnDevice { uid: RANGE_UID.get(34).unwrap(), set: "desired" }),
+    )]
+    fn fill_in_desired_values_(
+        #[case] uids: &[LockingRangeRef],
+        #[case] desired: &[LockingRange],
+        #[case] expected_result: Result<impl IntoIterator<Item = LockingRange>, LockingRangePlanError>,
+    ) {
+        let mut locking_ranges =
+            map_current_by_uid(uids.iter().map(|uid| LockingRange { uid: Some(*uid), ..Default::default() }));
+
+        let actual_result = fill_in_desired_values(&mut locking_ranges, desired.iter().cloned());
+        match expected_result {
+            Ok(expected_desired) => {
+                let mut expected_desired: Vec<_> = expected_desired.into_iter().collect();
+                expected_desired.sort_by_key(|range| range.uid);
+                let mut actual_desired: Vec<_> = locking_ranges.values().map(|change| change.desired.clone()).collect();
+                actual_desired.sort_by_key(|range| range.uid);
+                assert_that!(actual_desired, eq(&expected_desired));
+            }
+            Err(expected_err) => assert_that!(actual_result, err(eq(&expected_err))),
+        };
+    }
+
+    //--------------------------------------------------------------------------
+    // fill_in_missing_spans
+    //--------------------------------------------------------------------------
+
+    #[test]
+    fn fill_in_missing_spans_() {
+        let mut input = [
+            (
+                RANGE_UID.get(1).unwrap(),
+                LockingRangeChange {
+                    current: LockingRange {
+                        uid: RANGE_UID.get(1),
+                        range_start: Some(1),
+                        range_length: Some(2),
+                        ..Default::default()
+                    },
+                    desired: LockingRange {
+                        uid: RANGE_UID.get(1),
+                        range_start: None,
+                        range_length: None,
+                        ..Default::default()
+                    },
+                },
+            ),
+            (
+                RANGE_UID.get(2).unwrap(),
+                LockingRangeChange {
+                    current: LockingRange {
+                        uid: RANGE_UID.get(2),
+                        range_start: Some(1),
+                        range_length: Some(2),
+                        ..Default::default()
+                    },
+                    desired: LockingRange {
+                        uid: RANGE_UID.get(2),
+                        range_start: Some(3),
+                        range_length: Some(4),
+                        ..Default::default()
+                    },
+                },
+            ),
+        ]
+        .into();
+
+        let expected = [
+            (
+                RANGE_UID.get(1).unwrap(),
+                LockingRangeChange {
+                    current: LockingRange {
+                        uid: RANGE_UID.get(1),
+                        range_start: Some(1),
+                        range_length: Some(2),
+                        ..Default::default()
+                    },
+                    desired: LockingRange {
+                        uid: RANGE_UID.get(1),
+                        range_start: Some(1),
+                        range_length: Some(2),
+                        ..Default::default()
+                    },
+                },
+            ),
+            (
+                RANGE_UID.get(2).unwrap(),
+                LockingRangeChange {
+                    current: LockingRange {
+                        uid: RANGE_UID.get(2),
+                        range_start: Some(1),
+                        range_length: Some(2),
+                        ..Default::default()
+                    },
+                    desired: LockingRange {
+                        uid: RANGE_UID.get(2),
+                        range_start: Some(3),
+                        range_length: Some(4),
+                        ..Default::default()
+                    },
+                },
+            ),
+        ]
+        .into();
+        fill_in_missing_spans(&mut input).unwrap();
+        assert_that!(input, eq(&expected));
+    }
+
+    //--------------------------------------------------------------------------
+    // check_overlap
+    //--------------------------------------------------------------------------
+
+    #[rstest]
+    #[case::non_overlapping_ordered(
+        vec![
+            LockingRange{ uid: RANGE_UID.get(1), range_start: Some(10), range_length: Some(30), ..Default::default() },
+            LockingRange{ uid: RANGE_UID.get(2), range_start: Some(40), range_length: Some(50), ..Default::default() },
+        ],
+        Ok::<_, LockingRangePlanError>(()),
+    )]
+    #[case::non_overlapping_reversed(
+        vec![
+            LockingRange{ uid: RANGE_UID.get(2), range_start: Some(40), range_length: Some(50), ..Default::default() },
+            LockingRange{ uid: RANGE_UID.get(1), range_start: Some(10), range_length: Some(30), ..Default::default() },
+        ],
+        Ok::<_, LockingRangePlanError>(()),
+    )]
+    #[case::overlapping(
+        vec![
+            LockingRange{ uid: RANGE_UID.get(2), range_start: Some(39), range_length: Some(50), ..Default::default() },
+            LockingRange{ uid: RANGE_UID.get(1), range_start: Some(10), range_length: Some(30), ..Default::default() },
+        ],
+        Err::<(),_>( LockingRangePlanError::OverlappingRanges { first: RANGE_UID.get(1).unwrap(), second: RANGE_UID.get(2).unwrap() }),
+    )]
+    fn check_overlap_(#[case] ranges: Vec<LockingRange>, #[case] expected_result: Result<(), LockingRangePlanError>) {
+        assert_that!(check_overlap(&ranges), eq(&expected_result));
+    }
+
+    //--------------------------------------------------------------------------
+    // is_matching_current
+    //--------------------------------------------------------------------------
     #[rstest]
     #[case::equal(
-        &[
-            LockingRange{ uid: RANGE_UID.get(1), range_start: Some(1), range_length: Some(6), ..Default::default() },
-            LockingRange{ uid: RANGE_UID.get(2), range_start: Some(83), range_length: Some(23), ..Default::default() },
-        ],
-        &[
-            LockingRange{ uid: RANGE_UID.get(1), range_start: Some(1), range_length: Some(6), ..Default::default() },
-            LockingRange{ uid: RANGE_UID.get(2), range_start: Some(83), range_length: Some(23), ..Default::default() },
-        ],
-        true
-    )]
-    #[case::not_equal(
-        &[
-            LockingRange{ uid: RANGE_UID.get(1),range_start: Some(1), range_length: Some(6), ..Default::default() },
-            LockingRange{ uid: RANGE_UID.get(2),range_start: Some(94), range_length: Some(23), ..Default::default() },
-        ],
-        &[
-            LockingRange{ uid: RANGE_UID.get(1),range_start: Some(1), range_length: Some(6), ..Default::default() },
-            LockingRange{ uid: RANGE_UID.get(2),range_start: Some(83), range_length: Some(23), ..Default::default() },
-        ],
-        false
+        LockingRange{ range_start: None, range_length: Some(50), ..Default::default() },
+        LockingRange{ range_start: None, range_length: Some(50), ..Default::default() },
+        true,
     )]
     #[case::unspecified(
-        &[
-            LockingRange{ uid: RANGE_UID.get(1),range_start: Some(1), range_length: Some(6), ..Default::default() },
-            LockingRange{ uid: RANGE_UID.get(2),range_start: None, range_length: Some(23), ..Default::default() },
-        ],
-        &[
-            LockingRange{ uid: RANGE_UID.get(1), range_start: Some(1), range_length: Some(6), ..Default::default() },
-            LockingRange{ uid: RANGE_UID.get(2), range_start: Some(83), range_length: Some(23), ..Default::default() },
-        ],
-        true
+        LockingRange{ range_start: None, range_length: Some(50), ..Default::default() },
+        LockingRange{ range_start: Some(10), range_length: Some(50), ..Default::default() },
+        true,
     )]
-    #[case::unordered(
-        &[
-            LockingRange{ uid: RANGE_UID.get(2), range_start: Some(83), range_length: Some(23), ..Default::default() },
-            LockingRange{ uid: RANGE_UID.get(1), range_start: Some(1), range_length: Some(6), ..Default::default() },
-        ],
-        &[
-            LockingRange{ uid: RANGE_UID.get(1), range_start: Some(1), range_length: Some(6), ..Default::default() },
-            LockingRange{ uid: RANGE_UID.get(2), range_start: Some(83), range_length: Some(23), ..Default::default() },
-        ],
-        true
+    #[case::overspecified(
+        LockingRange{ range_start: Some(10), range_length: Some(50), ..Default::default() },
+        LockingRange{ range_start: None, range_length: Some(50), ..Default::default() },
+        false,
     )]
-    #[case::no_uid(
-        &[
-            LockingRange{ range_start: Some(1), range_length: Some(6), ..Default::default() },
-        ],
-        &[
-            LockingRange{ range_start: Some(1), range_length: Some(6), ..Default::default() },
-        ],
-        false
-    )]
-    fn matches_actual_(#[case] expected: &[LockingRange], #[case] actual: &[LockingRange], #[case] result: bool) {
-        assert_eq!(expected_matches_actual(expected, actual), result);
+    fn is_matching_current_(#[case] expected: LockingRange, #[case] actual: LockingRange, #[case] result: bool) {
+        assert_eq!(is_matching_current(&expected, &actual), result);
     }
+
+    //--------------------------------------------------------------------------
+    // is_aligned
+    //--------------------------------------------------------------------------
 
     #[rstest]
     #[case::both_aligned(
@@ -271,113 +496,27 @@ mod tests {
         assert_eq!(is_aligned(&range, &alignment), result);
     }
 
+    //--------------------------------------------------------------------------
+    // is_within_capacity
+    //--------------------------------------------------------------------------
+
     #[rstest]
-    #[case::exactly_capacity(
-        LockingRange{ range_start: Some(7), range_length: Some(13), ..Default::default() },
-        20,
-        Some(true),
+    #[case::unspecified(
+        LockingRange{ range_start: None, range_length: Some(50), ..Default::default() },
+        60,
+        None,
     )]
-    #[case::one_over_capacity(
-        LockingRange{ range_start: Some(7), range_length: Some(14), ..Default::default() },
-        20,
+    #[case::exceeds_by_one(
+        LockingRange{ range_start: Some(10), range_length: Some(51), ..Default::default() },
+        60,
         Some(false),
     )]
-    #[case::unspecified(
-        LockingRange{ range_start: None, range_length: Some(14), ..Default::default() },
-        20,
-        None,
+    #[case::at_capacity(
+        LockingRange{ range_start: Some(10), range_length: Some(50), ..Default::default() },
+        60,
+        Some(true),
     )]
     fn is_within_capacity_(#[case] range: LockingRange, #[case] capacity: u64, #[case] result: Option<bool>) {
         assert_eq!(is_within_capacity(&range, capacity), result);
-    }
-
-    #[rstest]
-    #[case::disjoint(
-        &[
-            LockingRange{ range_start: Some(20), range_length: Some(9), ..Default::default() },
-            LockingRange{ range_start: Some(7), range_length: Some(13), ..Default::default() },
-        ],
-        Some(false),
-    )]
-    #[case::overlapped(
-        &[
-            LockingRange{ range_start: Some(20), range_length: Some(9), ..Default::default() },
-            LockingRange{ range_start: Some(7), range_length: Some(14), ..Default::default() },
-        ],
-        Some(true),
-    )]
-    #[case::unspecified(
-        &[
-            LockingRange{ range_start: None, range_length: Some(14), ..Default::default() },
-            LockingRange{ range_start: Some(9), range_length: Some(17), ..Default::default() },
-        ],
-        None,
-    )]
-    fn is_overlapping_(#[case] ranges: &[LockingRange], #[case] result: Option<bool>) {
-        assert_eq!(is_overlapping(&ranges), result);
-    }
-
-    #[test]
-    fn check_correctness_() {
-        let locking_ranges = [
-            LockingRange { range_start: Some(22), range_length: Some(8), ..Default::default() },
-            LockingRange { range_start: Some(14), range_length: Some(4), ..Default::default() },
-        ];
-        let alignment = Alignment { alignment_required: true, alignment_granularity: 4, lowest_aligned_lba: 10 };
-        let capacity = 120;
-
-        assert_eq!(check_correctness(&locking_ranges, &alignment, capacity), Some(true));
-    }
-
-    #[rstest]
-    #[case::matching_order(
-        vec![
-            LockingRange{ uid: RANGE_UID.get(1), range_start: None, range_length: Some(142), ..Default::default() },
-            LockingRange{ uid: RANGE_UID.get(2), range_start: Some(108), range_length: None, ..Default::default() },
-        ],
-        &[
-            LockingRange{ uid: RANGE_UID.get(1), range_start: Some(3), range_length: Some(14), ..Default::default() },
-            LockingRange{ uid: RANGE_UID.get(2), range_start: Some(9), range_length: Some(17), ..Default::default() },
-        ],
-        &[
-            LockingRange{ uid: RANGE_UID.get(1), range_start: Some(3), range_length: Some(142), ..Default::default() },
-            LockingRange{ uid: RANGE_UID.get(2), range_start: Some(108), range_length: Some(17), ..Default::default() },
-        ],
-    )]
-    #[case::unordered(
-        vec![
-            LockingRange{ uid: RANGE_UID.get(1), range_start: None, range_length: Some(142), ..Default::default() },
-            LockingRange{ uid: RANGE_UID.get(2), range_start: Some(108), range_length: None, ..Default::default() },
-        ],
-        &[
-            LockingRange{ uid: RANGE_UID.get(2), range_start: Some(9), range_length: Some(17), ..Default::default() },
-            LockingRange{ uid: RANGE_UID.get(1), range_start: Some(3), range_length: Some(14), ..Default::default() },
-        ],
-        &[
-            LockingRange{ uid: RANGE_UID.get(1), range_start: Some(3), range_length: Some(142), ..Default::default() },
-            LockingRange{ uid: RANGE_UID.get(2), range_start: Some(108), range_length: Some(17), ..Default::default() },
-        ],
-    )]
-    #[case::wrong_id(
-        vec![
-            LockingRange{ uid: RANGE_UID.get(1), range_start: None, range_length: Some(142), ..Default::default() },
-            LockingRange{ uid: RANGE_UID.get(2), range_start: Some(108), range_length: None, ..Default::default() },
-        ],
-        &[
-            LockingRange{ uid: RANGE_UID.get(4), range_start: Some(9), range_length: Some(17), ..Default::default() },
-            LockingRange{ uid: RANGE_UID.get(1), range_start: Some(3), range_length: Some(14), ..Default::default() },
-        ],
-        &[
-            LockingRange{ uid: RANGE_UID.get(1), range_start: Some(3), range_length: Some(142), ..Default::default() },
-            LockingRange{ uid: RANGE_UID.get(2), range_start: Some(108), range_length: None, ..Default::default() },
-        ],
-    )]
-    fn backfill_span_(
-        #[case] mut desired: Vec<LockingRange>,
-        #[case] actual: &[LockingRange],
-        #[case] result: &[LockingRange],
-    ) {
-        backfill_incomplete_spans(&mut desired, actual);
-        assert_eq!(&desired, &result);
     }
 }
