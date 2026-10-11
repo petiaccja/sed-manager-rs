@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use sed_spec::{
     objects::{LockingRange, LockingRangeRef},
@@ -9,7 +9,8 @@ use crate::Alignment;
 
 #[derive(Debug)]
 pub struct LockingRangePlanner {
-    locking_ranges: HashMap<LockingRangeRef, LockingRangeChange>,
+    // BTreeMap so that the order is deterministic and so are the errors.
+    locking_ranges: BTreeMap<LockingRangeRef, LockingRangeChange>,
 }
 
 impl LockingRangePlanner {
@@ -126,7 +127,9 @@ pub enum LockingRangePlanError {
 /// # Panics
 ///
 /// If any of the locking ranges don't have a UID. The device should always return the UIDs.
-fn map_current_by_uid(current: impl IntoIterator<Item = LockingRange>) -> HashMap<LockingRangeRef, LockingRangeChange> {
+fn map_current_by_uid(
+    current: impl IntoIterator<Item = LockingRange>,
+) -> BTreeMap<LockingRangeRef, LockingRangeChange> {
     current
         .into_iter()
         .map(|current| {
@@ -149,7 +152,7 @@ fn map_current_by_uid(current: impl IntoIterator<Item = LockingRange>) -> HashMa
 /// The `desired` values don't have to contain an entry for each locking range
 /// found in the map.
 fn fill_in_desired_values(
-    locking_ranges: &mut HashMap<LockingRangeRef, LockingRangeChange>,
+    locking_ranges: &mut BTreeMap<LockingRangeRef, LockingRangeChange>,
     desired: impl IntoIterator<Item = LockingRange>,
 ) -> Result<(), LockingRangePlanError> {
     Ok(for (index, desired) in desired.into_iter().enumerate() {
@@ -163,7 +166,7 @@ fn fill_in_desired_values(
 /// they are filled in from the `current` values. This ensures that all
 /// `desired` ranges specify their span and can be checked for overlaps.
 fn fill_in_missing_spans(
-    locking_ranges: &mut HashMap<LockingRangeRef, LockingRangeChange>,
+    locking_ranges: &mut BTreeMap<LockingRangeRef, LockingRangeChange>,
 ) -> Result<(), LockingRangePlanError> {
     for (uid, LockingRangeChange { current, desired }) in locking_ranges {
         let uid = *uid;
@@ -180,7 +183,7 @@ fn fill_in_missing_spans(
 /// Check if the span of the global range is specified to anything but the other
 /// than `0..0` required by the spec.
 fn check_global_range_span(
-    locking_ranges: &HashMap<LockingRangeRef, LockingRangeChange>,
+    locking_ranges: &BTreeMap<LockingRangeRef, LockingRangeChange>,
 ) -> Result<(), LockingRangePlanError> {
     if let Some(LockingRangeChange { desired: global_range, .. }) = locking_ranges.get(&GLOBAL_RANGE)
         && (global_range.range_start.unwrap_or(0) != 0 || global_range.range_length.unwrap_or(0) != 0)
