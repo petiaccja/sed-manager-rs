@@ -25,15 +25,22 @@ pub struct Alignment {
 }
 
 impl Alignment {
-    pub fn align(&self, sector: u64) -> u64 {
-        if !self.alignment_required {
-            return sector;
+    /// Rounds the LBA down to the closest LBA that is aligned properly.
+    pub fn align_lba(&self, lba: u64) -> u64 {
+        // The LBA 0 does not have to be aligned as per the Opal V2 specification.
+        if !self.alignment_required || lba == 0 {
+            return lba;
         }
 
-        let clamped = max(sector, self.lowest_aligned_lba);
+        let clamped = max(lba, self.lowest_aligned_lba);
         let rebased = clamped - self.lowest_aligned_lba;
         let snapped = rebased / self.alignment_granularity * self.alignment_granularity;
         snapped + self.lowest_aligned_lba
+    }
+
+    /// Check if the LBA respects the alignment requirements.
+    pub fn is_lba_aligned(&self, lba: u64) -> bool {
+        self.align_lba(lba) == lba
     }
 }
 
@@ -64,7 +71,20 @@ mod tests {
     // Aligned LBAs are 1, 2001, 4001, ... (granularity 2000, lowest aligned LBA 1).
     #[case::respects_lowest_aligned_lba(3500, alignment(true, 2000, 1), 2001)]
     #[case::starts_at_lowest_aligned_lba(1, alignment(true, 8, 6), 6)]
-    fn align_cases(#[case] sector: u64, #[case] alignment: Alignment, #[case] expected: u64) {
-        assert_eq!(alignment.align(sector), expected);
+    #[case::zero_always_accepted(0, alignment(true, 8, 6), 0)]
+    fn align_lba(#[case] lba: u64, #[case] alignment: Alignment, #[case] expected: u64) {
+        assert_eq!(alignment.align_lba(lba), expected);
+        assert!(alignment.is_lba_aligned(alignment.align_lba(lba)));
+    }
+
+    #[rstest]
+    #[case::not_required(19, alignment(false, 8, 4), true)]
+    #[case::zero(0, alignment(true, 8, 4), true)]
+    #[case::below_lowest_aligned_lba(2, alignment(true, 8, 4), false)]
+    #[case::at_lowest_aligned_lba(4, alignment(true, 8, 4), true)]
+    #[case::aligned(20, alignment(true, 8, 4), true)]
+    #[case::unaligned(16, alignment(true, 8, 4), false)]
+    fn is_lba_aligned(#[case] lba: u64, #[case] alignment: Alignment, #[case] expected: bool) {
+        assert_eq!(alignment.is_lba_aligned(lba), expected);
     }
 }

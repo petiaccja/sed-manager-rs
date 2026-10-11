@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 
-use sed_spec::objects::{LockingRange, LockingRangeRef};
+use sed_spec::{
+    objects::{LockingRange, LockingRangeRef},
+    preconfig::opal_2::locking::locking::GLOBAL_RANGE,
+};
 
 use crate::Alignment;
 
@@ -16,6 +19,7 @@ impl LockingRangePlanner {
     ) -> Result<Self, LockingRangePlanError> {
         let mut locking_ranges = map_current_by_uid(current);
         fill_in_desired_values(&mut locking_ranges, desired)?;
+        check_global_range_span(&locking_ranges)?;
         fill_in_missing_spans(&mut locking_ranges)?;
         check_overlap(locking_ranges.values().map(|change| &change.desired))?;
         Ok(Self { locking_ranges })
@@ -103,7 +107,6 @@ pub enum LockingRangePlanError {
     NotOnDevice { uid: LockingRangeRef, set: &'static str },
     #[error("The desired ranges {first} and {second} overlap")]
     OverlappingRanges { first: LockingRangeRef, second: LockingRangeRef },
-
     #[error("The actual state of the locking ranges does not match the expected state")]
     ActualNotMatchingExpected,
     #[error("The start and/or length of the the range {uid} can not be determined")]
@@ -112,6 +115,8 @@ pub enum LockingRangePlanError {
     IncorrectAlignment { uid: LockingRangeRef },
     #[error("The locking range exceeds the capacity of the device/namespace")]
     ExceedsCapacity { uid: sed_packet::ObjectRef<8804682956800> },
+    #[error("The desired global range specifies a non-zero start or length")]
+    InvalidGlobalRangeSpan,
 }
 
 /// Maps the `current` locking ranges by UID. The set of changes has the
@@ -172,19 +177,38 @@ fn fill_in_missing_spans(
     Ok(())
 }
 
+/// Check if the span of the global range is specified to anything but the other
+/// than `0..0` required by the spec.
+fn check_global_range_span(
+    locking_ranges: &HashMap<LockingRangeRef, LockingRangeChange>,
+) -> Result<(), LockingRangePlanError> {
+    if let Some(LockingRangeChange { desired: global_range, .. }) = locking_ranges.get(&GLOBAL_RANGE)
+        && (global_range.range_start.unwrap_or(0) != 0 || global_range.range_length.unwrap_or(0) != 0)
+    {
+        Err(LockingRangePlanError::InvalidGlobalRangeSpan)
+    } else {
+        Ok(())
+    }
+}
+
 /// Returns an error if any of the `desired` locking ranges overlap.
 ///
 /// # Panics
 ///
 /// If any of the ranges don't have their `range_start` or `range_length` specified.
 fn check_overlap<'a>(locking_ranges: impl IntoIterator<Item = &'a LockingRange>) -> Result<(), LockingRangePlanError> {
-    let mut entries: Vec<_> = locking_ranges.into_iter().collect();
+    // Zero-length ranges are filtered out because they are never considered
+    // overlapping with another as per the specification.
+    let mut entries: Vec<_> =
+        locking_ranges.into_iter().filter(|locking_range| locking_range.range_length != Some(0)).collect();
     entries.sort_by_key(|locking_range| locking_range.range_start.expect("missing range span"));
     for window in entries.windows(2) {
         let first = window[0];
         let second = window[1];
-        let first_end =
-            first.range_start.expect("missing range span") + first.range_length.expect("missing range span");
+        let first_end = first
+            .range_start
+            .expect("missing range span")
+            .saturating_add(first.range_length.expect("missing range span"));
         let second_start = second.range_start.expect("missing range span");
         if !(first_end <= second_start) {
             return Err(LockingRangePlanError::OverlappingRanges {
@@ -234,14 +258,15 @@ fn is_aligned(locking_range: &LockingRange, alignment: &Alignment) -> Option<boo
     }
     let start = locking_range.range_start?;
     let length = locking_range.range_length?;
+    let end = start.saturating_add(length);
 
-    let is_start_aligned = start == alignment.align(start);
-    let is_length_aligned = !alignment.alignment_required || length.is_multiple_of(alignment.alignment_granularity);
-    Some(is_start_aligned && is_length_aligned)
+    let is_start_aligned = alignment.is_lba_aligned(start);
+    let is_end_aligned = alignment.is_lba_aligned(end);
+    Some(is_start_aligned && is_end_aligned)
 }
 
 fn is_within_capacity(locking_range: &LockingRange, capacity: u64) -> Option<bool> {
-    let end = locking_range.range_start? + locking_range.range_length?;
+    let end = locking_range.range_start?.saturating_add(locking_range.range_length?);
     Some(end <= capacity)
 }
 
@@ -430,8 +455,80 @@ mod tests {
         ],
         Err::<(),_>( LockingRangePlanError::OverlappingRanges { first: RANGE_UID.get(1).unwrap(), second: RANGE_UID.get(2).unwrap() }),
     )]
+    #[case::touching(
+        vec![
+            LockingRange{ uid: RANGE_UID.get(1), range_start: Some(10), range_length: Some(30), ..Default::default() },
+            LockingRange{ uid: RANGE_UID.get(2), range_start: Some(40), range_length: Some(50), ..Default::default() },
+        ],
+        Ok::<_, LockingRangePlanError>(()),
+    )]
+    #[case::zero_length_inside_other(
+        vec![
+            LockingRange{ uid: RANGE_UID.get(1), range_start: Some(10), range_length: Some(80), ..Default::default() },
+            LockingRange{ uid: RANGE_UID.get(2), range_start: Some(50), range_length: Some(0), ..Default::default() },
+        ],
+        Ok::<_, LockingRangePlanError>(()),
+    )]
+    #[case::zero_length_same_start(
+        vec![
+            LockingRange{ uid: RANGE_UID.get(1), range_start: Some(10), range_length: Some(0), ..Default::default() },
+            LockingRange{ uid: RANGE_UID.get(2), range_start: Some(10), range_length: Some(30), ..Default::default() },
+            LockingRange{ uid: RANGE_UID.get(3), range_start: Some(10), range_length: Some(0), ..Default::default() },
+        ],
+        Ok::<_, LockingRangePlanError>(()),
+    )]
+    #[case::non_adjacent_overlap(
+        vec![
+            LockingRange{ uid: RANGE_UID.get(1), range_start: Some(0), range_length: Some(100), ..Default::default() },
+            LockingRange{ uid: RANGE_UID.get(2), range_start: Some(10), range_length: Some(0), ..Default::default() },
+            LockingRange{ uid: RANGE_UID.get(3), range_start: Some(50), range_length: Some(10), ..Default::default() },
+        ],
+        Err::<(),_>( LockingRangePlanError::OverlappingRanges { first: RANGE_UID.get(1).unwrap(), second: RANGE_UID.get(3).unwrap() }),
+    )]
+    #[case::overflowing_span(
+        vec![
+            LockingRange{ uid: RANGE_UID.get(1), range_start: Some(10), range_length: Some(u64::MAX), ..Default::default() },
+            LockingRange{ uid: RANGE_UID.get(2), range_start: Some(40), range_length: Some(50), ..Default::default() },
+        ],
+        Err::<(),_>( LockingRangePlanError::OverlappingRanges { first: RANGE_UID.get(1).unwrap(), second: RANGE_UID.get(2).unwrap() }),
+    )]
     fn check_overlap_(#[case] ranges: Vec<LockingRange>, #[case] expected_result: Result<(), LockingRangePlanError>) {
         assert_that!(check_overlap(&ranges), eq(&expected_result));
+    }
+
+    //--------------------------------------------------------------------------
+    // check_global_range_span
+    //--------------------------------------------------------------------------
+
+    #[rstest]
+    #[case::omitted(None, None, Ok(()))]
+    #[case::zero(Some(0), Some(0), Ok(()))]
+    #[case::non_zero_start(Some(10), None, Err(LockingRangePlanError::InvalidGlobalRangeSpan))]
+    #[case::non_zero_length(None, Some(10), Err(LockingRangePlanError::InvalidGlobalRangeSpan))]
+    fn check_global_range_span_(
+        #[case] range_start: Option<u64>,
+        #[case] range_length: Option<u64>,
+        #[case] expected_result: Result<(), LockingRangePlanError>,
+    ) {
+        let global_range = LockingRange { uid: Some(GLOBAL_RANGE), ..Default::default() };
+        let locking_ranges = [(
+            GLOBAL_RANGE,
+            LockingRangeChange {
+                current: global_range.clone(),
+                desired: LockingRange { range_start, range_length, ..global_range },
+            },
+        )]
+        .into();
+        assert_that!(check_global_range_span(&locking_ranges), eq(&expected_result));
+    }
+
+    #[test]
+    fn check_global_range_span_ignores_other_ranges() {
+        let range =
+            LockingRange { uid: RANGE_UID.get(1), range_start: Some(10), range_length: Some(10), ..Default::default() };
+        let locking_ranges =
+            [(RANGE_UID.get(1).unwrap(), LockingRangeChange { current: range.clone(), desired: range })].into();
+        assert_that!(check_global_range_span(&locking_ranges), ok(eq(&())));
     }
 
     //--------------------------------------------------------------------------
@@ -492,6 +589,36 @@ mod tests {
         Alignment { alignment_required: false, alignment_granularity: 8, lowest_aligned_lba: 4 },
         Some(true),
     )]
+    #[case::zero_start_with_aligned_end(
+        LockingRange{ range_start: Some(0), range_length: Some(12), ..Default::default() },
+        Alignment { alignment_required: true, alignment_granularity: 8, lowest_aligned_lba: 4 },
+        Some(true),
+    )]
+    #[case::zero_start_with_unaligned_end(
+        LockingRange{ range_start: Some(0), range_length: Some(8), ..Default::default() },
+        Alignment { alignment_required: true, alignment_granularity: 8, lowest_aligned_lba: 4 },
+        Some(false),
+    )]
+    #[case::zero_start_shorter_than_lowest_aligned_lba(
+        LockingRange{ range_start: Some(0), range_length: Some(2), ..Default::default() },
+        Alignment { alignment_required: true, alignment_granularity: 8, lowest_aligned_lba: 4 },
+        Some(false),
+    )]
+    #[case::zero_length(
+        LockingRange{ range_start: Some(20), range_length: Some(0), ..Default::default() },
+        Alignment { alignment_required: true, alignment_granularity: 8, lowest_aligned_lba: 4 },
+        Some(true),
+    )]
+    #[case::zero_span(
+        LockingRange{ range_start: Some(0), range_length: Some(0), ..Default::default() },
+        Alignment { alignment_required: true, alignment_granularity: 8, lowest_aligned_lba: 4 },
+        Some(true),
+    )]
+    #[case::start_before_lowest_aligned_lba(
+        LockingRange{ range_start: Some(2), range_length: Some(8), ..Default::default() },
+        Alignment { alignment_required: true, alignment_granularity: 8, lowest_aligned_lba: 4 },
+        Some(false),
+    )]
     fn is_aligned_(#[case] range: LockingRange, #[case] alignment: Alignment, #[case] result: Option<bool>) {
         assert_eq!(is_aligned(&range, &alignment), result);
     }
@@ -515,6 +642,11 @@ mod tests {
         LockingRange{ range_start: Some(10), range_length: Some(50), ..Default::default() },
         60,
         Some(true),
+    )]
+    #[case::overflowing_span(
+        LockingRange{ range_start: Some(10), range_length: Some(u64::MAX - 5), ..Default::default() },
+        60,
+        Some(false),
     )]
     fn is_within_capacity_(#[case] range: LockingRange, #[case] capacity: u64, #[case] result: Option<bool>) {
         assert_eq!(is_within_capacity(&range, capacity), result);
