@@ -573,8 +573,10 @@ impl App {
                 };
 
                 // Initiate the actual command.
-                let self_ = self.clone();
-                let path_ = path.clone();
+                let self_s = self.clone();
+                let path_s = path.clone();
+                let self_e = self.clone();
+                let path_e = path.clone();
                 self.command()
                     .success_message("Locking ranges written to device")
                     .error_message("Could not write locking ranges")
@@ -588,9 +590,15 @@ impl App {
                             .await?;
                         Ok(())
                     })
-                    .on_success(move |ui_device, _spec, _output| ui_device)
-                    .finally(move |ui_device| {
-                        self_.list_locking_ranges(path_, true);
+                    .on_success(move |ui_device, _spec, _output| {
+                        self_s.list_locking_ranges(path_s, true);
+                        ui_device
+                    })
+                    .on_error(move |ui_device, _spec, err| {
+                        match err {
+                            Error::LockingRangeUpdateRejected(_) => (),
+                            _ => self_e.list_locking_ranges(path_e, true),
+                        }
                         ui_device
                     })
                     .run();
