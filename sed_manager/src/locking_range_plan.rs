@@ -29,7 +29,7 @@ impl LockingRangePlanner {
     /// Check if the desired value of all ranges respectes alignment requirements.
     pub fn check_alignment(&self, alignment: &Alignment) -> Result<(), LockingRangePlanError> {
         for (uid, LockingRangeChange { desired, .. }) in &self.locking_ranges {
-            if !is_aligned(&desired, alignment).expect("missing range span") {
+            if !is_aligned(desired, alignment).expect("missing range span") {
                 return Err(LockingRangePlanError::IncorrectAlignment { uid: *uid });
             }
         }
@@ -39,7 +39,7 @@ impl LockingRangePlanner {
     /// Check if the desired value of all ranges is within the capacity of the device.
     pub fn check_within_capacity(&self, capacity: u64) -> Result<(), LockingRangePlanError> {
         for (uid, LockingRangeChange { desired, .. }) in &self.locking_ranges {
-            if !is_within_capacity(&desired, capacity).expect("missing range span") {
+            if !is_within_capacity(desired, capacity).expect("missing range span") {
                 return Err(LockingRangePlanError::ExceedsCapacity { uid: *uid });
             }
         }
@@ -59,15 +59,15 @@ impl LockingRangePlanner {
             let diff = change.diff();
             // Ranges that move are collapsed first, so the parameters have to
             // be set relative to the collapsed state.
-            let change = if diff.range_start.is_some() || diff.range_length.is_some() {
+            let after_collapse = if diff.range_start.is_some() || diff.range_length.is_some() {
                 collapse_steps.push(LockingRangeStep::Collapse(*uid));
-                change.collapsed()
+                collapsed(change.current.clone())
             } else {
-                change.clone()
+                change.current.clone()
             };
-            let changes = change.diff();
-            if changes != (LockingRange { uid: Some(*uid), ..Default::default() }) {
-                set_steps.push(LockingRangeStep::Set { uid: *uid, changes });
+            let diff = LockingRangeChange { current: after_collapse, desired: change.desired.clone() }.diff();
+            if diff != (LockingRange { uid: Some(*uid), ..Default::default() }) {
+                set_steps.push(LockingRangeStep::Set { uid: *uid, changes: diff });
             }
         }
         collapse_steps.into_iter().chain(set_steps).collect()
@@ -81,15 +81,6 @@ struct LockingRangeChange {
 }
 
 impl LockingRangeChange {
-    /// Returns the change as it looks after the range has been collapsed on
-    /// the device, i.e. its length set to zero.
-    fn collapsed(&self) -> Self {
-        Self {
-            current: LockingRange { range_length: Some(0), ..self.current.clone() },
-            desired: self.desired.clone(),
-        }
-    }
-
     /// Returns the differences between the current and the desired value of the
     /// locking range.
     ///
@@ -194,7 +185,7 @@ pub fn check_matching_current_all<'a>(
     for (index, expected) in expected.into_iter().enumerate() {
         let uid = expected.uid.ok_or(LockingRangePlanError::MissingUid { index, set: "expected" })?;
         let current = current.get(&uid).ok_or(LockingRangePlanError::NotOnDevice { uid, set: "expected" })?;
-        if !is_matching_current(expected, &current) {
+        if !is_matching_current(expected, current) {
             return Err(LockingRangePlanError::CurrentNotMatchingExpected { uid });
         }
     }
@@ -215,11 +206,12 @@ fn fill_in_desired_values(
     locking_ranges: &mut BTreeMap<LockingRangeRef, LockingRangeChange>,
     desired: impl IntoIterator<Item = LockingRange>,
 ) -> Result<(), LockingRangePlanError> {
-    Ok(for (index, desired) in desired.into_iter().enumerate() {
+    for (index, desired) in desired.into_iter().enumerate() {
         let uid = desired.uid.ok_or(LockingRangePlanError::MissingUid { index, set: "desired" })?;
         let entry = locking_ranges.get_mut(&uid).ok_or(LockingRangePlanError::NotOnDevice { uid, set: "desired" })?;
         entry.desired = desired;
-    })
+    }
+    Ok(())
 }
 
 /// If a `desired` value is missing the `range_start` or `range_end` fields,
@@ -350,6 +342,10 @@ where
     }
 }
 
+fn collapsed(locking_range: LockingRange) -> LockingRange {
+    LockingRange { range_length: Some(0), ..locking_range }
+}
+
 #[cfg(test)]
 mod tests {
     use std::num::NonZero;
@@ -367,7 +363,7 @@ mod tests {
         step: 1,
     };
 
-    fn range(index: usize, start: u64, length: u64) -> LockingRange {
+    fn make_range(index: usize, start: u64, length: u64) -> LockingRange {
         LockingRange {
             uid: RANGE_UID.get(index),
             range_start: Some(start),
@@ -377,8 +373,12 @@ mod tests {
     }
 
     /// The Global Range, a configured range, and an unconfigured (`0..0`) range.
-    fn current_ranges() -> Vec<LockingRange> {
-        vec![range(0, 0, 0), range(1, 12, 16), range(2, 0, 0)]
+    fn make_current_ranges() -> Vec<LockingRange> {
+        vec![
+            make_range(0, 0, 0),
+            make_range(1, 12, 16),
+            make_range(2, 0, 0),
+        ]
     }
 
     //--------------------------------------------------------------------------
@@ -387,21 +387,25 @@ mod tests {
 
     #[test]
     fn planner_zero_length_range_inside_other() {
-        let desired = [range(2, 20, 0)];
-        assert_that!(LockingRangePlanner::new(current_ranges(), desired), ok(anything()));
+        let desired = [make_range(2, 20, 0)];
+        assert_that!(LockingRangePlanner::new(make_current_ranges(), desired), ok(anything()));
     }
 
     #[test]
     fn planner_untouched_zero_length_range_inside_other() {
-        let current = [range(0, 0, 0), range(1, 12, 16), range(2, 20, 0)];
+        let current = [
+            make_range(0, 0, 0),
+            make_range(1, 12, 16),
+            make_range(2, 20, 0),
+        ];
         assert_that!(LockingRangePlanner::new(current, []), ok(anything()));
     }
 
     #[test]
     fn planner_overlap() {
-        let desired = [range(2, 20, 16)];
+        let desired = [make_range(2, 20, 16)];
         assert_that!(
-            LockingRangePlanner::new(current_ranges(), desired),
+            LockingRangePlanner::new(make_current_ranges(), desired),
             err(eq(&LockingRangePlanError::OverlappingRanges {
                 first: RANGE_UID.get(1).unwrap(),
                 second: RANGE_UID.get(2).unwrap()
@@ -415,14 +419,14 @@ mod tests {
     fn planner_check_alignment_untouched_global_range(#[case] alignment: Alignment) {
         // The Global Range and the unconfigured range both span `0..0`, which
         // is not aligned to the lowest aligned LBA, but must still be accepted.
-        let planner = LockingRangePlanner::new(current_ranges(), []).unwrap();
+        let planner = LockingRangePlanner::new(make_current_ranges(), []).unwrap();
         assert_that!(planner.check_alignment(&alignment), ok(eq(&())));
     }
 
     #[test]
     fn planner_check_alignment_unaligned() {
         let alignment = Alignment { alignment_required: true, alignment_granularity: 8, lowest_aligned_lba: 4 };
-        let planner = LockingRangePlanner::new(current_ranges(), [range(2, 36, 7)]).unwrap();
+        let planner = LockingRangePlanner::new(make_current_ranges(), [make_range(2, 36, 7)]).unwrap();
         assert_that!(
             planner.check_alignment(&alignment),
             err(eq(&LockingRangePlanError::IncorrectAlignment { uid: RANGE_UID.get(2).unwrap() }))
@@ -431,7 +435,7 @@ mod tests {
 
     #[test]
     fn planner_check_within_capacity_overflowing_span() {
-        let planner = LockingRangePlanner::new(current_ranges(), [range(2, 100, u64::MAX)]).unwrap();
+        let planner = LockingRangePlanner::new(make_current_ranges(), [make_range(2, 100, u64::MAX)]).unwrap();
         assert_that!(
             planner.check_within_capacity(1000),
             err(eq(&LockingRangePlanError::ExceedsCapacity { uid: RANGE_UID.get(2).unwrap() }))
@@ -440,9 +444,9 @@ mod tests {
 
     #[test]
     fn planner_overflowing_span_overlap() {
-        let desired = [range(1, 0, u64::MAX), range(2, 100, 16)];
+        let desired = [make_range(1, 0, u64::MAX), make_range(2, 100, 16)];
         assert_that!(
-            LockingRangePlanner::new(current_ranges(), desired),
+            LockingRangePlanner::new(make_current_ranges(), desired),
             err(eq(&LockingRangePlanError::OverlappingRanges {
                 first: RANGE_UID.get(1).unwrap(),
                 second: RANGE_UID.get(2).unwrap()
@@ -450,54 +454,60 @@ mod tests {
         );
     }
 
-    fn collapse(index: usize) -> LockingRangeStep {
+    fn make_collapse_step(index: usize) -> LockingRangeStep {
         LockingRangeStep::Collapse(RANGE_UID.get(index).unwrap())
     }
 
-    fn set(changes: LockingRange) -> LockingRangeStep {
+    fn make_set_step(changes: LockingRange) -> LockingRangeStep {
         LockingRangeStep::Set { uid: changes.uid.unwrap(), changes }
     }
 
     #[test]
     fn planner_plan_no_changes() {
-        let planner = LockingRangePlanner::new(current_ranges(), []).unwrap();
+        let planner = LockingRangePlanner::new(make_current_ranges(), []).unwrap();
         assert_that!(planner.plan(), is_empty());
     }
 
     #[test]
     fn planner_plan_without_moving() {
-        let desired = [LockingRange { read_locked: Some(true), ..uid_only(1) }];
-        let planner = LockingRangePlanner::new(current_ranges(), desired.clone()).unwrap();
-        assert_that!(planner.plan(), elements_are![eq(&set(desired[0].clone()))]);
+        let desired = [LockingRange { read_locked: Some(true), ..make_uid_only_range(1) }];
+        let planner = LockingRangePlanner::new(make_current_ranges(), desired.clone()).unwrap();
+        assert_that!(planner.plan(), elements_are![eq(&make_set_step(desired[0].clone()))]);
     }
 
     #[test]
     fn planner_plan_moving_start() {
         // The length must be set again, as it's cleared by the collapse.
-        let planner = LockingRangePlanner::new(current_ranges(), [range(1, 20, 16)]).unwrap();
-        assert_that!(planner.plan(), elements_are![eq(&collapse(1)), eq(&set(range(1, 20, 16)))]);
+        let planner = LockingRangePlanner::new(make_current_ranges(), [make_range(1, 20, 16)]).unwrap();
+        assert_that!(
+            planner.plan(),
+            elements_are![
+                eq(&make_collapse_step(1)),
+                eq(&make_set_step(make_range(1, 20, 16)))
+            ]
+        );
     }
 
     #[test]
     fn planner_plan_moving_end() {
         // The start is unaffected by the collapse, so it must not be set again.
-        let planner = LockingRangePlanner::new(current_ranges(), [range(1, 12, 8)]).unwrap();
-        let expected = LockingRange { range_length: Some(8), ..uid_only(1) };
-        assert_that!(planner.plan(), elements_are![eq(&collapse(1)), eq(&set(expected))]);
+        let planner = LockingRangePlanner::new(make_current_ranges(), [make_range(1, 12, 8)]).unwrap();
+        let expected = LockingRange { range_length: Some(8), ..make_uid_only_range(1) };
+        assert_that!(planner.plan(), elements_are![eq(&make_collapse_step(1)), eq(&make_set_step(expected))]);
     }
 
     #[test]
     fn planner_plan_collapses_before_sets() {
         // Range 2 moves into the space previously occupied by range 1.
-        let desired = [range(1, 40, 16), range(2, 12, 16)];
-        let planner = LockingRangePlanner::new(current_ranges(), desired).unwrap();
+        let desired = [make_range(1, 40, 16), make_range(2, 12, 16)];
+        let planner = LockingRangePlanner::new(make_current_ranges(), desired).unwrap();
         assert_that!(
             planner.plan(),
             elements_are![
-                eq(&collapse(1)),
-                eq(&collapse(2)),
-                eq(&set(range(1, 40, 16))),
-                eq(&set(range(2, 12, 16)))
+                eq(&make_collapse_step(1)),
+                eq(&make_collapse_step(2)),
+                eq(&make_set_step(make_range(1, 40, 16))),
+                eq(&make_set_step(make_range(2, 12, 16)))
             ]
         );
     }
@@ -750,7 +760,7 @@ mod tests {
     // check_matching_current_all
     //--------------------------------------------------------------------------
 
-    fn uid_only(index: usize) -> LockingRange {
+    fn make_uid_only_range(index: usize) -> LockingRange {
         LockingRange { uid: RANGE_UID.get(index), ..Default::default() }
     }
 
@@ -759,30 +769,30 @@ mod tests {
     }
 
     #[rstest]
-    #[case::equal(current_ranges(), Ok(()))]
+    #[case::equal(make_current_ranges(), Ok(()))]
     #[case::empty(vec![], Ok(()))]
-    #[case::reordered(vec![range(2, 0, 0), range(0, 0, 0), range(1, 12, 16)], Ok(()))]
-    #[case::subset(vec![range(1, 12, 16)], Ok(()))]
-    #[case::unspecified_fields_ignored(vec![uid_only(0), uid_only(1), uid_only(2)], Ok(()))]
-    #[case::additional_field_matching(vec![locked(range(1, 12, 16))], Ok(()))]
+    #[case::reordered(vec![make_range(2, 0, 0), make_range(0, 0, 0), make_range(1, 12, 16)], Ok(()))]
+    #[case::subset(vec![make_range(1, 12, 16)], Ok(()))]
+    #[case::unspecified_fields_ignored(vec![make_uid_only_range(0), make_uid_only_range(1), make_uid_only_range(2)], Ok(()))]
+    #[case::additional_field_matching(vec![locked(make_range(1, 12, 16))], Ok(()))]
     #[case::additional_field_mismatching(
-        vec![locked(range(2, 0, 0))],
+        vec![locked(make_range(2, 0, 0))],
         Err(LockingRangePlanError::CurrentNotMatchingExpected { uid: RANGE_UID.get(2).unwrap() }),
     )]
     #[case::span_mismatching(
-        vec![range(0, 0, 0), range(1, 12, 8)],
+        vec![make_range(0, 0, 0), make_range(1, 12, 8)],
         Err(LockingRangePlanError::CurrentNotMatchingExpected { uid: RANGE_UID.get(1).unwrap() }),
     )]
     #[case::first_mismatch_reported(
-        vec![range(2, 4, 4), range(1, 12, 8)],
+        vec![make_range(2, 4, 4), make_range(1, 12, 8)],
         Err(LockingRangePlanError::CurrentNotMatchingExpected { uid: RANGE_UID.get(2).unwrap() }),
     )]
     #[case::missing_uid(
-        vec![range(1, 12, 16), LockingRange { range_start: Some(0), ..Default::default() }],
+        vec![make_range(1, 12, 16), LockingRange { range_start: Some(0), ..Default::default() }],
         Err(LockingRangePlanError::MissingUid { index: 1, set: "expected" }),
     )]
     #[case::not_on_device(
-        vec![range(1, 12, 16), range(5, 0, 0)],
+        vec![make_range(1, 12, 16), make_range(5, 0, 0)],
         Err(LockingRangePlanError::NotOnDevice { uid: RANGE_UID.get(5).unwrap(), set: "expected" }),
     )]
     fn check_matching_current_all_(
@@ -790,7 +800,11 @@ mod tests {
         #[case] expected_result: Result<(), LockingRangePlanError>,
     ) {
         // Range 1 is locked on the device, but range 2 is not.
-        let current = [range(0, 0, 0), locked(range(1, 12, 16)), range(2, 0, 0)];
+        let current = [
+            make_range(0, 0, 0),
+            locked(make_range(1, 12, 16)),
+            make_range(2, 0, 0),
+        ];
         assert_that!(check_matching_current_all(&expected, &current), eq(&expected_result));
     }
 
