@@ -16,7 +16,8 @@ use slint::{ComponentHandle as _, Model as _};
 
 use crate::element_handle_ext::ElementHandleEx;
 use crate::test_utils::{
-    assert_present, assert_toast, find_element, run_test, select_combo_box_item, sleep_until_condition,
+    assert_present, assert_toast, find_element, prevent_clipping, run_test, select_combo_box_item,
+    sleep_until_condition,
 };
 
 const TEST_PASSWORD: &str = "test-password-1234";
@@ -31,6 +32,7 @@ fn change_password() {
     run_test(|| async {
         let runtime = Arc::new(PolyRuntime::Slint(SlintRuntime));
         let ui = ui::MainWindow::new().unwrap();
+        prevent_clipping(&ui);
         let notification_queue = ToastQueue::new(ui.clone_strong());
         let host = Arc::new(Host::new(runtime.clone()));
         let _app = App::new(ui.clone_strong(), notification_queue, host, runtime.clone());

@@ -12,8 +12,10 @@ use std::time::{Duration, Instant};
 use futures::FutureExt;
 use i_slint_backend_testing::{ElementHandle, ElementRoot};
 use sed_async::{Runtime, SlintRuntime};
+use sed_manager_gui_slint as ui;
 use slint::ComponentHandle;
-use slint::platform::PointerEventButton;
+use slint::SharedString;
+use slint::platform::{Key, PointerEventButton, WindowEvent};
 
 use crate::element_handle_ext::ElementHandleEx;
 
@@ -77,6 +79,13 @@ fn init_event_loop() {
     });
 }
 
+/// Clipped UI elements cannot be found by the testing backend, which can lead to
+/// unexpected test failures. To prevent this the window is resized to large
+/// enough so that there is no scrolling or clipping.
+pub fn prevent_clipping(main_window: &ui::MainWindow) {
+    main_window.window().set_size(slint::LogicalSize::new(3840.0, 2160.0));
+}
+
 /// Sleep until the provided condition becomes true or the timeout expires.
 pub async fn sleep_until_condition(mut condition: impl FnMut() -> bool, timeout: Duration) -> Result<(), TimeoutError> {
     let deadline = Instant::now() + timeout;
@@ -123,6 +132,38 @@ pub fn select_combo_box_item(ui: &impl ComponentHandle, combo_box_id: &str, item
         position: click_pos,
         button: PointerEventButton::Left,
     });
+}
+
+/// Replaces the text of a text input by typing into it, then presses Enter.
+///
+/// Unlike [`ElementHandle::set_accessible_value`], this fires the `accepted`
+/// callback, and works for plain `TextInput` elements without accessibility
+/// handlers.
+pub async fn enter_text(ui: &impl ComponentHandle, id: &str, text: &str) {
+    find_element(ui, id).single_click(PointerEventButton::Left).await;
+
+    let window = ui.window();
+    let press = |text: SharedString| window.dispatch_event(WindowEvent::KeyPressed { text });
+    let release = |text: SharedString| window.dispatch_event(WindowEvent::KeyReleased { text });
+    let tap = |text: SharedString| {
+        press(text.clone());
+        release(text);
+    };
+
+    // Select all, so that the typed text replaces the current one.
+    press(Key::Control.into());
+    tap("a".into());
+    release(Key::Control.into());
+
+    for ch in text.chars() {
+        tap(ch.to_string().into());
+    }
+    tap(Key::Return.into());
+}
+
+/// Get the text from a `TextInput` or similar UI element through its accessible value.
+pub fn get_text<'a>(ui: &'a impl ComponentHandle, id: &'a str) -> Option<SharedString> {
+    find_element(ui, id).accessible_value()
 }
 
 /// Assert that a UI element is present or appears within a short time.

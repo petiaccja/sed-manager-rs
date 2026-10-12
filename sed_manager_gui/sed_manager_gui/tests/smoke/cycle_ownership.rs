@@ -14,7 +14,8 @@ use slint::{ComponentHandle as _, Model as _};
 
 use crate::element_handle_ext::ElementHandleEx;
 use crate::test_utils::{
-    assert_absent, assert_enabled, assert_present, assert_toast, find_element, run_test, select_combo_box_item,
+    assert_absent, assert_enabled, assert_present, assert_toast, find_element, prevent_clipping, run_test,
+    select_combo_box_item,
 };
 
 const TEST_PASSWORD: &str = "test-password-1234";
@@ -31,6 +32,7 @@ fn cycle_ownership() {
     run_test(|| async {
         let runtime = Arc::new(PolyRuntime::Slint(SlintRuntime));
         let ui = ui::MainWindow::new().unwrap();
+        prevent_clipping(&ui);
         let notification_queue = ToastQueue::new(ui.clone_strong());
         let host = Arc::new(Host::new(runtime.clone()));
         let _app = App::new(ui.clone_strong(), notification_queue, host, runtime.clone());

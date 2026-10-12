@@ -13,7 +13,7 @@ use slint::platform::PointerEventButton;
 use slint::{ComponentHandle as _, Model as _};
 
 use crate::element_handle_ext::ElementHandleEx;
-use crate::test_utils::{assert_enabled, assert_present, assert_toast, find_element, run_test};
+use crate::test_utils::{assert_enabled, assert_present, assert_toast, find_element, prevent_clipping, run_test};
 
 /// This test exercises the following functionality:
 /// - Reset stack
@@ -22,6 +22,7 @@ fn reset_stack() {
     run_test(|| async {
         let runtime = Arc::new(PolyRuntime::Slint(SlintRuntime));
         let ui = ui::MainWindow::new().unwrap();
+        prevent_clipping(&ui);
         let notification_queue = ToastQueue::new(ui.clone_strong());
         let host = Arc::new(Host::new(runtime.clone()));
         let _app = App::new(ui.clone_strong(), notification_queue, host, runtime.clone());

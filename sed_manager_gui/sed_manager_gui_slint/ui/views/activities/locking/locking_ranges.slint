@@ -115,6 +115,9 @@ component LockingRangeTable {
 
                         Cell {
                             TextInput {
+                                accessible-id: "locking-range-start-" + index;
+                                accessible-role: text-input;
+                                accessible-value: self.text;
                                 text: SectorLib.to_string(locking-range.start, geometry);
                                 color: SectorLib.is-valid(self.text, geometry) ? Palette.control-foreground : PaletteExtra.error-foreground;
 
@@ -134,6 +137,9 @@ component LockingRangeTable {
 
                         Cell {
                             TextInput {
+                                accessible-id: "locking-range-end-" + index;
+                                accessible-role: text-input;
+                                accessible-value: self.text;
                                 text: SectorLib.to_string(locking-range.end, geometry);
                                 color: SectorLib.is-valid(self.text, geometry) ? Palette.control-foreground : PaletteExtra.error-foreground;
 

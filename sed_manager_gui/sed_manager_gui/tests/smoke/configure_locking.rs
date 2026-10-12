@@ -15,7 +15,8 @@ use slint::{ComponentHandle as _, Model as _};
 
 use crate::element_handle_ext::ElementHandleEx;
 use crate::test_utils::{
-    assert_absent, assert_enabled, assert_present, assert_toast, find_element, run_test, sleep_until_condition,
+    assert_absent, assert_enabled, assert_present, assert_toast, enter_text, find_element, get_text, prevent_clipping,
+    run_test, sleep_until_condition,
 };
 
 const TEST_PASSWORD: &str = "test-password-1234";
@@ -34,6 +35,7 @@ fn enter_config_page() {
     run_test(|| async {
         let runtime = Arc::new(PolyRuntime::Slint(SlintRuntime));
         let ui = ui::MainWindow::new().unwrap();
+        prevent_clipping(&ui);
         let notification_queue = ToastQueue::new(ui.clone_strong());
         let host = Arc::new(Host::new(runtime.clone()));
         let _app = App::new(ui.clone_strong(), notification_queue, host, runtime.clone());
@@ -100,6 +102,17 @@ fn enter_config_page() {
         assert_eq!(find_element(&ui, checkbox_id).accessible_checked(), Some(false));
         find_element(&ui, checkbox_id).invoke_accessible_default_action();
 
+        // Also move the range to an unaligned span. The UI should round the
+        // span down to the alignment granularity (8 on the virtual device),
+        // otherwise the device rejects the update.
+        // The sectors are 512 bytes, so 1000 and 2000 LBAs are displayed as
+        // 500 and 1000 KiB, whereas the unaligned values would be displayed as
+        // 500.5 and 1001.5 KiB.
+        enter_text(&ui, "locking-range-start-1", "1001").await;
+        enter_text(&ui, "locking-range-end-1", "2003").await;
+        assert_eq!(get_text(&ui, "locking-range-start-1").as_deref(), Some("500 KiB"));
+        assert_eq!(get_text(&ui, "locking-range-end-1").as_deref(), Some("1000 KiB"));
+
         // Background commands started by the login may briefly make the session
         // busy, which disables the button. The click is therefore invoked
         // synchronously right after it's found enabled, as opposed to an
@@ -109,14 +122,19 @@ fn enter_config_page() {
         assert_toast!(&ui, "Locking ranges written to device");
 
         // The ranges are reloaded from the device after saving, so once there
-        // are no unsaved changes, the checkbox reflects the state of the device.
+        // are no unsaved changes, the UI reflects the state of the device.
         sleep_until_condition(
             || find_element(&ui, "save-ranges-submit").accessible_enabled() == Some(false),
             Duration::from_secs(5),
         )
         .await
         .unwrap_or_else(|_| panic!("the locking ranges were not reloaded"));
+
+        // Reloading replaces the model, and the rows are recreated lazily.
+        assert_present!(&ui, checkbox_id);
         assert_eq!(find_element(&ui, checkbox_id).accessible_checked(), Some(true));
+        assert_eq!(get_text(&ui, "locking-range-start-1").as_deref(), Some("500 KiB"));
+        assert_eq!(get_text(&ui, "locking-range-end-1").as_deref(), Some("1000 KiB"));
 
         // Log back out and wait for the login panel to reappear.
         find_element(&ui, "logout-submit").single_click(PointerEventButton::Left).await;
