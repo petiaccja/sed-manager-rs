@@ -65,9 +65,6 @@ impl App {
         });
 
         // Algorithm callbacks.
-        ui.global::<ui::LockingRangeLib>().on_stripe_x_normalized(locking_range_lib::stripe_x_normalized);
-        ui.global::<ui::LockingRangeLib>()
-            .on_stripe_width_normalized(locking_range_lib::stripe_width_normalized);
         ui.global::<ui::LockingRangeLib>().on_is_any_dirty(locking_range_lib::is_any_dirty);
         ui.global::<ui::LockingRangeLib>().on_is_individual_dirty(locking_range_lib::is_individual_dirty);
         ui.global::<ui::LockingRangeLib>().on_discard(locking_range_lib::discard);
