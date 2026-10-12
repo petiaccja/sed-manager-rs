@@ -11,7 +11,8 @@ import { LockingRange } from "../data/lib.slint";
 export global LockingRangeLib {
     pure callback stripe-x-normalized(index: int, locking-ranges: [LockingRange], geometry: Geometry) -> float;
     pure callback stripe-width-normalized(index: int, locking-ranges: [LockingRange], geometry: Geometry) -> float;
-    pure callback is-dirty(locking-ranges: [LockingRange]) -> bool;
+    pure callback is-any-dirty(locking-ranges: [LockingRange]) -> bool;
+    pure callback is-individual-dirty(index: int, locking-ranges: [LockingRange]) -> bool;
     pure callback discard(locking-ranges: [LockingRange]) -> bool;
 
     stripe-x-normalized(index, locking-ranges, geometry) => {
@@ -22,7 +23,9 @@ export global LockingRangeLib {
         (10000 * (locking-ranges[index].end.value - locking-ranges[index].start.value) / geometry.logical-sector-count.value) / 10000.0
     }
 
-    is-dirty => { true }
+    is-any-dirty => { true }
+
+    is-individual-dirty => { false }
 
     discard => { false }
 }

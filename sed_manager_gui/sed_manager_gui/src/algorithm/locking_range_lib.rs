@@ -10,26 +10,26 @@ use crate::diff_model::DiffModel;
 /// locking ranges instead of proportionally to their size. This factor gives
 /// tiny ranges a disproportionate size so that they are visible and have space
 /// for their label.
-const STRIPE_FIXED_FRACTION: f32 = 0.3;
+const STRIPE_FIXED_FRACTION: f64 = 0.3;
 
 /// Returns the normalized x position (0 .. 1.0) of a locking range as it
 /// appears on the locking range stripe.
 pub fn stripe_x_normalized(index: i32, locking_ranges: ModelRc<ui::LockingRange>, geometry: ui::Geometry) -> f32 {
-    let (index, sector_counts, total_sector_count) = match stripe_map_input(index, locking_ranges, geometry) {
-        Some(input) => input,
-        None => return 0.0,
-    };
-    stripe_placement_normalized(index, &sector_counts, total_sector_count).0
+    if let Some((index, sector_counts, total_sector_count)) = stripe_map_input(index, locking_ranges, geometry) {
+        stripe_placement_normalized(index, &sector_counts, total_sector_count).0
+    } else {
+        0.0
+    }
 }
 
 /// Returns the normalized width (0 .. 1.0) of a locking range as it
 /// appears on the locking range stripe.
 pub fn stripe_width_normalized(index: i32, locking_ranges: ModelRc<ui::LockingRange>, geometry: ui::Geometry) -> f32 {
-    let (index, sector_counts, total_sector_count) = match stripe_map_input(index, locking_ranges, geometry) {
-        Some(input) => input,
-        None => return 0.0,
-    };
-    stripe_placement_normalized(index, &sector_counts, total_sector_count).1
+    if let Some((index, sector_counts, total_sector_count)) = stripe_map_input(index, locking_ranges, geometry) {
+        stripe_placement_normalized(index, &sector_counts, total_sector_count).1
+    } else {
+        0.0
+    }
 }
 
 fn stripe_map_input(
@@ -40,14 +40,16 @@ fn stripe_map_input(
     for row in 0..locking_ranges.row_count() {
         locking_ranges.model_tracker().track_row_data_changes(row);
     }
-    let index = (index > 1).then_some(index as usize - 1)?;
-    let sector_counts: Vec<_> = locking_ranges
+    let indexed_spans: Vec<_> = locking_ranges
         .iter()
-        .skip(1)
-        .map(|range| (max(0, range.start.value) as u64)..(max(0, range.end.value) as u64))
+        .enumerate()
+        .filter(|(_, range)| !range.is_global_range)
+        .map(|(index, range)| (index, (max(0, range.start.value) as u64)..(max(0, range.end.value) as u64)))
         .collect();
+    let filtered_index = indexed_spans.iter().find_map(|(i, _)| (*i == index as usize).then_some(*i))?;
+    let spans = indexed_spans.into_iter().map(|(_, span)| span).collect();
     let total_sector_count = geometry.logical_sector_count.value as u64;
-    Some((index, sector_counts, total_sector_count))
+    Some((filtered_index, spans, total_sector_count))
 }
 
 pub fn stripe_placement_normalized(index: usize, ranges: &[Range<u64>], total_sector_count: u64) -> (f32, f32) {
@@ -55,15 +57,15 @@ pub fn stripe_placement_normalized(index: usize, ranges: &[Range<u64>], total_se
         Some(Range { start, end }) if start < end => (start, end - start),
         _ => return (0.0, 0.0),
     };
-    let total_sector_count = f32::max(1.0, total_sector_count as f32);
-    let num_non_empty = ranges.iter().filter(|s| s.start < s.end).count() as f32;
-    let num_non_empty_before = ranges.iter().filter(|s| s.start < s.end && s.start < start).count() as f32;
-    let (start, length) = (start as f32, length as f32);
+    let total_sector_count = f64::max(1.0, total_sector_count as f64);
+    let num_non_empty = ranges.iter().filter(|s| s.start < s.end).count() as f64;
+    let num_non_empty_before = ranges.iter().filter(|s| s.start < s.end && s.start < start).count() as f64;
+    let (start, length) = (start as f64, length as f64);
 
     let x = num_non_empty_before * STRIPE_FIXED_FRACTION / num_non_empty
         + (1.0 - STRIPE_FIXED_FRACTION) * start / total_sector_count;
     let width = STRIPE_FIXED_FRACTION / num_non_empty + (1.0 - STRIPE_FIXED_FRACTION) * length / total_sector_count;
-    (x, width)
+    (x as f32, width as f32)
 }
 
 /// Returns whether the contents of the locking ranges have changed compared
@@ -73,9 +75,24 @@ pub fn stripe_placement_normalized(index: usize, ranges: &[Range<u64>], total_se
 ///
 /// If the model is not tracking changes, it's always considered dirty and
 /// true is returned.
-pub fn is_dirty(locking_ranges: ModelRc<ui::LockingRange>) -> bool {
+pub fn is_any_dirty(locking_ranges: ModelRc<ui::LockingRange>) -> bool {
     if let Some(diff_model) = locking_ranges.as_any().downcast_ref::<DiffModel<ui::LockingRange>>() {
-        diff_model.is_dirty()
+        diff_model.is_any_dirty()
+    } else {
+        true
+    }
+}
+
+/// Returns whether the contents of the individual locking range have changed
+/// compared to the initial contents.
+///
+/// # Errors
+///
+/// If the model is not tracking changes, it's always considered dirty and
+/// true is returned.
+pub fn is_individual_dirty(index: i32, locking_ranges: ModelRc<ui::LockingRange>) -> bool {
+    if let Some(diff_model) = locking_ranges.as_any().downcast_ref::<DiffModel<ui::LockingRange>>() {
+        diff_model.is_individual_dirty(index as usize)
     } else {
         true
     }
@@ -114,5 +131,13 @@ mod tests {
         let (x, width) = stripe_placement_normalized(0, &[80..100], 100);
         assert_eq!(x, 0.56);
         assert_eq!(width, 0.44);
+    }
+
+    #[test]
+    #[expect(clippy::single_range_in_vec_init)]
+    fn placement_multiple_ranges() {
+        let spans = [80..90, 20..50];
+        assert_eq!(stripe_placement_normalized(0, &spans, 100), (0.71, 0.22));
+        assert_eq!(stripe_placement_normalized(1, &spans, 100), (0.14, 0.36));
     }
 }

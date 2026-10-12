@@ -4575,6 +4575,7 @@ dependencies = [
  "chrono",
  "clap",
  "futures",
+ "googletest",
  "i-slint-backend-testing",
  "oneshot",
  "pin-project",

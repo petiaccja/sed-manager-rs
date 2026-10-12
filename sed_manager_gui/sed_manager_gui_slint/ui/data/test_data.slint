@@ -110,7 +110,7 @@ export global TestData {
                 write-lock-enabled: false,
                 read-locked: false,
                 write-locked: false,
-                erase: false,
+                is-global-range: true,
             },
             {
                 uid: { value: 0ms },
@@ -122,7 +122,7 @@ export global TestData {
                 write-lock-enabled: true,
                 read-locked: false,
                 write-locked: false,
-                erase: false,
+                is-global-range: false,
             },
             {
                 uid: { value: 0ms },
@@ -134,7 +134,7 @@ export global TestData {
                 write-lock-enabled: true,
                 read-locked: false,
                 write-locked: false,
-                erase: false,
+                is-global-range: false,
             },
         ],
         authorities: [

@@ -42,10 +42,19 @@ impl<T> DiffModel<T> {
         }
     }
 
-    pub fn is_dirty(&self) -> bool {
+    pub fn is_any_dirty(&self) -> bool {
         self.notify.track_row_count_changes();
         (0..self.current.borrow().len()).for_each(|row| self.notify.track_row_data_changes(row));
         self.is_dirty.load(Ordering::Relaxed)
+    }
+
+    pub fn is_individual_dirty(&self, index: usize) -> bool
+    where
+        T: PartialEq,
+    {
+        self.notify.track_row_count_changes();
+        self.notify.track_row_data_changes(index);
+        self.committed.borrow().get(index) != self.current.borrow().get(index)
     }
 
     pub fn discard(&self)
@@ -124,7 +133,7 @@ mod tests {
     #[test]
     fn initially_not_dirty() {
         let value = DiffModel::from(vec![1, 2, 3]);
-        assert!(!value.is_dirty());
+        assert!(!value.is_any_dirty());
     }
 
     #[test]
@@ -137,7 +146,7 @@ mod tests {
     fn set_row_data_makes_dirty() {
         let value = DiffModel::from(vec![1, 2, 3]);
         value.set_row_data(1, 5);
-        assert!(value.is_dirty());
+        assert!(value.is_any_dirty());
     }
 
     #[test]
@@ -161,6 +170,6 @@ mod tests {
         value.set_row_data(1, 5);
         value.commit();
         assert_eq!(value.row_data(1), Some(5));
-        assert!(!value.is_dirty());
+        assert!(!value.is_any_dirty());
     }
 }

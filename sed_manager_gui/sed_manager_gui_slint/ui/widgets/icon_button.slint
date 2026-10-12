@@ -30,8 +30,8 @@ export component IconButton inherits IslandButton {
     in property <TextPlacement> text-placement: TextPlacement.right;
 
     GridLayout {
-        padding: 0.4rem;
-        spacing: 0.4rem;
+        padding: 0.135 * (icon-size + font-size);
+        spacing: 0.135 * (icon-size + font-size);
 
         HorizontalLayout {
             col: text-placement == TextPlacement.left ? 1 : 0;

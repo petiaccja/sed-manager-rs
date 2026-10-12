@@ -7,7 +7,10 @@ use std::num::NonZero;
 
 use sed_manager_gui_slint as ui;
 use sed_packet::discovery::FeatureDescriptor;
-use sed_spec::objects::{LockingRange, LockingRangeRef, SecurityProviderRef};
+use sed_spec::{
+    objects::{LockingRange, LockingRangeRef, SecurityProviderRef},
+    preconfig::opal_2::locking::locking::GLOBAL_RANGE,
+};
 use slint::{SharedString, ToSharedString};
 
 use crate::ui_conv::{ConversionError, FromBackend, FromBackendName, TryFromUi, TryIntoBackend};
@@ -28,14 +31,12 @@ impl FromBackendName<&LockingRange> for ui::LockingRange {
             name: SharedString::from_backend_name(&uid, features, sp),
             uid: ui::Uid::from_backend(&uid),
             start: ui::Sector { value: start.cast_signed() },
-            end: ui::Sector { value: start.wrapping_add(length).cast_signed() },
+            end: ui::Sector { value: start.saturating_add(length).cast_signed() },
             read_lock_enabled: value.read_lock_enabled.unwrap_or(false),
             write_lock_enabled: value.write_lock_enabled.unwrap_or(false),
             read_locked: value.read_locked.unwrap_or(false),
             write_locked: value.write_locked.unwrap_or(false),
-            // Erase is an action, not a persisted column. It's only ever set
-            // by the user to request an erase on commit.
-            erase: false,
+            is_global_range: uid == GLOBAL_RANGE,
         }
     }
 }
@@ -44,12 +45,14 @@ impl TryFromUi<&ui::LockingRange> for LockingRange {
     type Error = ConversionError;
 
     fn try_from_ui(value: &ui::LockingRange) -> Result<Self, Self::Error> {
+        let start = value.start.value as u64;
+        let length = (value.end.value - value.start.value) as u64;
         Ok(Self {
             uid: Some((&value.uid).try_into_backend()?),
             name: None, // The name of the UI object is based on the UID, not on this field.
             common_name: Some(value.common_name.to_string()),
-            range_start: Some(value.start.value as u64),
-            range_length: Some((value.end.value - value.start.value) as u64),
+            range_start: if !value.is_global_range { Some(start) } else { None },
+            range_length: if !value.is_global_range { Some(length) } else { None },
             read_lock_enabled: Some(value.read_lock_enabled),
             write_lock_enabled: Some(value.write_lock_enabled),
             read_locked: Some(value.read_locked),
@@ -65,12 +68,33 @@ mod tests {
 
     use super::*;
 
+    use googletest::{assert_that, matchers::*};
+
     // A sanity check for accidentally mixing up all the booleans and the length
     // conversion logic.
     #[test]
-    fn roundtrip() {
+    fn roundtrip_global_range() {
         let locking_range = LockingRange {
             uid: Some(opal_2::locking::locking::GLOBAL_RANGE),
+            common_name: Some("Global range".into()),
+            range_start: None,
+            range_length: None,
+            read_lock_enabled: Some(true),
+            write_lock_enabled: Some(false),
+            read_locked: Some(false),
+            write_locked: Some(true),
+            ..Default::default()
+        };
+
+        let ui_locking_range = ui::LockingRange::from_backend(&locking_range);
+        let roundtrip = LockingRange::try_from_ui(&ui_locking_range).unwrap();
+        assert_that!(roundtrip, eq(&locking_range));
+    }
+
+    #[test]
+    fn roundtrip_non_global_range() {
+        let locking_range = LockingRange {
+            uid: Some(opal_2::locking::locking::RANGE.get(0).unwrap()),
             common_name: Some("Global range".into()),
             range_start: Some(1234),
             range_length: Some(5678),
@@ -83,6 +107,6 @@ mod tests {
 
         let ui_locking_range = ui::LockingRange::from_backend(&locking_range);
         let roundtrip = LockingRange::try_from_ui(&ui_locking_range).unwrap();
-        assert_eq!(locking_range, roundtrip);
+        assert_that!(roundtrip, eq(&locking_range));
     }
 }
