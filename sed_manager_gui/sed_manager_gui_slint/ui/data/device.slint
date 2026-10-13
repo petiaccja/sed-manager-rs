@@ -106,8 +106,8 @@ export struct Authority {
     common_name: string,
     enabled: bool,
     is-class: bool,
-    locking-range-access: [LockingRangeAccess],
-    mbr-access: MbrAccess,
+    has-password: bool,
+    is-admin: bool,
 }
 
 export struct Mbr {
