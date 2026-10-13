@@ -351,6 +351,9 @@ export component AuthoritiesTab {
                     text: "Apply";
                     primary: true;
                     enabled: !command-status.session-busy && !command-status.session-busy;
+                    icon: Icons.check;
+                    colorize-icon: true;
+                    preferred-width: 7rem;
 
                     clicked => {
                         commit-authorities();
@@ -359,7 +362,9 @@ export component AuthoritiesTab {
 
                 Button {
                     text: "Discard";
-                    width: 8rem;
+                    icon: Icons.cancel;
+                    colorize-icon: true;
+                    preferred-width: 7rem;
 
                     clicked => {
                         discard-authorities();
@@ -374,6 +379,7 @@ export component AuthoritiesTab {
                     text: "Logout";
                     icon: Icons.logout;
                     colorize-icon: true;
+                    preferred-width: 7rem;
 
                     clicked => {
                         logout();

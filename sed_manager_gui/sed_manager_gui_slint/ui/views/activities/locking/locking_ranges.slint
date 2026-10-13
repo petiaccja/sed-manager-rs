@@ -314,13 +314,15 @@ export component LockingRangesTab {
 
             HorizontalLayout {
                 alignment: stretch;
-                spacing: 0.8rem;
+                spacing: StyleMetrics.layout-spacing;
 
                 Button {
                     accessible-id: "save-ranges-submit";
                     text: "Apply";
-                    width: 8rem;
+                    preferred-width: 7rem;
                     primary: true;
+                    icon: Icons.check;
+                    colorize-icon: true;
                     enabled: !command-status.session-busy
                         && !command-status.session-busy
                         && LockingRangeLib.is-any-dirty(locking-ranges);
@@ -332,8 +334,10 @@ export component LockingRangesTab {
 
                 Button {
                     text: "Discard";
-                    width: 8rem;
+                    preferred-width: 7rem;
                     enabled: LockingRangeLib.is-any-dirty(locking-ranges);
+                    icon: Icons.cancel;
+                    colorize-icon: true;
 
                     clicked => {
                         if !LockingRangeLib.discard(locking-ranges) {
@@ -356,6 +360,7 @@ export component LockingRangesTab {
                     text: "Logout";
                     icon: Icons.logout;
                     colorize-icon: true;
+                    preferred-width: 7rem;
 
                     clicked => {
                         logout();
