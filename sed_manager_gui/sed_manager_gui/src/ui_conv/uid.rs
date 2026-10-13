@@ -3,91 +3,58 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use std::convert::Infallible;
-
 use sed_manager_gui_slint as ui;
-use sed_packet::{ObjectRef, Uid, discovery::FeatureDescriptor};
+use sed_packet::{ObjectRef, TableRef, Uid, discovery::FeatureDescriptor};
 use sed_spec::{objects::SecurityProviderRef, path::Path, preconfig::GLOBAL_LOOKUP};
 use slint::SharedString;
 
-use crate::ui_conv::{IntoUi, IntoUiName, TryFromUi};
+use crate::ui_conv::{ConversionError, FromBackend, FromBackendName, FromUi, TryFromUi};
 
-impl IntoUi for Uid {
-    type Ui = ui::Uid;
-
-    fn into_ui(&self) -> Self::Ui {
-        ui::Uid { value: self.to_u64().cast_signed() }
+impl FromBackend<&Uid> for ui::Uid {
+    fn from_backend(value: &Uid) -> Self {
+        ui::Uid { value: value.to_u64().cast_signed() }
     }
 }
 
-impl<const TABLE: u64> IntoUi for ObjectRef<TABLE> {
-    type Ui = ui::Uid;
-
-    fn into_ui(&self) -> Self::Ui {
-        self.to_uid().into_ui()
+impl<const TABLE: u64> FromBackend<&ObjectRef<TABLE>> for ui::Uid {
+    fn from_backend(value: &ObjectRef<TABLE>) -> Self {
+        Self::from_backend(&value.to_uid())
     }
 }
 
-impl TryFromUi<ui::Uid> for Uid {
-    type Error = Infallible;
-
-    fn try_from_ui(value: ui::Uid) -> Result<Self, Self::Error>
-    where
-        Self: Sized,
-    {
-        Ok(Self::new(value.value.cast_unsigned()))
+impl FromUi<&ui::Uid> for Uid {
+    fn from_ui(value: &ui::Uid) -> Self {
+        Self::new(value.value.cast_unsigned())
     }
 }
 
-impl<'a> TryFromUi<&'a ui::Uid> for Uid {
-    type Error = Infallible;
-
-    fn try_from_ui(value: &'a ui::Uid) -> Result<Self, Self::Error>
-    where
-        Self: Sized,
-    {
-        Ok(Self::new(value.value.cast_unsigned()))
-    }
-}
-
-impl IntoUiName for Uid {
-    type Ui = SharedString;
-
-    fn into_ui_name(&self, features: &[FeatureDescriptor], sp: Option<SecurityProviderRef>) -> Self::Ui {
+impl FromBackendName<&Uid> for SharedString {
+    fn from_backend_name(value: &Uid, features: &[FeatureDescriptor], sp: Option<SecurityProviderRef>) -> Self {
         GLOBAL_LOOKUP
-            .by_uid(features, *self, sp)
+            .by_uid(features, *value, sp)
             .map(|name| Path::new(&name).object().to_owned())
-            .unwrap_or_else(|| self.to_string())
+            .unwrap_or_else(|| value.to_string())
             .into()
     }
 }
 
-impl<const TABLE: u64> IntoUiName for ObjectRef<TABLE> {
-    type Ui = SharedString;
-
-    fn into_ui_name(&self, features: &[FeatureDescriptor], sp: Option<SecurityProviderRef>) -> Self::Ui {
-        self.to_uid().into_ui_name(features, sp)
-    }
-}
-
-impl<const TABLE: u64> TryFromUi<ui::Uid> for ObjectRef<TABLE> {
-    type Error = ui::Uid;
-
-    fn try_from_ui(value: ui::Uid) -> Result<Self, Self::Error>
-    where
-        Self: Sized,
-    {
-        Self::try_new(value.value.cast_unsigned()).ok_or(value)
+impl<const TABLE: u64> FromBackendName<&ObjectRef<TABLE>> for SharedString {
+    fn from_backend_name(
+        value: &ObjectRef<TABLE>,
+        features: &[FeatureDescriptor],
+        sp: Option<SecurityProviderRef>,
+    ) -> Self {
+        Self::from_backend_name(&value.to_uid(), features, sp)
     }
 }
 
 impl<'a, const TABLE: u64> TryFromUi<&'a ui::Uid> for ObjectRef<TABLE> {
-    type Error = &'a ui::Uid;
+    type Error = ConversionError;
 
-    fn try_from_ui(value: &'a ui::Uid) -> Result<Self, Self::Error>
-    where
-        Self: Sized,
-    {
-        Self::try_new(value.value.cast_unsigned()).ok_or(value)
+    fn try_from_ui(value: &'a ui::Uid) -> Result<Self, Self::Error> {
+        let uid = Uid::from_ui(value);
+        let expected = TableRef::try_new(TABLE).expect("should always be a table reference");
+        let actual = uid.containing_table().and_then(|uid| TableRef::try_from(uid).ok()).unwrap_or(TableRef::null());
+        Self::try_from(uid).map_err(|_| ConversionError::IncorrectUidTable { expected, actual })
     }
 }

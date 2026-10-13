@@ -646,16 +646,31 @@ pub fn k_aes_256() -> Table<KAes256> {
 }
 
 pub fn locking() -> Table<LockingRange> {
+    // The columns that are preconfigured identically for all ranges.
+    let shared_preconfig = LockingRange {
+        common_name: Some(String::new()),
+        range_start: Some(0),
+        range_length: Some(0),
+        read_lock_enabled: Some(false),
+        write_lock_enabled: Some(false),
+        read_locked: Some(false),
+        write_locked: Some(false),
+        lock_on_reset: Some([ResetType::PowerCycle].into()),
+        ..Default::default()
+    };
+
     let fixed = [LockingRange {
         uid: Some(locking::GLOBAL_RANGE),
+        name: Some("Locking_GlobalRange".into()),
         active_key: Some(k_aes_256::GLOBAL_RANGE_KEY),
-        ..Default::default()
+        ..shared_preconfig.clone()
     }];
 
     let ranges = RANGES.map(|range_idx| LockingRange {
         uid: Some(locking::RANGE.get(range_idx).unwrap()),
+        name: Some(format!("Locking_Range{}", range_idx + 1)),
         active_key: Some(k_aes_256::RANGE_KEY.get(range_idx).unwrap()),
-        ..Default::default()
+        ..shared_preconfig.clone()
     });
 
     fixed.into_iter().chain(ranges).into_table().expect("object missing an UID")

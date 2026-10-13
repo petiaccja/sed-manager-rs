@@ -13,7 +13,7 @@ use slint::platform::PointerEventButton;
 use slint::{ComponentHandle as _, Model as _};
 
 use crate::element_handle_ext::ElementHandleEx;
-use crate::test_utils::{assert_present, assert_toast, find_element, run_test};
+use crate::test_utils::{assert_enabled, assert_present, assert_toast, find_element, prevent_clipping, run_test};
 
 /// This test exercises the following functionality:
 /// - Reset stack
@@ -22,6 +22,7 @@ fn reset_stack() {
     run_test(|| async {
         let runtime = Arc::new(PolyRuntime::Slint(SlintRuntime));
         let ui = ui::MainWindow::new().unwrap();
+        prevent_clipping(&ui);
         let notification_queue = ToastQueue::new(ui.clone_strong());
         let host = Arc::new(Host::new(runtime.clone()));
         let _app = App::new(ui.clone_strong(), notification_queue, host, runtime.clone());
@@ -34,7 +35,9 @@ fn reset_stack() {
         find_element(&ui, "device-side-bar-item-0").single_click(PointerEventButton::Left).await;
         assert_present!(&ui, "activity-reset-stack");
 
-        // Click "Reset stack" and wait for the success toast.
+        // Click "Reset stack" and wait for the success toast. The button is disabled
+        // while the commands issued when the device was opened are still running.
+        assert_enabled!(&ui, "activity-reset-stack");
         find_element(&ui, "activity-reset-stack").single_click(PointerEventButton::Left).await;
         assert_toast!(&ui, "Stack has been reset");
     });

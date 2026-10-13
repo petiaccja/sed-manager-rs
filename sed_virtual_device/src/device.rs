@@ -27,6 +27,7 @@ use crate::tper::{Opal2Tper, Tper};
 pub const VIRTUAL_DEVICE_PATH: &str = "/dev/virtual_device";
 pub const BASE_COM_ID: ComId = ComId(3072);
 pub const NUM_COM_IDS: u16 = 1;
+pub const LOGICAL_SECTOR_COUNT: u64 = 8_589_934_592; // 4 TiB
 
 #[derive(Debug)]
 pub struct VirtualDevice {
@@ -123,7 +124,7 @@ impl StorageDevice for VirtualDevice {
 
     #[instrument(skip(self), ret, err)]
     async fn logical_sector_count(&self) -> Result<u64, Error> {
-        Ok(8_589_934_592) // 4 TiB
+        Ok(LOGICAL_SECTOR_COUNT)
     }
 
     #[instrument(skip(self, data), fields(len = debug(data.len())), ret, err)]

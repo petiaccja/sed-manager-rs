@@ -6,8 +6,10 @@
 mod algorithm;
 pub mod app;
 pub mod associative_model;
+mod busy;
 mod command;
 mod device_list;
+mod diff_model;
 mod session;
 pub mod telemetry;
 pub mod toast;

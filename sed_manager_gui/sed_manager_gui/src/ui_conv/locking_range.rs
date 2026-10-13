@@ -7,43 +7,106 @@ use std::num::NonZero;
 
 use sed_manager_gui_slint as ui;
 use sed_packet::discovery::FeatureDescriptor;
-use sed_spec::objects::{LockingRange, LockingRangeRef, SecurityProviderRef};
-use slint::ToSharedString;
+use sed_spec::{
+    objects::{LockingRange, LockingRangeRef, SecurityProviderRef},
+    preconfig::opal_2::locking::locking::GLOBAL_RANGE,
+};
+use slint::{SharedString, ToSharedString};
 
-use crate::ui_conv::{IntoUi, IntoUiName};
+use crate::ui_conv::{ConversionError, FromBackend, FromBackendName, TryFromUi, TryIntoBackend};
 
 const INVALID_LOCKING_RANGE: LockingRangeRef = LockingRangeRef::from_half(NonZero::new(0xFFFF_FFFF).unwrap());
 
-impl IntoUi for LockingRange {
-    type Ui = ui::LockingRange;
-
-    fn into_ui(&self) -> Self::Ui {
-        let start = self.range_start.unwrap_or(0);
-        let length = self.range_length.unwrap_or(0);
+impl FromBackendName<&LockingRange> for ui::LockingRange {
+    fn from_backend_name(
+        value: &LockingRange,
+        features: &[FeatureDescriptor],
+        sp: Option<SecurityProviderRef>,
+    ) -> Self {
+        let uid = value.uid.unwrap_or(INVALID_LOCKING_RANGE);
+        let start = value.range_start.unwrap_or(0);
+        let length = value.range_length.unwrap_or(0);
         ui::LockingRange {
-            common_name: self.common_name.as_deref().unwrap_or("").to_shared_string(),
-            name: self.uid.unwrap_or(INVALID_LOCKING_RANGE).to_shared_string(),
-            uid: self.uid.unwrap_or(INVALID_LOCKING_RANGE).into_ui(),
+            common_name: value.common_name.as_deref().unwrap_or("").to_shared_string(),
+            name: SharedString::from_backend_name(&uid, features, sp),
+            uid: ui::Uid::from_backend(&uid),
             start: ui::Sector { value: start.cast_signed() },
-            end: ui::Sector { value: start.wrapping_add(length).cast_signed() },
-            read_lock_enabled: self.read_lock_enabled.unwrap_or(false),
-            write_lock_enabled: self.write_lock_enabled.unwrap_or(false),
-            read_locked: self.read_locked.unwrap_or(false),
-            write_locked: self.write_locked.unwrap_or(false),
-            // Erase is an action, not a persisted column. It's only ever set
-            // by the user to request an erase on commit.
-            erase: false,
+            end: ui::Sector { value: start.saturating_add(length).cast_signed() },
+            read_lock_enabled: value.read_lock_enabled.unwrap_or(false),
+            write_lock_enabled: value.write_lock_enabled.unwrap_or(false),
+            read_locked: value.read_locked.unwrap_or(false),
+            write_locked: value.write_locked.unwrap_or(false),
+            is_global_range: uid == GLOBAL_RANGE,
         }
     }
 }
 
-impl IntoUiName for LockingRange {
-    type Ui = ui::LockingRange;
+impl TryFromUi<&ui::LockingRange> for LockingRange {
+    type Error = ConversionError;
 
-    fn into_ui_name(&self, features: &[FeatureDescriptor], sp: Option<SecurityProviderRef>) -> Self::Ui {
-        ui::LockingRange {
-            name: self.uid.unwrap_or(INVALID_LOCKING_RANGE).into_ui_name(features, sp),
-            ..self.into_ui()
-        }
+    fn try_from_ui(value: &ui::LockingRange) -> Result<Self, Self::Error> {
+        let start = value.start.value as u64;
+        let length = (value.end.value - value.start.value) as u64;
+        Ok(Self {
+            uid: Some((&value.uid).try_into_backend()?),
+            name: None, // The name of the UI object is based on the UID, not on this field.
+            common_name: Some(value.common_name.to_string()),
+            range_start: if !value.is_global_range { Some(start) } else { None },
+            range_length: if !value.is_global_range { Some(length) } else { None },
+            read_lock_enabled: Some(value.read_lock_enabled),
+            write_lock_enabled: Some(value.write_lock_enabled),
+            read_locked: Some(value.read_locked),
+            write_locked: Some(value.write_locked),
+            ..Default::default()
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use sed_spec::preconfig::opal_2;
+
+    use super::*;
+
+    use googletest::{assert_that, matchers::*};
+
+    // A sanity check for accidentally mixing up all the booleans and the length
+    // conversion logic.
+    #[test]
+    fn roundtrip_global_range() {
+        let locking_range = LockingRange {
+            uid: Some(opal_2::locking::locking::GLOBAL_RANGE),
+            common_name: Some("Global range".into()),
+            range_start: None,
+            range_length: None,
+            read_lock_enabled: Some(true),
+            write_lock_enabled: Some(false),
+            read_locked: Some(false),
+            write_locked: Some(true),
+            ..Default::default()
+        };
+
+        let ui_locking_range = ui::LockingRange::from_backend(&locking_range);
+        let roundtrip = LockingRange::try_from_ui(&ui_locking_range).unwrap();
+        assert_that!(roundtrip, eq(&locking_range));
+    }
+
+    #[test]
+    fn roundtrip_non_global_range() {
+        let locking_range = LockingRange {
+            uid: Some(opal_2::locking::locking::RANGE.get(0).unwrap()),
+            common_name: Some("Global range".into()),
+            range_start: Some(1234),
+            range_length: Some(5678),
+            read_lock_enabled: Some(true),
+            write_lock_enabled: Some(false),
+            read_locked: Some(false),
+            write_locked: Some(true),
+            ..Default::default()
+        };
+
+        let ui_locking_range = ui::LockingRange::from_backend(&locking_range);
+        let roundtrip = LockingRange::try_from_ui(&ui_locking_range).unwrap();
+        assert_that!(roundtrip, eq(&locking_range));
     }
 }

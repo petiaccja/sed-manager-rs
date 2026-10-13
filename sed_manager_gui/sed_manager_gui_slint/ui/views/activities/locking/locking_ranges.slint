@@ -25,6 +25,9 @@ import {
     HeaderCell,
     PaletteExtra,
     CyclicColor,
+    ToastQueue,
+    ToastLevel,
+    IconButton,
 } from "../../../widgets/lib.slint";
 import { Icons } from "../../../resources/lib.slint";
 
@@ -65,7 +68,6 @@ component LockingRangeTable {
                         "Write locking enabled",
                         "Read locked",
                         "Write locked",
-                        "Erase"
                     ]: Detached {
                         row: 0;
                         col: index + 1;
@@ -88,10 +90,22 @@ component LockingRangeTable {
                         z: 1;
 
                         HeaderCell {
-                            Text {
-                                text: locking-range.name;
-                                color: CyclicColor.foreground(index);
-                                vertical-alignment: center;
+                            HorizontalLayout {
+                                alignment: space-between;
+
+                                Text {
+                                    text: locking-range.name;
+                                    color: CyclicColor.foreground(index);
+                                    vertical-alignment: center;
+                                    font-italic: LockingRangeLib.is-individual-dirty(index, locking-ranges);
+                                }
+
+                                IconButton {
+                                    icon-size: 1.4rem;
+                                    icon: Icons.destruction;
+                                    text-placement: left;
+                                    enabled: !LockingRangeLib.is-individual-dirty(index, locking-ranges);
+                                }
                             }
                         }
                     }
@@ -103,6 +117,7 @@ component LockingRangeTable {
                         Cell {
                             TextInput {
                                 text <=> locking-range.common-name;
+                                vertical-alignment: center;
                             }
                         }
                     }
@@ -113,8 +128,14 @@ component LockingRangeTable {
 
                         Cell {
                             TextInput {
+                                accessible-id: "locking-range-start-" + index;
+                                accessible-role: text-input;
+                                accessible-value: self.text;
                                 text: SectorLib.to_string(locking-range.start, geometry);
                                 color: SectorLib.is-valid(self.text, geometry) ? Palette.control-foreground : PaletteExtra.error-foreground;
+                                vertical-alignment: center;
+                                enabled: !locking-range.is-global-range;
+                                opacity: !locking-range.is-global-range ? 1.0 : 0.5;
 
                                 accepted => {
                                     if SectorLib.is-valid(self.text, geometry) {
@@ -132,8 +153,14 @@ component LockingRangeTable {
 
                         Cell {
                             TextInput {
-                                text: SectorLib.to_string(locking-range.end, geometry);
-                                color: SectorLib.is-valid(self.text, geometry) ? Palette.control-foreground : PaletteExtra.error-foreground;
+                                accessible-id: "locking-range-end-" + index;
+                                accessible-role: text-input;
+                                accessible-value: self.text;
+                                text: !locking-range.is-global-range ? SectorLib.to_string(locking-range.end, geometry) : "∞";
+                                color: SectorLib.is-valid(self.text, geometry) || locking-range.is-global-range ? Palette.control-foreground : PaletteExtra.error-foreground;
+                                vertical-alignment: center;
+                                enabled: !locking-range.is-global-range;
+                                opacity: !locking-range.is-global-range ? 1.0 : 0.5;
 
                                 accepted => {
                                     if SectorLib.is-valid(self.text, geometry) {
@@ -152,6 +179,7 @@ component LockingRangeTable {
                         Cell {
                             horizontal-alignment: space-around;
                             CheckBox {
+                                accessible-id: "locking-range-read-lock-enabled-" + index;
                                 checked <=> locking-range.read-lock-enabled;
                             }
                         }
@@ -192,18 +220,6 @@ component LockingRangeTable {
                             }
                         }
                     }
-
-                    for locking-range[index] in locking-ranges: Detached {
-                        row: index + 1;
-                        col: 8;
-
-                        Cell {
-                            horizontal-alignment: space-around;
-                            CheckBox {
-                                checked <=> locking-range.erase;
-                            }
-                        }
-                    }
                 }
             }
         }
@@ -220,19 +236,11 @@ component LockingRangeStripe inherits Rectangle {
     in property <[LockingRange]> locking-ranges;
     in property <Geometry> geometry;
 
-    function range-x(index: int) -> length {
-        self.width * LockingRangeLib.stripe-x-normalized(index, locking-ranges, geometry)
-    }
-
-    function range-width(index: int) -> length {
-        self.width * LockingRangeLib.stripe-width-normalized(index, locking-ranges, geometry)
-    }
-
     for locking-range[index] in locking-ranges: Rectangle {
         if index != 0 && locking-range.end.value - locking-range.start.value > 0ms: Rectangle {
-            x: range-x(index);
-            y: root.x;
-            width: range-width(index);
+            x: root.width * LockingRangeLib.stripe-x-normalized(index, locking-ranges, geometry);
+            y: 0;
+            width: root.width * LockingRangeLib.stripe-width-normalized(index, locking-ranges, geometry);
             height: root.height;
 
             background: CyclicColor.background(index);
@@ -309,10 +317,13 @@ export component LockingRangesTab {
                 spacing: 0.8rem;
 
                 Button {
-                    text: "Save ranges";
+                    accessible-id: "save-ranges-submit";
+                    text: "Apply";
                     width: 8rem;
                     primary: true;
-                    enabled: !command-status.session-busy && !command-status.session-busy;
+                    enabled: !command-status.session-busy
+                        && !command-status.session-busy
+                        && LockingRangeLib.is-any-dirty(locking-ranges);
 
                     clicked => {
                         commit-ranges()
@@ -322,8 +333,16 @@ export component LockingRangesTab {
                 Button {
                     text: "Discard";
                     width: 8rem;
+                    enabled: LockingRangeLib.is-any-dirty(locking-ranges);
 
                     clicked => {
+                        if !LockingRangeLib.discard(locking-ranges) {
+                            ToastQueue.push({
+                                level: ToastLevel.error,
+                                title: "Could not discard changes",
+                                message: "You won't be able to discard you changes, but you can keep working and save them. This is a bug, please report it.",
+                            })
+                        }
                         discard-ranges()
                     }
                 }

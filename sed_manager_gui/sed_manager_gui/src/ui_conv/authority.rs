@@ -8,38 +8,29 @@ use std::{num::NonZero, rc::Rc};
 use sed_manager_gui_slint as ui;
 use sed_packet::discovery::FeatureDescriptor;
 use sed_spec::objects::{Authority, AuthorityRef, SecurityProviderRef};
-use slint::{ToSharedString, VecModel};
+use slint::{SharedString, ToSharedString, VecModel};
 
-use crate::ui_conv::{IntoUi, IntoUiName};
+use crate::ui_conv::{FromBackend, FromBackendName};
 
 const INVALID_AUTHORITY: AuthorityRef = AuthorityRef::from_half(NonZero::new(0xFFFF_FFFF).unwrap());
 
-impl IntoUi for Authority {
-    type Ui = ui::Authority;
-
-    fn into_ui(&self) -> Self::Ui {
+impl FromBackendName<&Authority> for ui::Authority {
+    fn from_backend_name(value: &Authority, features: &[FeatureDescriptor], sp: Option<SecurityProviderRef>) -> Self {
+        let uid = value.uid.unwrap_or(INVALID_AUTHORITY);
         ui::Authority {
-            common_name: self.common_name.as_deref().unwrap_or("").to_shared_string(),
+            common_name: value.common_name.as_deref().unwrap_or("").to_shared_string(),
             // Assume enabled. This will give us an error from the TPer when
             // trying to modify the authority, which is better than hiding the authority
             // from the UI.
-            enabled: self.enabled.unwrap_or(true),
+            enabled: value.enabled.unwrap_or(true),
             // Assume NOT a class. This will give us an error from the TPer if
             // we try to authenticate, but it's better than hiding it from the
             // UI.
-            is_class: self.is_class.unwrap_or(false),
+            is_class: value.is_class.unwrap_or(false),
             locking_range_access: Rc::from(VecModel::from(Vec::new())).into(),
             mbr_access: ui::MbrAccess::default(),
-            name: self.uid.unwrap_or(INVALID_AUTHORITY).to_shared_string(),
-            uid: self.uid.unwrap_or(INVALID_AUTHORITY).into_ui(),
+            name: SharedString::from_backend_name(&uid, features, sp),
+            uid: ui::Uid::from_backend(&uid),
         }
-    }
-}
-
-impl IntoUiName for Authority {
-    type Ui = ui::Authority;
-
-    fn into_ui_name(&self, features: &[FeatureDescriptor], sp: Option<SecurityProviderRef>) -> Self::Ui {
-        ui::Authority { name: self.uid.unwrap_or(INVALID_AUTHORITY).into_ui_name(features, sp), ..self.into_ui() }
     }
 }

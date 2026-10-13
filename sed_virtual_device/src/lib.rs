@@ -11,6 +11,5 @@ mod packet_session;
 mod session;
 mod tper;
 
-pub use device::BASE_COM_ID;
-pub use device::{NUM_COM_IDS, VIRTUAL_DEVICE_PATH, VirtualDevice};
+pub use device::{BASE_COM_ID, LOGICAL_SECTOR_COUNT, NUM_COM_IDS, VIRTUAL_DEVICE_PATH, VirtualDevice};
 pub use tper::{INITIAL_SID_PASSWORD, PSID_PASSWORD};

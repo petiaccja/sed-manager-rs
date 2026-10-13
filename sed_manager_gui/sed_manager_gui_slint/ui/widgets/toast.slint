@@ -29,7 +29,7 @@ export struct ToastQueueItem {
 export global ToastQueue {
     in-out property <[ToastQueueItem]> queue;
 
-    callback push(notification: Toast);
+    callback push(toast: Toast);
     callback dismiss(index: int);
 }
 
@@ -39,27 +39,27 @@ export component ToastCard inherits Rectangle {
     border-width: 0.1rem;
     border-color: foreground_brush.mix(Palette.background, 0.5);
 
-    in property <Toast> notification;
+    in property <Toast> toast;
     in property <bool> has-icon;
     in property <bool> has-close;
 
     private property <brush> background_brush: {
-        if notification.level == ToastLevel.success {
+        if toast.level == ToastLevel.success {
             PaletteExtra.success-background
-        } else if notification.level == ToastLevel.info {
+        } else if toast.level == ToastLevel.info {
             PaletteExtra.info-background
-        } else if notification.level == ToastLevel.warning {
+        } else if toast.level == ToastLevel.warning {
             PaletteExtra.warning-background
         } else {
             PaletteExtra.error-background
         }
     }
     private property <brush> foreground_brush: {
-        if notification.level == ToastLevel.success {
+        if toast.level == ToastLevel.success {
             PaletteExtra.success-foreground
-        } else if notification.level == ToastLevel.info {
+        } else if toast.level == ToastLevel.info {
             PaletteExtra.info-foreground
-        } else if notification.level == ToastLevel.warning {
+        } else if toast.level == ToastLevel.warning {
             PaletteExtra.warning-foreground
         } else {
             PaletteExtra.error-foreground
@@ -78,11 +78,11 @@ export component ToastCard inherits Rectangle {
             if has-icon: Image {
                 width: 2rem;
                 source: {
-                    if notification.level == ToastLevel.success {
+                    if toast.level == ToastLevel.success {
                         Icons.check
-                    } else if notification.level == ToastLevel.info {
+                    } else if toast.level == ToastLevel.info {
                         Icons.info
-                    } else if notification.level == ToastLevel.warning {
+                    } else if toast.level == ToastLevel.warning {
                         Icons.warning
                     } else {
                         Icons.error
@@ -91,13 +91,14 @@ export component ToastCard inherits Rectangle {
                 colorize: foreground_brush;
             }
 
-            if !notification.title.is-empty: Text {
-                text: notification.title;
+            if !toast.title.is-empty: Text {
+                text: toast.title;
                 color: foreground_brush;
                 font-size: 1.2rem;
                 font-weight: 400;
                 overflow: elide;
                 vertical-alignment: center;
+                wrap: word-wrap;
             }
 
             Rectangle {
@@ -113,7 +114,7 @@ export component ToastCard inherits Rectangle {
             }
         }
 
-        if !notification.message.is-empty: ScrollView {
+        if !toast.message.is-empty: ScrollView {
             vertical-stretch: 1.0;
             min-height: 1.4rem;
             preferred-width: text.preferred-width;
@@ -122,7 +123,7 @@ export component ToastCard inherits Rectangle {
 
             VerticalLayout {
                 text := Text {
-                    text: notification.message;
+                    text: toast.message;
                     wrap: word-wrap;
                 }
             }
@@ -173,7 +174,7 @@ component ToastInstance {
     }
 
     ToastCard {
-        notification: toast;
+        toast: toast;
         has-icon: true;
         has-close: true;
         closed => {
@@ -196,7 +197,7 @@ export component ToastArea {
 
 
 export component TestCard inherits ToastCard {
-    notification: {
+    toast: {
         title: "Success",
         message: "Operation succeeded successfully.",
         level: ToastLevel.success,

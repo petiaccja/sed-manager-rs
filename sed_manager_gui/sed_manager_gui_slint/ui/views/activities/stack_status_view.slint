@@ -51,32 +51,8 @@ export component StackStatusView {
                 padding: 0.4rem;
 
                 GridLayout {
-                    HorizontalLayout {
-                        alignment: start;
-                        row: 0;
-                        col: 0;
-                        padding: 0.3rem;
-                        padding-left: 0.6rem;
-                        padding-right: 0.6rem;
-                        spacing: 0.3rem;
-
-                        Text {
-                            text: stack-status.com-id.good ? "Connected" : "Not connected";
-                            color: stack-status.com-id.good ? PaletteExtra.success-foreground : PaletteExtra.error-foreground;
-                            font-weight: 600;
-                            overflow: elide;
-                        }
-
-                        Image {
-                            source: stack-status.com-id.good ? Icons.check : Icons.close;
-                            colorize: stack-status.com-id.good ? PaletteExtra.success-foreground : PaletteExtra.error-foreground;
-                            width: 1.2rem;
-                            height: 1.2rem;
-                        }
-                    }
-
                     for name[index] in ["ComID:", "ComID extension:", "Status:"]: Cell {
-                        row: index + 1;
+                        row: index;
                         col: 0;
                         has-highlighting: false;
                         Text {
@@ -88,14 +64,26 @@ export component StackStatusView {
                     for value[index] in [
                         stack-status.com-id.com-id,
                         stack-status.com-id.com-id-ext,
-                        stack-status.com-id.status
                     ]: Cell {
-                        row: index + 1;
+                        row: index;
                         col: 1;
                         has-highlighting: false;
                         Text {
-                            text: value;
+                            text: stack-status.com-id.connected ? value : "N/A";
                             overflow: elide;
+                            color: stack-status.com-id.connected ? PaletteExtra.success-foreground : PaletteExtra.error-foreground;
+                            horizontal-alignment: right;
+                        }
+                    }
+
+                    Cell {
+                        row: 2;
+                        col: 1;
+                        has-highlighting: false;
+                        Text {
+                            text: stack-status.com-id.status;
+                            overflow: elide;
+                            color: stack-status.com-id.receptive ? PaletteExtra.success-foreground : PaletteExtra.error-foreground;
                             horizontal-alignment: right;
                         }
                     }

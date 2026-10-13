@@ -8,22 +8,20 @@ use std::{num::NonZero, time::Duration};
 use sed_spec::methods::{Limit, OptionalLimit};
 use slint::{SharedString, ToSharedString};
 
-use crate::ui_conv::IntoUi;
+use crate::ui_conv::{FromBackend, IntoUi};
 
-impl IntoUi for Duration {
-    type Ui = SharedString;
-
-    fn into_ui(&self) -> Self::Ui {
-        if self < &Duration::from_micros(1) {
-            format!("{} ns", self.as_nanos()).into()
-        } else if self < &Duration::from_millis(1) {
-            format!("{} μs", self.as_nanos() as f64 / 1e3).into()
-        } else if self < &Duration::from_secs(1) {
-            format!("{} ms", self.as_millis() as f64 / 1e3).into()
+impl FromBackend<&Duration> for SharedString {
+    fn from_backend(value: &Duration) -> Self {
+        if value < &Duration::from_micros(1) {
+            format!("{} ns", value.as_nanos()).into()
+        } else if value < &Duration::from_millis(1) {
+            format!("{} μs", value.as_nanos() as f64 / 1e3).into()
+        } else if value < &Duration::from_secs(1) {
+            format!("{} ms", value.as_millis() as f64 / 1e3).into()
         } else {
-            let seconds = (self.as_millis() % 60_000) as f64 / 1e3;
-            let minutes = self.as_secs() / 60 % 60;
-            let hours = self.as_secs() / 3600;
+            let seconds = (value.as_millis() % 60_000) as f64 / 1e3;
+            let minutes = value.as_secs() / 60 % 60;
+            let hours = value.as_secs() / 3600;
             if hours > 0 {
                 format!("{}h {}m {}s", hours, minutes, seconds).into()
             } else if minutes > 0 {
@@ -35,66 +33,54 @@ impl IntoUi for Duration {
     }
 }
 
-impl<T> IntoUi for Option<T>
+impl<'a, T> FromBackend<&'a Option<T>> for SharedString
 where
-    T: IntoUi<Ui = SharedString>,
+    SharedString: FromBackend<&'a T>,
 {
-    type Ui = SharedString;
-
-    fn into_ui(&self) -> Self::Ui {
-        self.as_ref().map(|value| value.into_ui()).unwrap_or("-".into())
+    fn from_backend(value: &'a Option<T>) -> Self {
+        value.as_ref().map(|value| value.into_ui()).unwrap_or("-".into())
     }
 }
 
-impl<T> IntoUi for Limit<T>
+impl<'a, T> FromBackend<&'a Limit<T>> for SharedString
 where
-    T: IntoUi<Ui = SharedString>,
+    SharedString: FromBackend<&'a T>,
 {
-    type Ui = SharedString;
-
-    fn into_ui(&self) -> Self::Ui {
-        match self {
+    fn from_backend(value: &'a Limit<T>) -> Self {
+        match value {
             Limit::Unlimited => "unlimited".into(),
             Limit::Limited(value) => value.into_ui(),
         }
     }
 }
 
-impl<T> IntoUi for OptionalLimit<T>
+impl<'a, T> FromBackend<&'a OptionalLimit<T>> for SharedString
 where
-    T: IntoUi<Ui = SharedString>,
+    SharedString: FromBackend<&'a T>,
 {
-    type Ui = SharedString;
-
-    fn into_ui(&self) -> Self::Ui {
-        match self {
+    fn from_backend(value: &'a OptionalLimit<T>) -> Self {
+        match value {
             OptionalLimit::Unsupported => "not supported".into(),
             OptionalLimit::Limited(value) => value.into_ui(),
         }
     }
 }
 
-impl IntoUi for NonZero<usize> {
-    type Ui = SharedString;
-
-    fn into_ui(&self) -> Self::Ui {
-        self.get().into_ui()
+impl FromBackend<&NonZero<usize>> for SharedString {
+    fn from_backend(value: &NonZero<usize>) -> Self {
+        value.get().to_string().into()
     }
 }
 
-impl IntoUi for usize {
-    type Ui = SharedString;
-
-    fn into_ui(&self) -> Self::Ui {
-        self.to_string().into()
+impl FromBackend<&usize> for SharedString {
+    fn from_backend(value: &usize) -> Self {
+        value.to_string().into()
     }
 }
 
-impl IntoUi for bool {
-    type Ui = SharedString;
-
-    fn into_ui(&self) -> Self::Ui {
-        match self {
+impl FromBackend<&bool> for SharedString {
+    fn from_backend(value: &bool) -> Self {
+        match value {
             true => "yes",
             false => "no",
         }

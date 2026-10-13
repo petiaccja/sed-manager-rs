@@ -9,6 +9,7 @@ use sed_manager_gui_slint as ui;
 use slint::VecModel;
 
 pub trait DeviceExt {
+    #[expect(unused)]
     fn with_identity(self, identity: ui::Identity) -> Self;
     fn with_discovery(self, discovery: ui::Discovery) -> Self;
     fn with_config(self, discovery: ui::DeviceConfig) -> Self;
@@ -49,6 +50,7 @@ impl DiscoveryExt for ui::Discovery {
 }
 
 pub trait StackStatusExt {
+    #[expect(unused)]
     fn with_com_id(self, com_id: ui::ComIdStatus) -> Self;
     fn with_protocol(self, com_id: VecModel<ui::ProtocolProperty>) -> Self;
 }

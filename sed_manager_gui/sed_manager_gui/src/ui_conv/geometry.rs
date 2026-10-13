@@ -5,27 +5,34 @@
 
 use sed_manager::{Alignment, Geometry};
 
-use crate::ui_conv::IntoUi;
+use crate::ui_conv::{FromBackend, FromUi};
 use sed_manager_gui_slint as ui;
 
-impl IntoUi for Geometry {
-    type Ui = ui::Geometry;
-
-    fn into_ui(&self) -> Self::Ui {
-        ui::Geometry {
-            logical_sector_count: ui::Sector { value: self.logical_sector_count as i64 },
-            logical_sector_size: self.logical_sector_size as i32,
+impl FromBackend<&Geometry> for ui::Geometry {
+    fn from_backend(value: &Geometry) -> Self {
+        Self {
+            logical_sector_count: ui::Sector { value: value.logical_sector_count as i64 },
+            logical_sector_size: value.logical_sector_size as i32,
         }
     }
 }
-impl IntoUi for Alignment {
-    type Ui = ui::Alignment;
 
-    fn into_ui(&self) -> Self::Ui {
-        ui::Alignment {
-            alignment_granularity: ui::Sector { value: self.alignment_granularity as i64 },
-            alignment_required: self.alignment_required,
-            lowest_aligned_lba: ui::Sector { value: self.lowest_aligned_lba as i64 },
+impl FromBackend<&Alignment> for ui::Alignment {
+    fn from_backend(value: &Alignment) -> Self {
+        Self {
+            alignment_granularity: ui::Sector { value: value.alignment_granularity as i64 },
+            alignment_required: value.alignment_required,
+            lowest_aligned_lba: ui::Sector { value: value.lowest_aligned_lba as i64 },
+        }
+    }
+}
+
+impl FromUi<&ui::Alignment> for Alignment {
+    fn from_ui(value: &ui::Alignment) -> Self {
+        Self {
+            alignment_required: value.alignment_required,
+            alignment_granularity: value.alignment_granularity.value.max(0) as u64,
+            lowest_aligned_lba: value.lowest_aligned_lba.value.max(0) as u64,
         }
     }
 }

@@ -6,13 +6,18 @@
 use sed_packet::MaxBytes;
 use sed_spec::{
     methods::MethodStatus,
-    objects::{Authority, AuthorityRef, LockingInfoExt, LockingRange, MbrControl, TableDescRefExt},
+    objects::{Authority, AuthorityRef, LockingInfoExt, LockingRange, LockingRangeRef, MbrControl, TableDescRefExt},
     preconfig::core::shared::{locking_info, mbr_control, table, table_id},
 };
-use sed_tper::{Session, Tper};
-use tracing::instrument;
+use sed_tper::{Error as TperError, Session, Tper};
+use tracing::{debug, instrument};
 
-use crate::{Alignment, error::Error, spec::Spec};
+use crate::{
+    Alignment,
+    error::Error,
+    locking_range_plan::{LockingRangePlanner, LockingRangeStep, check_matching_current_all},
+    spec::Spec,
+};
 
 /// Configures the locking SP of the TPer, like locking ranges and authorities.
 ///
@@ -147,5 +152,64 @@ impl LockingConfigSession {
             Err(sed_tper::Error::MethodCallFailed(MethodStatus::InvalidParameter)) => Ok(Alignment::default()),
             Err(err) => Err(err.into()),
         }
+    }
+
+    /// Set the locking ranges to their `desired` value.
+    ///
+    /// When `expected` is provided, this function performs a compare-and-swap.
+    /// If the current state of the locking ranges, as retrieved from the device,
+    /// matches that given by `expected`, the ranges are updated to `desired`.
+    /// If there is a mismatch, the ranges aren't updated and an error is returned.
+    ///
+    /// Only the fields of the [`LockingRange`] object of `desired` that are set
+    /// to [`Some`] value are changed. Except for the UID, ranges should not
+    /// attempt to set read-only or unauthorized fields, or else the device will
+    /// reject the request and an error will be returned.
+    ///
+    /// Before writing anything to the device, the `desired` ranges are checked
+    /// and rejected early if the device would reject them anyway. This avoids
+    /// partial writes to the device, but the update procedure may still fail
+    /// in the middle, leaving some ranges updated and other not. In either cases,
+    /// an error is returned.
+    #[instrument(skip(self), err)]
+    pub async fn set_locking_ranges(
+        &self,
+        expected: Option<&[LockingRange]>,
+        desired: &[LockingRange],
+        capacity: u64,
+    ) -> Result<(), Error> {
+        let current = self.get_locking_ranges().await?;
+        if let Some(expected) = expected {
+            check_matching_current_all(expected, &current)?;
+        }
+
+        let alignment = self.get_alignment().await?;
+        let planner = LockingRangePlanner::new(current, desired.iter().cloned())?;
+        planner.check_alignment(&alignment)?;
+        planner.check_within_capacity(capacity)?;
+
+        let plan = planner.plan();
+        debug!(plan = ?plan);
+        for step in plan {
+            match step {
+                LockingRangeStep::Collapse(uid) => self.collapse_locking_range(uid).await,
+                LockingRangeStep::Set { uid, changes } => self.set_locking_range(uid, changes).await,
+            }
+            .map_err(Error::LockingRangeUpdateFailed)?;
+        }
+
+        Ok(())
+    }
+
+    #[instrument(skip(self), err)]
+    async fn collapse_locking_range(&self, uid: LockingRangeRef) -> Result<(), TperError> {
+        let changes = LockingRange { range_length: Some(0), ..Default::default() };
+        self.set_locking_range(uid, changes).await
+    }
+
+    #[instrument(skip(self), err)]
+    async fn set_locking_range(&self, uid: LockingRangeRef, changes: LockingRange) -> Result<(), TperError> {
+        let changes = LockingRange { uid: None, ..changes };
+        self.session.set_object(uid, changes).await
     }
 }
