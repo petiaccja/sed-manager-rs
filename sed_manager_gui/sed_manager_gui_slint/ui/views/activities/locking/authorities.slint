@@ -130,6 +130,7 @@ component AuthorityTable {
                         Cell {
                             CheckBox {
                                 checked <=> authority.enabled;
+                                enabled: !authority.is-class;
                             }
                         }
                     }
