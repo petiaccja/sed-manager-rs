@@ -129,6 +129,7 @@ component AuthorityTable {
 
                         Cell {
                             CheckBox {
+                                accessible-id: "authority-enabled-" + authority.name;
                                 checked <=> authority.enabled;
                                 enabled: !authority.is-class;
                             }
@@ -163,6 +164,7 @@ export component AuthoritiesTab {
             spacing: StyleMetrics.layout-spacing;
 
             Button {
+                accessible-id: "save-authorities-submit";
                 text: "Apply";
                 primary: true;
                 enabled: !command-status.session-busy && !command-status.session-busy;
@@ -195,6 +197,7 @@ export component AuthoritiesTab {
                 icon: Icons.logout;
                 colorize-icon: true;
                 preferred-width: 7rem;
+                accessible-id: "logout-submit";
 
                 clicked => {
                     logout();

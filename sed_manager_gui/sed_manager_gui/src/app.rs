@@ -22,7 +22,7 @@ use sed_spec::{
 };
 use sed_tper::{Error as TperError, PropertiesChanged};
 use slint::{
-    CloseRequestResponse, ComponentHandle, Model, ModelExt as _, ModelRc, SharedString, ToSharedString, VecModel,
+    CloseRequestResponse, ComponentHandle, Model, ModelExt as _, ModelRc, SharedString, ToSharedString,
     quit_event_loop, spawn_local,
 };
 use tracing::{error, instrument};
@@ -643,13 +643,13 @@ impl App {
                         Ok(())
                     })
                     .on_success(move |ui_device, _spec, _output| {
-                        self_s.list_locking_authorities(path_s, true);
+                        self_s.list_locking_authorities_ext(path_s, true);
                         ui_device
                     })
                     .on_error(move |ui_device, _spec, err| {
                         match err {
                             Error::AuthorityUpdateRejected(_) => (),
-                            _ => self_e.list_locking_authorities(path_e, true),
+                            _ => self_e.list_locking_authorities_ext(path_e, true),
                         }
                         ui_device
                     })
@@ -867,14 +867,14 @@ fn display_authorities(
     authorities: &[Authority],
     sp_ref: Option<SecurityProviderRef>,
 ) -> (
-    Rc<VecModel<ui::Authority>>,
+    Rc<DiffModel<ui::Authority>>,
     impl Model<Data = SharedString> + use<>,
     impl Model<Data = ui::Uid> + use<>,
 ) {
     // Convert the authority structures to their UI counterparts.
     let features = spec.map(|spec| spec.discovery.feature_descriptors.as_slice()).unwrap_or(&[]);
     let authorities: Vec<ui::Authority> = authorities.iter().map(|auth| auth.into_ui_name(features, sp_ref)).collect();
-    let authorities = Rc::from(VecModel::from(authorities));
+    let authorities = Rc::from(DiffModel::from(authorities));
 
     // Map and filter user names and UIDs for the password change
     // activity. TODO: move this into Slint when feature is available.
