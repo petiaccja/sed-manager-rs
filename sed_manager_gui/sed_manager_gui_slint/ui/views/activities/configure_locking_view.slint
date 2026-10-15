@@ -42,9 +42,7 @@ export component ConfigureLockingView {
     callback login(authority: Uid, password: string);
     callback logout();
     callback commit-ranges();
-    callback discard-ranges();
     callback commit-authorities();
-    callback discard-authorities();
 
     if !command-status.secondary-session-active: VerticalLayout {
         alignment: start;
@@ -79,10 +77,6 @@ export component ConfigureLockingView {
                         commit-ranges()
                     }
 
-                    discard-ranges => {
-                        discard-ranges()
-                    }
-
                     logout() => {
                         logout()
                     }
@@ -103,10 +97,6 @@ export component ConfigureLockingView {
 
                     commit-authorities => {
                         commit-authorities()
-                    }
-
-                    discard-authorities => {
-                        discard-authorities()
                     }
 
                     logout() => {

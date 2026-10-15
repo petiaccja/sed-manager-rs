@@ -33,6 +33,7 @@ pub trait Field<const INDEX: u16> {
 
 pub trait ObjectUid: Object {
     fn uid(&self) -> Option<Self::Ref>;
+    fn set_uid(&mut self, uid: Option<Self::Ref>);
 }
 
 pub trait TokenizeField: Tokenize {

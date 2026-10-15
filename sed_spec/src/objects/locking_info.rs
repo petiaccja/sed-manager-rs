@@ -26,6 +26,10 @@ impl ObjectUid for LockingInfo {
     fn uid(&self) -> Option<Self::Ref> {
         self.uid
     }
+
+    fn set_uid(&mut self, uid: Option<Self::Ref>) {
+        self.uid = uid;
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Object, TokenizeStruct, DetokenizeStruct, FieldList, TokenizeField)]
@@ -48,5 +52,9 @@ pub struct LockingInfoExt {
 impl ObjectUid for LockingInfoExt {
     fn uid(&self) -> Option<Self::Ref> {
         self.uid
+    }
+
+    fn set_uid(&mut self, uid: Option<Self::Ref>) {
+        self.uid = uid;
     }
 }

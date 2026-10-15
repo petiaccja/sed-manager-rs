@@ -6,7 +6,7 @@
 use sed_device::Error as DeviceError;
 use sed_tper::Error as TperError;
 
-use crate::locking_range_plan::LockingRangePlanError;
+use crate::{authority_plan::AuthorityPlanError, locking_range_plan::LockingRangePlanError};
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum Error {
@@ -42,4 +42,10 @@ pub enum Error {
         "An error occurred while applying the desired locking ranges: {0}. The updates may have been partially applied."
     )]
     LockingRangeUpdateFailed(#[source] TperError),
+    #[error("The desired authorities won't be applied: {0}")]
+    AuthorityUpdateRejected(#[from] AuthorityPlanError),
+    #[error(
+        "An error occurred while applying the desired authorities: {0}. The updates may have been partially applied."
+    )]
+    AuthorityUpdateFailed(#[source] TperError),
 }

@@ -572,6 +572,7 @@ pub fn authority() -> Table<Authority> {
         Authority {
             uid: Some(authority::ANYBODY),
             name: Some("Anybody".into()),
+            common_name: Some("".into()),
             is_class: Some(false),
             class: Some(AuthorityRef::null()),
             enabled: Some(true),
@@ -580,6 +581,7 @@ pub fn authority() -> Table<Authority> {
         Authority {
             uid: Some(authority::ADMINS),
             name: Some("Admins".into()),
+            common_name: Some("".into()),
             is_class: Some(true),
             class: Some(AuthorityRef::null()),
             enabled: Some(true),
@@ -588,6 +590,7 @@ pub fn authority() -> Table<Authority> {
         Authority {
             uid: Some(authority::USERS),
             name: Some("Users".into()),
+            common_name: Some("".into()),
             is_class: Some(true),
             class: Some(AuthorityRef::null()),
             enabled: Some(true),
@@ -598,6 +601,7 @@ pub fn authority() -> Table<Authority> {
     let admins = ADMINS.map(|admin_idx| Authority {
         uid: Some(authority::ADMIN.get(admin_idx).unwrap()),
         name: Some(format!("Admin{}", admin_idx)),
+        common_name: Some("".into()),
         is_class: Some(false),
         class: Some(authority::ADMINS),
         enabled: Some(admin_idx == 0),
@@ -609,6 +613,7 @@ pub fn authority() -> Table<Authority> {
     let users = USERS.map(|user_idx| Authority {
         uid: Some(authority::USER.get(user_idx).unwrap()),
         name: Some(format!("User{}", user_idx)),
+        common_name: Some("".into()),
         is_class: Some(false),
         class: Some(authority::USERS),
         enabled: Some(false),

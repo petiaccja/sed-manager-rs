@@ -17,24 +17,24 @@ use sed_manager_gui_slint as ui;
 use sed_packet::{MaxBytes, com_id_request::ComIdState};
 use sed_spec::{
     methods::MethodStatus,
-    objects::{Authority, AuthorityRef, LockingRange, SecurityProviderRef},
+    objects::{Authority, AuthorityRef, SecurityProviderRef},
     preconfig::{core::shared::authority::ANYBODY, opal_2::locking},
 };
 use sed_tper::{Error as TperError, PropertiesChanged};
 use slint::{
-    CloseRequestResponse, ComponentHandle, Model, ModelExt as _, ModelRc, SharedString, ToSharedString, VecModel,
+    CloseRequestResponse, ComponentHandle, Model, ModelExt as _, ModelRc, SharedString, ToSharedString,
     quit_event_loop, spawn_local,
 };
 use tracing::{error, instrument};
 
 use crate::{
-    algorithm::{locking_range_lib, sector_lib},
+    algorithm::sector_lib,
     command::{Command, CommandError, ExpectInEventLoop},
     device_list::{DeviceEntry, DeviceList},
-    diff_model::DiffModel,
+    diff_model::{self, DiffModel},
     session::Session,
     toast::ToastQueue,
-    ui_conv::{CombinedProperties, ConversionError, IntoUi, IntoUiName, MbrDesc, TryFromUi as _},
+    ui_conv::{CombinedProperties, ConversionError, IntoUi, IntoUiName, MbrDesc, TryFromUi},
     ui_ext::{DeviceExt as _, DiscoveryExt, StackStatusExt},
 };
 
@@ -65,9 +65,12 @@ impl App {
         });
 
         // Algorithm callbacks.
-        ui.global::<ui::LockingRangeLib>().on_is_any_dirty(locking_range_lib::is_any_dirty);
-        ui.global::<ui::LockingRangeLib>().on_is_individual_dirty(locking_range_lib::is_individual_dirty);
-        ui.global::<ui::LockingRangeLib>().on_discard(locking_range_lib::discard);
+        ui.global::<ui::LockingRangeLib>().on_is_any_dirty(diff_model::is_any_dirty);
+        ui.global::<ui::LockingRangeLib>().on_is_individual_dirty(diff_model::is_individual_dirty);
+        ui.global::<ui::LockingRangeLib>().on_discard(diff_model::discard);
+        ui.global::<ui::AuthorityLib>().on_is_any_dirty(diff_model::is_any_dirty);
+        ui.global::<ui::AuthorityLib>().on_is_individual_dirty(diff_model::is_individual_dirty);
+        ui.global::<ui::AuthorityLib>().on_discard(diff_model::discard);
 
         ui.global::<ui::SectorLib>().on_to_string(sector_lib::to_string);
         ui.global::<ui::SectorLib>().on_is_valid(sector_lib::is_valid);
@@ -128,6 +131,12 @@ impl App {
         {
             let view_model = view_model.clone();
             ui.on_commit_ranges(move |path| view_model.clone().commit_locking_ranges(path.to_string().into()));
+        }
+        {
+            let view_model = view_model.clone();
+            ui.on_commit_authorities(move |path| {
+                view_model.clone().commit_locking_authorities(path.to_string().into())
+            });
         }
         {
             let view_model = view_model.clone();
@@ -558,7 +567,7 @@ impl App {
             let device_list = self.device_list.read().await;
             if let Some(ui_device) = device_list.ui.get(&path) {
                 // Read the locking ranges from the UI and convert it to backend format.
-                let (committed, desired) = match convert_locking_ranges(ui_device.locking_sp.locking_ranges.clone()) {
+                let (committed, desired) = match convert_diff_model(ui_device.locking_sp.locking_ranges.clone()) {
                     Ok(diff_locking_ranges) => diff_locking_ranges,
                     Err(err) => {
                         error!(error = %err, locking_ranges = ?ui_device.locking_sp.locking_ranges);
@@ -596,6 +605,54 @@ impl App {
                         match err {
                             Error::LockingRangeUpdateRejected(_) => (),
                             _ => self_e.list_locking_ranges(path_e, true),
+                        }
+                        ui_device
+                    })
+                    .run();
+            }
+        })
+        .expect_in_event_loop();
+    }
+
+    #[instrument(skip(self))]
+    fn commit_locking_authorities(self: Rc<Self>, path: PathBuf) {
+        slint::spawn_local(async move {
+            let device_list = self.device_list.read().await;
+            if let Some(ui_device) = device_list.ui.get(&path) {
+                // Read the authorities from the UI and convert it to backend format.
+                let (committed, desired) = match convert_diff_model(ui_device.locking_sp.authorities.clone()) {
+                    Ok(diff_authorities) => diff_authorities,
+                    Err(err) => {
+                        error!(error = %err, authorities = ?ui_device.locking_sp.authorities);
+                        self.toast_queue
+                            .error("Could not write authorities", format!("{err}. This is a bug, please report it."));
+                        return;
+                    }
+                };
+
+                // Initiate the actual command.
+                let self_s = self.clone();
+                let path_s = path.clone();
+                let self_e = self.clone();
+                let path_e = path.clone();
+                self.command()
+                    .success_message("Authorities written to device")
+                    .error_message("Could not write authorities")
+                    .on_session(path, async move |_device: &Device, session: &mut Session| {
+                        let Session::LockingConfig(locking_session) = session else {
+                            return Err(CommandError::Skipped);
+                        };
+                        locking_session.set_authorities(committed.as_deref(), &desired).await?;
+                        Ok(())
+                    })
+                    .on_success(move |ui_device, _spec, _output| {
+                        self_s.list_locking_authorities_ext(path_s, true);
+                        ui_device
+                    })
+                    .on_error(move |ui_device, _spec, err| {
+                        match err {
+                            Error::AuthorityUpdateRejected(_) => (),
+                            _ => self_e.list_locking_authorities_ext(path_e, true),
                         }
                         ui_device
                     })
@@ -813,14 +870,14 @@ fn display_authorities(
     authorities: &[Authority],
     sp_ref: Option<SecurityProviderRef>,
 ) -> (
-    Rc<VecModel<ui::Authority>>,
+    Rc<DiffModel<ui::Authority>>,
     impl Model<Data = SharedString> + use<>,
     impl Model<Data = ui::Uid> + use<>,
 ) {
     // Convert the authority structures to their UI counterparts.
     let features = spec.map(|spec| spec.discovery.feature_descriptors.as_slice()).unwrap_or(&[]);
     let authorities: Vec<ui::Authority> = authorities.iter().map(|auth| auth.into_ui_name(features, sp_ref)).collect();
-    let authorities = Rc::from(VecModel::from(authorities));
+    let authorities = Rc::from(DiffModel::from(authorities));
 
     // Map and filter user names and UIDs for the password change
     // activity. TODO: move this into Slint when feature is available.
@@ -846,17 +903,21 @@ fn retain_unicode(paths: &mut HashSet<PathBuf>) -> Vec<PathBuf> {
     paths.extract_if(|path| !is_unicode(path)).collect()
 }
 
-fn convert_locking_ranges(
-    locking_range: ModelRc<ui::LockingRange>,
-) -> Result<(Option<Vec<LockingRange>>, Vec<LockingRange>), ConversionError> {
+fn convert_diff_model<UiObject, BackendObject>(
+    locking_range: ModelRc<UiObject>,
+) -> Result<(Option<Vec<BackendObject>>, Vec<BackendObject>), ConversionError>
+where
+    UiObject: 'static,
+    BackendObject: for<'a> TryFromUi<&'a UiObject, Error = ConversionError>,
+{
     let committed = locking_range
         .as_any()
-        .downcast_ref::<DiffModel<ui::LockingRange>>()
+        .downcast_ref::<DiffModel<UiObject>>()
         .map(|diff_model| diff_model.committed());
     let committed = committed
-        .map(|committed| committed.iter().map(LockingRange::try_from_ui).collect::<Result<Vec<_>, _>>())
+        .map(|committed| committed.iter().map(BackendObject::try_from_ui).collect::<Result<Vec<_>, _>>())
         .transpose();
-    let desired = locking_range.iter().map(|range| LockingRange::try_from_ui(&range)).collect::<Result<Vec<_>, _>>();
+    let desired = locking_range.iter().map(|range| BackendObject::try_from_ui(&range)).collect::<Result<Vec<_>, _>>();
 
     Ok((committed?, desired?))
 }

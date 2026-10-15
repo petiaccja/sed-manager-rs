@@ -6,6 +6,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use i_slint_backend_testing::ElementHandle;
 use sed_async::{PolyRuntime, SlintRuntime};
 use sed_manager::Host;
 use sed_manager_gui::{app::App, toast::ToastQueue};
@@ -16,19 +17,21 @@ use slint::{ComponentHandle as _, Model as _};
 use crate::element_handle_ext::ElementHandleEx;
 use crate::test_utils::{
     assert_absent, assert_enabled, assert_present, assert_toast, enter_text, find_element, get_text, prevent_clipping,
-    run_test, sleep_until_condition,
+    run_test, select_combo_box_item, sleep_until_condition,
 };
 
 const TEST_PASSWORD: &str = "test-password-1234";
 
 /// This test takes ownership, activates locking, logs into the locking SP as "Admin1" to reach
-/// the "Configure locking" page, changes and saves a locking range, then logs back out.
+/// the "Configure locking" page, changes and saves a locking range and an authority, then logs
+/// back out.
 ///
 /// This test exercises the following functionality:
 /// - Take ownership
 /// - Activate locking
 /// - Login (to the locking SP)
 /// - Listing and writing locking ranges
+/// - Listing and writing authorities
 /// - Logout
 #[test]
 fn enter_config_page() {
@@ -136,8 +139,60 @@ fn enter_config_page() {
         assert_eq!(get_text(&ui, "locking-range-start-1").as_deref(), Some("500 KiB"));
         assert_eq!(get_text(&ui, "locking-range-end-1").as_deref(), Some("1000 KiB"));
 
+        // Switch to the "Authorities" tab and enable "User1", which is
+        // disabled by default on a freshly-activated locking SP.
+        ElementHandle::find_by_accessible_label(&ui, "Authorities")
+            .next()
+            .expect("the authorities tab should be present")
+            .single_click(PointerEventButton::Left)
+            .await;
+        let checkbox_id = "authority-enabled-User1";
+        assert_present!(&ui, checkbox_id);
+        assert_eq!(find_element(&ui, checkbox_id).accessible_checked(), Some(false));
+        assert_eq!(find_element(&ui, "save-authorities-submit").accessible_enabled(), Some(false));
+        assert_eq!(find_element(&ui, "discard-authorities-submit").accessible_enabled(), Some(false));
+
+        // Changing an authority makes the changes discardable, and discarding
+        // them restores the original state.
+        find_element(&ui, checkbox_id).invoke_accessible_default_action();
+        assert_enabled!(&ui, "discard-authorities-submit");
+        find_element(&ui, "discard-authorities-submit").invoke_accessible_default_action();
+        assert_present!(&ui, checkbox_id);
+        assert_eq!(find_element(&ui, checkbox_id).accessible_checked(), Some(false));
+        assert_eq!(find_element(&ui, "save-authorities-submit").accessible_enabled(), Some(false));
+        assert_eq!(find_element(&ui, "discard-authorities-submit").accessible_enabled(), Some(false));
+
+        // Change it again, this time for real.
+        find_element(&ui, checkbox_id).invoke_accessible_default_action();
+
+        // Same as for the ranges: the click is invoked synchronously, so the
+        // button can't get disabled by background commands mid-click.
+        assert_enabled!(&ui, "save-authorities-submit");
+        find_element(&ui, "save-authorities-submit").invoke_accessible_default_action();
+        assert_toast!(&ui, "Authorities written to device");
+
+        // The authorities are reloaded from the device after saving, so once
+        // there are no unsaved changes, the UI reflects the state of the
+        // device. The reload must not end the session, so the user must stay
+        // logged in.
+        sleep_until_condition(
+            || find_element(&ui, "save-authorities-submit").accessible_enabled() == Some(false),
+            Duration::from_secs(5),
+        )
+        .await
+        .unwrap_or_else(|_| panic!("the authorities were not reloaded"));
+        assert_present!(&ui, "logout-submit");
+        assert_present!(&ui, checkbox_id);
+        assert_eq!(find_element(&ui, checkbox_id).accessible_checked(), Some(true));
+
         // Log back out and wait for the login panel to reappear.
-        find_element(&ui, "logout-submit").single_click(PointerEventButton::Left).await;
+        find_element(&ui, "logout-submit").invoke_accessible_default_action();
         assert_present!(&ui, "login-submit");
+
+        // Only enabled authorities are listed in the login panel, so "User1"
+        // is now available to log in with.
+        find_element(&ui, "login-authority").single_click(PointerEventButton::Left).await;
+        select_combo_box_item(&ui, "login-authority", "User1");
+        assert_eq!(find_element(&ui, "login-authority").accessible_value().as_deref(), Some("User1"));
     });
 }

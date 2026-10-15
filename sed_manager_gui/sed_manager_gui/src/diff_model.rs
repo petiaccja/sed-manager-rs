@@ -8,7 +8,7 @@ use std::{
     sync::atomic::{AtomicBool, Ordering},
 };
 
-use slint::{Model, ModelNotify, ModelTracker as _};
+use slint::{Model, ModelNotify, ModelRc, ModelTracker as _};
 
 /// A model that lets you alter its content while remembering the initial state.
 /// You can restore the model to its initial state at any time via [`discard`],
@@ -77,6 +77,51 @@ impl<T> DiffModel<T> {
 
     pub fn committed(&self) -> Ref<'_, Vec<T>> {
         self.committed.borrow()
+    }
+}
+
+/// Returns whether the contents of the `model` have changed compared to the
+/// initial contents.
+///
+/// # Notes
+///
+/// If the model is not tracking changes, it's always considered dirty and
+/// true is returned.
+pub fn is_any_dirty<T: 'static>(model: ModelRc<T>) -> bool {
+    if let Some(diff_model) = model.as_any().downcast_ref::<DiffModel<T>>() {
+        diff_model.is_any_dirty()
+    } else {
+        true
+    }
+}
+
+/// Returns whether the row at `index` of the `model` has changed compared to
+/// the initial contents.
+///
+/// # Notes
+///
+/// If the model is not tracking changes, it's always considered dirty and
+/// true is returned.
+pub fn is_individual_dirty<T: PartialEq + 'static>(index: i32, model: ModelRc<T>) -> bool {
+    if let Some(diff_model) = model.as_any().downcast_ref::<DiffModel<T>>() {
+        diff_model.is_individual_dirty(index as usize)
+    } else {
+        true
+    }
+}
+
+/// Discards the changes in the contents of the `model`.
+///
+/// # Notes
+///
+/// If the model is not tracking changes, it returns false to signal that
+/// discarding changes failed.
+pub fn discard<T: Clone + 'static>(model: ModelRc<T>) -> bool {
+    if let Some(diff_model) = model.as_any().downcast_ref::<DiffModel<T>>() {
+        diff_model.discard();
+        true
+    } else {
+        false
     }
 }
 

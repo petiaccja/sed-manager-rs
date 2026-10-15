@@ -206,9 +206,7 @@ export component DeviceView {
     callback login(authority: Uid, password: string);
     callback logout();
     callback commit-ranges();
-    callback discard-ranges();
     callback commit-authorities();
-    callback discard-authorities();
     callback revert-device(scope: RevertScope, authority: RevertAuthority, password: string);
     callback query-stack-status();
     callback reset-stack();
@@ -323,14 +321,8 @@ export component DeviceView {
                 commit-ranges => {
                     commit-ranges()
                 }
-                discard-ranges => {
-                    discard-ranges()
-                }
                 commit-authorities => {
                     commit-authorities()
-                }
-                discard-authorities => {
-                    discard-authorities()
                 }
             }
 
