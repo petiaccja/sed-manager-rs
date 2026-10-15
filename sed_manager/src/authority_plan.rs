@@ -8,9 +8,11 @@ use std::collections::BTreeMap;
 use sed_spec::objects::{Authority, AuthorityRef};
 
 use crate::set_plan::{
-    AuthorityChange, MatchCurrent, PlanError, diff_field, fill_in_desired_values, is_matching_current_field,
+    MatchCurrent, ObjectChange, PlanError, diff_field, fill_in_desired_values, is_matching_current_field,
     map_current_by_uid,
 };
+
+pub type AuthorityChange = ObjectChange<Authority>;
 
 #[derive(Debug)]
 pub struct AuthorityPlanner {

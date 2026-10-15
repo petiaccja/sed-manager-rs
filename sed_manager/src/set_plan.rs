@@ -1,7 +1,11 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
 use std::collections::BTreeMap;
 
 use sed_packet::{Object, ObjectUid};
-use sed_spec::objects::{Authority, LockingRange};
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum PlanError<Ref: core::fmt::Display> {
@@ -55,9 +59,6 @@ pub struct ObjectChange<O> {
     pub current: O,
     pub desired: O,
 }
-
-pub type AuthorityChange = ObjectChange<Authority>;
-pub type LockingRangeChange = ObjectChange<LockingRange>;
 
 /// Maps the `current` objects by UID. The map of changes has the
 /// `current` state of the objects filled in, but the `desired` state is left as
@@ -161,7 +162,7 @@ mod tests {
     use googletest::{assert_that, matchers::*};
     use rstest::rstest;
     use sed_packet::UidRange;
-    use sed_spec::objects::LockingRangeRef;
+    use sed_spec::objects::{LockingRange, LockingRangeRef};
 
     //--------------------------------------------------------------------------
     // fill_in_desired_values

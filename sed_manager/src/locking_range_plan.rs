@@ -13,10 +13,12 @@ use sed_spec::{
 use crate::{
     Alignment,
     set_plan::{
-        LockingRangeChange, MatchCurrent, PlanError, diff_field, fill_in_desired_values, is_matching_current_field,
+        MatchCurrent, ObjectChange, PlanError, diff_field, fill_in_desired_values, is_matching_current_field,
         map_current_by_uid,
     },
 };
+
+pub type LockingRangeChange = ObjectChange<LockingRange>;
 
 #[derive(Debug)]
 pub struct LockingRangePlanner {
