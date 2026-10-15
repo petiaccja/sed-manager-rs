@@ -152,7 +152,6 @@ export component AuthoritiesTab {
     in property <Mbr> mbr;
 
     callback commit-authorities();
-    callback discard-authorities();
     callback logout();
 
     VerticalLayout {
@@ -197,7 +196,6 @@ export component AuthoritiesTab {
                             message: "You won't be able to discard you changes, but you can keep working and save them. This is a bug, please report it.",
                         })
                     }
-                    discard-authorities();
                 }
             }
 

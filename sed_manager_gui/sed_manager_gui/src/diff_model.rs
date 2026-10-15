@@ -83,7 +83,7 @@ impl<T> DiffModel<T> {
 /// Returns whether the contents of the `model` have changed compared to the
 /// initial contents.
 ///
-/// # Errors
+/// # Notes
 ///
 /// If the model is not tracking changes, it's always considered dirty and
 /// true is returned.
@@ -98,7 +98,7 @@ pub fn is_any_dirty<T: 'static>(model: ModelRc<T>) -> bool {
 /// Returns whether the row at `index` of the `model` has changed compared to
 /// the initial contents.
 ///
-/// # Errors
+/// # Notes
 ///
 /// If the model is not tracking changes, it's always considered dirty and
 /// true is returned.
@@ -112,7 +112,7 @@ pub fn is_individual_dirty<T: PartialEq + 'static>(index: i32, model: ModelRc<T>
 
 /// Discards the changes in the contents of the `model`.
 ///
-/// # Errors
+/// # Notes
 ///
 /// If the model is not tracking changes, it returns false to signal that
 /// discarding changes failed.
