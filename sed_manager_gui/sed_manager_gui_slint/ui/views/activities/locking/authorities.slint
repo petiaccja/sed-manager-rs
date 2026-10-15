@@ -28,8 +28,11 @@ import {
     HorizontalSeparator,
     IslandButton,
     IconButton,
+    ToastQueue,
+    ToastLevel,
 } from "../../../widgets/lib.slint";
 import { Icons } from "../../../resources/lib.slint";
+import { AuthorityLib } from "../../../algorithm/authority.slint";
 
 component AuthorityTable {
     preferred-width: table.preferred-width;
@@ -100,6 +103,7 @@ component AuthorityTable {
                                         }
                                     };
                                     vertical-alignment: center;
+                                    font-italic: AuthorityLib.is-individual-dirty(index, authorities);
                                 }
 
                                 if authority.has-password: IconButton {
@@ -167,7 +171,7 @@ export component AuthoritiesTab {
                 accessible-id: "save-authorities-submit";
                 text: "Apply";
                 primary: true;
-                enabled: !command-status.session-busy && !command-status.session-busy;
+                enabled: !command-status.session-busy && AuthorityLib.is-any-dirty(authorities);
                 icon: Icons.check;
                 colorize-icon: true;
                 preferred-width: 7rem;
@@ -178,12 +182,21 @@ export component AuthoritiesTab {
             }
 
             Button {
+                accessible-id: "discard-authorities-submit";
                 text: "Discard";
+                enabled: AuthorityLib.is-any-dirty(authorities);
                 icon: Icons.cancel;
                 colorize-icon: true;
                 preferred-width: 7rem;
 
                 clicked => {
+                    if !AuthorityLib.discard(authorities) {
+                        ToastQueue.push({
+                            level: ToastLevel.error,
+                            title: "Could not discard changes",
+                            message: "You won't be able to discard you changes, but you can keep working and save them. This is a bug, please report it.",
+                        })
+                    }
                     discard-authorities();
                 }
             }

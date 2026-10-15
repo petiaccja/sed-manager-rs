@@ -28,10 +28,10 @@ use slint::{
 use tracing::{error, instrument};
 
 use crate::{
-    algorithm::{locking_range_lib, sector_lib},
+    algorithm::sector_lib,
     command::{Command, CommandError, ExpectInEventLoop},
     device_list::{DeviceEntry, DeviceList},
-    diff_model::DiffModel,
+    diff_model::{self, DiffModel},
     session::Session,
     toast::ToastQueue,
     ui_conv::{CombinedProperties, ConversionError, IntoUi, IntoUiName, MbrDesc, TryFromUi},
@@ -65,9 +65,12 @@ impl App {
         });
 
         // Algorithm callbacks.
-        ui.global::<ui::LockingRangeLib>().on_is_any_dirty(locking_range_lib::is_any_dirty);
-        ui.global::<ui::LockingRangeLib>().on_is_individual_dirty(locking_range_lib::is_individual_dirty);
-        ui.global::<ui::LockingRangeLib>().on_discard(locking_range_lib::discard);
+        ui.global::<ui::LockingRangeLib>().on_is_any_dirty(diff_model::is_any_dirty);
+        ui.global::<ui::LockingRangeLib>().on_is_individual_dirty(diff_model::is_individual_dirty);
+        ui.global::<ui::LockingRangeLib>().on_discard(diff_model::discard);
+        ui.global::<ui::AuthorityLib>().on_is_any_dirty(diff_model::is_any_dirty);
+        ui.global::<ui::AuthorityLib>().on_is_individual_dirty(diff_model::is_individual_dirty);
+        ui.global::<ui::AuthorityLib>().on_discard(diff_model::discard);
 
         ui.global::<ui::SectorLib>().on_to_string(sector_lib::to_string);
         ui.global::<ui::SectorLib>().on_is_valid(sector_lib::is_valid);

@@ -149,6 +149,20 @@ fn enter_config_page() {
         let checkbox_id = "authority-enabled-User1";
         assert_present!(&ui, checkbox_id);
         assert_eq!(find_element(&ui, checkbox_id).accessible_checked(), Some(false));
+        assert_eq!(find_element(&ui, "save-authorities-submit").accessible_enabled(), Some(false));
+        assert_eq!(find_element(&ui, "discard-authorities-submit").accessible_enabled(), Some(false));
+
+        // Changing an authority makes the changes discardable, and discarding
+        // them restores the original state.
+        find_element(&ui, checkbox_id).invoke_accessible_default_action();
+        assert_enabled!(&ui, "discard-authorities-submit");
+        find_element(&ui, "discard-authorities-submit").invoke_accessible_default_action();
+        assert_present!(&ui, checkbox_id);
+        assert_eq!(find_element(&ui, checkbox_id).accessible_checked(), Some(false));
+        assert_eq!(find_element(&ui, "save-authorities-submit").accessible_enabled(), Some(false));
+        assert_eq!(find_element(&ui, "discard-authorities-submit").accessible_enabled(), Some(false));
+
+        // Change it again, this time for real.
         find_element(&ui, checkbox_id).invoke_accessible_default_action();
 
         // Same as for the ranges: the click is invoked synchronously, so the
@@ -157,9 +171,16 @@ fn enter_config_page() {
         find_element(&ui, "save-authorities-submit").invoke_accessible_default_action();
         assert_toast!(&ui, "Authorities written to device");
 
-        // The authorities are reloaded from the device after saving. The
-        // reload must not end the session, so the user must stay logged in.
-        assert_enabled!(&ui, "save-authorities-submit");
+        // The authorities are reloaded from the device after saving, so once
+        // there are no unsaved changes, the UI reflects the state of the
+        // device. The reload must not end the session, so the user must stay
+        // logged in.
+        sleep_until_condition(
+            || find_element(&ui, "save-authorities-submit").accessible_enabled() == Some(false),
+            Duration::from_secs(5),
+        )
+        .await
+        .unwrap_or_else(|_| panic!("the authorities were not reloaded"));
         assert_present!(&ui, "logout-submit");
         assert_present!(&ui, checkbox_id);
         assert_eq!(find_element(&ui, checkbox_id).accessible_checked(), Some(true));

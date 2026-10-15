@@ -1,0 +1,19 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
+import { Authority } from "../data/lib.slint";
+
+// See the Rust code for documentation.
+export global AuthorityLib {
+    pure callback is-any-dirty(authorities: [Authority]) -> bool;
+    pure callback is-individual-dirty(index: int, authorities: [Authority]) -> bool;
+    pure callback discard(authorities: [Authority]) -> bool;
+
+    is-any-dirty => { true }
+
+    is-individual-dirty => { false }
+
+    discard => { false }
+}
