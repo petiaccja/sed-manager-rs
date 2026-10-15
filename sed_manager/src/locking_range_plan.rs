@@ -10,7 +10,13 @@ use sed_spec::{
     preconfig::opal_2::locking::locking::GLOBAL_RANGE,
 };
 
-use crate::Alignment;
+use crate::{
+    Alignment,
+    set_plan::{
+        LockingRangeChange, MatchCurrent, PlanError, diff_field, fill_in_desired_values, is_matching_current_field,
+        map_current_by_uid,
+    },
+};
 
 #[derive(Debug)]
 pub struct LockingRangePlanner {
@@ -23,7 +29,7 @@ impl LockingRangePlanner {
         current: impl IntoIterator<Item = LockingRange>,
         desired: impl IntoIterator<Item = LockingRange>,
     ) -> Result<Self, LockingRangePlanError> {
-        let mut locking_ranges = map_current_by_uid(current);
+        let mut locking_ranges = map_current_by_uid(current)?;
         fill_in_desired_values(&mut locking_ranges, desired)?;
         check_global_range_span(&locking_ranges)?;
         fill_in_missing_spans(&mut locking_ranges)?;
@@ -80,45 +86,6 @@ impl LockingRangePlanner {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct LockingRangeChange {
-    current: LockingRange,
-    desired: LockingRange,
-}
-
-impl LockingRangeChange {
-    /// Returns the differences between the current and the desired value of the
-    /// locking range.
-    ///
-    /// All fields that are unchanged are set to [`None`] in the
-    /// result. The UID is always filled.
-    pub fn diff(&self) -> LockingRange {
-        let Self { current, desired } = self;
-        LockingRange {
-            uid: self.desired.uid,
-            name: diff(current.name.as_ref(), desired.name.as_ref()).cloned(),
-            common_name: diff(current.common_name.as_ref(), desired.common_name.as_ref()).cloned(),
-            range_start: diff(current.range_start.as_ref(), desired.range_start.as_ref()).cloned(),
-            range_length: diff(current.range_length.as_ref(), desired.range_length.as_ref()).cloned(),
-            read_lock_enabled: diff(current.read_lock_enabled.as_ref(), desired.read_lock_enabled.as_ref()).cloned(),
-            write_lock_enabled: diff(current.write_lock_enabled.as_ref(), desired.write_lock_enabled.as_ref()).cloned(),
-            read_locked: diff(current.read_locked.as_ref(), desired.read_locked.as_ref()).cloned(),
-            write_locked: diff(current.write_locked.as_ref(), desired.write_locked.as_ref()).cloned(),
-            lock_on_reset: diff(current.lock_on_reset.as_ref(), desired.lock_on_reset.as_ref()).cloned(),
-            active_key: diff(current.active_key.as_ref(), desired.active_key.as_ref()).cloned(),
-            next_key: diff(current.next_key.as_ref(), desired.next_key.as_ref()).cloned(),
-            reencrypt_state: diff(current.reencrypt_state.as_ref(), desired.reencrypt_state.as_ref()).cloned(),
-            reencrypt_request: diff(current.reencrypt_request.as_ref(), desired.reencrypt_request.as_ref()).cloned(),
-            adv_key_mode: diff(current.adv_key_mode.as_ref(), desired.adv_key_mode.as_ref()).cloned(),
-            verify_mode: diff(current.verify_mode.as_ref(), desired.verify_mode.as_ref()).cloned(),
-            cont_on_reset: diff(current.cont_on_reset.as_ref(), desired.cont_on_reset.as_ref()).cloned(),
-            last_reencrypt_lba: diff(current.last_reencrypt_lba.as_ref(), desired.last_reencrypt_lba.as_ref()).cloned(),
-            last_reenc_stat: diff(current.last_reenc_stat.as_ref(), desired.last_reenc_stat.as_ref()).cloned(),
-            general_status: diff(current.general_status.as_ref(), desired.general_status.as_ref()).cloned(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LockingRangeStep {
     Collapse(LockingRangeRef),
     Set { uid: LockingRangeRef, changes: LockingRange },
@@ -144,79 +111,14 @@ pub enum LockingRangePlanError {
     InvalidGlobalRangeSpan,
 }
 
-/// Maps the `current` locking ranges by UID. The set of changes has the
-/// `current` state of the ranges filled in, but the `desired` state is left as
-/// [`Default`] (except for the UID field).
-///
-/// # Panics
-///
-/// If any of the locking ranges don't have a UID. The device should always return the UIDs.
-fn map_current_by_uid(
-    current: impl IntoIterator<Item = LockingRange>,
-) -> BTreeMap<LockingRangeRef, LockingRangeChange> {
-    current
-        .into_iter()
-        .map(|current| {
-            let uid = current
-                .uid
-                .expect("current locking ranges should be obtained directly from the device and must always have UIDs");
-            (uid, LockingRangeChange { current, desired: LockingRange { uid: Some(uid), ..Default::default() } })
-        })
-        .collect()
-}
-
-/// Check if the `expected` locking ranges match the current ones as found
-/// on the device.
-///
-/// It checks if the two locking ranges are equal, with the following nuances:
-/// - The ordering of the ranges does not matter.
-/// - Fields not specified (i.e. [`None`]) in the `expected` locking ranges are
-///   ignored for comparison, even if they are specified in the `actual` locking
-///   range.
-pub fn check_matching_current_all<'a>(
-    expected: impl IntoIterator<Item = &'a LockingRange>,
-    current: impl IntoIterator<Item = &'a LockingRange>,
-) -> Result<(), LockingRangePlanError> {
-    let current: BTreeMap<_, _> = current
-        .into_iter()
-        .map(|current| {
-            let uid = current
-                .uid
-                .expect("current locking ranges should be obtained directly from the device and must always have UIDs");
-            (uid, current)
-        })
-        .collect();
-
-    for (index, expected) in expected.into_iter().enumerate() {
-        let uid = expected.uid.ok_or(LockingRangePlanError::MissingUid { index, set: "expected" })?;
-        let current = current.get(&uid).ok_or(LockingRangePlanError::NotOnDevice { uid, set: "expected" })?;
-        if !is_matching_current(expected, current) {
-            return Err(LockingRangePlanError::CurrentNotMatchingExpected { uid });
+impl From<PlanError<LockingRangeRef>> for LockingRangePlanError {
+    fn from(value: PlanError<LockingRangeRef>) -> Self {
+        match value {
+            PlanError::MissingUid { index, set } => Self::MissingUid { index, set },
+            PlanError::NotOnDevice { uid, set } => Self::NotOnDevice { uid, set },
+            PlanError::CurrentNotMatchingExpected { uid } => Self::CurrentNotMatchingExpected { uid },
         }
     }
-    Ok(())
-}
-
-/// Updated the `desired` values in the change map.
-///
-/// # Errors
-///
-/// - If any of the desired values don't set their UID field.
-/// - If a desired field is not found in the map -- change requested, does not
-///   exist on the device.
-///
-/// The `desired` values don't have to contain an entry for each locking range
-/// found in the map.
-fn fill_in_desired_values(
-    locking_ranges: &mut BTreeMap<LockingRangeRef, LockingRangeChange>,
-    desired: impl IntoIterator<Item = LockingRange>,
-) -> Result<(), LockingRangePlanError> {
-    for (index, desired) in desired.into_iter().enumerate() {
-        let uid = desired.uid.ok_or(LockingRangePlanError::MissingUid { index, set: "desired" })?;
-        let entry = locking_ranges.get_mut(&uid).ok_or(LockingRangePlanError::NotOnDevice { uid, set: "desired" })?;
-        entry.desired = desired;
-    }
-    Ok(())
 }
 
 /// If a `desired` value is missing the `range_start` or `range_end` fields,
@@ -281,37 +183,6 @@ fn check_overlap<'a>(locking_ranges: impl IntoIterator<Item = &'a LockingRange>)
     Ok(())
 }
 
-/// Check if the `expected` locking range matches the `actual` based on the
-/// rules explained in [`matches_actual`].
-fn is_matching_current(expected: &LockingRange, actual: &LockingRange) -> bool {
-    fn is_matching_current_field<T>(expected: Option<&T>, actual: Option<&T>) -> bool
-    where
-        T: PartialEq,
-    {
-        if let Some(expected) = expected { Some(expected) == actual } else { true }
-    }
-
-    is_matching_current_field(expected.uid.as_ref(), actual.uid.as_ref())
-        && is_matching_current_field(expected.common_name.as_ref(), actual.common_name.as_ref())
-        && is_matching_current_field(expected.range_start.as_ref(), actual.range_start.as_ref())
-        && is_matching_current_field(expected.range_length.as_ref(), actual.range_length.as_ref())
-        && is_matching_current_field(expected.read_lock_enabled.as_ref(), actual.read_lock_enabled.as_ref())
-        && is_matching_current_field(expected.write_lock_enabled.as_ref(), actual.write_lock_enabled.as_ref())
-        && is_matching_current_field(expected.read_locked.as_ref(), actual.read_locked.as_ref())
-        && is_matching_current_field(expected.write_locked.as_ref(), actual.write_locked.as_ref())
-        && is_matching_current_field(expected.lock_on_reset.as_ref(), actual.lock_on_reset.as_ref())
-        && is_matching_current_field(expected.active_key.as_ref(), actual.active_key.as_ref())
-        && is_matching_current_field(expected.next_key.as_ref(), actual.next_key.as_ref())
-        && is_matching_current_field(expected.reencrypt_state.as_ref(), actual.reencrypt_state.as_ref())
-        && is_matching_current_field(expected.reencrypt_request.as_ref(), actual.reencrypt_request.as_ref())
-        && is_matching_current_field(expected.adv_key_mode.as_ref(), actual.adv_key_mode.as_ref())
-        && is_matching_current_field(expected.verify_mode.as_ref(), actual.verify_mode.as_ref())
-        && is_matching_current_field(expected.cont_on_reset.as_ref(), actual.cont_on_reset.as_ref())
-        && is_matching_current_field(expected.last_reencrypt_lba.as_ref(), actual.last_reencrypt_lba.as_ref())
-        && is_matching_current_field(expected.last_reenc_stat.as_ref(), actual.last_reenc_stat.as_ref())
-        && is_matching_current_field(expected.general_status.as_ref(), actual.general_status.as_ref())
-}
-
 fn is_aligned(locking_range: &LockingRange, alignment: &Alignment) -> Option<bool> {
     if !alignment.alignment_required {
         return Some(true);
@@ -330,25 +201,69 @@ fn is_within_capacity(locking_range: &LockingRange, capacity: u64) -> Option<boo
     Some(end <= capacity)
 }
 
-fn diff<'a, T>(current: Option<&'a T>, desired: Option<&'a T>) -> Option<&'a T>
-where
-    T: PartialEq,
-{
-    match (current, desired) {
-        (_, None) => None,
-        (None, _) => desired,
-        (Some(current), Some(desired)) => {
-            if current == desired {
-                None
-            } else {
-                Some(desired)
-            }
+fn collapsed(locking_range: LockingRange) -> LockingRange {
+    LockingRange { range_length: Some(0), ..locking_range }
+}
+
+impl LockingRangeChange {
+    /// Returns the differences between the current and the desired value of the
+    /// locking range.
+    ///
+    /// All fields that are unchanged are set to [`None`] in the
+    /// result. The UID is always filled.
+    pub fn diff(&self) -> LockingRange {
+        let Self { current, desired } = self;
+        LockingRange {
+            uid: self.desired.uid,
+            name: diff_field(current.name.as_ref(), desired.name.as_ref()).cloned(),
+            common_name: diff_field(current.common_name.as_ref(), desired.common_name.as_ref()).cloned(),
+            range_start: diff_field(current.range_start.as_ref(), desired.range_start.as_ref()).cloned(),
+            range_length: diff_field(current.range_length.as_ref(), desired.range_length.as_ref()).cloned(),
+            read_lock_enabled: diff_field(current.read_lock_enabled.as_ref(), desired.read_lock_enabled.as_ref())
+                .cloned(),
+            write_lock_enabled: diff_field(current.write_lock_enabled.as_ref(), desired.write_lock_enabled.as_ref())
+                .cloned(),
+            read_locked: diff_field(current.read_locked.as_ref(), desired.read_locked.as_ref()).cloned(),
+            write_locked: diff_field(current.write_locked.as_ref(), desired.write_locked.as_ref()).cloned(),
+            lock_on_reset: diff_field(current.lock_on_reset.as_ref(), desired.lock_on_reset.as_ref()).cloned(),
+            active_key: diff_field(current.active_key.as_ref(), desired.active_key.as_ref()).cloned(),
+            next_key: diff_field(current.next_key.as_ref(), desired.next_key.as_ref()).cloned(),
+            reencrypt_state: diff_field(current.reencrypt_state.as_ref(), desired.reencrypt_state.as_ref()).cloned(),
+            reencrypt_request: diff_field(current.reencrypt_request.as_ref(), desired.reencrypt_request.as_ref())
+                .cloned(),
+            adv_key_mode: diff_field(current.adv_key_mode.as_ref(), desired.adv_key_mode.as_ref()).cloned(),
+            verify_mode: diff_field(current.verify_mode.as_ref(), desired.verify_mode.as_ref()).cloned(),
+            cont_on_reset: diff_field(current.cont_on_reset.as_ref(), desired.cont_on_reset.as_ref()).cloned(),
+            last_reencrypt_lba: diff_field(current.last_reencrypt_lba.as_ref(), desired.last_reencrypt_lba.as_ref())
+                .cloned(),
+            last_reenc_stat: diff_field(current.last_reenc_stat.as_ref(), desired.last_reenc_stat.as_ref()).cloned(),
+            general_status: diff_field(current.general_status.as_ref(), desired.general_status.as_ref()).cloned(),
         }
     }
 }
 
-fn collapsed(locking_range: LockingRange) -> LockingRange {
-    LockingRange { range_length: Some(0), ..locking_range }
+impl MatchCurrent for LockingRange {
+    fn is_matching_current(&self, actual: &LockingRange) -> bool {
+        is_matching_current_field(self.uid.as_ref(), actual.uid.as_ref())
+            && is_matching_current_field(self.common_name.as_ref(), actual.common_name.as_ref())
+            && is_matching_current_field(self.range_start.as_ref(), actual.range_start.as_ref())
+            && is_matching_current_field(self.range_length.as_ref(), actual.range_length.as_ref())
+            && is_matching_current_field(self.read_lock_enabled.as_ref(), actual.read_lock_enabled.as_ref())
+            && is_matching_current_field(self.write_lock_enabled.as_ref(), actual.write_lock_enabled.as_ref())
+            && is_matching_current_field(self.read_locked.as_ref(), actual.read_locked.as_ref())
+            && is_matching_current_field(self.write_locked.as_ref(), actual.write_locked.as_ref())
+            && is_matching_current_field(self.lock_on_reset.as_ref(), actual.lock_on_reset.as_ref())
+            && is_matching_current_field(self.active_key.as_ref(), actual.active_key.as_ref())
+            && is_matching_current_field(self.next_key.as_ref(), actual.next_key.as_ref())
+            && is_matching_current_field(self.reencrypt_state.as_ref(), actual.reencrypt_state.as_ref())
+            && is_matching_current_field(self.reencrypt_request.as_ref(), actual.reencrypt_request.as_ref())
+            && is_matching_current_field(self.adv_key_mode.as_ref(), actual.adv_key_mode.as_ref())
+            && is_matching_current_field(self.verify_mode.as_ref(), actual.verify_mode.as_ref())
+            && is_matching_current_field(self.cont_on_reset.as_ref(), actual.cont_on_reset.as_ref())
+            && is_matching_current_field(self.last_reencrypt_lba.as_ref(), actual.last_reencrypt_lba.as_ref())
+            && is_matching_current_field(self.last_reenc_stat.as_ref(), actual.last_reenc_stat.as_ref())
+            && is_matching_current_field(self.general_status.as_ref(), actual.general_status.as_ref())
+    }
 }
 
 #[cfg(test)]
@@ -356,6 +271,7 @@ mod tests {
     use std::num::NonZero;
 
     use super::*;
+    use crate::set_plan::check_matching_current_all;
 
     use googletest::{assert_that, matchers::*};
     use rstest::rstest;
@@ -515,63 +431,6 @@ mod tests {
                 eq(&make_set_step(make_range(2, 12, 16)))
             ]
         );
-    }
-
-    //--------------------------------------------------------------------------
-    // fill_in_desired_values
-    //--------------------------------------------------------------------------
-
-    #[rstest]
-    #[case::success(
-        &[
-            RANGE_UID.get(1).unwrap(),
-        ],
-        &[
-            LockingRange{ uid: RANGE_UID.get(1), range_start: Some(10), ..Default::default() }
-        ],
-        Ok::<_, LockingRangePlanError>(
-            [
-                LockingRange{ uid: RANGE_UID.get(1), range_start: Some(10), ..Default::default() }
-            ]
-        ),
-    )]
-    #[case::missing_uid(
-        &[
-            RANGE_UID.get(1).unwrap(),
-        ],
-        &[
-            LockingRange{ range_start: Some(10), ..Default::default() }
-        ],
-        Err::<[_; 0], _>(LockingRangePlanError::MissingUid{ index: 0, set: "desired" }),
-    )]
-    #[case::not_on_device(
-        &[
-            RANGE_UID.get(1).unwrap(),
-        ],
-        &[
-            LockingRange{ uid: RANGE_UID.get(34), range_start: Some(10), ..Default::default() }
-        ],
-        Err::<[_; 0], _>(LockingRangePlanError::NotOnDevice { uid: RANGE_UID.get(34).unwrap(), set: "desired" }),
-    )]
-    fn fill_in_desired_values_(
-        #[case] uids: &[LockingRangeRef],
-        #[case] desired: &[LockingRange],
-        #[case] expected_result: Result<impl IntoIterator<Item = LockingRange>, LockingRangePlanError>,
-    ) {
-        let mut locking_ranges =
-            map_current_by_uid(uids.iter().map(|uid| LockingRange { uid: Some(*uid), ..Default::default() }));
-
-        let actual_result = fill_in_desired_values(&mut locking_ranges, desired.iter().cloned());
-        match expected_result {
-            Ok(expected_desired) => {
-                let mut expected_desired: Vec<_> = expected_desired.into_iter().collect();
-                expected_desired.sort_by_key(|range| range.uid);
-                let mut actual_desired: Vec<_> = locking_ranges.values().map(|change| change.desired.clone()).collect();
-                actual_desired.sort_by_key(|range| range.uid);
-                assert_that!(actual_desired, eq(&expected_desired));
-            }
-            Err(expected_err) => assert_that!(actual_result, err(eq(&expected_err))),
-        };
     }
 
     //--------------------------------------------------------------------------
@@ -810,7 +669,10 @@ mod tests {
             locked(make_range(1, 12, 16)),
             make_range(2, 0, 0),
         ];
-        assert_that!(check_matching_current_all(&expected, &current), eq(&expected_result));
+        assert_that!(
+            check_matching_current_all(&expected, &current).map_err(LockingRangePlanError::from),
+            eq(&expected_result)
+        );
     }
 
     //--------------------------------------------------------------------------
@@ -833,7 +695,7 @@ mod tests {
         false,
     )]
     fn is_matching_current_(#[case] expected: LockingRange, #[case] actual: LockingRange, #[case] result: bool) {
-        assert_eq!(is_matching_current(&expected, &actual), result);
+        assert_eq!(expected.is_matching_current(&actual), result);
     }
 
     //--------------------------------------------------------------------------
@@ -932,28 +794,5 @@ mod tests {
     )]
     fn is_within_capacity_(#[case] range: LockingRange, #[case] capacity: u64, #[case] result: Option<bool>) {
         assert_eq!(is_within_capacity(&range, capacity), result);
-    }
-
-    //--------------------------------------------------------------------------
-    // diff
-    //--------------------------------------------------------------------------
-
-    #[rstest]
-    #[case::both_unspecified(None, None, None)]
-    #[case::desired_unspecified(Some(10), None, None)]
-    #[case::current_unspecified(None, Some(10), Some(10))]
-    #[case::equal(Some(10), Some(10), None)]
-    #[case::different(Some(10), Some(20), Some(20))]
-    #[case::changed_to_zero(Some(10), Some(0), Some(0))]
-    fn diff_(#[case] current: Option<u64>, #[case] desired: Option<u64>, #[case] result: Option<u64>) {
-        assert_eq!(diff(current.as_ref(), desired.as_ref()), result.as_ref());
-    }
-
-    #[test]
-    fn diff_returns_desired() {
-        let current = String::from("current");
-        let desired = String::from("desired");
-        let result = diff(Some(&current), Some(&desired));
-        assert!(result.is_some_and(|result| std::ptr::eq(result, &desired)));
     }
 }

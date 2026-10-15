@@ -38,4 +38,8 @@ impl ObjectUid for Authority {
     fn uid(&self) -> Option<Self::Ref> {
         self.uid
     }
+
+    fn set_uid(&mut self, uid: Option<Self::Ref>) {
+        self.uid = uid;
+    }
 }

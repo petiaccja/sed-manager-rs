@@ -10,7 +10,7 @@ use sed_async::{PolyRuntime, TokioRuntime};
 use sed_manager::{Alignment, Error, LockingConfigSession, LockingRangePlanError, SetupSession};
 use sed_packet::{MaxBytes, com_id::ComIdExt};
 use sed_spec::{
-    objects::{AuthorityRef, LockingRange, LockingRangeRef, MbrControl},
+    objects::{Authority, AuthorityRef, LockingRange, LockingRangeRef, MbrControl},
     preconfig::opal_2::locking as opal_locking,
 };
 use sed_telemetry::with_tracing;
@@ -44,6 +44,10 @@ async fn login_admin1(tper: &Tper) -> Result<LockingConfigSession, Error> {
 
 fn range_uid(index: usize) -> LockingRangeRef {
     opal_locking::locking::RANGE.get(index).unwrap()
+}
+
+fn user_uid(index: usize) -> AuthorityRef {
+    opal_locking::authority::USER.get(index).unwrap()
 }
 
 fn make_range_from_span(index: usize, start: u64, length: u64) -> LockingRange {
@@ -254,4 +258,23 @@ async fn set_locking_ranges_invalid_desired() {
         })))
     );
     assert_that!(session.get_locking_ranges().await, ok(eq(&current)));
+}
+
+#[instrument]
+#[tokio::test]
+#[with_tracing]
+async fn set_authorities() {
+    let tper = setup().await;
+    let session = login_admin1(&tper).await.unwrap();
+
+    let uid = user_uid(3);
+
+    let current = session.get_authorities().await.unwrap();
+    let desired = [Authority { uid: Some(uid), enabled: Some(true), ..Default::default() }];
+    let result = session.set_authorities(Some(&current), &desired).await;
+    assert_that!(result, ok(anything()));
+
+    let updated = session.get_authorities().await.unwrap();
+    let updated_auth = updated.iter().find(|authority| authority.uid == Some(uid)).unwrap();
+    assert_eq!(updated_auth.enabled, Some(true));
 }

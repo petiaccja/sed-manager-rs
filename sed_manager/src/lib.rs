@@ -3,12 +3,14 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
+mod authority_plan;
 mod device;
 mod error;
 mod geometry;
 mod host;
 mod locking_config_session;
 mod locking_range_plan;
+mod set_plan;
 mod setup_session;
 mod spec;
 

@@ -13,9 +13,11 @@ use sed_tper::{Error as TperError, Session, Tper};
 use tracing::{debug, instrument};
 
 use crate::{
-    Alignment,
+    Alignment, LockingRangePlanError,
+    authority_plan::{AuthorityPlanError, AuthorityPlanner},
     error::Error,
-    locking_range_plan::{LockingRangePlanner, LockingRangeStep, check_matching_current_all},
+    locking_range_plan::{LockingRangePlanner, LockingRangeStep},
+    set_plan::check_matching_current_all,
     spec::Spec,
 };
 
@@ -180,7 +182,7 @@ impl LockingConfigSession {
     ) -> Result<(), Error> {
         let current = self.get_locking_ranges().await?;
         if let Some(expected) = expected {
-            check_matching_current_all(expected, &current)?;
+            check_matching_current_all(expected, &current).map_err(LockingRangePlanError::from)?;
         }
 
         let alignment = self.get_alignment().await?;
@@ -196,6 +198,30 @@ impl LockingConfigSession {
                 LockingRangeStep::Set { uid, changes } => self.set_locking_range(uid, changes).await,
             }
             .map_err(Error::LockingRangeUpdateFailed)?;
+        }
+
+        Ok(())
+    }
+
+    /// Set the authorities to their `desired` value.
+    ///
+    /// Like [`set_locking_ranges`], it performs a compare-and-swap, and only
+    /// changes the authorities on the devise if `expected` matches the current
+    /// state of the authorities.
+    #[instrument(skip(self), err)]
+    pub async fn set_authorities(&self, expected: Option<&[Authority]>, desired: &[Authority]) -> Result<(), Error> {
+        let current = self.get_authorities().await?;
+        if let Some(expected) = expected {
+            check_matching_current_all(expected, &current).map_err(AuthorityPlanError::from)?;
+        }
+
+        let planner = AuthorityPlanner::new(current, desired.iter().cloned())?;
+
+        let plan = planner.plan();
+        debug!(plan = ?plan);
+        for step in plan {
+            let changes = Authority { uid: None, ..step.value };
+            self.session.set_object(step.uid, changes).await.map_err(Error::AuthorityUpdateFailed)?;
         }
 
         Ok(())
