@@ -4558,6 +4558,7 @@ dependencies = [
  "sed_device",
  "sed_packet",
  "sed_spec",
+ "sed_spec_macros",
  "sed_telemetry",
  "sed_tper",
  "sed_virtual_device",

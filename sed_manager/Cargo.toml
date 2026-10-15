@@ -25,6 +25,7 @@ tracing.workspace = true
 sed_telemetry = { workspace = true, features = ["test-utils"] }
 sed_device = { workspace = true, features = ["test-utils"] }
 sed_tper = { workspace = true, features = ["test-utils"] }
+sed_spec_macros.workspace = true
 sed_virtual_device.workspace = true
 rstest.workspace = true
 tokio = { workspace = true, features = ["macros"] }

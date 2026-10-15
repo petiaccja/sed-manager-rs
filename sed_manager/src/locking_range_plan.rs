@@ -274,7 +274,6 @@ mod tests {
     use std::num::NonZero;
 
     use super::*;
-    use crate::set_plan::check_matching_current_all;
 
     use googletest::{assert_that, matchers::*};
     use rstest::rstest;
@@ -294,6 +293,10 @@ mod tests {
             range_length: Some(length),
             ..Default::default()
         }
+    }
+
+    fn make_uid_only_range(index: usize) -> LockingRange {
+        LockingRange { uid: RANGE_UID.get(index), ..Default::default() }
     }
 
     /// The Global Range, a configured range, and an unconfigured (`0..0`) range.
@@ -621,61 +624,6 @@ mod tests {
         let locking_ranges =
             [(RANGE_UID.get(1).unwrap(), LockingRangeChange { current: range.clone(), desired: range })].into();
         assert_that!(check_global_range_span(&locking_ranges), ok(eq(&())));
-    }
-
-    //--------------------------------------------------------------------------
-    // check_matching_current_all
-    //--------------------------------------------------------------------------
-
-    fn make_uid_only_range(index: usize) -> LockingRange {
-        LockingRange { uid: RANGE_UID.get(index), ..Default::default() }
-    }
-
-    fn locked(range: LockingRange) -> LockingRange {
-        LockingRange { read_locked: Some(true), write_locked: Some(true), ..range }
-    }
-
-    #[rstest]
-    #[case::equal(make_current_ranges(), Ok(()))]
-    #[case::empty(vec![], Ok(()))]
-    #[case::reordered(vec![make_range(2, 0, 0), make_range(0, 0, 0), make_range(1, 12, 16)], Ok(()))]
-    #[case::subset(vec![make_range(1, 12, 16)], Ok(()))]
-    #[case::unspecified_fields_ignored(vec![make_uid_only_range(0), make_uid_only_range(1), make_uid_only_range(2)], Ok(()))]
-    #[case::additional_field_matching(vec![locked(make_range(1, 12, 16))], Ok(()))]
-    #[case::additional_field_mismatching(
-        vec![locked(make_range(2, 0, 0))],
-        Err(LockingRangePlanError::CurrentNotMatchingExpected { uid: RANGE_UID.get(2).unwrap() }),
-    )]
-    #[case::span_mismatching(
-        vec![make_range(0, 0, 0), make_range(1, 12, 8)],
-        Err(LockingRangePlanError::CurrentNotMatchingExpected { uid: RANGE_UID.get(1).unwrap() }),
-    )]
-    #[case::first_mismatch_reported(
-        vec![make_range(2, 4, 4), make_range(1, 12, 8)],
-        Err(LockingRangePlanError::CurrentNotMatchingExpected { uid: RANGE_UID.get(2).unwrap() }),
-    )]
-    #[case::missing_uid(
-        vec![make_range(1, 12, 16), LockingRange { range_start: Some(0), ..Default::default() }],
-        Err(LockingRangePlanError::MissingUid { index: 1, set: "expected" }),
-    )]
-    #[case::not_on_device(
-        vec![make_range(1, 12, 16), make_range(5, 0, 0)],
-        Err(LockingRangePlanError::NotOnDevice { uid: RANGE_UID.get(5).unwrap(), set: "expected" }),
-    )]
-    fn check_matching_current_all_(
-        #[case] expected: Vec<LockingRange>,
-        #[case] expected_result: Result<(), LockingRangePlanError>,
-    ) {
-        // Range 1 is locked on the device, but range 2 is not.
-        let current = [
-            make_range(0, 0, 0),
-            locked(make_range(1, 12, 16)),
-            make_range(2, 0, 0),
-        ];
-        assert_that!(
-            check_matching_current_all(&expected, &current).map_err(LockingRangePlanError::from),
-            eq(&expected_result)
-        );
     }
 
     //--------------------------------------------------------------------------
