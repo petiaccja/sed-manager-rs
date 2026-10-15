@@ -245,6 +245,7 @@ impl LockingRangeChange {
 impl MatchCurrent for LockingRange {
     fn is_matching_current(&self, actual: &LockingRange) -> bool {
         is_matching_current_field(self.uid.as_ref(), actual.uid.as_ref())
+            && is_matching_current_field(self.name.as_ref(), actual.name.as_ref())
             && is_matching_current_field(self.common_name.as_ref(), actual.common_name.as_ref())
             && is_matching_current_field(self.range_start.as_ref(), actual.range_start.as_ref())
             && is_matching_current_field(self.range_length.as_ref(), actual.range_length.as_ref())
