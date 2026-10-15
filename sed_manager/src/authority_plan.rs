@@ -23,9 +23,9 @@ impl AuthorityPlanner {
         current: impl IntoIterator<Item = Authority>,
         desired: impl IntoIterator<Item = Authority>,
     ) -> Result<Self, AuthorityPlanError> {
-        let mut locking_ranges = map_current_by_uid(current)?;
-        fill_in_desired_values(&mut locking_ranges, desired)?;
-        Ok(Self { authorities: locking_ranges })
+        let mut authorities = map_current_by_uid(current)?;
+        fill_in_desired_values(&mut authorities, desired)?;
+        Ok(Self { authorities })
     }
 
     /// Return a list of changes that have to be issued to the device so that we
@@ -36,7 +36,7 @@ impl AuthorityPlanner {
             .filter_map(|(uid, change)| {
                 let diff = change.diff();
                 if diff != (Authority { uid: Some(*uid), ..Default::default() }) {
-                    Some(AuthorityStep { uid: *uid, value: diff })
+                    Some(AuthorityStep { uid: *uid, changes: diff })
                 } else {
                     None
                 }
@@ -48,16 +48,16 @@ impl AuthorityPlanner {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AuthorityStep {
     pub uid: AuthorityRef,
-    pub value: Authority,
+    pub changes: Authority,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum AuthorityPlanError {
-    #[error("The {set} range at index {index} does not specify its UID")]
+    #[error("The {set} authority at index {index} does not specify its UID")]
     MissingUid { index: usize, set: &'static str },
-    #[error("The {set} range with UID {uid} does not exist on the device")]
+    #[error("The {set} authority with UID {uid} does not exist on the device")]
     NotOnDevice { uid: AuthorityRef, set: &'static str },
-    #[error("The current state of range {uid} does not match the expected state")]
+    #[error("The current state of authority {uid} does not match the expected state")]
     CurrentNotMatchingExpected { uid: AuthorityRef },
 }
 
@@ -105,25 +105,25 @@ impl AuthorityChange {
 }
 
 impl MatchCurrent for Authority {
-    fn is_matching_current(&self, actual: &Authority) -> bool {
-        is_matching_current_field(self.uid.as_ref(), actual.uid.as_ref())
-            && is_matching_current_field(self.name.as_ref(), actual.name.as_ref())
-            && is_matching_current_field(self.common_name.as_ref(), actual.common_name.as_ref())
-            && is_matching_current_field(self.is_class.as_ref(), actual.is_class.as_ref())
-            && is_matching_current_field(self.class.as_ref(), actual.class.as_ref())
-            && is_matching_current_field(self.enabled.as_ref(), actual.enabled.as_ref())
-            && is_matching_current_field(self.secure.as_ref(), actual.secure.as_ref())
-            && is_matching_current_field(self.hash_and_sign.as_ref(), actual.hash_and_sign.as_ref())
-            && is_matching_current_field(self.present_certificate.as_ref(), actual.present_certificate.as_ref())
-            && is_matching_current_field(self.operation.as_ref(), actual.operation.as_ref())
-            && is_matching_current_field(self.credential.as_ref(), actual.credential.as_ref())
-            && is_matching_current_field(self.response_sign.as_ref(), actual.response_sign.as_ref())
-            && is_matching_current_field(self.response_exch.as_ref(), actual.response_exch.as_ref())
-            && is_matching_current_field(self.clock_start.as_ref(), actual.clock_start.as_ref())
-            && is_matching_current_field(self.clock_end.as_ref(), actual.clock_end.as_ref())
-            && is_matching_current_field(self.limit.as_ref(), actual.limit.as_ref())
-            && is_matching_current_field(self.uses.as_ref(), actual.uses.as_ref())
-            && is_matching_current_field(self.log.as_ref(), actual.log.as_ref())
-            && is_matching_current_field(self.log_to.as_ref(), actual.log_to.as_ref())
+    fn is_matching_current(&self, current: &Authority) -> bool {
+        is_matching_current_field(self.uid.as_ref(), current.uid.as_ref())
+            && is_matching_current_field(self.name.as_ref(), current.name.as_ref())
+            && is_matching_current_field(self.common_name.as_ref(), current.common_name.as_ref())
+            && is_matching_current_field(self.is_class.as_ref(), current.is_class.as_ref())
+            && is_matching_current_field(self.class.as_ref(), current.class.as_ref())
+            && is_matching_current_field(self.enabled.as_ref(), current.enabled.as_ref())
+            && is_matching_current_field(self.secure.as_ref(), current.secure.as_ref())
+            && is_matching_current_field(self.hash_and_sign.as_ref(), current.hash_and_sign.as_ref())
+            && is_matching_current_field(self.present_certificate.as_ref(), current.present_certificate.as_ref())
+            && is_matching_current_field(self.operation.as_ref(), current.operation.as_ref())
+            && is_matching_current_field(self.credential.as_ref(), current.credential.as_ref())
+            && is_matching_current_field(self.response_sign.as_ref(), current.response_sign.as_ref())
+            && is_matching_current_field(self.response_exch.as_ref(), current.response_exch.as_ref())
+            && is_matching_current_field(self.clock_start.as_ref(), current.clock_start.as_ref())
+            && is_matching_current_field(self.clock_end.as_ref(), current.clock_end.as_ref())
+            && is_matching_current_field(self.limit.as_ref(), current.limit.as_ref())
+            && is_matching_current_field(self.uses.as_ref(), current.uses.as_ref())
+            && is_matching_current_field(self.log.as_ref(), current.log.as_ref())
+            && is_matching_current_field(self.log_to.as_ref(), current.log_to.as_ref())
     }
 }

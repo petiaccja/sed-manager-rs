@@ -243,27 +243,27 @@ impl LockingRangeChange {
 }
 
 impl MatchCurrent for LockingRange {
-    fn is_matching_current(&self, actual: &LockingRange) -> bool {
-        is_matching_current_field(self.uid.as_ref(), actual.uid.as_ref())
-            && is_matching_current_field(self.name.as_ref(), actual.name.as_ref())
-            && is_matching_current_field(self.common_name.as_ref(), actual.common_name.as_ref())
-            && is_matching_current_field(self.range_start.as_ref(), actual.range_start.as_ref())
-            && is_matching_current_field(self.range_length.as_ref(), actual.range_length.as_ref())
-            && is_matching_current_field(self.read_lock_enabled.as_ref(), actual.read_lock_enabled.as_ref())
-            && is_matching_current_field(self.write_lock_enabled.as_ref(), actual.write_lock_enabled.as_ref())
-            && is_matching_current_field(self.read_locked.as_ref(), actual.read_locked.as_ref())
-            && is_matching_current_field(self.write_locked.as_ref(), actual.write_locked.as_ref())
-            && is_matching_current_field(self.lock_on_reset.as_ref(), actual.lock_on_reset.as_ref())
-            && is_matching_current_field(self.active_key.as_ref(), actual.active_key.as_ref())
-            && is_matching_current_field(self.next_key.as_ref(), actual.next_key.as_ref())
-            && is_matching_current_field(self.reencrypt_state.as_ref(), actual.reencrypt_state.as_ref())
-            && is_matching_current_field(self.reencrypt_request.as_ref(), actual.reencrypt_request.as_ref())
-            && is_matching_current_field(self.adv_key_mode.as_ref(), actual.adv_key_mode.as_ref())
-            && is_matching_current_field(self.verify_mode.as_ref(), actual.verify_mode.as_ref())
-            && is_matching_current_field(self.cont_on_reset.as_ref(), actual.cont_on_reset.as_ref())
-            && is_matching_current_field(self.last_reencrypt_lba.as_ref(), actual.last_reencrypt_lba.as_ref())
-            && is_matching_current_field(self.last_reenc_stat.as_ref(), actual.last_reenc_stat.as_ref())
-            && is_matching_current_field(self.general_status.as_ref(), actual.general_status.as_ref())
+    fn is_matching_current(&self, current: &LockingRange) -> bool {
+        is_matching_current_field(self.uid.as_ref(), current.uid.as_ref())
+            && is_matching_current_field(self.name.as_ref(), current.name.as_ref())
+            && is_matching_current_field(self.common_name.as_ref(), current.common_name.as_ref())
+            && is_matching_current_field(self.range_start.as_ref(), current.range_start.as_ref())
+            && is_matching_current_field(self.range_length.as_ref(), current.range_length.as_ref())
+            && is_matching_current_field(self.read_lock_enabled.as_ref(), current.read_lock_enabled.as_ref())
+            && is_matching_current_field(self.write_lock_enabled.as_ref(), current.write_lock_enabled.as_ref())
+            && is_matching_current_field(self.read_locked.as_ref(), current.read_locked.as_ref())
+            && is_matching_current_field(self.write_locked.as_ref(), current.write_locked.as_ref())
+            && is_matching_current_field(self.lock_on_reset.as_ref(), current.lock_on_reset.as_ref())
+            && is_matching_current_field(self.active_key.as_ref(), current.active_key.as_ref())
+            && is_matching_current_field(self.next_key.as_ref(), current.next_key.as_ref())
+            && is_matching_current_field(self.reencrypt_state.as_ref(), current.reencrypt_state.as_ref())
+            && is_matching_current_field(self.reencrypt_request.as_ref(), current.reencrypt_request.as_ref())
+            && is_matching_current_field(self.adv_key_mode.as_ref(), current.adv_key_mode.as_ref())
+            && is_matching_current_field(self.verify_mode.as_ref(), current.verify_mode.as_ref())
+            && is_matching_current_field(self.cont_on_reset.as_ref(), current.cont_on_reset.as_ref())
+            && is_matching_current_field(self.last_reencrypt_lba.as_ref(), current.last_reencrypt_lba.as_ref())
+            && is_matching_current_field(self.last_reenc_stat.as_ref(), current.last_reenc_stat.as_ref())
+            && is_matching_current_field(self.general_status.as_ref(), current.general_status.as_ref())
     }
 }
 
@@ -695,8 +695,8 @@ mod tests {
         LockingRange{ range_start: None, range_length: Some(50), ..Default::default() },
         false,
     )]
-    fn is_matching_current_(#[case] expected: LockingRange, #[case] actual: LockingRange, #[case] result: bool) {
-        assert_eq!(expected.is_matching_current(&actual), result);
+    fn is_matching_current_(#[case] expected: LockingRange, #[case] current: LockingRange, #[case] result: bool) {
+        assert_eq!(expected.is_matching_current(&current), result);
     }
 
     //--------------------------------------------------------------------------

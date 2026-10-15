@@ -34,15 +34,19 @@ where
     }
 }
 
-/// Check if the expected field matches the actual one.
+/// Check if the `expected` field matches the `current` one.
 ///
-/// If expected is `provided`, it must be equal to the `actual`.
-/// If expected isn't provided, `true` is returned.
-pub fn is_matching_current_field<T>(expected: Option<&T>, actual: Option<&T>) -> bool
+/// If `expected` is provided, it must be equal to `current`.
+/// If `expected` isn't provided, `true` is returned.
+pub fn is_matching_current_field<T>(expected: Option<&T>, current: Option<&T>) -> bool
 where
     T: PartialEq,
 {
-    if let Some(expected) = expected { Some(expected) == actual } else { true }
+    if let Some(expected) = expected {
+        Some(expected) == current
+    } else {
+        true
+    }
 }
 
 /// A change in the value of the object from `current` to `desired`.
@@ -55,7 +59,7 @@ pub struct ObjectChange<O> {
 pub type AuthorityChange = ObjectChange<Authority>;
 pub type LockingRangeChange = ObjectChange<LockingRange>;
 
-/// Maps the `current` objects by UID. The set of changes has the
+/// Maps the `current` objects by UID. The map of changes has the
 /// `current` state of the objects filled in, but the `desired` state is left as
 /// [`Default`] (except for the UID field).
 ///
@@ -89,8 +93,8 @@ where
 /// - If a desired field is not found in the map -- change requested, does not
 ///   exist on the device.
 ///
-/// The `desired` values don't have to contain an entry for each locking range
-/// found in the map.
+/// The `desired` values don't have to contain an entry for each object found
+/// in the map.
 pub fn fill_in_desired_values<O>(
     objects: &mut BTreeMap<O::Ref, ObjectChange<O>>,
     desired: impl IntoIterator<Item = O>,
@@ -107,14 +111,15 @@ where
     Ok(())
 }
 
-/// Check if the `expected` locking ranges match the current ones as found
-/// on the device.
+/// Check if the `expected` objects match the `current` ones as found on the
+/// device.
 ///
-/// It checks if the two locking ranges are equal, with the following nuances:
-/// - The ordering of the ranges does not matter.
-/// - Fields not specified (i.e. [`None`]) in the `expected` locking ranges are
-///   ignored for comparison, even if they are specified in the `actual` locking
-///   range.
+/// It checks if the two sets of objects are equal, with the following nuances:
+/// - The ordering of the objects does not matter.
+/// - Fields not specified (i.e. [`None`]) in the `expected` objects are
+///   ignored for comparison, even if they are specified in the `current`
+///   objects.
+/// - Objects that are `current` but not `expected` are ignored.
 pub fn check_matching_current_all<'a, O>(
     expected: impl IntoIterator<Item = &'a O>,
     current: impl IntoIterator<Item = &'a O>,

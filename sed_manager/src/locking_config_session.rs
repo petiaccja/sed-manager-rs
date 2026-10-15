@@ -220,7 +220,7 @@ impl LockingConfigSession {
         let plan = planner.plan();
         debug!(plan = ?plan);
         for step in plan {
-            let changes = Authority { uid: None, ..step.value };
+            let changes = Authority { uid: None, ..step.changes };
             self.session.set_object(step.uid, changes).await.map_err(Error::AuthorityUpdateFailed)?;
         }
 
