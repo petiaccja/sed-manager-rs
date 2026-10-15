@@ -129,3 +129,154 @@ impl MatchCurrent for Authority {
             && is_matching_current_field(self.log_to.as_ref(), current.log_to.as_ref())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::num::NonZero;
+
+    use super::*;
+
+    use googletest::{assert_that, matchers::*};
+    use rstest::rstest;
+    use sed_packet::UidRange;
+
+    const AUTHORITY_UID: UidRange<AuthorityRef> = UidRange {
+        start: AuthorityRef::from_half(NonZero::new(1).unwrap()),
+        end: AuthorityRef::from_half(NonZero::new(2048).unwrap()),
+        step: 1,
+    };
+
+    fn make_authority(index: usize, common_name: &str, enabled: bool) -> Authority {
+        Authority {
+            uid: AUTHORITY_UID.get(index),
+            common_name: Some(common_name.into()),
+            enabled: Some(enabled),
+            ..Default::default()
+        }
+    }
+
+    fn make_uid_only_authority(index: usize) -> Authority {
+        Authority { uid: AUTHORITY_UID.get(index), ..Default::default() }
+    }
+
+    /// An enabled authority with a name, and two disabled ones without a name.
+    fn make_current_authorities() -> Vec<Authority> {
+        vec![
+            make_authority(0, "Alice", true),
+            make_authority(1, "", false),
+            make_authority(2, "", false),
+        ]
+    }
+
+    //--------------------------------------------------------------------------
+    // AuthorityPlanner
+    //--------------------------------------------------------------------------
+
+    #[test]
+    fn planner_current_missing_uid() {
+        let current = [
+            make_authority(0, "Alice", true),
+            Authority { enabled: Some(false), ..Default::default() },
+        ];
+        assert_that!(
+            AuthorityPlanner::new(current, []),
+            err(eq(&AuthorityPlanError::MissingUid { index: 1, set: "current" }))
+        );
+    }
+
+    #[test]
+    fn planner_desired_missing_uid() {
+        let desired = [Authority { enabled: Some(true), ..Default::default() }];
+        assert_that!(
+            AuthorityPlanner::new(make_current_authorities(), desired),
+            err(eq(&AuthorityPlanError::MissingUid { index: 0, set: "desired" }))
+        );
+    }
+
+    #[test]
+    fn planner_desired_not_on_device() {
+        let desired = [make_authority(5, "Bob", true)];
+        assert_that!(
+            AuthorityPlanner::new(make_current_authorities(), desired),
+            err(eq(&AuthorityPlanError::NotOnDevice { uid: AUTHORITY_UID.get(5).unwrap(), set: "desired" }))
+        );
+    }
+
+    fn make_step(changes: Authority) -> AuthorityStep {
+        AuthorityStep { uid: changes.uid.unwrap(), changes }
+    }
+
+    #[test]
+    fn planner_plan_no_changes() {
+        let planner = AuthorityPlanner::new(make_current_authorities(), []).unwrap();
+        assert_that!(planner.plan(), is_empty());
+    }
+
+    #[test]
+    fn planner_plan_unchanged_desired() {
+        let planner = AuthorityPlanner::new(make_current_authorities(), make_current_authorities()).unwrap();
+        assert_that!(planner.plan(), is_empty());
+    }
+
+    #[test]
+    fn planner_plan_single_field() {
+        let desired = [Authority { enabled: Some(true), ..make_uid_only_authority(1) }];
+        let planner = AuthorityPlanner::new(make_current_authorities(), desired.clone()).unwrap();
+        assert_that!(planner.plan(), elements_are![eq(&make_step(desired[0].clone()))]);
+    }
+
+    #[test]
+    fn planner_plan_unchanged_fields_omitted() {
+        // The authority stays enabled, so only the name has to be set.
+        let planner = AuthorityPlanner::new(make_current_authorities(), [make_authority(0, "Bob", true)]).unwrap();
+        let expected = Authority { common_name: Some("Bob".into()), ..make_uid_only_authority(0) };
+        assert_that!(planner.plan(), elements_are![eq(&make_step(expected))]);
+    }
+
+    // This is not a functional requirement, updates will work in any order.
+    // However, it keeps errors and telemetry traces deterministic, which helps
+    // with debugging.
+    #[test]
+    fn planner_plan_ordered_by_uid() {
+        let desired = [
+            make_authority(2, "Carol", true),
+            make_authority(1, "Bob", true),
+        ];
+        let planner = AuthorityPlanner::new(make_current_authorities(), desired).unwrap();
+        assert_that!(
+            planner.plan(),
+            elements_are![
+                eq(&make_step(make_authority(1, "Bob", true))),
+                eq(&make_step(make_authority(2, "Carol", true)))
+            ]
+        );
+    }
+
+    //--------------------------------------------------------------------------
+    // is_matching_current
+    //--------------------------------------------------------------------------
+    #[rstest]
+    #[case::equal(
+        Authority{ common_name: None, enabled: Some(true), ..Default::default() },
+        Authority{ common_name: None, enabled: Some(true), ..Default::default() },
+        true,
+    )]
+    #[case::unspecified(
+        Authority{ common_name: None, enabled: Some(true), ..Default::default() },
+        Authority{ common_name: Some("Alice".into()), enabled: Some(true), ..Default::default() },
+        true,
+    )]
+    #[case::overspecified(
+        Authority{ common_name: Some("Alice".into()), enabled: Some(true), ..Default::default() },
+        Authority{ common_name: None, enabled: Some(true), ..Default::default() },
+        false,
+    )]
+    #[case::mismatching(
+        Authority{ common_name: None, enabled: Some(true), ..Default::default() },
+        Authority{ common_name: None, enabled: Some(false), ..Default::default() },
+        false,
+    )]
+    fn is_matching_current_(#[case] expected: Authority, #[case] current: Authority, #[case] result: bool) {
+        assert_eq!(expected.is_matching_current(&current), result);
+    }
+}

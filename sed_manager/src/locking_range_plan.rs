@@ -313,6 +313,36 @@ mod tests {
     //--------------------------------------------------------------------------
 
     #[test]
+    fn planner_current_missing_uid() {
+        let current = [
+            make_range(0, 0, 0),
+            LockingRange { range_start: Some(12), ..Default::default() },
+        ];
+        assert_that!(
+            LockingRangePlanner::new(current, []),
+            err(eq(&LockingRangePlanError::MissingUid { index: 1, set: "current" }))
+        );
+    }
+
+    #[test]
+    fn planner_desired_missing_uid() {
+        let desired = [LockingRange { read_locked: Some(true), ..Default::default() }];
+        assert_that!(
+            LockingRangePlanner::new(make_current_ranges(), desired),
+            err(eq(&LockingRangePlanError::MissingUid { index: 0, set: "desired" }))
+        );
+    }
+
+    #[test]
+    fn planner_desired_not_on_device() {
+        let desired = [make_range(5, 64, 16)];
+        assert_that!(
+            LockingRangePlanner::new(make_current_ranges(), desired),
+            err(eq(&LockingRangePlanError::NotOnDevice { uid: RANGE_UID.get(5).unwrap(), set: "desired" }))
+        );
+    }
+
+    #[test]
     fn planner_zero_length_range_inside_other() {
         let desired = [make_range(2, 20, 0)];
         assert_that!(LockingRangePlanner::new(make_current_ranges(), desired), ok(anything()));
@@ -402,6 +432,17 @@ mod tests {
         assert_that!(planner.plan(), elements_are![eq(&make_set_step(desired[0].clone()))]);
     }
 
+    #[test]
+    fn planner_plan_ordered_by_uid() {
+        let locked_2 = LockingRange { read_locked: Some(true), ..make_uid_only_range(2) };
+        let locked_1 = LockingRange { read_locked: Some(true), ..make_uid_only_range(1) };
+        let planner = LockingRangePlanner::new(make_current_ranges(), [locked_2.clone(), locked_1.clone()]).unwrap();
+        assert_that!(planner.plan(), elements_are![eq(&make_set_step(locked_1)), eq(&make_set_step(locked_2))]);
+    }
+
+    // This is not a functional requirement, updates will work in any order.
+    // However, it keeps errors and telemetry traces deterministic, which helps
+    // with debugging.
     #[test]
     fn planner_plan_moving_start() {
         // The length must be set again, as it's cleared by the collapse.
