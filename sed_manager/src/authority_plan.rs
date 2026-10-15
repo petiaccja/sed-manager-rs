@@ -80,7 +80,7 @@ impl AuthorityChange {
     pub fn diff(&self) -> Authority {
         let Self { current, desired } = self;
         Authority {
-            uid: self.desired.uid,
+            uid: self.desired.uid, // UID is read-only so no diff, include the target object's UID.
             name: diff_field(current.name.as_ref(), desired.name.as_ref()).cloned(),
             common_name: diff_field(current.common_name.as_ref(), desired.common_name.as_ref()).cloned(),
             is_class: diff_field(current.is_class.as_ref(), desired.is_class.as_ref()).cloned(),

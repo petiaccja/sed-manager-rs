@@ -214,7 +214,7 @@ impl LockingRangeChange {
     pub fn diff(&self) -> LockingRange {
         let Self { current, desired } = self;
         LockingRange {
-            uid: self.desired.uid,
+            uid: self.desired.uid, // UID is read-only so no diff, include the target object's UID.
             name: diff_field(current.name.as_ref(), desired.name.as_ref()).cloned(),
             common_name: diff_field(current.common_name.as_ref(), desired.common_name.as_ref()).cloned(),
             range_start: diff_field(current.range_start.as_ref(), desired.range_start.as_ref()).cloned(),
