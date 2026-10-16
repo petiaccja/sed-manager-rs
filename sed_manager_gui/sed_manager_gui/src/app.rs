@@ -130,7 +130,7 @@ impl App {
         }
         {
             let view_model = view_model.clone();
-            ui.on_commit_ranges(move |path| view_model.clone().commit_locking_ranges(path.to_string().into()));
+            ui.on_commit_locking_ranges(move |path| view_model.clone().commit_locking_ranges(path.to_string().into()));
         }
         {
             let view_model = view_model.clone();

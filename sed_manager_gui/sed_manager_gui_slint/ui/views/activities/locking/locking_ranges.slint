@@ -271,7 +271,7 @@ export component LockingRangesTab {
     in-out property <[LockingRange]> locking-ranges;
     in property <CommandStatus> command-status;
 
-    callback commit-ranges();
+    callback commit-locking-ranges();
     callback logout();
 
     VerticalLayout {
@@ -327,7 +327,7 @@ export component LockingRangesTab {
                         && LockingRangeLib.is-any-dirty(locking-ranges);
 
                     clicked => {
-                        commit-ranges()
+                        commit-locking-ranges()
                     }
                 }
 
