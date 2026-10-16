@@ -1,0 +1,81 @@
+import { Palette, Button, StyleMetrics } from "std-widgets.slint";
+import { Island } from "island.slint";
+import { PaletteExtra } from "palette_extra.slint";
+import { Icons } from "../resources/lib.slint";
+
+export component ConfirmPopup inherits PopupWindow {
+    close-policy: no-auto-close;
+
+    in property <string> title;
+    in property <string> message;
+
+    callback confirmed();
+
+    Rectangle {
+        background: Palette.background.with-alpha(0.9);
+        width: 100%;
+        height: 100%;
+    }
+
+    VerticalLayout {
+        alignment: center;
+        preferred-width: min(root.width, max(root.width / 3, 16rem));
+
+        HorizontalLayout {
+            alignment: center;
+            padding: StyleMetrics.layout-padding;
+
+            Island {
+                background: Palette.background;
+                border-color: PaletteExtra.warning-foreground.mix(Palette.background, 0.5);
+
+                VerticalLayout {
+                    spacing: StyleMetrics.layout-spacing;
+                    padding: StyleMetrics.layout-padding;
+
+                    HorizontalLayout {
+                        spacing: StyleMetrics.layout-spacing;
+
+                        Image {
+                            source: Icons.warning;
+                            colorize: PaletteExtra.warning-foreground;
+                            width: 2.0rem;
+                            height: 2.0rem;
+                        }
+
+                        Text {
+                            text: title;
+                            wrap: word-wrap;
+                            color: PaletteExtra.warning-foreground;
+                        }
+                    }
+
+                    Text {
+                        text: message;
+                        wrap: word-wrap;
+                    }
+
+                    HorizontalLayout {
+                        alignment: end;
+                        spacing: StyleMetrics.layout-spacing;
+
+                        Button {
+                            text: "Continue";
+
+                            clicked => {
+                                confirmed();
+                                root.close();
+                            }
+                        }
+
+                        Button {
+                            text: "Cancel";
+
+                            clicked => { root.close(); }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

@@ -16,6 +16,7 @@ import {
     CommandStatus,
     Geometry,
     Alignment,
+    Uid,
 } from "../../../data/lib.slint";
 import { SectorLib } from "../../../algorithm/sector.slint";
 import { LockingRangeLib } from "../../../algorithm/locking_range.slint";
@@ -28,8 +29,10 @@ import {
     ToastQueue,
     ToastLevel,
     IconButton,
+    ConfirmPopup,
 } from "../../../widgets/lib.slint";
 import { Icons } from "../../../resources/lib.slint";
+import { MainWindowGeometry } from "../../../main_window_geometry.slint";
 
 component LockingRangeTable {
     preferred-width: table.preferred-width;
@@ -38,6 +41,8 @@ component LockingRangeTable {
     in property <Geometry> geometry;
     in property <Alignment> alignment;
     in-out property <[LockingRange]> locking-ranges;
+
+    callback erase(index: int);
 
     viewport := ScrollView {
         GridLayout {
@@ -105,6 +110,10 @@ component LockingRangeTable {
                                     icon: Icons.destruction;
                                     text-placement: left;
                                     enabled: !LockingRangeLib.is-individual-dirty(index, locking-ranges);
+
+                                    clicked => {
+                                        erase(index)
+                                    }
                                 }
                             }
                         }
@@ -270,18 +279,38 @@ export component LockingRangesTab {
     in property <Alignment> alignment;
     in-out property <[LockingRange]> locking-ranges;
     in property <CommandStatus> command-status;
+    private property <int> erase-index;
 
     callback commit-locking-ranges();
+    callback erase-locking-range(locking-range: Uid);
     callback logout();
 
     VerticalLayout {
         spacing: StyleMetrics.layout-spacing * 1.4;
+
+        confirm-erase := ConfirmPopup {
+            x: -root.absolute-position.x;
+            y: -root.absolute-position.y;
+            width: MainWindowGeometry.width;
+            height: MainWindowGeometry.height;
+            title: @tr("Erase {}?", locking-ranges[erase-index].name);
+            message: "The range's data will be crypto-shredded and cannot be restored in any way.";
+
+            confirmed => {
+                erase-locking-range(locking-ranges[erase-index].uid);
+            }
+        }
 
         LockingRangeTable {
             geometry: geometry;
             alignment: alignment;
             max-height: self.preferred-height;
             locking-ranges <=> locking-ranges;
+
+            erase(index) => {
+                erase-index = index;
+                confirm-erase.show();
+            }
         }
 
         VerticalLayout {

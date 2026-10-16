@@ -18,6 +18,7 @@ export component DeviceSwitchView {
     callback login(device: string, authority: Uid, password: string);
     callback logout(device: string);
     callback commit-locking-ranges(device: string);
+    callback erase-locking-range(device: string, locking-range: Uid);
     callback commit-authorities(device: string);
     callback revert-device(device: string, scope: RevertScope, authority: RevertAuthority, password: string);
     callback query-stack-status(device: string);
@@ -61,6 +62,9 @@ export component DeviceSwitchView {
                 }
                 commit-locking-ranges() => {
                     commit-locking-ranges(device.identity.path)
+                }
+                erase-locking-range(locking-range) => {
+                    erase-locking-range(device.identity.path, locking-range)
                 }
                 commit-authorities() => {
                     commit-authorities(device.identity.path)
