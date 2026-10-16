@@ -29,7 +29,11 @@ pub struct Spec {
 
 impl Spec {
     pub fn default_ssc(&self) -> Option<&dyn SecuritySubsystemClass> {
-        self.discovery.ssc_features().next()
+        self.default_ssc_descriptor().and_then(|desc| desc.as_ssc())
+    }
+
+    pub fn default_ssc_descriptor(&self) -> Option<&FeatureDescriptor> {
+        self.discovery.feature_descriptors.iter().find(|desc| desc.as_ssc().is_some())
     }
 
     pub fn secondary_sp_uid(&self) -> Option<SecurityProviderRef> {

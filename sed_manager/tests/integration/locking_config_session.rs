@@ -263,6 +263,19 @@ async fn set_locking_ranges_invalid_desired() {
 #[instrument]
 #[tokio::test]
 #[with_tracing]
+async fn erase_locking_range() {
+    let tper = setup().await;
+    let session = login_admin1(&tper).await.unwrap();
+
+    session.erase_locking_range(range_uid(2)).await.unwrap();
+
+    // We cannot really check the side-effects of erasing a range. We'd need to
+    // check if they key was changed, but the key cannot be read.
+}
+
+#[instrument]
+#[tokio::test]
+#[with_tracing]
 async fn set_authorities() {
     let tper = setup().await;
     let session = login_admin1(&tper).await.unwrap();

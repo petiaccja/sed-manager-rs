@@ -17,7 +17,7 @@ use sed_manager_gui_slint as ui;
 use sed_packet::{MaxBytes, com_id_request::ComIdState};
 use sed_spec::{
     methods::MethodStatus,
-    objects::{Authority, AuthorityRef, SecurityProviderRef},
+    objects::{Authority, AuthorityRef, LockingRangeRef, SecurityProviderRef},
     preconfig::{core::shared::authority::ANYBODY, opal_2::locking},
 };
 use sed_tper::{Error as TperError, PropertiesChanged};
@@ -131,6 +131,12 @@ impl App {
         {
             let view_model = view_model.clone();
             ui.on_commit_locking_ranges(move |path| view_model.clone().commit_locking_ranges(path.to_string().into()));
+        }
+        {
+            let view_model = view_model.clone();
+            ui.on_erase_locking_range(move |path, uid| {
+                view_model.clone().erase_locking_range(path.to_string().into(), uid)
+            });
         }
         {
             let view_model = view_model.clone();
@@ -615,6 +621,28 @@ impl App {
     }
 
     #[instrument(skip(self))]
+    fn erase_locking_range(self: Rc<Self>, path: PathBuf, locking_range: ui::Uid) {
+        let Ok(locking_range) = LockingRangeRef::try_from_ui(&locking_range) else {
+            error!(locking_range_ref = &locking_range.value, error = "invalid locking range reference");
+            self.toast_queue
+                .error("Invalid authority reference", "The UID is not an authority reference. Please report this bug.");
+            return;
+        };
+
+        self.command()
+            .success_message("Locking range erased")
+            .error_message("Failed to erase locking range")
+            .on_session(path, async move |_: &Device, session: &mut Session| {
+                let Session::LockingConfig(locking_session) = session else {
+                    return Err(CommandError::Skipped);
+                };
+                locking_session.erase_locking_range(locking_range).await?;
+                Ok(())
+            })
+            .run();
+    }
+
+    #[instrument(skip(self))]
     fn commit_locking_authorities(self: Rc<Self>, path: PathBuf) {
         slint::spawn_local(async move {
             let device_list = self.device_list.read().await;
@@ -745,13 +773,13 @@ impl App {
             return;
         };
         let Ok(sp) = SecurityProviderRef::try_from_ui(&sp) else {
-            error!(sp_ref = &sp.value, "invalid SP reference");
+            error!(sp_ref = &sp.value, error = "invalid SP reference");
             self.toast_queue
                 .error("Invalid SP reference", "The UID is not an SP reference. Please report this bug.");
             return;
         };
         let Ok(authority) = AuthorityRef::try_from_ui(&authority) else {
-            error!(authority_ref = &authority.value, "invalid authority reference");
+            error!(authority_ref = &authority.value, error = "invalid authority reference");
             self.toast_queue
                 .error("Invalid authority reference", "The UID is not an authority reference. Please report this bug.");
             return;
