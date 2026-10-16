@@ -218,7 +218,7 @@ impl LockingConfigSession {
     #[instrument(skip(self), err)]
     pub async fn erase_locking_range(&self, locking_range: LockingRangeRef) -> Result<(), Error> {
         if matches!(self.spec.default_ssc_descriptor(), Some(FeatureDescriptor::Enterprise(_))) {
-            Err(Error::TperError(TperError::NotImplemented))
+            Err(Error::NotImplemented)
         } else {
             let key = self.session.get_field(locking_range.active_key()).await?;
             self.session.gen_key(key, None, None).await?;
