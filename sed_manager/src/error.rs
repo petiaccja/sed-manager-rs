@@ -16,6 +16,8 @@ pub enum Error {
     TperError(#[from] TperError),
     #[error("The feature is not supported by the current TCG SSC")]
     IncompatibleSsc,
+    #[error("The feature is not supported by the device")]
+    NotSupported,
     #[error("The device does not support any TCG SSCs")]
     NoSscAvailable,
     #[error("The feature is supported by the device, but isn't not implemented")]

@@ -7,8 +7,12 @@ use std::sync::Arc;
 
 use googletest::{assert_that, matchers::*};
 use sed_async::{PolyRuntime, TokioRuntime};
-use sed_manager::{Alignment, Error, LockingConfigSession, LockingRangePlanError, SetupSession};
-use sed_packet::{MaxBytes, com_id::ComIdExt};
+use sed_manager::{Alignment, Error, LockingConfigSession, LockingRangePlanError, SetupSession, Spec};
+use sed_packet::{
+    MaxBytes,
+    com_id::ComIdExt,
+    discovery::{FeatureDescriptor, LockingDescriptor},
+};
 use sed_spec::{
     objects::{Authority, AuthorityRef, LockingRange, LockingRangeRef, MbrControl},
     preconfig::opal_2::locking as opal_locking,
@@ -288,6 +292,30 @@ async fn erase_locking_range() {
 
     assert_that!(get_media_encryption_key(&device), not(eq(key_before)));
     assert_that!(session.get_locking_ranges().await, ok(eq(&ranges_before)));
+}
+
+#[instrument]
+#[tokio::test]
+#[with_tracing]
+async fn erase_locking_range_no_media_encryption() {
+    let (tper, device) = setup().await;
+
+    // Pretend the device doesn't use media encryption, like Pyrite devices.
+    let mut discovery = tper.discover_current().await.unwrap();
+    for feature in &mut discovery.feature_descriptors {
+        if let FeatureDescriptor::Locking(LockingDescriptor { media_encryption, .. }) = feature {
+            *media_encryption = false;
+        }
+    }
+    let spec = Spec::try_from(discovery).unwrap();
+    let session = LockingConfigSession::login(&tper, spec, locking_admin1(), Some(NEW_SID_PASSWORD)).await.unwrap();
+
+    let key_before = get_media_encryption_key(&device);
+
+    let result = session.erase_locking_range(range_uid(2)).await;
+
+    assert_that!(result, err(eq(&Error::NotSupported)));
+    assert_that!(get_media_encryption_key(&device), eq(key_before));
 }
 
 #[instrument]

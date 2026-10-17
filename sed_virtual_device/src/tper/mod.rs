@@ -134,7 +134,7 @@ impl Tper {
                 locked,
                 locking_enabled,
                 locking_supported: true,
-                media_encryption: false,
+                media_encryption: true,
                 mbr_enabled,
                 mbr_done,
                 mbr_shadowing_not_supported: false,

@@ -624,8 +624,10 @@ impl App {
     fn erase_locking_range(self: Rc<Self>, path: PathBuf, locking_range: ui::Uid) {
         let Ok(locking_range) = LockingRangeRef::try_from_ui(&locking_range) else {
             error!(locking_range_ref = &locking_range.value, error = "invalid locking range reference");
-            self.toast_queue
-                .error("Invalid authority reference", "The UID is not an authority reference. Please report this bug.");
+            self.toast_queue.error(
+                "Invalid locking range reference",
+                "The UID is not a locking range reference. Please report this bug.",
+            );
             return;
         };
 
