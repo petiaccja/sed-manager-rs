@@ -16,6 +16,8 @@ pub enum Error {
     AmbiguousElement { id: String },
     #[error("The element title=\"{title}\" not found")]
     ToastNotFound { title: String },
+    #[error("The element id=\"{id}\" is still present")]
+    ElementNotGone { id: String },
     #[error("The element id=\"{id}\" is not enabled (although present)")]
     ElementNotEnabled { id: String },
     #[error("The element id=\"{id}\" does not satisfy the condition (although present)")]
@@ -152,12 +154,16 @@ impl<Root: ElementRoot + ComponentHandle> Driver<Root> {
         }
     }
 
-    /// Check if the element has appeared within the timeout.
+    /// Check if all elements with the `accessible-id` have disappeared within the timeout.
     pub async fn check_disappearance(&self, element_id: &str) -> Result<(), Error> {
-        let result = sleep_until_condition(|| !self.find_unique(element_id).is_ok(), self.timeout).await;
+        let result = sleep_until_condition(
+            || ElementHandle::find_by_accessible_id(&self.root, element_id).next().is_none(),
+            self.timeout,
+        )
+        .await;
         match result {
             Ok(_) => Ok(()),
-            Err(_) => Err(Error::ElementNotFound { id: element_id.into() }),
+            Err(_) => Err(Error::ElementNotGone { id: element_id.into() }),
         }
     }
 

@@ -65,8 +65,11 @@ fn change_password() {
         ui.enter_text("new-password", TEST_PASSWORD).await.unwrap();
         ui.enter_text("repeat-password", TEST_PASSWORD).await.unwrap();
 
-        // Submit and wait for the success toast.
-        ui.single_click("change-password-submit", Left).await.unwrap();
+        // Submit and wait for the success toast. The button is disabled while the TPer or the
+        // session is busy, so it's invoked synchronously right after it's found enabled, as
+        // opposed to an asynchronous mouse click, during which it may get disabled again.
+        ui.check_enabled("change-password-submit").await.unwrap();
+        ui.invoke_default_action("change-password-submit").unwrap();
         ui.check_appearance_toast("Password changed").await.unwrap();
     });
 }

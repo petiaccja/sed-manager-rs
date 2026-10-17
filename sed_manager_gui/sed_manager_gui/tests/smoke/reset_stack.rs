@@ -40,9 +40,10 @@ fn reset_stack() {
         ui.single_click("device-side-bar-item-0", Left).await.unwrap();
 
         // Click "Reset stack" and wait for the success toast. The button is disabled
-        // while the commands issued when the device was opened are still running.
+        // while the commands issued when the device was opened are still running. The
+        // click is invoked synchronously, so the button can't get disabled mid-click.
         ui.check_enabled("activity-reset-stack").await.unwrap();
-        ui.single_click("activity-reset-stack", Left).await.unwrap();
+        ui.invoke_default_action("activity-reset-stack").unwrap();
         ui.check_appearance_toast("Stack has been reset").await.unwrap();
     });
 }

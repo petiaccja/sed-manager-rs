@@ -49,8 +49,11 @@ fn cycle_ownership() {
         ui.enter_text("new-password", TEST_PASSWORD).await.unwrap();
         ui.enter_text("repeat-password", TEST_PASSWORD).await.unwrap();
 
-        // Submit and wait for the success toast.
-        ui.single_click("take-ownership-submit", Left).await.unwrap();
+        // Submit and wait for the success toast. The submit buttons are disabled while the TPer
+        // or the session is busy, so they are invoked synchronously right after they're found
+        // enabled, as opposed to an asynchronous mouse click, during which they may get disabled.
+        ui.check_enabled("take-ownership-submit").await.unwrap();
+        ui.invoke_default_action("take-ownership-submit").unwrap();
         ui.check_appearance_toast("Taken ownership").await.unwrap();
 
         // A successful action triggers a background re-discovery, which navigates the sidebar
@@ -61,7 +64,8 @@ fn cycle_ownership() {
         // Switch to the "Activate locking" activity and submit the owner password.
         ui.single_click("activity-activate-locking", Left).await.unwrap();
         ui.enter_text("activate-locking-password", TEST_PASSWORD).await.unwrap();
-        ui.single_click("activate-locking-submit", Left).await.unwrap();
+        ui.check_enabled("activate-locking-submit").await.unwrap();
+        ui.invoke_default_action("activate-locking-submit").unwrap();
         ui.check_appearance_toast("Locking activated").await.unwrap();
         ui.check_disappearance("activate-locking-password").await.unwrap();
 
@@ -69,7 +73,7 @@ fn cycle_ownership() {
         ui.single_click("activity-revert-device", Left).await.unwrap();
         ui.enter_text("revert-password", TEST_PASSWORD).await.unwrap();
         ui.check_enabled("revert-submit").await.unwrap();
-        ui.single_click("revert-submit", Left).await.unwrap();
+        ui.invoke_default_action("revert-submit").unwrap();
         ui.check_appearance_toast("Reverted device successfully").await.unwrap();
         ui.check_disappearance("revert-password").await.unwrap();
         // Reverting the locking SP disables locking again, so "Activate locking" reappears.
@@ -82,7 +86,7 @@ fn cycle_ownership() {
         ui.select_combo_box_item("revert-scope", "Everything").unwrap();
         ui.enter_text("revert-password", TEST_PASSWORD).await.unwrap();
         ui.check_enabled("revert-submit").await.unwrap();
-        ui.single_click("revert-submit", Left).await.unwrap();
+        ui.invoke_default_action("revert-submit").unwrap();
         ui.check_appearance_toast("Reverted device successfully").await.unwrap();
         // Reverting the whole device restores the factory MSID password, so "Take ownership" reappears.
         ui.check_appearance("activity-take-ownership").await.unwrap();
