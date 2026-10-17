@@ -152,6 +152,10 @@ impl App {
         }
         {
             let view_model = view_model.clone();
+            ui.on_commit_mbr_control(move |path| view_model.clone().commit_mbr_control(path.to_string().into()));
+        }
+        {
+            let view_model = view_model.clone();
             ui.on_logout(move |path| view_model.clone().logout(path.to_string().into()));
         }
         {
@@ -722,6 +726,9 @@ impl App {
             })
             .run();
     }
+
+    #[instrument(skip(self))]
+    fn commit_mbr_control(self: Rc<Self>, path: PathBuf) {}
 
     #[instrument(skip(self))]
     fn logout(self: Rc<Self>, path: PathBuf) {

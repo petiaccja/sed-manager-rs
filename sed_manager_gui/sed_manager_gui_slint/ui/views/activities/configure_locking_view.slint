@@ -45,6 +45,7 @@ export component ConfigureLockingView {
     callback erase-locking-range(locking-range: Uid);
     callback commit-authorities();
     callback change-password(authority: Uid, password: string);
+    callback commit-mbr-control();
 
     if !command-status.secondary-session-active: VerticalLayout {
         alignment: start;
@@ -126,6 +127,10 @@ export component ConfigureLockingView {
                     geometry: geometry;
                     command-status: command-status;
                     mbr <=> locking-sp.mbr;
+
+                    commit-mbr-control() => {
+                        commit-mbr-control()
+                    }
 
                     logout() => {
                         logout()
