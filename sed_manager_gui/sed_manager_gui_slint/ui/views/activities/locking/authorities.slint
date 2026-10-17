@@ -18,6 +18,7 @@ import {
     LockingRangeAccess,
     Mbr,
     MbrAccess,
+    Uid,
 } from "../../../data/lib.slint";
 import {
     Detached,
@@ -33,12 +34,16 @@ import {
 } from "../../../widgets/lib.slint";
 import { Icons } from "../../../resources/lib.slint";
 import { AuthorityLib } from "../../../algorithm/authority.slint";
+import { PasswordPopup } from "../../../widgets/password_popup.slint";
+import { MainWindowGeometry } from "../../../main_window_geometry.slint";
 
 component AuthorityTable {
     preferred-width: table.preferred-width;
     preferred-height: table.preferred-height;
 
     in-out property <[Authority]> authorities;
+
+    callback change-password(authority-index: int);
 
     viewport := ScrollView {
         GridLayout {
@@ -110,6 +115,10 @@ component AuthorityTable {
                                     icon-size: 1.4rem;
                                     icon: Icons.change-password;
                                     text-placement: left;
+
+                                    clicked => {
+                                        change-password(index)
+                                    }
                                 }
                             }
                         }
@@ -150,9 +159,23 @@ export component AuthoritiesTab {
     in-out property <[Authority]> authorities;
     in property <CommandStatus> command-status;
     in property <Mbr> mbr;
+    private property <int> password-index;
 
     callback commit-authorities();
     callback logout();
+    callback change-password(authority: Uid, password: string);
+
+    password-entry := PasswordPopup {
+        x: -root.absolute-position.x;
+        y: -root.absolute-position.y;
+        width: MainWindowGeometry.width;
+        height: MainWindowGeometry.height;
+        title: @tr("Change password for {}?", authorities[password-index].name);
+
+        set(password) => {
+            change-password(authorities[password-index].uid, password);
+        }
+    }
 
     VerticalLayout {
         alignment: space-between;
@@ -160,6 +183,11 @@ export component AuthoritiesTab {
 
         AuthorityTable {
             authorities <=> authorities;
+
+            change-password(index) => {
+                root.password-index = index;
+                password-entry.show();
+            }
         }
 
         HorizontalLayout {
