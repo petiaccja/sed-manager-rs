@@ -16,22 +16,16 @@ pub enum Error {
     TperError(#[from] TperError),
     #[error("The feature is not supported by the current TCG SSC")]
     IncompatibleSsc,
+    #[error("The feature is not supported by the device")]
+    NotSupported,
     #[error("The device does not support any TCG SSCs")]
     NoSscAvailable,
+    #[error("The feature is supported by the device, but isn't not implemented")]
+    NotImplemented,
     #[error("Ownership has already been set up on this device")]
     AlreadyOwned,
     #[error("Locking has already been activated on this device")]
     AlreadyActivated,
-    #[error("Internal error: this is a bug in SEDManager")]
-    InternalError,
-    #[error("Cancelled")]
-    Cancelled,
-    #[error("Cannot open file")]
-    FileNotOpen,
-    #[error("Cannot read file")]
-    FileReadError,
-    #[error("File is too large")]
-    FileTooLarge,
     #[error("Invalid ACE expression")]
     InvalidAceExpression,
     #[error("Not a password authority")]

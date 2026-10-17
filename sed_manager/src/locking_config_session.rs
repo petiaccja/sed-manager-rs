@@ -3,10 +3,16 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use sed_packet::MaxBytes;
+use sed_packet::{
+    MaxBytes,
+    discovery::{FeatureDescriptor, LockingDescriptor},
+};
 use sed_spec::{
     methods::MethodStatus,
-    objects::{Authority, AuthorityRef, LockingInfoExt, LockingRange, LockingRangeRef, MbrControl, TableDescRefExt},
+    objects::{
+        Authority, AuthorityRef, LockingInfoExt, LockingRange, LockingRangeRef, LockingRangeRefExt, MbrControl,
+        TableDescRefExt,
+    },
     preconfig::core::shared::{locking_info, mbr_control, table, table_id},
 };
 use sed_tper::{Error as TperError, Session, Tper};
@@ -201,6 +207,37 @@ impl LockingConfigSession {
         }
 
         Ok(())
+    }
+
+    /// Erase the locking range.
+    ///
+    /// Uses the `GenKey` or `Erase` (Enterprise SSC) functions to discard the
+    /// key associated with the locking range. On Enterprise, `Erase` resets the
+    /// associated `BandMaster` authority as well.
+    ///
+    /// # Errors
+    ///
+    /// Besides the usual, [`Error::NotSupported`] is returned if the device
+    /// does not use media encryption (e.g. Pyrite), as there is no key to
+    /// discard.
+    ///
+    /// # Notes
+    ///
+    /// Currently, Enterprise is not implemented and an error is always returned.
+    #[instrument(skip(self), err)]
+    pub async fn erase_locking_range(&self, locking_range: LockingRangeRef) -> Result<(), Error> {
+        let locking_descriptor = self.spec.discovery.get::<LockingDescriptor>();
+        let ssc_descriptor = self.spec.default_ssc_descriptor();
+
+        if !locking_descriptor.is_some_and(|desc| desc.media_encryption) {
+            Err(Error::NotSupported)
+        } else if matches!(ssc_descriptor, Some(FeatureDescriptor::Enterprise(_))) {
+            Err(Error::NotImplemented)
+        } else {
+            let key = self.session.get_field(locking_range.active_key()).await?;
+            self.session.gen_key(key, None, None).await?;
+            Ok(())
+        }
     }
 
     /// Set the authorities to their `desired` value.

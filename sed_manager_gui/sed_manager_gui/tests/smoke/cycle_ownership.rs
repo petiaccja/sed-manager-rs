@@ -4,19 +4,17 @@
 //L-----------------------------------------------------------------------------
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use sed_async::{PolyRuntime, SlintRuntime};
 use sed_manager::Host;
 use sed_manager_gui::{app::App, toast::ToastQueue};
 use sed_manager_gui_slint as ui;
-use slint::platform::PointerEventButton;
-use slint::{ComponentHandle as _, Model as _};
+use slint::ComponentHandle as _;
+use slint::platform::PointerEventButton::Left;
 
-use crate::element_handle_ext::ElementHandleEx;
-use crate::test_utils::{
-    assert_absent, assert_enabled, assert_present, assert_toast, find_element, prevent_clipping, run_test,
-    select_combo_box_item,
-};
+use crate::driver::Driver;
+use crate::test_utils::run_test;
 
 const TEST_PASSWORD: &str = "test-password-1234";
 
@@ -32,60 +30,65 @@ fn cycle_ownership() {
     run_test(|| async {
         let runtime = Arc::new(PolyRuntime::Slint(SlintRuntime));
         let ui = ui::MainWindow::new().unwrap();
-        prevent_clipping(&ui);
         let notification_queue = ToastQueue::new(ui.clone_strong());
         let host = Arc::new(Host::new(runtime.clone()));
         let _app = App::new(ui.clone_strong(), notification_queue, host, runtime.clone());
 
+        let ui = Driver::new(ui, Duration::from_secs(5));
+
         // Scan for devices; the virtual device is always included in debug builds.
-        find_element(&ui, "scan-button").single_click(PointerEventButton::Left).await;
-        assert_present!(&ui, "device-side-bar-item-0");
+        ui.single_click("scan-button", Left).await.unwrap();
+        ui.check_appearance("device-side-bar-item-0").await.unwrap();
 
         // Select the virtual device.
-        find_element(&ui, "device-side-bar-item-0").single_click(PointerEventButton::Left).await;
-        assert_present!(&ui, "activity-take-ownership");
+        ui.single_click("device-side-bar-item-0", Left).await.unwrap();
+        ui.check_appearance("activity-take-ownership").await.unwrap();
 
         // Switch to the "Take ownership" activity and fill in the password form.
-        find_element(&ui, "activity-take-ownership").single_click(PointerEventButton::Left).await;
-        find_element(&ui, "new-password").set_accessible_value(TEST_PASSWORD);
-        find_element(&ui, "repeat-password").set_accessible_value(TEST_PASSWORD);
+        ui.single_click("activity-take-ownership", Left).await.unwrap();
+        ui.enter_text("new-password", TEST_PASSWORD).await.unwrap();
+        ui.enter_text("repeat-password", TEST_PASSWORD).await.unwrap();
 
-        // Submit and wait for the success toast.
-        find_element(&ui, "take-ownership-submit").single_click(PointerEventButton::Left).await;
-        assert_toast!(&ui, "Taken ownership");
+        // Submit and wait for the success toast. The submit buttons are disabled while the TPer
+        // or the session is busy, so they are invoked synchronously right after they're found
+        // enabled, as opposed to an asynchronous mouse click, during which they may get disabled.
+        ui.check_enabled("take-ownership-submit").await.unwrap();
+        ui.invoke_default_action("take-ownership-submit").unwrap();
+        ui.check_appearance_toast("Taken ownership").await.unwrap();
 
         // A successful action triggers a background re-discovery, which navigates the sidebar
         // back to the "Discovery" activity once it completes. Wait for that before switching
         // activities again, or the switch may be undone by the pending re-discovery.
-        assert_absent!(&ui, "new-password");
+        ui.check_disappearance("new-password").await.unwrap();
 
         // Switch to the "Activate locking" activity and submit the owner password.
-        find_element(&ui, "activity-activate-locking").single_click(PointerEventButton::Left).await;
-        find_element(&ui, "activate-locking-password").set_accessible_value(TEST_PASSWORD);
-        find_element(&ui, "activate-locking-submit").single_click(PointerEventButton::Left).await;
-        assert_toast!(&ui, "Locking activated");
-        assert_absent!(&ui, "activate-locking-password");
+        ui.single_click("activity-activate-locking", Left).await.unwrap();
+        ui.enter_text("activate-locking-password", TEST_PASSWORD).await.unwrap();
+        ui.check_enabled("activate-locking-submit").await.unwrap();
+        ui.invoke_default_action("activate-locking-submit").unwrap();
+        ui.check_appearance_toast("Locking activated").await.unwrap();
+        ui.check_disappearance("activate-locking-password").await.unwrap();
 
         // Switch to the "Revert device" activity and revert just the locking SP.
-        find_element(&ui, "activity-revert-device").single_click(PointerEventButton::Left).await;
-        find_element(&ui, "revert-password").set_accessible_value(TEST_PASSWORD);
-        assert_enabled!(&ui, "revert-submit");
-        find_element(&ui, "revert-submit").single_click(PointerEventButton::Left).await;
-        assert_toast!(&ui, "Reverted device successfully");
-        assert_absent!(&ui, "revert-password");
+        ui.single_click("activity-revert-device", Left).await.unwrap();
+        ui.enter_text("revert-password", TEST_PASSWORD).await.unwrap();
+        ui.check_enabled("revert-submit").await.unwrap();
+        ui.invoke_default_action("revert-submit").unwrap();
+        ui.check_appearance_toast("Reverted device successfully").await.unwrap();
+        ui.check_disappearance("revert-password").await.unwrap();
         // Reverting the locking SP disables locking again, so "Activate locking" reappears.
-        assert_present!(&ui, "activity-activate-locking");
+        ui.check_appearance("activity-activate-locking").await.unwrap();
 
         // Switch to the "Revert device" activity again, select "Everything" as the scope, and
         // revert the whole device back to its factory state.
-        find_element(&ui, "activity-revert-device").single_click(PointerEventButton::Left).await;
-        find_element(&ui, "revert-scope").single_click(PointerEventButton::Left).await;
-        select_combo_box_item(&ui, "revert-scope", "Everything");
-        find_element(&ui, "revert-password").set_accessible_value(TEST_PASSWORD);
-        assert_enabled!(&ui, "revert-submit");
-        find_element(&ui, "revert-submit").single_click(PointerEventButton::Left).await;
-        assert_toast!(&ui, "Reverted device successfully");
+        ui.single_click("activity-revert-device", Left).await.unwrap();
+        ui.single_click("revert-scope", Left).await.unwrap();
+        ui.select_combo_box_item("revert-scope", "Everything").unwrap();
+        ui.enter_text("revert-password", TEST_PASSWORD).await.unwrap();
+        ui.check_enabled("revert-submit").await.unwrap();
+        ui.invoke_default_action("revert-submit").unwrap();
+        ui.check_appearance_toast("Reverted device successfully").await.unwrap();
         // Reverting the whole device restores the factory MSID password, so "Take ownership" reappears.
-        assert_present!(&ui, "activity-take-ownership");
+        ui.check_appearance("activity-take-ownership").await.unwrap();
     });
 }

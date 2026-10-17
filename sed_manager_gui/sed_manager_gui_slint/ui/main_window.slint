@@ -23,6 +23,7 @@ import {
     ToastArea,
     ToastLevel,
 } from "widgets/lib.slint";
+import { MainWindowGeometry } from "main_window_geometry.slint";
 
 export { ToastQueue } from "widgets/lib.slint";
 export { SectorLib } from "algorithm/sector.slint";
@@ -48,11 +49,15 @@ export component MainWindow inherits Window {
     callback list-locking-authorities <=> device-switch-view.list-locking-authorities;
     callback login <=> device-switch-view.login;
     callback logout <=> device-switch-view.logout;
-    callback commit-ranges <=> device-switch-view.commit-ranges;
+    callback commit-locking-ranges <=> device-switch-view.commit-locking-ranges;
+    callback erase-locking-range <=> device-switch-view.erase-locking-range;
     callback commit-authorities <=> device-switch-view.commit-authorities;
     callback revert-device <=> device-switch-view.revert-device;
     callback query-stack-status <=> device-switch-view.query-stack-status;
     callback reset-stack <=> device-switch-view.reset-stack;
+
+    changed width => { MainWindowGeometry.width = self.width; }
+    changed height => { MainWindowGeometry.height = self.height; }
 
     HorizontalLayout {
         padding: 1.0rem;

@@ -7,8 +7,12 @@ use std::sync::Arc;
 
 use googletest::{assert_that, matchers::*};
 use sed_async::{PolyRuntime, TokioRuntime};
-use sed_manager::{Alignment, Error, LockingConfigSession, LockingRangePlanError, SetupSession};
-use sed_packet::{MaxBytes, com_id::ComIdExt};
+use sed_manager::{Alignment, Error, LockingConfigSession, LockingRangePlanError, SetupSession, Spec};
+use sed_packet::{
+    MaxBytes,
+    com_id::ComIdExt,
+    discovery::{FeatureDescriptor, LockingDescriptor},
+};
 use sed_spec::{
     objects::{Authority, AuthorityRef, LockingRange, LockingRangeRef, MbrControl},
     preconfig::opal_2::locking as opal_locking,
@@ -21,7 +25,12 @@ use tracing::instrument;
 const NEW_SID_PASSWORD: MaxBytes<32> =
     unsafe { MaxBytes::from_const_with_len_unchecked(*b"not_default\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0", 0) };
 
-async fn setup() -> Tper {
+async fn setup_tper() -> Tper {
+    let (tper, _device) = setup().await;
+    tper
+}
+
+async fn setup() -> (Tper, Arc<VirtualDevice>) {
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
     let device = Arc::new(VirtualDevice::new());
     let tper = Tper::connect(BASE_COM_ID, ComIdExt(0), device.clone(), runtime);
@@ -30,7 +39,7 @@ async fn setup() -> Tper {
     setup_session.take_owneship(NEW_SID_PASSWORD).await.unwrap();
     setup_session.activate_secondary_sp(NEW_SID_PASSWORD).await.unwrap();
 
-    tper
+    (tper, device)
 }
 
 fn locking_admin1() -> AuthorityRef {
@@ -67,7 +76,7 @@ fn find_range_by_uid(ranges: &[LockingRange], uid: LockingRangeRef) -> &LockingR
 #[tokio::test]
 #[with_tracing]
 async fn login() {
-    let tper = setup().await;
+    let tper = setup_tper().await;
 
     let result = login_admin1(&tper).await;
     assert_that!(result, ok(anything()));
@@ -77,7 +86,7 @@ async fn login() {
 #[tokio::test]
 #[with_tracing]
 async fn login_wrong_password() {
-    let tper = setup().await;
+    let tper = setup_tper().await;
     let wrong_password = MaxBytes::<32>::from(b"wrong_password".as_slice());
 
     let admin1 = locking_admin1();
@@ -89,7 +98,7 @@ async fn login_wrong_password() {
 #[tokio::test]
 #[with_tracing]
 async fn get_authorities() {
-    let tper = setup().await;
+    let tper = setup_tper().await;
 
     let session = login_admin1(&tper).await.unwrap();
     let result = session.get_authorities().await;
@@ -100,7 +109,7 @@ async fn get_authorities() {
 #[tokio::test]
 #[with_tracing]
 async fn get_locking_ranges() {
-    let tper = setup().await;
+    let tper = setup_tper().await;
 
     let session = login_admin1(&tper).await.unwrap();
     let result = session.get_locking_ranges().await;
@@ -111,7 +120,7 @@ async fn get_locking_ranges() {
 #[tokio::test]
 #[with_tracing]
 async fn get_mbr_size() {
-    let tper = setup().await;
+    let tper = setup_tper().await;
 
     let session = login_admin1(&tper).await.unwrap();
     let result = session.get_mbr_size().await;
@@ -122,7 +131,7 @@ async fn get_mbr_size() {
 #[tokio::test]
 #[with_tracing]
 async fn get_mbr_control() {
-    let tper = setup().await;
+    let tper = setup_tper().await;
 
     let session = login_admin1(&tper).await.unwrap();
     let result = session.get_mbr_control().await;
@@ -133,7 +142,7 @@ async fn get_mbr_control() {
 #[tokio::test]
 #[with_tracing]
 async fn get_alignment() {
-    let tper = setup().await;
+    let tper = setup_tper().await;
 
     let session = login_admin1(&tper).await.unwrap();
     let result = session.get_alignment().await;
@@ -147,7 +156,7 @@ async fn get_alignment() {
 #[tokio::test]
 #[with_tracing]
 async fn set_locking_ranges() {
-    let tper = setup().await;
+    let tper = setup_tper().await;
     let session = login_admin1(&tper).await.unwrap();
 
     let current = session.get_locking_ranges().await.unwrap();
@@ -171,7 +180,7 @@ async fn set_locking_ranges() {
 #[tokio::test]
 #[with_tracing]
 async fn set_locking_ranges_swap() {
-    let tper = setup().await;
+    let tper = setup_tper().await;
     let session = login_admin1(&tper).await.unwrap();
 
     session
@@ -211,7 +220,7 @@ async fn set_locking_ranges_swap() {
 #[tokio::test]
 #[with_tracing]
 async fn set_locking_ranges_stale_expected() {
-    let tper = setup().await;
+    let tper = setup_tper().await;
     let session = login_admin1(&tper).await.unwrap();
 
     let current = session.get_locking_ranges().await.unwrap();
@@ -236,7 +245,7 @@ async fn set_locking_ranges_stale_expected() {
 #[tokio::test]
 #[with_tracing]
 async fn set_locking_ranges_invalid_desired() {
-    let tper = setup().await;
+    let tper = setup_tper().await;
     let session = login_admin1(&tper).await.unwrap();
 
     let current = session.get_locking_ranges().await.unwrap();
@@ -260,11 +269,60 @@ async fn set_locking_ranges_invalid_desired() {
     assert_that!(session.get_locking_ranges().await, ok(eq(&current)));
 }
 
+fn get_media_encryption_key(virtual_device: &VirtualDevice) -> Option<[u8; 64]> {
+    virtual_device.inspect(|tper| {
+        let locking_sp = tper.locking_sp().unwrap();
+        let key_uid = locking_sp.locking[&range_uid(2)].active_key.unwrap();
+        locking_sp.k_aes_256[&key_uid].key
+    })
+}
+
+#[instrument]
+#[tokio::test]
+#[with_tracing]
+async fn erase_locking_range() {
+    let (tper, device) = setup().await;
+    let session = login_admin1(&tper).await.unwrap();
+
+    let ranges_before = session.get_locking_ranges().await.unwrap();
+    let key_before = get_media_encryption_key(&device);
+    assert_that!(key_before, some(anything()));
+
+    session.erase_locking_range(range_uid(2)).await.unwrap();
+
+    assert_that!(get_media_encryption_key(&device), not(eq(key_before)));
+    assert_that!(session.get_locking_ranges().await, ok(eq(&ranges_before)));
+}
+
+#[instrument]
+#[tokio::test]
+#[with_tracing]
+async fn erase_locking_range_no_media_encryption() {
+    let (tper, device) = setup().await;
+
+    // Pretend the device doesn't use media encryption, like Pyrite devices.
+    let mut discovery = tper.discover_current().await.unwrap();
+    for feature in &mut discovery.feature_descriptors {
+        if let FeatureDescriptor::Locking(LockingDescriptor { media_encryption, .. }) = feature {
+            *media_encryption = false;
+        }
+    }
+    let spec = Spec::try_from(discovery).unwrap();
+    let session = LockingConfigSession::login(&tper, spec, locking_admin1(), Some(NEW_SID_PASSWORD)).await.unwrap();
+
+    let key_before = get_media_encryption_key(&device);
+
+    let result = session.erase_locking_range(range_uid(2)).await;
+
+    assert_that!(result, err(eq(&Error::NotSupported)));
+    assert_that!(get_media_encryption_key(&device), eq(key_before));
+}
+
 #[instrument]
 #[tokio::test]
 #[with_tracing]
 async fn set_authorities() {
-    let tper = setup().await;
+    let tper = setup_tper().await;
     let session = login_admin1(&tper).await.unwrap();
 
     let uid = user_uid(3);

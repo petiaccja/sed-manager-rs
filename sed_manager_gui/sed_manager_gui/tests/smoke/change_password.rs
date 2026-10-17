@@ -11,14 +11,11 @@ use sed_manager::Host;
 use sed_manager_gui::{app::App, toast::ToastQueue};
 use sed_manager_gui_slint as ui;
 use sed_virtual_device::INITIAL_SID_PASSWORD;
-use slint::platform::PointerEventButton;
-use slint::{ComponentHandle as _, Model as _};
+use slint::ComponentHandle as _;
+use slint::platform::PointerEventButton::Left;
 
-use crate::element_handle_ext::ElementHandleEx;
-use crate::test_utils::{
-    assert_present, assert_toast, find_element, prevent_clipping, run_test, select_combo_box_item,
-    sleep_until_condition,
-};
+use crate::driver::Driver;
+use crate::test_utils::run_test;
 
 const TEST_PASSWORD: &str = "test-password-1234";
 
@@ -32,48 +29,47 @@ fn change_password() {
     run_test(|| async {
         let runtime = Arc::new(PolyRuntime::Slint(SlintRuntime));
         let ui = ui::MainWindow::new().unwrap();
-        prevent_clipping(&ui);
         let notification_queue = ToastQueue::new(ui.clone_strong());
         let host = Arc::new(Host::new(runtime.clone()));
         let _app = App::new(ui.clone_strong(), notification_queue, host, runtime.clone());
 
+        let ui = Driver::new(ui, Duration::from_secs(5));
+
         // Scan for devices; the virtual device is always included in debug builds.
-        find_element(&ui, "scan-button").single_click(PointerEventButton::Left).await;
-        assert_present!(&ui, "device-side-bar-item-0");
+        ui.single_click("scan-button", Left).await.unwrap();
+        ui.check_appearance("device-side-bar-item-0").await.unwrap();
 
         // Select the virtual device.
-        find_element(&ui, "device-side-bar-item-0").single_click(PointerEventButton::Left).await;
-        assert_present!(&ui, "activity-change-password");
+        ui.single_click("device-side-bar-item-0", Left).await.unwrap();
+        ui.check_appearance("activity-change-password").await.unwrap();
 
         // Switch to the "Change password" activity. Selecting it triggers a silent, background
         // listing of the admin SP's authorities; wait for that to populate the authority combo
         // box before interacting with it (there's no toast to wait on, since it's silent).
-        find_element(&ui, "activity-change-password").single_click(PointerEventButton::Left).await;
-        sleep_until_condition(
-            || {
-                find_element(&ui, "change-password-authority")
-                    .accessible_value()
-                    .is_some_and(|value| !value.is_empty())
-            },
-            Duration::from_secs(5),
-        )
+        ui.single_click("activity-change-password", Left).await.unwrap();
+        ui.check_condition("change-password-authority", |element| {
+            element.accessible_value().is_some_and(|value| !value.is_empty())
+        })
         .await
-        .unwrap_or_else(|_| panic!("the admin SP's authorities did not load"));
+        .unwrap();
 
         // Select the SID authority (the security provider combo box already defaults to the
         // admin SP, which is the one that owns the SID authority).
-        find_element(&ui, "change-password-authority").single_click(PointerEventButton::Left).await;
-        select_combo_box_item(&ui, "change-password-authority", "SID");
+        ui.single_click("change-password-authority", Left).await.unwrap();
+        ui.select_combo_box_item("change-password-authority", "SID").unwrap();
 
         // Fill in the current (factory MSID) password and the new password.
         let initial_sid_password = INITIAL_SID_PASSWORD;
         let initial_password = str::from_utf8(&initial_sid_password).unwrap();
-        find_element(&ui, "change-password-current-password").set_accessible_value(initial_password);
-        find_element(&ui, "new-password").set_accessible_value(TEST_PASSWORD);
-        find_element(&ui, "repeat-password").set_accessible_value(TEST_PASSWORD);
+        ui.enter_text("change-password-current-password", initial_password).await.unwrap();
+        ui.enter_text("new-password", TEST_PASSWORD).await.unwrap();
+        ui.enter_text("repeat-password", TEST_PASSWORD).await.unwrap();
 
-        // Submit and wait for the success toast.
-        find_element(&ui, "change-password-submit").single_click(PointerEventButton::Left).await;
-        assert_toast!(&ui, "Password changed");
+        // Submit and wait for the success toast. The button is disabled while the TPer or the
+        // session is busy, so it's invoked synchronously right after it's found enabled, as
+        // opposed to an asynchronous mouse click, during which it may get disabled again.
+        ui.check_enabled("change-password-submit").await.unwrap();
+        ui.invoke_default_action("change-password-submit").unwrap();
+        ui.check_appearance_toast("Password changed").await.unwrap();
     });
 }

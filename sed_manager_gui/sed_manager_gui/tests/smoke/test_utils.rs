@@ -6,20 +6,15 @@
 //! Utilities for UI testing.
 
 use std::panic::{AssertUnwindSafe, resume_unwind};
-use std::sync::OnceLock;
+use std::sync::{LazyLock, OnceLock};
 use std::time::{Duration, Instant};
 
 use futures::FutureExt;
-use i_slint_backend_testing::{ElementHandle, ElementRoot};
 use sed_async::{Runtime, SlintRuntime};
-use sed_manager_gui_slint as ui;
-use slint::ComponentHandle;
-use slint::SharedString;
-use slint::platform::{Key, PointerEventButton, WindowEvent};
-
-use crate::element_handle_ext::ElementHandleEx;
+use tokio::sync::Mutex;
 
 static EVENT_LOOP: OnceLock<std::thread::JoinHandle<()>> = OnceLock::new();
+static TEST_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
 pub struct TimeoutError;
 
@@ -30,6 +25,10 @@ where
     F: Future + 'static,
     F::Output: Send,
 {
+    // Let only one test run at a time. The slint backend seems to get
+    // overwhelmed with parallel tests and the tests start timing out.
+    let _test_guard = TEST_LOCK.lock();
+
     // Shouldn't use `macro_support` items normally, but the crates are in the
     // same workspace so it's not that bad.
     let _otlp_flush_guard = sed_telemetry::macro_support::with_tracing();
@@ -48,7 +47,7 @@ where
     .unwrap();
 
     let handle = handle_rx.recv_timeout(Duration::from_secs(15)).unwrap();
-    let result = result_rx.recv_timeout(Duration::from_secs(30));
+    let result = result_rx.recv_timeout(Duration::from_secs(120));
 
     match result {
         Ok(Ok(_)) => (),
@@ -79,13 +78,6 @@ fn init_event_loop() {
     });
 }
 
-/// Clipped UI elements cannot be found by the testing backend, which can lead to
-/// unexpected test failures. To prevent this the window is resized to large
-/// enough so that there is no scrolling or clipping.
-pub fn prevent_clipping(main_window: &ui::MainWindow) {
-    main_window.window().set_size(slint::LogicalSize::new(3840.0, 2160.0));
-}
-
 /// Sleep until the provided condition becomes true or the timeout expires.
 pub async fn sleep_until_condition(mut condition: impl FnMut() -> bool, timeout: Duration) -> Result<(), TimeoutError> {
     let deadline = Instant::now() + timeout;
@@ -97,144 +89,3 @@ pub async fn sleep_until_condition(mut condition: impl FnMut() -> bool, timeout:
     }
     Ok(())
 }
-
-/// Find the first element by its ID. If no element is found, panic.
-pub fn find_element(ui: &impl ElementRoot, id: &str) -> ElementHandle {
-    ElementHandle::find_by_accessible_id(ui, id)
-        .next()
-        .unwrap_or_else(|| panic!("no element found with accessible-id \"{id}\""))
-}
-
-/// Selects an item from a combo box's popup, which must already be open.
-///
-/// `i-slint-backend-testing` reports the position of elements inside a popup relative to the
-/// popup's own origin rather than to the window, so a plain `ElementHandle::single_click()` on
-/// the popup item misses it. Composing the combo box's own (correctly reported) absolute position
-/// with the item's (incorrectly relative) position happens to cancel out the error and land back
-/// on the right spot.
-pub fn select_combo_box_item(ui: &impl ComponentHandle, combo_box_id: &str, item_label: &str) {
-    let combo_box_pos = find_element(ui, combo_box_id).absolute_position();
-    let item = ElementHandle::find_by_accessible_label(ui, item_label).next().unwrap();
-    let item_pos = item.absolute_position();
-    let item_size = item.size();
-    let click_pos = slint::LogicalPosition::new(
-        combo_box_pos.x + item_pos.x + item_size.width / 2.0,
-        combo_box_pos.y + item_pos.y + item_size.height / 2.0,
-    );
-
-    let window = ui.window();
-    window.dispatch_event(slint::platform::WindowEvent::PointerMoved { position: click_pos });
-    window.dispatch_event(slint::platform::WindowEvent::PointerPressed {
-        position: click_pos,
-        button: PointerEventButton::Left,
-    });
-    window.dispatch_event(slint::platform::WindowEvent::PointerReleased {
-        position: click_pos,
-        button: PointerEventButton::Left,
-    });
-}
-
-/// Replaces the text of a text input by typing into it, then presses Enter.
-///
-/// Unlike [`ElementHandle::set_accessible_value`], this fires the `accepted`
-/// callback, and works for plain `TextInput` elements without accessibility
-/// handlers.
-pub async fn enter_text(ui: &impl ComponentHandle, id: &str, text: &str) {
-    find_element(ui, id).single_click(PointerEventButton::Left).await;
-
-    let window = ui.window();
-    let press = |text: SharedString| window.dispatch_event(WindowEvent::KeyPressed { text });
-    let release = |text: SharedString| window.dispatch_event(WindowEvent::KeyReleased { text });
-    let tap = |text: SharedString| {
-        press(text.clone());
-        release(text);
-    };
-
-    // Select all, so that the typed text replaces the current one.
-    press(Key::Control.into());
-    tap("a".into());
-    release(Key::Control.into());
-
-    for ch in text.chars() {
-        tap(ch.to_string().into());
-    }
-    tap(Key::Return.into());
-}
-
-/// Get the text from a `TextInput` or similar UI element through its accessible value.
-pub fn get_text<'a>(ui: &'a impl ComponentHandle, id: &'a str) -> Option<SharedString> {
-    find_element(ui, id).accessible_value()
-}
-
-/// Assert that a UI element is present or appears within a short time.
-macro_rules! assert_present {
-    ($ui:expr, $id:expr) => {
-        let result = $crate::test_utils::sleep_until_condition(
-            || ::i_slint_backend_testing::ElementHandle::find_by_accessible_id($ui, $id.as_ref()).next().is_some(),
-            ::core::time::Duration::from_secs(5),
-        )
-        .await;
-        match result {
-            Ok(_) => (),
-            Err(_) => panic!("the ui element \"{}\" did not appear", $id),
-        }
-    };
-}
-
-/// Assert that a UI element is absent or disappears within a short time.
-macro_rules! assert_absent {
-    ($ui:expr, $id:expr) => {
-        let result = $crate::test_utils::sleep_until_condition(
-            || ::i_slint_backend_testing::ElementHandle::find_by_accessible_id($ui, $id.as_ref()).next().is_none(),
-            ::core::time::Duration::from_secs(5),
-        )
-        .await;
-        match result {
-            Ok(_) => (),
-            Err(_) => panic!("the ui element \"{}\" did not disappear", $id),
-        }
-    };
-}
-
-/// Assert that a UI element is enabled or becomes enabled within a short time.
-///
-/// This is helpful to make sure that actions that are disabled while the TPer
-/// or the session is busy get enabled. If you click them too early, while they
-/// are still disabled due to the previous command, the click will be ignored.
-macro_rules! assert_enabled {
-    ($ui:expr, $id:expr) => {
-        let result = $crate::test_utils::sleep_until_condition(
-            || {
-                ::i_slint_backend_testing::ElementHandle::find_by_accessible_id($ui, $id.as_ref())
-                    .next()
-                    .is_some_and(|element| element.accessible_enabled() == Some(true))
-            },
-            ::core::time::Duration::from_secs(5),
-        )
-        .await;
-        match result {
-            Ok(_) => (),
-            Err(_) => panic!("the ui element \"{}\" did not become enabled", $id),
-        }
-    };
-}
-
-/// Assert that a toast message is present or appears within a short time.
-macro_rules! assert_toast {
-    ($ui:expr, $title:expr) => {
-        let result = $crate::test_utils::sleep_until_condition(
-            || $ui.global::<ui::ToastQueue>().get_queue().iter().any(|item| item.toast.title == $title),
-            ::core::time::Duration::from_secs(5),
-        )
-        .await;
-        match result {
-            Ok(_) => (),
-            Err(_) => panic!("the toast message with title \"{}\" did not appear", $title),
-        }
-    };
-}
-
-pub(crate) use assert_absent;
-pub(crate) use assert_enabled;
-pub(crate) use assert_present;
-pub(crate) use assert_toast;

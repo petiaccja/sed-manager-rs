@@ -4,16 +4,19 @@
 //L-----------------------------------------------------------------------------
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use sed_async::{PolyRuntime, SlintRuntime};
 use sed_manager::Host;
 use sed_manager_gui::{app::App, toast::ToastQueue};
 use sed_manager_gui_slint as ui;
+use slint::ComponentHandle as _;
 use slint::platform::PointerEventButton;
-use slint::{ComponentHandle as _, Model as _};
 
-use crate::element_handle_ext::ElementHandleEx;
-use crate::test_utils::{assert_enabled, assert_present, assert_toast, find_element, prevent_clipping, run_test};
+pub use crate::driver::Driver;
+use crate::test_utils::run_test;
+
+use PointerEventButton::Left;
 
 /// This test exercises the following functionality:
 /// - Reset stack
@@ -22,23 +25,25 @@ fn reset_stack() {
     run_test(|| async {
         let runtime = Arc::new(PolyRuntime::Slint(SlintRuntime));
         let ui = ui::MainWindow::new().unwrap();
-        prevent_clipping(&ui);
-        let notification_queue = ToastQueue::new(ui.clone_strong());
+        let toast_queue = ToastQueue::new(ui.clone_strong());
         let host = Arc::new(Host::new(runtime.clone()));
-        let _app = App::new(ui.clone_strong(), notification_queue, host, runtime.clone());
+        let _app = App::new(ui.clone_strong(), toast_queue, host, runtime.clone());
 
-        // Scan for devices; the virtual device is always included in debug builds.
-        find_element(&ui, "scan-button").single_click(PointerEventButton::Left).await;
-        assert_present!(&ui, "device-side-bar-item-0");
+        let ui = Driver::new(ui, Duration::from_secs(5));
+
+        // Scan for devices. The virtual device is sorted first because the
+        // others are blocked by file OS access control.
+        ui.single_click("scan-button", Left).await.unwrap();
+        ui.check_appearance("device-side-bar-item-0").await.unwrap();
 
         // Select the virtual device.
-        find_element(&ui, "device-side-bar-item-0").single_click(PointerEventButton::Left).await;
-        assert_present!(&ui, "activity-reset-stack");
+        ui.single_click("device-side-bar-item-0", Left).await.unwrap();
 
         // Click "Reset stack" and wait for the success toast. The button is disabled
-        // while the commands issued when the device was opened are still running.
-        assert_enabled!(&ui, "activity-reset-stack");
-        find_element(&ui, "activity-reset-stack").single_click(PointerEventButton::Left).await;
-        assert_toast!(&ui, "Stack has been reset");
+        // while the commands issued when the device was opened are still running. The
+        // click is invoked synchronously, so the button can't get disabled mid-click.
+        ui.check_enabled("activity-reset-stack").await.unwrap();
+        ui.invoke_default_action("activity-reset-stack").unwrap();
+        ui.check_appearance_toast("Stack has been reset").await.unwrap();
     });
 }

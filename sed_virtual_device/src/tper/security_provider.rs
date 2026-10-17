@@ -16,7 +16,6 @@ pub type Table<T> = BTreeMap<<T as Object>::Ref, T>;
 pub trait SecurityProvider {
     // Tables all SPs have.
     fn access_control(&self) -> &Table<AccessControl>;
-    #[allow(unused)]
     fn access_control_mut(&mut self) -> &mut Table<AccessControl>;
     fn ace(&self) -> &Table<Ace>;
     fn ace_mut(&mut self) -> &mut Table<Ace>;
@@ -43,7 +42,6 @@ pub trait SecurityProvider {
     fn locking_info_ext(&self) -> Option<&Table<LockingInfoExt>> {
         None
     }
-    #[expect(unused, reason = "this table might be fully constant in the spec, so unset by TPer functions")]
     fn locking_info_ext_mut(&mut self) -> Option<&mut Table<LockingInfoExt>> {
         None
     }
@@ -75,7 +73,6 @@ pub trait SecurityProvider {
     }
 
     // Type-erased SPs.
-    #[allow(unused)]
     fn as_any(&self) -> &dyn Any;
     fn as_any_mut(&mut self) -> &mut dyn Any;
 }
