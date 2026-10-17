@@ -17,7 +17,7 @@ use sed_manager_gui_slint as ui;
 use sed_packet::{MaxBytes, com_id_request::ComIdState};
 use sed_spec::{
     methods::MethodStatus,
-    objects::{Authority, AuthorityRef, LockingRangeRef, SecurityProviderRef},
+    objects::{Authority, AuthorityRef, LockingRangeRef, MbrControl, SecurityProviderRef},
     preconfig::{core::shared::authority::ANYBODY, opal_2::locking},
 };
 use sed_tper::{Error as TperError, PropertiesChanged};
@@ -34,7 +34,7 @@ use crate::{
     diff_model::{self, DiffModel},
     session::Session,
     toast::ToastQueue,
-    ui_conv::{CombinedProperties, ConversionError, IntoUi, IntoUiName, MbrDesc, TryFromUi},
+    ui_conv::{CombinedProperties, ConversionError, FromUi as _, IntoUi, IntoUiName, MbrDesc, TryFromUi},
     ui_ext::{DeviceExt as _, DiscoveryExt, StackStatusExt},
 };
 
@@ -728,7 +728,35 @@ impl App {
     }
 
     #[instrument(skip(self))]
-    fn commit_mbr_control(self: Rc<Self>, path: PathBuf) {}
+    fn commit_mbr_control(self: Rc<Self>, path: PathBuf) {
+        slint::spawn_local(async move {
+            let device_list = self.device_list.read().await;
+            if let Some(ui_device) = device_list.ui.get(&path) {
+                // Read the authorities from the UI and convert it to backend format.
+                let mbr_control = MbrControl::from_ui(&ui_device.locking_sp.mbr);
+
+                // Initiate the actual command.
+                let self_ = self.clone();
+                let path_ = path.clone();
+                self.command()
+                    .success_message("MBR control updated")
+                    .error_message("Could not update MBR control")
+                    .on_session(path, async move |_device: &Device, session: &mut Session| {
+                        let Session::LockingConfig(locking_session) = session else {
+                            return Err(CommandError::Skipped);
+                        };
+                        locking_session.set_mbr_control(mbr_control).await?;
+                        Ok(())
+                    })
+                    .finally(move |ui_device| {
+                        self_.get_mbr(path_, true);
+                        ui_device
+                    })
+                    .run();
+            }
+        })
+        .expect_in_event_loop();
+    }
 
     #[instrument(skip(self))]
     fn logout(self: Rc<Self>, path: PathBuf) {
