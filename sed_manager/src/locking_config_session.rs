@@ -10,8 +10,8 @@ use sed_packet::{
 use sed_spec::{
     methods::MethodStatus,
     objects::{
-        Authority, AuthorityRef, LockingInfoExt, LockingRange, LockingRangeRef, LockingRangeRefExt, MbrControl,
-        TableDescRefExt,
+        Authority, AuthorityRef, AuthorityRefExt, CPinRef, CPinRefExt, LockingInfoExt, LockingRange, LockingRangeRef,
+        LockingRangeRefExt, MbrControl, TableDescRefExt,
     },
     preconfig::core::shared::{locking_info, mbr_control, table, table_id},
 };
@@ -262,6 +262,16 @@ impl LockingConfigSession {
         }
 
         Ok(())
+    }
+
+    #[instrument(skip(self), err)]
+    pub async fn change_password(&self, authority: AuthorityRef, password: MaxBytes<32>) -> Result<(), Error> {
+        let credential = self.session.get_field(authority.credential()).await?;
+        if let Ok(c_pin_ref) = CPinRef::try_from(credential) {
+            self.session.set_field(c_pin_ref.pin(), password).await.map_err(Into::into)
+        } else {
+            Err(Error::NotAPasswordAuthority)
+        }
     }
 
     #[instrument(skip(self), err)]

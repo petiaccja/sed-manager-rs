@@ -146,6 +146,12 @@ impl App {
         }
         {
             let view_model = view_model.clone();
+            ui.on_change_locking_password(move |path, authority, password| {
+                view_model.clone().change_locking_password(path.to_string().into(), authority, password)
+            });
+        }
+        {
+            let view_model = view_model.clone();
             ui.on_logout(move |path| view_model.clone().logout(path.to_string().into()));
         }
         {
@@ -690,6 +696,31 @@ impl App {
             }
         })
         .expect_in_event_loop();
+    }
+
+    #[instrument(skip(self))]
+    fn change_locking_password(self: Rc<Self>, path: PathBuf, authority: ui::Uid, password: SharedString) {
+        let Some(new_password) = self.try_convert_password(password.as_str()) else {
+            return;
+        };
+        let Ok(authority) = AuthorityRef::try_from_ui(&authority) else {
+            error!(authority_ref = &authority.value, error = "invalid authority reference");
+            self.toast_queue
+                .error("Invalid authority reference", "The UID is not an authority reference. Please report this bug.");
+            return;
+        };
+
+        self.command()
+            .success_message("Password changed")
+            .error_message("Could not change password")
+            .on_session(path.clone(), async move |_device: &Device, session: &mut Session| {
+                let Session::LockingConfig(locking_session) = session else {
+                    return Err(CommandError::Skipped);
+                };
+                locking_session.change_password(authority, new_password).await?;
+                Ok(())
+            })
+            .run();
     }
 
     #[instrument(skip(self))]

@@ -44,6 +44,7 @@ export component ConfigureLockingView {
     callback commit-locking-ranges();
     callback erase-locking-range(locking-range: Uid);
     callback commit-authorities();
+    callback change-password(authority: Uid, password: string);
 
     if !command-status.secondary-session-active: VerticalLayout {
         alignment: start;
@@ -102,6 +103,10 @@ export component ConfigureLockingView {
 
                     commit-authorities => {
                         commit-authorities()
+                    }
+
+                    change-password(authority, password) => {
+                        change-password(authority, password)
                     }
 
                     logout() => {
