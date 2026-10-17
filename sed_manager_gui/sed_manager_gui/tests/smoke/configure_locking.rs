@@ -40,63 +40,11 @@ fn enter_config_page() {
 
         let ui = Driver::new(ui, Duration::from_secs(5));
 
-        // Scan for devices; the virtual device is always included in debug builds.
-        ui.single_click("scan-button", Left).await.unwrap();
-        ui.check_appearance("device-side-bar-item-0").await.unwrap();
-
-        // Select the virtual device.
-        ui.single_click("device-side-bar-item-0", Left).await.unwrap();
-        ui.check_appearance("activity-take-ownership").await.unwrap();
-
-        // Switch to the "Take ownership" activity and fill in the password form.
-        ui.single_click("activity-take-ownership", Left).await.unwrap();
-        ui.enter_text("new-password", TEST_PASSWORD).await.unwrap();
-        ui.enter_text("repeat-password", TEST_PASSWORD).await.unwrap();
-
-        // Submit and wait for the success toast. The submit buttons are disabled while the TPer
-        // or the session is busy, so they are invoked synchronously right after they're found
-        // enabled, as opposed to an asynchronous mouse click, during which they may get disabled.
-        ui.check_enabled("take-ownership-submit").await.unwrap();
-        ui.invoke_default_action("take-ownership-submit").unwrap();
-        ui.check_appearance_toast("Taken ownership").await.unwrap();
-
-        // A successful action triggers a background re-discovery, which navigates the sidebar
-        // back to the "Discovery" activity once it completes. Wait for that before switching
-        // activities again, or the switch may be undone by the pending re-discovery.
-        ui.check_disappearance("new-password").await.unwrap();
-
-        // Switch to the "Activate locking" activity and submit the owner password.
-        ui.single_click("activity-activate-locking", Left).await.unwrap();
-        ui.enter_text("activate-locking-password", TEST_PASSWORD).await.unwrap();
-        ui.check_enabled("activate-locking-submit").await.unwrap();
-        ui.invoke_default_action("activate-locking-submit").unwrap();
-        ui.check_appearance_toast("Locking activated").await.unwrap();
-        ui.check_disappearance("activate-locking-password").await.unwrap();
-
-        // Switch to the "Configure locking" activity. Selecting it triggers a silent, background
-        // listing of the locking SP's authorities; wait for that to populate the login panel's
-        // authority combo box before interacting with it (there's no toast to wait on here, since
-        // the listing is silent).
-        ui.check_appearance("activity-configure-locking").await.unwrap();
-        ui.single_click("activity-configure-locking", Left).await.unwrap();
-        ui.check_condition("login-authority", |element| {
-            element.accessible_value().is_some_and(|value| !value.is_empty())
-        })
-        .await
-        .unwrap();
-
-        // Log in as "Admin1". The authority combo box already defaults to it, since it's the only
-        // individual authority enabled by default on a freshly-activated locking SP. Activating
-        // locking copies the current SID password into Admin1's credential, so it's the same
-        // password used to take ownership, not the virtual device's raw factory default.
-        ui.enter_text("login-password", TEST_PASSWORD).await.unwrap();
-        ui.check_enabled("login-submit").await.unwrap();
-        ui.invoke_default_action("login-submit").unwrap();
-
-        // A successful login switches the "Configure locking" page from the login panel to the
-        // locking SP's tabs, landing on "Locking ranges" first, which has its own "Logout" button.
-        // Wait for that before proceeding, so the login is confirmed to actually have gone through.
-        ui.check_appearance("logout-submit").await.unwrap();
+        scan_devices(&ui).await;
+        select_virtual_device(&ui).await;
+        take_ownership(&ui).await;
+        activate_locking(&ui).await;
+        login_admin1(&ui).await;
 
         // Toggle "Read locking enabled" of the first non-global range (index 0
         // is the Global Range) and save the ranges.
@@ -175,9 +123,7 @@ fn enter_config_page() {
         ui.check_appearance(checkbox_id).await.unwrap();
         assert_eq!(ui.accessible_checked(checkbox_id).unwrap(), Some(true));
 
-        // Log back out and wait for the login panel to reappear.
-        ui.invoke_default_action("logout-submit").unwrap();
-        ui.check_appearance("login-submit").await.unwrap();
+        logout(&ui).await;
 
         // Only enabled authorities are listed in the login panel, so "User1"
         // is now available to log in with.
@@ -185,4 +131,76 @@ fn enter_config_page() {
         ui.select_combo_box_item("login-authority", "User1").unwrap();
         assert_eq!(ui.accessible_value("login-authority").unwrap().as_deref(), Some("User1"));
     });
+}
+
+async fn scan_devices(ui: &Driver<sed_manager_gui_slint::MainWindow>) {
+    // Scan for devices; the virtual device is always included in debug builds.
+    ui.single_click("scan-button", Left).await.unwrap();
+    ui.check_appearance("device-side-bar-item-0").await.unwrap();
+}
+
+async fn select_virtual_device(ui: &Driver<sed_manager_gui_slint::MainWindow>) {
+    // Select the virtual device.
+    ui.single_click("device-side-bar-item-0", Left).await.unwrap();
+    ui.check_appearance("activity-take-ownership").await.unwrap();
+}
+
+async fn take_ownership(ui: &Driver<sed_manager_gui_slint::MainWindow>) {
+    // Switch to the "Take ownership" activity and fill in the password form.
+    ui.single_click("activity-take-ownership", Left).await.unwrap();
+    ui.enter_text("new-password", TEST_PASSWORD).await.unwrap();
+    ui.enter_text("repeat-password", TEST_PASSWORD).await.unwrap();
+
+    // Submit and wait for the success toast. The submit buttons are disabled while the TPer
+    // or the session is busy, so they are invoked synchronously right after they're found
+    // enabled, as opposed to an asynchronous mouse click, during which they may get disabled.
+    ui.check_enabled("take-ownership-submit").await.unwrap();
+    ui.invoke_default_action("take-ownership-submit").unwrap();
+    ui.check_appearance_toast("Taken ownership").await.unwrap();
+
+    // A successful action triggers a background re-discovery, which navigates the sidebar
+    // back to the "Discovery" activity once it completes. Wait for that before switching
+    // activities again, or the switch may be undone by the pending re-discovery.
+    ui.check_disappearance("new-password").await.unwrap();
+}
+
+async fn activate_locking(ui: &Driver<sed_manager_gui_slint::MainWindow>) {
+    // Switch to the "Activate locking" activity and submit the owner password.
+    ui.single_click("activity-activate-locking", Left).await.unwrap();
+    ui.enter_text("activate-locking-password", TEST_PASSWORD).await.unwrap();
+    ui.check_enabled("activate-locking-submit").await.unwrap();
+    ui.invoke_default_action("activate-locking-submit").unwrap();
+    ui.check_appearance_toast("Locking activated").await.unwrap();
+    ui.check_disappearance("activate-locking-password").await.unwrap();
+}
+
+async fn login_admin1(ui: &Driver<sed_manager_gui_slint::MainWindow>) {
+    // Switch to the "Configure locking" activity. Selecting it triggers a silent, background
+    // listing of the locking SP's authorities; wait for that to populate the login panel's
+    // authority combo box before interacting with it (there's no toast to wait on here, since
+    // the listing is silent).
+    ui.check_appearance("activity-configure-locking").await.unwrap();
+    ui.single_click("activity-configure-locking", Left).await.unwrap();
+    ui.check_condition("login-authority", |element| element.accessible_value().is_some_and(|value| !value.is_empty()))
+        .await
+        .unwrap();
+
+    // Log in as "Admin1". The authority combo box already defaults to it, since it's the only
+    // individual authority enabled by default on a freshly-activated locking SP. Activating
+    // locking copies the current SID password into Admin1's credential, so it's the same
+    // password used to take ownership, not the virtual device's raw factory default.
+    ui.enter_text("login-password", TEST_PASSWORD).await.unwrap();
+    ui.check_enabled("login-submit").await.unwrap();
+    ui.invoke_default_action("login-submit").unwrap();
+
+    // A successful login switches the "Configure locking" page from the login panel to the
+    // locking SP's tabs, landing on "Locking ranges" first, which has its own "Logout" button.
+    // Wait for that before proceeding, so the login is confirmed to actually have gone through.
+    ui.check_appearance("logout-submit").await.unwrap();
+}
+
+async fn logout(ui: &Driver<sed_manager_gui_slint::MainWindow>) {
+    // Log back out and wait for the login panel to reappear.
+    ui.invoke_default_action("logout-submit").unwrap();
+    ui.check_appearance("login-submit").await.unwrap();
 }
