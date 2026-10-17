@@ -17,15 +17,17 @@ use crate::driver::Driver;
 use crate::test_utils::run_test;
 
 const TEST_PASSWORD: &str = "test-password-1234";
+const USER1_PASSWORD: &str = "user1-password-1234";
 
 /// This test takes ownership, activates locking, logs into the locking SP as "Admin1" to reach
-/// the "Configure locking" page, changes and saves a locking range, then logs back out.
+/// the "Configure locking" page, changes, saves, and erases a locking range, then logs back out.
 ///
 /// This test exercises the following functionality:
 /// - Take ownership
 /// - Activate locking
 /// - Login (to the locking SP)
 /// - Listing and writing locking ranges
+/// - Erasing locking ranges
 /// - Logout
 #[test]
 fn configure_locking_ranges() {
@@ -82,19 +84,36 @@ fn configure_locking_ranges() {
         assert_eq!(ui.accessible_value("locking-range-start-1").unwrap().as_deref(), Some("500 KiB"));
         assert_eq!(ui.accessible_value("locking-range-end-1").unwrap().as_deref(), Some("1000 KiB"));
 
+        // Erase the same range, and confirm it in the popup. Erasing is only
+        // possible when the range has no unsaved changes, which is the case
+        // after the reload.
+        ui.check_enabled("locking-range-erase-1").await.unwrap();
+        ui.invoke_default_action("locking-range-erase-1").unwrap();
+        ui.check_enabled("confirm-popup-submit").await.unwrap();
+        ui.invoke_default_action("confirm-popup-submit").unwrap();
+        ui.check_appearance_toast("Locking range erased").await.unwrap();
+        ui.check_disappearance("confirm-popup-submit").await.unwrap();
+
+        // Erasing only replaces the range's media encryption key, the range's
+        // settings must stay the same.
+        assert_eq!(ui.accessible_checked(checkbox_id).unwrap(), Some(true));
+        assert_eq!(ui.accessible_value("locking-range-start-1").unwrap().as_deref(), Some("500 KiB"));
+        assert_eq!(ui.accessible_value("locking-range-end-1").unwrap().as_deref(), Some("1000 KiB"));
+
         logout(&ui).await;
     });
 }
 
 /// This test takes ownership, activates locking, logs into the locking SP as "Admin1" to reach
-/// the "Configure locking" page, changes and saves an authority, then logs back out and checks
-/// that the newly enabled authority is available to log in with.
+/// the "Configure locking" page, enables an authority and changes its password, then logs back
+/// out and logs in as the newly enabled authority with its new password.
 ///
 /// This test exercises the following functionality:
 /// - Take ownership
 /// - Activate locking
 /// - Login (to the locking SP)
 /// - Listing and writing authorities
+/// - Changing the password of authorities
 /// - Logout
 #[test]
 fn configure_authorities() {
@@ -154,6 +173,16 @@ fn configure_authorities() {
         ui.check_appearance(checkbox_id).await.unwrap();
         assert_eq!(ui.accessible_checked(checkbox_id).unwrap(), Some(true));
 
+        // Change the password of "User1" via the password popup.
+        ui.invoke_default_action("authority-change-password-User1").unwrap();
+        ui.check_appearance("password-popup-submit").await.unwrap();
+        ui.enter_text("new-password", USER1_PASSWORD).await.unwrap();
+        ui.enter_text("repeat-password", USER1_PASSWORD).await.unwrap();
+        ui.check_enabled("password-popup-submit").await.unwrap();
+        ui.invoke_default_action("password-popup-submit").unwrap();
+        ui.check_appearance_toast("Password changed").await.unwrap();
+        ui.check_disappearance("password-popup-submit").await.unwrap();
+
         logout(&ui).await;
 
         // Only enabled authorities are listed in the login panel, so "User1"
@@ -161,6 +190,15 @@ fn configure_authorities() {
         ui.single_click("login-authority", Left).await.unwrap();
         ui.select_combo_box_item("login-authority", "User1").unwrap();
         assert_eq!(ui.accessible_value("login-authority").unwrap().as_deref(), Some("User1"));
+
+        // Logging in as "User1" with the new password confirms that the
+        // password change went through.
+        ui.enter_text("login-password", USER1_PASSWORD).await.unwrap();
+        ui.check_enabled("login-submit").await.unwrap();
+        ui.invoke_default_action("login-submit").unwrap();
+        ui.check_appearance("logout-submit").await.unwrap();
+
+        logout(&ui).await;
     });
 }
 
