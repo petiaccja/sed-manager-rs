@@ -18,6 +18,12 @@ pub enum Error {
     ToastNotFound { title: String },
     #[error("The element id=\"{id}\" is not enabled (although present)")]
     ElementNotEnabled { id: String },
+    #[error("The element id=\"{id}\" does not satisfy the condition (although present)")]
+    ConditionNotMet { id: String },
+    #[error("The element label=\"{label}\" not found")]
+    LabelNotFound { label: String },
+    #[error("The element label=\"{label}\" is ambiguous")]
+    AmbiguousLabel { label: String },
 }
 
 pub struct Driver<Root: ElementRoot> {
@@ -41,9 +47,49 @@ impl<Root: ElementRoot + ComponentHandle> Driver<Root> {
         Ok(element)
     }
 
+    /// Find a unique element given by its `accessible-label`.
+    pub fn find_unique_by_label(&self, label: &str) -> Result<ElementHandle, Error> {
+        let mut it = ElementHandle::find_by_accessible_label(&self.root, label).fuse();
+        let element = it.next().ok_or_else(|| Error::LabelNotFound { label: label.into() })?;
+        if it.next().is_some() {
+            return Err(Error::AmbiguousLabel { label: label.into() });
+        }
+        Ok(element)
+    }
+
+    /// Get the accessible value (e.g. the text) of the element given by its `accessible-id`.
+    pub fn accessible_value(&self, element_id: &str) -> Result<Option<SharedString>, Error> {
+        Ok(self.find_unique(element_id)?.accessible_value())
+    }
+
+    /// Get the checked state of the element given by its `accessible-id`.
+    pub fn accessible_checked(&self, element_id: &str) -> Result<Option<bool>, Error> {
+        Ok(self.find_unique(element_id)?.accessible_checked())
+    }
+
+    /// Get the enabled state of the element given by its `accessible-id`.
+    pub fn accessible_enabled(&self, element_id: &str) -> Result<Option<bool>, Error> {
+        Ok(self.find_unique(element_id)?.accessible_enabled())
+    }
+
     /// Send a single click to the element given by its `accessible-id`.
     pub async fn single_click(&self, element_id: &str, button: PointerEventButton) -> Result<(), Error> {
         self.find_unique(element_id)?.single_click(button).await;
+        Ok(())
+    }
+
+    /// Send a single click to the element given by its `accessible-label`.
+    pub async fn single_click_by_label(&self, label: &str, button: PointerEventButton) -> Result<(), Error> {
+        self.find_unique_by_label(label)?.single_click(button).await;
+        Ok(())
+    }
+
+    /// Invoke the default action (e.g. click, toggle) of the element given by its `accessible-id`.
+    ///
+    /// Unlike [`Self::single_click`], this is synchronous, so the element cannot get disabled
+    /// by background activity in the middle of the action.
+    pub fn invoke_default_action(&self, element_id: &str) -> Result<(), Error> {
+        self.find_unique(element_id)?.invoke_accessible_default_action();
         Ok(())
     }
 
@@ -135,6 +181,26 @@ impl<Root: ElementRoot + ComponentHandle> Driver<Root> {
         match result {
             Ok(_) => Ok(()),
             Err(_) => Err(Error::ElementNotFound { id: "<PREDICATE>".into() }),
+        }
+    }
+
+    /// Check if the element is present and satisfies the condition within the timeout.
+    pub async fn check_condition(
+        &self,
+        element_id: &str,
+        condition: impl Fn(&ElementHandle) -> bool,
+    ) -> Result<(), Error> {
+        let result = sleep_until_condition(
+            || self.find_unique(element_id).is_ok_and(|element| condition(&element)),
+            self.timeout,
+        )
+        .await;
+        match result {
+            Ok(_) => Ok(()),
+            Err(_) => match self.find_unique(element_id) {
+                Err(err) => Err(err),
+                Ok(_) => Err(Error::ConditionNotMet { id: element_id.into() }),
+            },
         }
     }
 
