@@ -19,18 +19,16 @@ use crate::test_utils::run_test;
 const TEST_PASSWORD: &str = "test-password-1234";
 
 /// This test takes ownership, activates locking, logs into the locking SP as "Admin1" to reach
-/// the "Configure locking" page, changes and saves a locking range and an authority, then logs
-/// back out.
+/// the "Configure locking" page, changes and saves a locking range, then logs back out.
 ///
 /// This test exercises the following functionality:
 /// - Take ownership
 /// - Activate locking
 /// - Login (to the locking SP)
 /// - Listing and writing locking ranges
-/// - Listing and writing authorities
 /// - Logout
 #[test]
-fn enter_config_page() {
+fn configure_locking_ranges() {
     run_test(|| async {
         let runtime = Arc::new(PolyRuntime::Slint(SlintRuntime));
         let ui = ui::MainWindow::new().unwrap();
@@ -84,6 +82,37 @@ fn enter_config_page() {
         assert_eq!(ui.accessible_value("locking-range-start-1").unwrap().as_deref(), Some("500 KiB"));
         assert_eq!(ui.accessible_value("locking-range-end-1").unwrap().as_deref(), Some("1000 KiB"));
 
+        logout(&ui).await;
+    });
+}
+
+/// This test takes ownership, activates locking, logs into the locking SP as "Admin1" to reach
+/// the "Configure locking" page, changes and saves an authority, then logs back out and checks
+/// that the newly enabled authority is available to log in with.
+///
+/// This test exercises the following functionality:
+/// - Take ownership
+/// - Activate locking
+/// - Login (to the locking SP)
+/// - Listing and writing authorities
+/// - Logout
+#[test]
+fn configure_authorities() {
+    run_test(|| async {
+        let runtime = Arc::new(PolyRuntime::Slint(SlintRuntime));
+        let ui = ui::MainWindow::new().unwrap();
+        let notification_queue = ToastQueue::new(ui.clone_strong());
+        let host = Arc::new(Host::new(runtime.clone()));
+        let _app = App::new(ui.clone_strong(), notification_queue, host, runtime.clone());
+
+        let ui = Driver::new(ui, Duration::from_secs(5));
+
+        scan_devices(&ui).await;
+        select_virtual_device(&ui).await;
+        take_ownership(&ui).await;
+        activate_locking(&ui).await;
+        login_admin1(&ui).await;
+
         // Switch to the "Authorities" tab and enable "User1", which is
         // disabled by default on a freshly-activated locking SP.
         ui.single_click_by_label("Authorities", Left).await.unwrap();
@@ -106,8 +135,10 @@ fn enter_config_page() {
         // Change it again, this time for real.
         ui.invoke_default_action(checkbox_id).unwrap();
 
-        // Same as for the ranges: the click is invoked synchronously, so the
-        // button can't get disabled by background commands mid-click.
+        // Background commands started by the login may briefly make the session
+        // busy, which disables the button. The click is therefore invoked
+        // synchronously right after it's found enabled, so the button can't get
+        // disabled by background commands mid-click.
         ui.check_enabled("save-authorities-submit").await.unwrap();
         ui.invoke_default_action("save-authorities-submit").unwrap();
         ui.check_appearance_toast("Authorities written to device").await.unwrap();

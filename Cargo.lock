@@ -4593,7 +4593,6 @@ dependencies = [
  "sed_virtual_device",
  "slint",
  "thiserror 2.0.18",
- "tokio",
  "tracing",
  "tracing-subscriber",
 ]
