@@ -7,5 +7,6 @@ mod change_password;
 mod configure_locking;
 mod cycle_ownership;
 mod element_handle_ext;
+mod driver;
 mod reset_stack;
 mod test_utils;

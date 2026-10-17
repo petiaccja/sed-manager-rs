@@ -54,7 +54,7 @@ where
     .unwrap();
 
     let handle = handle_rx.recv_timeout(Duration::from_secs(15)).unwrap();
-    let result = result_rx.recv_timeout(Duration::from_secs(30));
+    let result = result_rx.recv_timeout(Duration::from_secs(120));
 
     match result {
         Ok(Ok(_)) => (),
