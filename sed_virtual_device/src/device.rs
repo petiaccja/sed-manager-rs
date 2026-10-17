@@ -85,6 +85,16 @@ impl VirtualDevice {
     pub fn discover(&self) -> Discovery {
         self.tper.lock().unwrap().discover()
     }
+
+    /// Get information about the device's internal state, like the content of
+    /// the tables.
+    ///
+    /// This function exposes everything without access control checks, and is
+    /// helpful to create checks in tests.
+    pub fn inspect<Output>(&self, f: impl FnOnce(&Tper) -> Output) -> Output {
+        let tper = self.tper.lock().expect("the virtual device panicked in another thread");
+        f(&tper)
+    }
 }
 
 #[async_trait::async_trait]
