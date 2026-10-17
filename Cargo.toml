@@ -107,3 +107,16 @@ style = { priority = -1, level = "warn" }
 unusual_byte_groupings = "allow" # Bitfields often grouped by member.
 bool_assert_comparison = "allow" # Sometimes it's more expressive.
 large_enum_variant = "allow" # Simplicity and correctness is more important.
+
+# Optimize the Slint runtime and the generated UI code even in debug builds.
+# Unoptimized, the UI is sluggish and the UI smoke tests are about 4x slower,
+# because searching the element tree is slow. Debug assertions and overflow
+# checks are still inherited from the profile.
+[profile.dev.package.i-slint-core]
+opt-level = 2
+
+[profile.dev.package.i-slint-backend-testing]
+opt-level = 2
+
+[profile.dev.package.sed_manager_gui_slint]
+opt-level = 2

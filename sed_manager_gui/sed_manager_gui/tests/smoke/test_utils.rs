@@ -6,15 +6,14 @@
 //! Utilities for UI testing.
 
 use std::panic::{AssertUnwindSafe, resume_unwind};
-use std::sync::{LazyLock, OnceLock};
+use std::sync::{Mutex, OnceLock, PoisonError};
 use std::time::{Duration, Instant};
 
 use futures::FutureExt;
 use sed_async::{Runtime, SlintRuntime};
-use tokio::sync::Mutex;
 
 static EVENT_LOOP: OnceLock<std::thread::JoinHandle<()>> = OnceLock::new();
-static TEST_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+static TEST_LOCK: Mutex<()> = Mutex::new(());
 
 pub struct TimeoutError;
 
@@ -27,7 +26,8 @@ where
 {
     // Let only one test run at a time. The slint backend seems to get
     // overwhelmed with parallel tests and the tests start timing out.
-    let _test_guard = TEST_LOCK.lock();
+    // A failed test poisons the lock, but that doesn't affect other tests.
+    let _test_guard = TEST_LOCK.lock().unwrap_or_else(PoisonError::into_inner);
 
     // Shouldn't use `macro_support` items normally, but the crates are in the
     // same workspace so it's not that bad.

@@ -15,7 +15,10 @@ use sed_packet::{
 };
 use sed_spec::{
     objects::{Authority, AuthorityRef, LockingRange, LockingRangeRef, MbrControl, MediaKeyRef},
-    preconfig::opal_2::locking as opal_locking,
+    preconfig::{
+        core::shared::mbr_control,
+        opal_2::{admin::sp, locking as opal_locking},
+    },
 };
 use sed_telemetry::with_tracing;
 use sed_tper::Tper;
@@ -338,4 +341,42 @@ async fn set_authorities() {
     let updated = session.get_authorities().await.unwrap();
     let updated_auth = updated.iter().find(|authority| authority.uid == Some(uid)).unwrap();
     assert_eq!(updated_auth.enabled, Some(true));
+}
+
+#[instrument]
+#[tokio::test]
+#[with_tracing]
+async fn change_password() {
+    let tper = setup_tper().await;
+    let session = login_admin1(&tper).await.unwrap();
+
+    let authority = user_uid(3);
+    let new_password = MaxBytes::<32>::from(b"wrong_password".as_slice());
+
+    session.change_password(authority, new_password.clone()).await.unwrap();
+
+    assert_that!(tper.start_session(sp::LOCKING, Some(authority), Some(new_password)).await, ok(anything()));
+}
+
+#[instrument]
+#[tokio::test]
+#[with_tracing]
+async fn set_mbr_control() {
+    let (tper, device) = setup().await;
+    let session = login_admin1(&tper).await.unwrap();
+
+    let mbr_control =
+        MbrControl { uid: Some(mbr_control::MBR_CONTROL), enable: Some(true), done: Some(true), done_on_reset: None };
+
+    assert_that!(
+        device.inspect(|tper| tper.locking_sp().unwrap().mbr_control[&mbr_control::MBR_CONTROL].enable),
+        some(eq(false))
+    );
+
+    session.set_mbr_control(mbr_control).await.unwrap();
+
+    assert_that!(
+        device.inspect(|tper| tper.locking_sp().unwrap().mbr_control[&mbr_control::MBR_CONTROL].enable),
+        some(eq(true))
+    );
 }

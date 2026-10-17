@@ -112,6 +112,7 @@ component AuthorityTable {
                                 }
 
                                 if authority.has-password: IconButton {
+                                    accessible-id: "authority-change-password-" + authority.name;
                                     icon-size: 1.4rem;
                                     icon: Icons.change-password;
                                     text-placement: left;

@@ -29,6 +29,7 @@ export component ShadowMbrTab {
     in property <CommandStatus> command-status;
     in-out property <Mbr> mbr;
 
+    callback commit-mbr-control();
     callback logout();
 
     VerticalLayout {
@@ -98,17 +99,27 @@ export component ShadowMbrTab {
                                 }
 
                                 Switch {
+                                    accessible-id: "mbr-enabled";
                                     row: 2;
                                     col: 1;
                                     checked <=> mbr.enabled;
                                     enabled: mbr.supported && !command-status.tper-busy && !command-status.session-busy;
+
+                                    toggled => {
+                                        commit-mbr-control()
+                                    }
                                 }
 
                                 Switch {
+                                    accessible-id: "mbr-done";
                                     row: 3;
                                     col: 1;
                                     checked <=> mbr.done;
                                     enabled: mbr.supported && !command-status.tper-busy && !command-status.session-busy;
+
+                                    toggled => {
+                                        commit-mbr-control()
+                                    }
                                 }
                             }
                         }
@@ -157,6 +168,7 @@ export component ShadowMbrTab {
                 alignment: end;
 
                 Button {
+                    accessible-id: "logout-submit";
                     text: "Logout";
                     icon: Icons.logout;
                     colorize-icon: true;

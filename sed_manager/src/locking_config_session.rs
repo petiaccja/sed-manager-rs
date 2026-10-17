@@ -275,6 +275,12 @@ impl LockingConfigSession {
     }
 
     #[instrument(skip(self), err)]
+    pub async fn set_mbr_control(&self, mbr_control: MbrControl) -> Result<(), Error> {
+        let mbr_control = MbrControl { uid: None, ..mbr_control };
+        self.session.set_object(mbr_control::MBR_CONTROL, mbr_control).await.map_err(|err| err.into())
+    }
+
+    #[instrument(skip(self), err)]
     async fn collapse_locking_range(&self, uid: LockingRangeRef) -> Result<(), TperError> {
         let changes = LockingRange { range_length: Some(0), ..Default::default() };
         self.set_locking_range(uid, changes).await
