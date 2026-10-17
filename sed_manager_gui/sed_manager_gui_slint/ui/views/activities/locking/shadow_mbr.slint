@@ -99,23 +99,25 @@ export component ShadowMbrTab {
                                 }
 
                                 Switch {
+                                    accessible-id: "mbr-enabled";
                                     row: 2;
                                     col: 1;
                                     checked <=> mbr.enabled;
                                     enabled: mbr.supported && !command-status.tper-busy && !command-status.session-busy;
 
-                                    changed checked => {
+                                    toggled => {
                                         commit-mbr-control()
                                     }
                                 }
 
                                 Switch {
+                                    accessible-id: "mbr-done";
                                     row: 3;
                                     col: 1;
                                     checked <=> mbr.done;
                                     enabled: mbr.supported && !command-status.tper-busy && !command-status.session-busy;
 
-                                    changed checked => {
+                                    toggled => {
                                         commit-mbr-control()
                                     }
                                 }
@@ -166,6 +168,7 @@ export component ShadowMbrTab {
                 alignment: end;
 
                 Button {
+                    accessible-id: "logout-submit";
                     text: "Logout";
                     icon: Icons.logout;
                     colorize-icon: true;

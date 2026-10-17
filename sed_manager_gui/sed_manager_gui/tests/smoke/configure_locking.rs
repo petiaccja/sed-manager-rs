@@ -202,6 +202,64 @@ fn configure_authorities() {
     });
 }
 
+/// This test takes ownership, activates locking, logs into the locking SP as "Admin1" to reach
+/// the "Configure locking" page, and enables the shadow MBR. It then logs out and back in to
+/// check that the change was written to the device.
+///
+/// This test exercises the following functionality:
+/// - Take ownership
+/// - Activate locking
+/// - Login (to the locking SP)
+/// - Reading and writing the MBR control
+/// - Logout
+#[test]
+fn configure_mbr_control() {
+    run_test(|| async {
+        let runtime = Arc::new(PolyRuntime::Slint(SlintRuntime));
+        let ui = ui::MainWindow::new().unwrap();
+        let notification_queue = ToastQueue::new(ui.clone_strong());
+        let host = Arc::new(Host::new(runtime.clone()));
+        let _app = App::new(ui.clone_strong(), notification_queue, host, runtime.clone());
+
+        let ui = Driver::new(ui, Duration::from_secs(5));
+
+        scan_devices(&ui).await;
+        select_virtual_device(&ui).await;
+        take_ownership(&ui).await;
+        activate_locking(&ui).await;
+        login_admin1(&ui).await;
+
+        // Switch to the "Shadow MBR" tab. The shadow MBR is disabled by
+        // default on a freshly-activated locking SP. The switches are only
+        // enabled once the MBR status has been loaded and the session is idle.
+        ui.single_click_by_label("Shadow MBR", Left).await.unwrap();
+        let switch_id = "mbr-enabled";
+        ui.check_enabled(switch_id).await.unwrap();
+        assert_eq!(ui.accessible_checked(switch_id).unwrap(), Some(false));
+
+        // Flipping the switch writes the change to the device immediately.
+        // Same as for the save buttons, the toggle is invoked synchronously so
+        // that the switch can't get disabled by background commands mid-click.
+        ui.invoke_default_action(switch_id).unwrap();
+        ui.check_appearance_toast("MBR control updated").await.unwrap();
+
+        // The MBR status is reloaded from the device after writing, so once
+        // the switch is enabled again, the UI reflects the state of the device.
+        ui.check_enabled(switch_id).await.unwrap();
+        assert_eq!(ui.accessible_checked(switch_id).unwrap(), Some(true));
+
+        // Log out and back in, so that the MBR status is read from the device
+        // in a fresh session.
+        logout(&ui).await;
+        login_admin1(&ui).await;
+        ui.single_click_by_label("Shadow MBR", Left).await.unwrap();
+        ui.check_enabled(switch_id).await.unwrap();
+        assert_eq!(ui.accessible_checked(switch_id).unwrap(), Some(true));
+
+        logout(&ui).await;
+    });
+}
+
 async fn scan_devices(ui: &Driver<sed_manager_gui_slint::MainWindow>) {
     // Scan for devices; the virtual device is always included in debug builds.
     ui.single_click("scan-button", Left).await.unwrap();
