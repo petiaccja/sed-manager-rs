@@ -274,7 +274,7 @@ fn get_media_encryption_key(virtual_device: &VirtualDevice) -> Option<[u8; 64]> 
         let locking_sp = tper.locking_sp().unwrap();
         let key_uid = locking_sp.locking[&range_uid(2)].active_key.unwrap();
         match key_uid {
-            MediaKeyRef::Aes128(_k_aes_128_ref) => panic!("no K_AES_256 table in virtual device"),
+            MediaKeyRef::Aes128(_k_aes_128_ref) => panic!("no K_AES_128 table in virtual device"),
             MediaKeyRef::Aes256(k_aes_256_ref) => locking_sp.k_aes_256[&k_aes_256_ref].key,
         }
     })

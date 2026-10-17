@@ -112,7 +112,9 @@ impl TryFrom<Uid> for MediaKeyRef {
     type Error = Uid;
 
     fn try_from(value: Uid) -> Result<Self, Self::Error> {
-        KAes128Ref::try_from(value).map(Self::Aes128).or(KAes256Ref::try_from(value).map(Self::Aes256))
+        KAes128Ref::try_from(value)
+            .map(Self::Aes128)
+            .or_else(|_| KAes256Ref::try_from(value).map(Self::Aes256))
     }
 }
 
@@ -138,5 +140,39 @@ impl Detokenize for MediaKeyRef {
     fn detokenize<D: Detokenizer>(detokenizer: &mut D) -> Result<Self, D::Error> {
         Self::try_from(Uid::detokenize(detokenizer)?)
             .map_err(|uid| D::Error::message(format!("{uid} is not a media key")))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rstest::rstest;
+    use sed_packet::token_stream::{FromTokens, ToTokens};
+
+    use crate::preconfig::opal_2::locking::{k_aes_128, k_aes_256, locking};
+
+    #[rstest]
+    // Null UIDs are assumed AES_128 because we cannot determine it.
+    #[case::null(Uid::null(), Some(MediaKeyRef::Aes128(KAes128Ref::null())))]
+    #[case::aes_128(k_aes_128::GLOBAL_RANGE_KEY.into(), Some(MediaKeyRef::Aes128(k_aes_128::GLOBAL_RANGE_KEY)))]
+    #[case::aes_256(k_aes_256::GLOBAL_RANGE_KEY.into(), Some(MediaKeyRef::Aes256(k_aes_256::GLOBAL_RANGE_KEY)))]
+    #[case::other_table(locking::GLOBAL_RANGE.into(), None)]
+    fn media_key_ref_try_from_uid(#[case] uid: Uid, #[case] expected: Option<MediaKeyRef>) {
+        assert_eq!(MediaKeyRef::try_from(uid).ok(), expected);
+    }
+
+    #[rstest]
+    #[case::aes_128(k_aes_128::GLOBAL_RANGE_KEY.into())]
+    #[case::aes_256(k_aes_256::GLOBAL_RANGE_KEY.into())]
+    fn media_key_ref_tokenize_roundtrip(#[case] key: MediaKeyRef) {
+        let tokens = key.to_tokens().unwrap();
+        assert_eq!(tokens, Uid::from(key).to_tokens().unwrap());
+        assert_eq!(MediaKeyRef::from_tokens(&tokens).unwrap(), key);
+    }
+
+    #[test]
+    fn media_key_ref_detokenize_other_table() {
+        let tokens = Uid::from(locking::GLOBAL_RANGE).to_tokens().unwrap();
+        assert!(MediaKeyRef::from_tokens(&tokens).is_err());
     }
 }
