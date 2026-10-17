@@ -14,7 +14,7 @@ use sed_packet::{
     discovery::{FeatureDescriptor, LockingDescriptor},
 };
 use sed_spec::{
-    objects::{Authority, AuthorityRef, LockingRange, LockingRangeRef, MbrControl},
+    objects::{Authority, AuthorityRef, LockingRange, LockingRangeRef, MbrControl, MediaKeyRef},
     preconfig::opal_2::locking as opal_locking,
 };
 use sed_telemetry::with_tracing;
@@ -273,7 +273,10 @@ fn get_media_encryption_key(virtual_device: &VirtualDevice) -> Option<[u8; 64]> 
     virtual_device.inspect(|tper| {
         let locking_sp = tper.locking_sp().unwrap();
         let key_uid = locking_sp.locking[&range_uid(2)].active_key.unwrap();
-        locking_sp.k_aes_256[&key_uid].key
+        match key_uid {
+            MediaKeyRef::Aes128(_k_aes_128_ref) => panic!("no K_AES_128 table in virtual device"),
+            MediaKeyRef::Aes256(k_aes_256_ref) => locking_sp.k_aes_256[&k_aes_256_ref].key,
+        }
     })
 }
 

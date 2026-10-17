@@ -8,7 +8,7 @@ use std::collections::HashSet;
 use sed_packet::ObjectUid;
 use sed_spec_macros::{DetokenizeStruct, FieldList, Object, TokenizeField, TokenizeStruct};
 
-use crate::objects::{KAes256Ref, LockingRangeRef};
+use crate::objects::{LockingRangeRef, MediaKeyRef};
 use crate::preconfig::core::shared::table_id;
 use crate::types::{
     AdvKeyMode, GeneralStatus, LastReencStatus, ReencryptRequest, ReencryptState, ResetType, VerifyMode,
@@ -27,8 +27,8 @@ pub struct LockingRange {
     pub read_locked: Option<bool>,
     pub write_locked: Option<bool>,
     pub lock_on_reset: Option<HashSet<ResetType>>,
-    pub active_key: Option<KAes256Ref>,
-    pub next_key: Option<KAes256Ref>,
+    pub active_key: Option<MediaKeyRef>,
+    pub next_key: Option<MediaKeyRef>,
     pub reencrypt_state: Option<ReencryptState>,
     pub reencrypt_request: Option<ReencryptRequest>,
     pub adv_key_mode: Option<AdvKeyMode>,

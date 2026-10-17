@@ -676,14 +676,14 @@ pub fn locking() -> Table<LockingRange> {
     let fixed = [LockingRange {
         uid: Some(locking::GLOBAL_RANGE),
         name: Some("Locking_GlobalRange".into()),
-        active_key: Some(k_aes_256::GLOBAL_RANGE_KEY),
+        active_key: Some(k_aes_256::GLOBAL_RANGE_KEY.into()),
         ..shared_preconfig.clone()
     }];
 
     let ranges = RANGES.map(|range_idx| LockingRange {
         uid: Some(locking::RANGE.get(range_idx).unwrap()),
         name: Some(format!("Locking_Range{}", range_idx + 1)),
-        active_key: Some(k_aes_256::RANGE_KEY.get(range_idx).unwrap()),
+        active_key: Some(k_aes_256::RANGE_KEY.get(range_idx).unwrap().into()),
         ..shared_preconfig.clone()
     });
 
