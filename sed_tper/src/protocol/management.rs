@@ -125,14 +125,14 @@ impl Management {
         // Drop and finalize current resources.
         let (properties_changed_tx, properties_changed_rx) = {
             let Self {
-                start_session_calls_enqueued: method_calls,
+                start_session_calls_enqueued,
                 start_session_calls_sending,
                 start_session_calls_receiving,
                 properties_changed_tx,
                 properties_changed_rx,
                 ..
             } = current;
-            for StartSessionCallRecord { sender, .. } in method_calls {
+            for StartSessionCallRecord { sender, .. } in start_session_calls_enqueued {
                 let _ = sender.send(Err(Error::Aborted));
             }
             for (_, queue) in start_session_calls_sending {
@@ -191,7 +191,7 @@ impl Management {
                 ExtractResult::EndOfSession => (),
                 ExtractResult::NeedMoreTokens => break,
                 ExtractResult::InvalidTokens(error) => {
-                    self.flush(error.into());
+                    self.handle_invalid_tokens(error.into());
                     break;
                 }
             };
@@ -357,10 +357,10 @@ impl Management {
         }
     }
 
-    fn flush(&mut self, error: Error) {
+    fn handle_invalid_tokens(&mut self, error: Error) {
         self.received_tokens.clear();
         // The response to `Properties` may have been among the discarded tokens.
-        if let PropertiesCall::Receiving { .. } = self.properties_call {
+        if let PropertiesCall::Sending { .. } | PropertiesCall::Receiving { .. } = self.properties_call {
             self.properties_call = PropertiesCall::Idle;
         }
         for (_, queue) in self.start_session_calls_sending.drain() {
