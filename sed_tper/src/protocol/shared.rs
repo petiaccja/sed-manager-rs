@@ -53,6 +53,14 @@ pub enum Action {
     Recover,
 }
 
+#[derive(Debug, Clone)]
+#[must_use]
+pub enum PacketAction {
+    None,
+    Sleep { until: Instant },
+    Send(PacketBatch),
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PropertiesChanged {
     pub remote_properties: Properties,

@@ -33,7 +33,7 @@ use crate::{
     },
 };
 
-use super::{com_id_session::ComIdAction, rpc_session::RpcAction};
+use super::{com_id_session::ComIdAction, shared::PacketAction};
 
 /// After the timeout, message sent between the host and device are considered
 /// lost.
@@ -224,9 +224,9 @@ impl ProtocolState {
         };
 
         match self.rpc_session.poll_action(time) {
-            RpcAction::None => (),
-            RpcAction::Sleep { until } => deadline = min_deadline(deadline, Some(until)),
-            RpcAction::Send(packets_and_spans) => {
+            PacketAction::None => (),
+            PacketAction::Sleep { until } => deadline = min_deadline(deadline, Some(until)),
+            PacketAction::Send(packets_and_spans) => {
                 let (packets, spans): (Vec<_>, Vec<_>) = packets_and_spans.into_iter().unzip();
                 self.com_packets_sending.push_back(ComPacketSendingRecord {
                     packets: packets

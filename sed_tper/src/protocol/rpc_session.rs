@@ -22,14 +22,11 @@ use crate::{
         management::Management,
         sequence_number::SequenceNumber,
         session::Session,
-        shared::{PacketBatch, PropertiesChanged, min_deadline},
+        shared::{PacketBatch, PropertiesChanged, eos, min_deadline},
     },
 };
 
-use super::{
-    management::{Action as ManagementAction, StackAction},
-    session::Action as SessionAction,
-};
+use super::{management::ManagementAction, shared::PacketAction};
 
 #[derive(Debug)]
 pub struct RpcSession {
@@ -122,14 +119,21 @@ impl RpcSession {
             if session_id == SessionId::MANAGEMENT {
                 for action in self.management.handle_tokens(sub_packet.payload, source) {
                     match action {
-                        StackAction::Spawn { session_id, properties } => {
+                        ManagementAction::Spawn { session_id, properties } => {
                             self.sessions.insert(session_id, Session::new(session_id, self.timeout, properties));
                         }
-                        StackAction::NotifyAbort { session_id } => {
+                        ManagementAction::SpawnOrphaned { session_id, properties } => {
+                            let mut session = Session::new(session_id, self.timeout, properties);
+                            let (tx, _rx) = oneshot::async_channel();
+                            session.handle_method_call(eos(), tx, source.clone());
+                            self.sessions.insert(session_id, session);
+                        }
+                        ManagementAction::NotifyAbort { session_id } => {
                             if let Some(mut session) = self.sessions.remove(&session_id) {
                                 session.handle_aborted()
                             }
                         }
+                        ManagementAction::StackReset => todo!(),
                     }
                 }
             } else if let Some(session) = self.sessions.get_mut(&session_id) {
@@ -138,27 +142,21 @@ impl RpcSession {
         }
     }
 
-    pub fn poll_action(&mut self, time: Instant) -> RpcAction {
-        let management_action = self.management.poll_action(time);
-        let session_actions: Vec<_> = self
-            .sessions
-            .iter_mut()
-            .map(|(session_id, session)| (*session_id, session.poll_action(time)))
-            .collect();
+    pub fn poll_action(&mut self, time: Instant) -> PacketAction {
+        let mut actions = Vec::new();
+        actions.push(self.management.poll_action(time));
+        actions.extend(self.sessions.values_mut().map(|session| session.poll_action(time)));
+        self.sessions.retain(|_, session| !session.is_closed());
 
-        let (packets_to_send, deleted_sessions, deadline) = reduce_actions(management_action, session_actions);
-
-        for session_id in deleted_sessions {
-            let _ = self.sessions.remove(&session_id);
-        }
+        let (packets_to_send, deadline) = reduce_actions(actions);
         self.packets_to_send.extend(packets_to_send);
 
         if let Some(packets) = self.packets_to_send.pop_front() {
-            RpcAction::Send(packets)
+            PacketAction::Send(packets)
         } else if let Some(deadline) = deadline {
-            RpcAction::Sleep { until: deadline }
+            PacketAction::Sleep { until: deadline }
         } else {
-            RpcAction::None
+            PacketAction::None
         }
     }
 
@@ -175,45 +173,22 @@ impl RpcSession {
     }
 }
 
-fn reduce_actions(
-    management_action: ManagementAction,
-    session_actions: Vec<(SessionId, SessionAction)>,
-) -> (Vec<PacketBatch>, Vec<SessionId>, Option<Instant>) {
+fn reduce_actions(actions: Vec<PacketAction>) -> (Vec<PacketBatch>, Option<Instant>) {
     let mut packets_to_send = Vec::new();
-    let mut deleted_sessions = Vec::new();
+    let mut deadline = None;
 
-    let mut deadline = match management_action {
-        ManagementAction::None => None,
-        ManagementAction::Sleep { until } => Some(until),
-        ManagementAction::Send(packets) => {
-            packets_to_send.push(packets);
-            None
-        }
-    };
-
-    for (session_id, action) in session_actions {
+    for action in actions {
         let session_deadline = match action {
-            SessionAction::None => None,
-            SessionAction::Sleep { until } => Some(until),
-            SessionAction::Send(packets) => {
+            PacketAction::None => None,
+            PacketAction::Sleep { until } => Some(until),
+            PacketAction::Send(packets) => {
                 packets_to_send.push(packets);
-                None
-            }
-            SessionAction::Delete => {
-                deleted_sessions.push(session_id);
                 None
             }
         };
         deadline = min_deadline(deadline, session_deadline);
     }
-    (packets_to_send, deleted_sessions, deadline)
-}
-
-#[derive(Debug)]
-pub enum RpcAction {
-    None,
-    Sleep { until: Instant },
-    Send(PacketBatch),
+    (packets_to_send, deadline)
 }
 
 #[cfg(test)]
@@ -231,7 +206,6 @@ mod tests {
     use super::*;
 
     const SESSION_ID_1: SessionId = SessionId { hsn: 1, tsn: 2 };
-    const SESSION_ID_2: SessionId = SessionId { hsn: 4, tsn: 5 };
     const TIMEOUT: Duration = Duration::from_secs(1);
     const CAPABILITIES: Properties = Properties::INITIAL;
 
@@ -255,20 +229,20 @@ mod tests {
         session.handle_call_start_session(start_call.parameters.clone(), sender, Span::current());
         assert_that!(
             session.poll_action(time),
-            pat!(RpcAction::Send(elements_are![(
+            pat!(PacketAction::Send(elements_are![(
                 eq(&packetize_one(SessionId::MANAGEMENT, SequenceNumber(1), start_call.to_tokens().unwrap())),
                 anything()
             )]))
         );
 
         session.handle_iface_send_done(time, SessionId::MANAGEMENT, SequenceNumber(1), Ok(()));
-        assert_that!(session.poll_action(time), pat!(&RpcAction::Sleep { until: eq(time + TIMEOUT) }));
+        assert_that!(session.poll_action(time), pat!(&PacketAction::Sleep { until: eq(time + TIMEOUT) }));
 
         session.handle_packet(
             packetize_one(SessionId::MANAGEMENT, SequenceNumber(1), sync_call.to_tokens().unwrap()),
             &Span::none(),
         );
-        assert_that!(session.poll_action(time), pat!(&RpcAction::None));
+        assert_that!(session.poll_action(time), pat!(&PacketAction::None));
 
         assert_that!(receiver.try_recv(), ok(ok(eq(&(sync_call.parameters, Properties::INITIAL)))));
         assert!(session.sessions.contains_key(&SESSION_ID_1));
@@ -286,17 +260,17 @@ mod tests {
         session.handle_method_call(SESSION_ID_1, call.clone(), sender, Span::current());
         assert_that!(
             session.poll_action(time),
-            pat!(RpcAction::Send(elements_are![(
+            pat!(PacketAction::Send(elements_are![(
                 eq(&packetize_one(SESSION_ID_1, SequenceNumber(1), call)),
                 anything()
             )]))
         );
 
         session.handle_iface_send_done(time, SESSION_ID_1, SequenceNumber(1), Ok(()));
-        assert_that!(session.poll_action(time), pat!(&RpcAction::Sleep { until: eq(time + TIMEOUT) }));
+        assert_that!(session.poll_action(time), pat!(&PacketAction::Sleep { until: eq(time + TIMEOUT) }));
 
         session.handle_packet(packetize_one(SESSION_ID_1, SequenceNumber(1), response.clone()), &Span::none());
-        assert_that!(session.poll_action(time), pat!(&RpcAction::None));
+        assert_that!(session.poll_action(time), pat!(&PacketAction::None));
 
         assert_that!(receiver.try_recv(), ok(ok(eq(&response))));
     }
@@ -313,17 +287,17 @@ mod tests {
         session.handle_method_call(SESSION_ID_1, call.clone(), sender, Span::current());
         assert_that!(
             session.poll_action(time),
-            pat!(RpcAction::Send(elements_are![(
+            pat!(PacketAction::Send(elements_are![(
                 eq(&packetize_one(SESSION_ID_1, SequenceNumber(1), call)),
                 anything()
             )]))
         );
 
         session.handle_iface_send_done(time, SESSION_ID_1, SequenceNumber(1), Ok(()));
-        assert_that!(session.poll_action(time), pat!(&RpcAction::Sleep { until: eq(time + TIMEOUT) }));
+        assert_that!(session.poll_action(time), pat!(&PacketAction::Sleep { until: eq(time + TIMEOUT) }));
 
         session.handle_packet(packetize_one(SESSION_ID_1, SequenceNumber(1), response.clone()), &Span::none());
-        assert_that!(session.poll_action(time), pat!(&RpcAction::None));
+        assert_that!(session.poll_action(time), pat!(&PacketAction::None));
 
         assert_that!(receiver.try_recv(), ok(ok(eq(&response))));
         assert!(session.sessions.is_empty());
@@ -338,7 +312,7 @@ mod tests {
         let call = start_session_call(SESSION_ID_1).to_tokens().unwrap();
 
         session.handle_method_call(SessionId::MANAGEMENT, call, sender, Span::current());
-        assert_that!(session.poll_action(time), matches_pattern!(RpcAction::None));
+        assert_that!(session.poll_action(time), matches_pattern!(PacketAction::None));
         assert_that!(receiver.try_recv(), ok(err(pat!(&Error::UnexpectedManagementMethod))));
     }
 
@@ -351,36 +325,22 @@ mod tests {
             packetize_one(SessionId::MANAGEMENT, SequenceNumber(32), close_session_call(SESSION_ID_1)),
             &Span::none(),
         );
-        assert_that!(session.poll_action(time), pat!(&RpcAction::None));
+        assert_that!(session.poll_action(time), pat!(&PacketAction::None));
 
         assert!(session.sessions.is_empty());
     }
 
     #[test]
-    fn reduce_actions_deadline_management_first() {
+    fn reduce_actions_earliest_deadline() {
         let time = Instant::now();
         let delay = Duration::from_secs(1);
-        let management_action = ManagementAction::Sleep { until: time };
-        let session_actions = vec![
-            (SESSION_ID_1, SessionAction::Sleep { until: time + delay }),
-            (SESSION_ID_2, SessionAction::Sleep { until: time + 2 * delay }),
+        let actions = vec![
+            PacketAction::Sleep { until: time + delay },
+            PacketAction::Sleep { until: time },
+            PacketAction::Sleep { until: time + 2 * delay },
         ];
 
-        let (_, _, deadline) = reduce_actions(management_action, session_actions);
-        assert_eq!(deadline, Some(time));
-    }
-
-    #[test]
-    fn reduce_actions_deadline_session_first() {
-        let time = Instant::now();
-        let delay = Duration::from_secs(1);
-        let management_action = ManagementAction::Sleep { until: time + 2 * delay };
-        let session_actions = vec![
-            (SESSION_ID_1, SessionAction::Sleep { until: time }),
-            (SESSION_ID_2, SessionAction::Sleep { until: time + delay }),
-        ];
-
-        let (_, _, deadline) = reduce_actions(management_action, session_actions);
+        let (_, deadline) = reduce_actions(actions);
         assert_eq!(deadline, Some(time));
     }
 }

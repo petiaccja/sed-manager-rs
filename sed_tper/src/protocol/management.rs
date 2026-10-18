@@ -21,13 +21,13 @@ use sed_spec::{
     },
     preconfig::core::shared::{invoking_id::SESSION_MANAGER, sm_method_id::START_SESSION},
 };
-use tracing::Span;
+use tracing::{Span, debug};
 
 use crate::{
     Error,
     protocol::{
         sequence_number::SequenceNumber,
-        shared::{PacketBatch, PropertiesChanged, link_both_ways, min_deadline, packetize_one},
+        shared::{PacketAction, PropertiesChanged, link_both_ways, min_deadline, packetize_one},
     },
 };
 
@@ -166,7 +166,7 @@ impl Management {
     /// - `tokens`: the tokens returned by the IF-RECV command.
     /// - `source`: the span of the IF-RECV command that returned the tokens.
     #[must_use]
-    pub fn handle_tokens(&mut self, tokens: Vec<u8>, source: &Span) -> Vec<StackAction> {
+    pub fn handle_tokens(&mut self, tokens: Vec<u8>, source: &Span) -> Vec<ManagementAction> {
         let mut actions = Vec::new();
         self.received_tokens.extend(tokens);
         loop {
@@ -199,7 +199,7 @@ impl Management {
         actions
     }
 
-    pub fn poll_action(&mut self, time: Instant) -> Action {
+    pub fn poll_action(&mut self, time: Instant) -> PacketAction {
         // Get next packet to send.
         let packet = self.poll_call_properties().or_else(|| self.poll_start_session_calls());
         let packet = packet.map(|(packet, span)| (packet, vec![span]));
@@ -224,11 +224,11 @@ impl Management {
 
         // Decide action.
         if let Some(packet) = packet {
-            Action::Send(vec![packet])
+            PacketAction::Send(vec![packet])
         } else if let Some(deadline) = deadline {
-            Action::Sleep { until: deadline }
+            PacketAction::Sleep { until: deadline }
         } else {
-            Action::None
+            PacketAction::None
         }
     }
 
@@ -307,33 +307,51 @@ impl Management {
 
     fn handle_sync_session(
         &mut self,
-        actions: &mut Vec<StackAction>,
+        actions: &mut Vec<ManagementAction>,
         sync_session: SyncSession,
         status: MethodStatus,
         source: &Span,
     ) {
         let session_id = SessionId { hsn: sync_session.host_session_id, tsn: sync_session.sp_session_id };
-        if let Some(queue) = self.start_session_calls_receiving.get_mut(&sync_session.host_session_id) {
-            if let Some(record) = queue.pop_front() {
+
+        // Pop record (if any) and delete queue for HSN if empty.
+        let maybe_record = self.start_session_calls_receiving.get_mut(&session_id.hsn).and_then(VecDeque::pop_front);
+        if self.start_session_calls_receiving.get(&session_id.hsn).is_some_and(|queue| queue.is_empty()) {
+            self.start_session_calls_receiving.remove(&session_id.hsn);
+        }
+
+        let action = match (maybe_record, status) {
+            (Some(record), MethodStatus::Success) => {
                 link_both_ways(source, &record.span);
-                if status == MethodStatus::Success {
-                    let _ = record.sender.send(Ok((sync_session, record.properties.clone())));
-                    actions.push(StackAction::Spawn { session_id, properties: record.properties });
+
+                if record.sender.send(Ok((sync_session, record.properties.clone()))).is_ok() {
+                    Some(ManagementAction::Spawn { session_id, properties: record.properties })
                 } else {
-                    let _ = record.sender.send(Err(status.into()));
+                    Some(ManagementAction::SpawnOrphaned { session_id, properties: record.properties })
                 }
             }
-            if queue.is_empty() {
-                self.start_session_calls_receiving.remove(&session_id.hsn);
+            (Some(record), status) => {
+                let _ = record.sender.send(Err(status.into()));
+                None
             }
-        }
+            (None, MethodStatus::Success) => {
+                debug!(parent: source, %session_id, error = %status, "untracked successful `SyncSession` received");
+                Some(ManagementAction::StackReset)
+            }
+            (None, status) => {
+                debug!(parent: source, %session_id, error = %status, "untracked failed `SyncSession` received");
+                None
+            }
+        };
+
+        actions.extend(action);
     }
 
-    fn handle_close_session(actions: &mut Vec<StackAction>, close_session: CloseSession, status: MethodStatus) {
+    fn handle_close_session(actions: &mut Vec<ManagementAction>, close_session: CloseSession, status: MethodStatus) {
         if status == MethodStatus::Success {
             let session_id =
                 SessionId { hsn: close_session.local_session_number, tsn: close_session.remote_session_number };
-            actions.push(StackAction::NotifyAbort { session_id });
+            actions.push(ManagementAction::NotifyAbort { session_id });
         }
     }
 
@@ -401,17 +419,19 @@ impl Management {
 
 #[derive(Debug, PartialEq, Eq)]
 #[must_use]
-pub enum StackAction {
+pub enum ManagementAction {
+    /// Spawn a new session in response to a successful `SyncSession`.
     Spawn { session_id: SessionId, properties: Properties },
+    /// Spawn a new session in response to a successful `SyncSession` when the
+    /// caller is no longer interested in the session (e.g. they dropped the
+    /// channel or timed out). Since nobody will be sending anything on the
+    /// session, it should be closed immediately.
+    SpawnOrphaned { session_id: SessionId, properties: Properties },
+    /// Notify an active session that it has been aborted via a `CloseSession`.
     NotifyAbort { session_id: SessionId },
-}
-
-#[derive(Debug, Clone)]
-#[must_use]
-pub enum Action {
-    None,
-    Sleep { until: Instant },
-    Send(PacketBatch),
+    /// The management session is unrecoverable and a stack reset must be
+    /// performed.
+    StackReset,
 }
 
 /// The state of the `Properties` method call that synchronizes the connection
@@ -515,7 +535,7 @@ mod tests {
         mgmt.handle_call_start_session(start_session.parameters.clone(), sender, Span::current());
         assert_that!(
             mgmt.poll_action(time),
-            matches_pattern!(Action::Send(elements_are![(
+            matches_pattern!(PacketAction::Send(elements_are![(
                 eq(&Packet {
                     tper_session_number: 0,
                     host_session_number: 0,
@@ -532,14 +552,14 @@ mod tests {
         );
 
         mgmt.handle_iface_send_done(time, SequenceNumber(1), Ok(()));
-        assert_that!(mgmt.poll_action(time), matches_pattern!(&Action::Sleep { until: eq(time + TIMEOUT) }));
+        assert_that!(mgmt.poll_action(time), matches_pattern!(&PacketAction::Sleep { until: eq(time + TIMEOUT) }));
 
         let stack_action = mgmt.handle_tokens(sync_session.to_tokens().unwrap(), &Span::none());
         assert_that!(
             stack_action,
-            eq(&vec![StackAction::Spawn { session_id: SESSION_ID, properties: Properties::INITIAL }])
+            eq(&vec![ManagementAction::Spawn { session_id: SESSION_ID, properties: Properties::INITIAL }])
         );
-        assert_that!(mgmt.poll_action(time), matches_pattern!(&Action::None));
+        assert_that!(mgmt.poll_action(time), matches_pattern!(&PacketAction::None));
         assert_that!(receiver.try_recv(), ok(ok(eq(&(sync_session.parameters, Properties::INITIAL)))));
 
         assert!(mgmt.start_session_calls_enqueued.is_empty());
@@ -557,14 +577,14 @@ mod tests {
         let sync_session = sync_session_call(SESSION_ID, MethodStatus::Fail);
 
         mgmt.handle_call_start_session(start_session.parameters.clone(), sender, Span::current());
-        assert_that!(mgmt.poll_action(time), matches_pattern!(Action::Send(len(eq(1)))));
+        assert_that!(mgmt.poll_action(time), matches_pattern!(PacketAction::Send(len(eq(1)))));
 
         mgmt.handle_iface_send_done(time, SequenceNumber(1), Ok(()));
-        assert_that!(mgmt.poll_action(time), matches_pattern!(&Action::Sleep { until: eq(time + TIMEOUT) }));
+        assert_that!(mgmt.poll_action(time), matches_pattern!(&PacketAction::Sleep { until: eq(time + TIMEOUT) }));
 
         let stack_action = mgmt.handle_tokens(sync_session.to_tokens().unwrap(), &Span::none());
         assert_that!(stack_action, eq(&vec![]));
-        assert_that!(mgmt.poll_action(time), matches_pattern!(&Action::None));
+        assert_that!(mgmt.poll_action(time), matches_pattern!(&PacketAction::None));
         assert_that!(receiver.try_recv(), ok(err(eq(&MethodStatus::Fail.into()))));
 
         assert!(mgmt.start_session_calls_enqueued.is_empty());
@@ -581,11 +601,11 @@ mod tests {
         let start_session = start_session_call(SESSION_ID);
 
         mgmt.handle_call_start_session(start_session.parameters, sender, Span::current());
-        assert_that!(mgmt.poll_action(time), matches_pattern!(Action::Send(len(eq(1)))));
+        assert_that!(mgmt.poll_action(time), matches_pattern!(PacketAction::Send(len(eq(1)))));
 
         mgmt.handle_iface_send_done(time, SequenceNumber(1), Ok(()));
-        assert_that!(mgmt.poll_action(time), matches_pattern!(&Action::Sleep { until: eq(time + TIMEOUT) }));
-        assert_that!(mgmt.poll_action(time + 2 * TIMEOUT), matches_pattern!(&Action::None));
+        assert_that!(mgmt.poll_action(time), matches_pattern!(&PacketAction::Sleep { until: eq(time + TIMEOUT) }));
+        assert_that!(mgmt.poll_action(time + 2 * TIMEOUT), matches_pattern!(&PacketAction::None));
 
         assert_that!(receiver.try_recv(), ok(err(eq(&Error::TimedOut))));
 
@@ -603,10 +623,10 @@ mod tests {
         let start_session = start_session_call(SESSION_ID);
 
         mgmt.handle_call_start_session(start_session.parameters, sender, Span::current());
-        assert_that!(mgmt.poll_action(time), matches_pattern!(Action::Send(len(eq(1)))));
+        assert_that!(mgmt.poll_action(time), matches_pattern!(PacketAction::Send(len(eq(1)))));
 
         mgmt.handle_iface_send_done(time, SequenceNumber(1), Err(Error::NotSupported));
-        assert_that!(mgmt.poll_action(time), matches_pattern!(&Action::None));
+        assert_that!(mgmt.poll_action(time), matches_pattern!(&PacketAction::None));
 
         assert_that!(receiver.try_recv(), ok(err(eq(&Error::NotSupported))));
 
@@ -644,7 +664,7 @@ mod tests {
         mgmt.handle_call_start_session(start_session.parameters.clone(), sender, Span::current());
         assert_that!(
             mgmt.poll_action(time),
-            matches_pattern!(Action::Send(elements_are![(
+            matches_pattern!(PacketAction::Send(elements_are![(
                 eq(&Packet {
                     tper_session_number: 0,
                     host_session_number: 0,
@@ -661,16 +681,16 @@ mod tests {
         );
 
         mgmt.handle_iface_send_done(time, SequenceNumber(1), Ok(()));
-        assert_that!(mgmt.poll_action(time), matches_pattern!(&Action::Sleep { until: eq(time + TIMEOUT) }));
+        assert_that!(mgmt.poll_action(time), matches_pattern!(&PacketAction::Sleep { until: eq(time + TIMEOUT) }));
 
         let stack_action = mgmt.handle_tokens(first_tokens, &Span::none());
         assert_that!(stack_action, eq(&vec![]));
         let stack_action = mgmt.handle_tokens(second_tokens, &Span::none());
         assert_that!(
             stack_action,
-            eq(&vec![StackAction::Spawn { session_id: SESSION_ID, properties: Properties::INITIAL }])
+            eq(&vec![ManagementAction::Spawn { session_id: SESSION_ID, properties: Properties::INITIAL }])
         );
-        assert_that!(mgmt.poll_action(time), matches_pattern!(&Action::None));
+        assert_that!(mgmt.poll_action(time), matches_pattern!(&PacketAction::None));
         assert_that!(receiver.try_recv(), ok(ok(eq(&(sync_session.parameters, Properties::INITIAL)))));
 
         assert!(mgmt.start_session_calls_enqueued.is_empty());
@@ -690,7 +710,7 @@ mod tests {
         mgmt.handle_call_start_session(start_session.parameters.clone(), sender, Span::current());
         assert_that!(
             mgmt.poll_action(time),
-            matches_pattern!(Action::Send(elements_are![(
+            matches_pattern!(PacketAction::Send(elements_are![(
                 eq(&Packet {
                     tper_session_number: 0,
                     host_session_number: 0,
@@ -707,11 +727,11 @@ mod tests {
         );
 
         mgmt.handle_iface_send_done(time, SequenceNumber(1), Ok(()));
-        assert_that!(mgmt.poll_action(time), matches_pattern!(&Action::Sleep { until: eq(time + TIMEOUT) }));
+        assert_that!(mgmt.poll_action(time), matches_pattern!(&PacketAction::Sleep { until: eq(time + TIMEOUT) }));
 
         let stack_action = mgmt.handle_tokens(invalid_tokens, &Span::none());
         assert_that!(stack_action, eq(&vec![]));
-        assert_that!(mgmt.poll_action(time), matches_pattern!(&Action::None));
+        assert_that!(mgmt.poll_action(time), matches_pattern!(&PacketAction::None));
         assert_that!(receiver.try_recv(), ok(err(pat!(&Error::TokenError(_)))));
 
         assert!(mgmt.start_session_calls_enqueued.is_empty());
@@ -731,8 +751,8 @@ mod tests {
         // Both methods are packetized before the `Properties` response arrives.
         mgmt.handle_call_properties(Span::current());
         mgmt.handle_call_start_session(start_session.parameters.clone(), sender, Span::current());
-        assert_that!(mgmt.poll_action(time), matches_pattern!(Action::Send(len(eq(1)))));
-        assert_that!(mgmt.poll_action(time), matches_pattern!(Action::Send(len(eq(1)))));
+        assert_that!(mgmt.poll_action(time), matches_pattern!(PacketAction::Send(len(eq(1)))));
+        assert_that!(mgmt.poll_action(time), matches_pattern!(PacketAction::Send(len(eq(1)))));
 
         // The `Properties` response arrives before the `StartSession` is sent.
         mgmt.handle_iface_send_done(time, SequenceNumber(1), Ok(()));
@@ -744,7 +764,7 @@ mod tests {
         let stack_action = mgmt.handle_tokens(sync_session.to_tokens().unwrap(), &Span::none());
         assert_that!(
             stack_action,
-            eq(&vec![StackAction::Spawn { session_id: SESSION_ID, properties: CONNECTION_PROPERTIES }])
+            eq(&vec![ManagementAction::Spawn { session_id: SESSION_ID, properties: CONNECTION_PROPERTIES }])
         );
         assert_that!(receiver.try_recv(), ok(ok(eq(&(sync_session.parameters, CONNECTION_PROPERTIES)))));
     }
@@ -760,8 +780,8 @@ mod tests {
 
         mgmt.handle_call_properties(Span::current());
         mgmt.handle_call_start_session(start_session.parameters.clone(), sender, Span::current());
-        assert_that!(mgmt.poll_action(time), matches_pattern!(Action::Send(len(eq(1)))));
-        assert_that!(mgmt.poll_action(time), matches_pattern!(Action::Send(len(eq(1)))));
+        assert_that!(mgmt.poll_action(time), matches_pattern!(PacketAction::Send(len(eq(1)))));
+        assert_that!(mgmt.poll_action(time), matches_pattern!(PacketAction::Send(len(eq(1)))));
 
         // The `StartSession` is sent before the `Properties` response arrives.
         mgmt.handle_iface_send_done(time, SequenceNumber(1), Ok(()));
@@ -774,7 +794,7 @@ mod tests {
         let stack_action = mgmt.handle_tokens(sync_session.to_tokens().unwrap(), &Span::none());
         assert_that!(
             stack_action,
-            eq(&vec![StackAction::Spawn { session_id: SESSION_ID, properties: Properties::INITIAL }])
+            eq(&vec![ManagementAction::Spawn { session_id: SESSION_ID, properties: Properties::INITIAL }])
         );
         assert_that!(receiver.try_recv(), ok(ok(eq(&(sync_session.parameters, Properties::INITIAL)))));
     }
@@ -784,7 +804,7 @@ mod tests {
         let mut mgmt = Management::new(TIMEOUT, HOST_PROPERTIES);
 
         let stack_action = mgmt.handle_tokens(close_session_call(SESSION_ID), &Span::none());
-        assert_that!(stack_action, eq(&vec![StackAction::NotifyAbort { session_id: SESSION_ID }]));
+        assert_that!(stack_action, eq(&vec![ManagementAction::NotifyAbort { session_id: SESSION_ID }]));
     }
 
     #[test]
