@@ -25,6 +25,7 @@ use sed_packet::{
 };
 #[cfg(feature = "test-utils")]
 use sed_spec::methods::Properties;
+use sed_spec::methods::{StartSession, SyncSession};
 use tracing::{Instrument as _, Span, info_span};
 
 use crate::Error;
@@ -117,8 +118,18 @@ impl Controller {
         rx
     }
 
-    pub fn sync_properties(&self) {
-        let _ = self.command_tx.try_send(Command::SyncProperties { span: Span::current() });
+    pub fn call_start_session(
+        &self,
+        start_session: StartSession,
+    ) -> oneshot::Receiver<Result<(SyncSession, Properties), Error>> {
+        let (tx, rx) = oneshot::channel();
+        let span = Span::current();
+        let _ = self.command_tx.try_send(Command::StartSessionCall { call: start_session, sender: tx, span });
+        rx
+    }
+
+    pub fn call_properties(&self) {
+        let _ = self.command_tx.try_send(Command::PropertiesCall { span: Span::current() });
     }
 
     /// Notify the protocol stack that a session has been aborted by the device.
@@ -159,7 +170,8 @@ impl Controller {
 #[rustfmt::skip] // Puts everything on a new line with the #[cfg].
 pub enum Command {
     MethodCall { session_id: SessionId, call: Vec<u8>, sender: oneshot::Sender<Result<Vec<u8>, Error>>, span: Span },
-    SyncProperties { span: Span },
+    StartSessionCall { call: StartSession, sender: oneshot::Sender<Result<(SyncSession, Properties), Error>>, span: Span },
+    PropertiesCall { span: Span },
     ComRequest { request: ComIdRequest, sender: oneshot::Sender<Result<ComIdResponse, Error>>, span: Span },
     ReportAborted { session_id: SessionId },
     #[cfg(feature = "test-utils")]
@@ -171,7 +183,8 @@ fn inject_command(state: &mut ProtocolState, command: Command) {
         Command::MethodCall { session_id, call, sender, span } => {
             state.handle_method_call(session_id, call, sender, span)
         }
-        Command::SyncProperties { span } => state.handle_sync_properties(span),
+        Command::StartSessionCall { call, sender, span } => state.handle_call_start_session(call, sender, span),
+        Command::PropertiesCall { span } => state.handle_call_properties(span),
         Command::ComRequest { request, sender, span } => state.handle_com_request(request, sender, span),
         Command::ReportAborted { session_id } => state.handle_session_aborted(session_id),
         #[cfg(feature = "test-utils")]
@@ -256,6 +269,7 @@ mod tests {
     use sed_packet::com_id::ComId;
     use sed_packet::com_id::ComIdExt;
     use sed_packet::packet::ComPacket;
+    use sed_packet::token_stream::ToTokens;
     use sed_spec::methods::MethodStatus;
     use sorbit::ser_de::ToBytes as _;
 
@@ -282,7 +296,7 @@ mod tests {
             payload: vec![packetize_one(
                 SessionId::MANAGEMENT,
                 SequenceNumber(1),
-                call.clone(),
+                call.to_tokens().unwrap(),
             )],
         };
         let response_packet = ComPacket {
@@ -294,7 +308,7 @@ mod tests {
             payload: vec![packetize_one(
                 SessionId::MANAGEMENT,
                 SequenceNumber(1),
-                response.clone(),
+                response.to_tokens().unwrap(),
             )],
         };
 
@@ -319,9 +333,9 @@ mod tests {
         let (protocol, controller) = Protocol::new(ComId(1), ComIdExt(0), Arc::new(device), Arc::new(runtime));
         let task = tokio::spawn(protocol.run());
 
-        let response_rx = controller.call(SessionId::MANAGEMENT, call);
+        let response_rx = controller.call_start_session(call.parameters.clone());
         let response_result = tokio::time::timeout(Duration::from_secs(5), response_rx).await;
-        assert_that!(response_result, ok(ok(ok(eq(&response)))));
+        assert_that!(response_result, ok(ok(ok(eq(&(response.parameters, Properties::INITIAL))))));
 
         drop(controller);
         let task_result = tokio::time::timeout(Duration::from_secs(5), task).await;

@@ -30,8 +30,8 @@ pub enum Error {
     Closed,
     #[error("The RPC message has timed out")]
     TimedOut,
-    #[error("Not allowed to send method `{0}` to the device")]
-    MethodNotAllowed(Uid),
+    #[error("Use the dedicated methods of the `Controller` to send managment methods")]
+    UnexpectedManagementMethod,
 
     // Data-related.
     #[error("Method ({requested} B) exceeds maximum method call size ({maximum} B)")]

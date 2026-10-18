@@ -18,7 +18,7 @@ use sed_packet::{
     packet::{COM_PACKET_HEADER_LEN, ComPacket, PACKET_HEADER_LEN, PACKETIZED_PROTOCOL, SUB_PACKET_HEADER_LEN},
     session_id::SessionId,
 };
-use sed_spec::methods::{Limit, Properties};
+use sed_spec::methods::{Limit, Properties, SyncSession};
 use sorbit::ser_de::FromBytes;
 use tracing::{Span, info_span};
 
@@ -128,8 +128,17 @@ impl ProtocolState {
         self.rpc_session.handle_method_call(session_id, call, sender, span);
     }
 
-    pub fn handle_sync_properties(&mut self, span: Span) {
-        self.rpc_session.handle_sync_properties(span);
+    pub fn handle_call_start_session(
+        &mut self,
+        call: sed_spec::methods::StartSession,
+        sender: Sender<Result<(SyncSession, Properties), Error>>,
+        span: Span,
+    ) {
+        self.rpc_session.handle_call_start_session(call, sender, span);
+    }
+
+    pub fn handle_call_properties(&mut self, span: Span) {
+        self.rpc_session.handle_call_properties(span);
     }
 
     pub fn handle_session_aborted(&mut self, session_id: SessionId) {
@@ -354,6 +363,7 @@ mod tests {
     use oneshot::channel;
     use sed_packet::com_id_request::ComIdResponsePayload;
     use sed_packet::com_id_request::StackResetStatus;
+    use sed_packet::token_stream::ToTokens;
     use sed_spec::methods::MethodStatus;
     use sorbit::ser_de::ToBytes;
 
@@ -413,7 +423,7 @@ mod tests {
             payload: vec![packetize_one(
                 SessionId::MANAGEMENT,
                 SequenceNumber(1),
-                call.clone(),
+                call.to_tokens().unwrap(),
             )],
         };
         let response_com_packet = ComPacket {
@@ -425,12 +435,12 @@ mod tests {
             payload: vec![packetize_one(
                 SessionId::MANAGEMENT,
                 SequenceNumber(1),
-                response.clone(),
+                response.to_tokens().unwrap(),
             )],
         };
 
         // Issue method call.
-        protocol.handle_method_call(SessionId::MANAGEMENT, call, sender, Span::current());
+        protocol.handle_call_start_session(call.parameters.clone(), sender, Span::current());
 
         // "Send" call to device.
         let (action, _) = protocol.poll_action(Instant::now());
@@ -452,6 +462,6 @@ mod tests {
         assert_that!(action, eq(&Action::None));
 
         // Check if we received the response to the method call.
-        assert_that!(receiver.try_recv(), ok(ok(eq(&response))));
+        assert_that!(receiver.try_recv(), ok(ok(eq(&(response.parameters, Properties::INITIAL)))));
     }
 }

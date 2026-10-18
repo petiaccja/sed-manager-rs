@@ -59,7 +59,7 @@ impl RpcSession {
         span: Span,
     ) {
         if session_id == SessionId::MANAGEMENT {
-            self.management.handle_method_call(call, sender, span);
+            let _ = sender.send(Err(Error::UnexpectedManagementMethod));
         } else if let Some(session) = self.sessions.get_mut(&session_id) {
             session.handle_method_call(call, sender, span);
         } else {
@@ -67,8 +67,17 @@ impl RpcSession {
         }
     }
 
-    pub fn handle_sync_properties(&mut self, span: Span) {
-        self.management.handle_sync_properties(span);
+    pub fn handle_call_start_session(
+        &mut self,
+        call: sed_spec::methods::StartSession,
+        sender: Sender<Result<(sed_spec::methods::SyncSession, Properties), Error>>,
+        span: Span,
+    ) {
+        self.management.handle_call_start_session(call, sender, span);
+    }
+
+    pub fn handle_call_properties(&mut self, span: Span) {
+        self.management.handle_call_properties(span);
     }
 
     pub fn handle_session_aborted(&mut self, session_id: SessionId) {
@@ -212,6 +221,7 @@ mod tests {
     use googletest::assert_that;
     use googletest::matchers::*;
     use oneshot::channel;
+    use sed_packet::token_stream::ToTokens;
     use sed_spec::methods::MethodStatus;
 
     use crate::protocol::shared::eos;
@@ -242,11 +252,11 @@ mod tests {
         let start_call = start_session_call(SESSION_ID_1);
         let sync_call = sync_session_call(SESSION_ID_1, MethodStatus::Success);
 
-        session.handle_method_call(SessionId::MANAGEMENT, start_call.clone(), sender, Span::current());
+        session.handle_call_start_session(start_call.parameters.clone(), sender, Span::current());
         assert_that!(
             session.poll_action(time),
             pat!(RpcAction::Send(elements_are![(
-                eq(&packetize_one(SessionId::MANAGEMENT, SequenceNumber(1), start_call)),
+                eq(&packetize_one(SessionId::MANAGEMENT, SequenceNumber(1), start_call.to_tokens().unwrap())),
                 anything()
             )]))
         );
@@ -254,11 +264,13 @@ mod tests {
         session.handle_iface_send_done(time, SessionId::MANAGEMENT, SequenceNumber(1), Ok(()));
         assert_that!(session.poll_action(time), pat!(&RpcAction::Sleep { until: eq(time + TIMEOUT) }));
 
-        session
-            .handle_packet(packetize_one(SessionId::MANAGEMENT, SequenceNumber(1), sync_call.clone()), &Span::none());
+        session.handle_packet(
+            packetize_one(SessionId::MANAGEMENT, SequenceNumber(1), sync_call.to_tokens().unwrap()),
+            &Span::none(),
+        );
         assert_that!(session.poll_action(time), pat!(&RpcAction::None));
 
-        assert_that!(receiver.try_recv(), ok(ok(eq(&sync_call))));
+        assert_that!(receiver.try_recv(), ok(ok(eq(&(sync_call.parameters, Properties::INITIAL)))));
         assert!(session.sessions.contains_key(&SESSION_ID_1));
     }
 
@@ -315,6 +327,19 @@ mod tests {
 
         assert_that!(receiver.try_recv(), ok(ok(eq(&response))));
         assert!(session.sessions.is_empty());
+    }
+
+    #[test]
+    fn not_allowed_calls_intercepted() {
+        let mut session = construct_with_sessions(&[]);
+        let time = Instant::now();
+        let (sender, receiver) = channel();
+
+        let call = start_session_call(SESSION_ID_1).to_tokens().unwrap();
+
+        session.handle_method_call(SessionId::MANAGEMENT, call, sender, Span::current());
+        assert_that!(session.poll_action(time), matches_pattern!(RpcAction::None));
+        assert_that!(receiver.try_recv(), ok(err(pat!(&Error::UnexpectedManagementMethod))));
     }
 
     #[test]

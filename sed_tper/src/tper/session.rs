@@ -11,12 +11,11 @@ use sed_packet::token_stream::{Command, Detokenize, Detokenizer, FromTokens, ToT
 use sed_packet::{Bytes, Field, FieldRef, Ignore, MaxBytes, Named, Object, ObjectRef, TableRef, Uid};
 use sed_spec::methods::{
     Activate, Authenticate, AuthenticateResult, CellBlock, GenKey, Get, GetAcl, GetBytesResult, MethodCall,
-    MethodResult, MethodStatus, Next, Random, Revert, RevertSp, SessionMethodParam as _, SetBytes, SetObject,
-    SetResult, StartSession, SyncSession,
+    MethodResult, MethodStatus, Next, Properties, Random, Revert, RevertSp, SessionMethodParam as _, SetBytes,
+    SetObject, SetResult, StartSession,
 };
 use sed_spec::objects::{AceRef, AuthorityRef, CredentialRef, MethodRef, SecurityProviderRef};
-use sed_spec::preconfig::core::shared::invoking_id::{SESSION_MANAGER, THIS_SP};
-use sed_spec::preconfig::core::shared::sm_method_id::START_SESSION;
+use sed_spec::preconfig::core::shared::invoking_id::THIS_SP;
 use sed_spec::preconfig::core::shared::{method_id, table_id};
 use sed_spec_macros::DetokenizeStruct;
 use tracing::instrument;
@@ -42,6 +41,7 @@ use crate::protocol::Controller;
 pub struct Session {
     security_provider: SecurityProviderRef,
     session_id: SessionId,
+    properties: Properties,
     controller: Controller,
     needs_eos: AtomicBool,
 }
@@ -62,37 +62,28 @@ impl Session {
         authority: Option<AuthorityRef>,
         password: Option<MaxBytes<32>>,
     ) -> Result<Self, Error> {
-        let call = MethodCall {
-            invoking_id: SESSION_MANAGER,
-            method_id: START_SESSION,
-            parameters: StartSession {
-                host_session_id: host_session_number,
-                spid: sp,
-                write: true,
-                host_challenge: password,
-                host_exchange_authority: None,
-                host_exchange_cert: None,
-                host_signing_authority: authority,
-                host_signing_cert: None,
-                session_timeout: None,
-                trans_timeout: None,
-                initial_credit: None,
-                signed_hash: None,
-            },
-            status: MethodStatus::Success,
+        let start_session = StartSession {
+            host_session_id: host_session_number,
+            spid: sp,
+            write: true,
+            host_challenge: password,
+            host_exchange_authority: None,
+            host_exchange_cert: None,
+            host_signing_authority: authority,
+            host_signing_cert: None,
+            session_timeout: None,
+            trans_timeout: None,
+            initial_credit: None,
+            signed_hash: None,
         };
-        let result_tokens = controller
-            .call(SessionId::MANAGEMENT, call.to_tokens().expect("invalid method call"))
+        let (sync_session, properties) = controller
+            .call_start_session(start_session)
             .await
-            .map_err(|_| Error::Closed)??;
-        let result = MethodCall::<SyncSession>::from_tokens(&result_tokens)?;
-        if result.status == MethodStatus::Success {
-            let tper_session_id = result.parameters.sp_session_id;
-            let session_id = SessionId { hsn: host_session_number, tsn: tper_session_id };
-            Ok(Self::from_started(sp, session_id, controller))
-        } else {
-            Err(result.status.into())
-        }
+            .map_err(|_: oneshot::RecvError| Error::Closed)??;
+
+        let tper_session_id = sync_session.sp_session_id;
+        let session_id = SessionId { hsn: host_session_number, tsn: tper_session_id };
+        Ok(Self::from_started(sp, session_id, properties, controller))
     }
 
     /// Create a [`Session`] object from an already established session.
@@ -106,8 +97,19 @@ impl Session {
     ///
     /// If the preconditions are not met, requests will be dropped or will time
     /// out.
-    pub fn from_started(security_provider: SecurityProviderRef, session_id: SessionId, controller: Controller) -> Self {
-        Self { security_provider, session_id, controller, needs_eos: true.into() }
+    pub fn from_started(
+        security_provider: SecurityProviderRef,
+        session_id: SessionId,
+        properties: Properties,
+        controller: Controller,
+    ) -> Self {
+        Self { security_provider, session_id, properties, controller, needs_eos: true.into() }
+    }
+
+    /// Return the communication properties this session is using to send RPC
+    /// calls to the device.
+    pub fn properties(&self) -> &Properties {
+        &self.properties
     }
 
     /// Execute a procedure using this session and then close the session.
@@ -370,6 +372,7 @@ impl Session {
     /// Revert the security provider to its factory original state.
     ///
     /// After reverting the SP, the session is immediately aborted.
+    #[expect(clippy::result_large_err, reason = "TODO: low priority improvement")]
     pub async fn revert_sp(self, keep_global_range_key: Option<bool>) -> Result<(), (Self, Error)> {
         #[instrument(level = "info", skip(self_), ret, err)]
         async fn do_revert_sp(self_: &Session, keep_global_range_key: Option<bool>) -> Result<(), Error> {

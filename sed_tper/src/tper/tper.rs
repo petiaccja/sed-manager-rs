@@ -117,7 +117,7 @@ impl Tper {
     /// protocol stack.
     #[instrument(level = "info", skip(self))]
     fn sync_properties(&self) {
-        self.controller.sync_properties();
+        self.controller.call_properties();
     }
 
     /// Discover the capabilities of the provided device.

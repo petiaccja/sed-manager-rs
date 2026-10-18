@@ -68,15 +68,18 @@ pub mod tests {
             SessionMethodParam as _, StartSession, SyncSession,
         },
         preconfig::{
-            core::shared::invoking_id::{SESSION_MANAGER, THIS_SP},
+            core::shared::{
+                invoking_id::{SESSION_MANAGER, THIS_SP},
+                sm_method_id::{START_SESSION, SYNC_SESSION},
+            },
             opal_2::admin::sp,
         },
     };
 
-    pub fn start_session_call(session_id: SessionId) -> Vec<u8> {
+    pub fn start_session_call(session_id: SessionId) -> MethodCall<StartSession> {
         MethodCall {
             invoking_id: SESSION_MANAGER,
-            method_id: StartSession::METHOD_ID,
+            method_id: START_SESSION,
             parameters: StartSession {
                 host_session_id: session_id.hsn,
                 spid: sp::ADMIN,
@@ -93,14 +96,12 @@ pub mod tests {
             },
             status: MethodStatus::Success,
         }
-        .to_tokens()
-        .unwrap()
     }
 
-    pub fn sync_session_call(session_id: SessionId, status: MethodStatus) -> Vec<u8> {
+    pub fn sync_session_call(session_id: SessionId, status: MethodStatus) -> MethodCall<SyncSession> {
         MethodCall {
             invoking_id: SESSION_MANAGER,
-            method_id: SyncSession::METHOD_ID,
+            method_id: SYNC_SESSION,
             parameters: SyncSession {
                 host_session_id: session_id.hsn,
                 sp_session_id: session_id.tsn,
@@ -113,8 +114,6 @@ pub mod tests {
             },
             status,
         }
-        .to_tokens()
-        .unwrap()
     }
 
     pub fn close_session_call(session_id: SessionId) -> Vec<u8> {

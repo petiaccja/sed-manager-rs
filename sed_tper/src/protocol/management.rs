@@ -12,14 +12,14 @@ use oneshot::Sender;
 use sed_packet::{
     packet::{PACKET_HEADER_LEN, Packet, SUB_PACKET_HEADER_LEN},
     session_id::SessionId,
-    token_stream::{FromTokens, ToTokens},
+    token_stream::ToTokens,
 };
 use sed_spec::{
     methods::{
         CloseSession, ExtractResult, MethodCall, MethodParam, MethodStatus, MgmtMethodCall, MgmtMethodCallParams,
-        Properties, PropertiesMethod, SyncSession, extract_method,
+        Properties, PropertiesMethod, StartSession, SyncSession, extract_method,
     },
-    preconfig::core::shared::invoking_id::SESSION_MANAGER,
+    preconfig::core::shared::{invoking_id::SESSION_MANAGER, sm_method_id::START_SESSION},
 };
 use tracing::Span;
 
@@ -37,12 +37,12 @@ pub struct Management {
     timeout: Duration,
     capabilities: Properties,
     properties: Properties,
-    method_calls: VecDeque<MethodCallRecord>,
-    /// `StartSession` methods that are queued for IF-SEND, keyed by HSN.
-    start_session_calls_sending: HashMap<u32, VecDeque<MethodSendingRecord>>,
-    start_session_calls_receiving: HashMap<u32, VecDeque<MethodReceivingRecord>>,
+    start_session_calls_enqueued: VecDeque<StartSessionCallRecord>,
+    /// `StartSession` methods that have been submitted for IF-SEND, keyed by HSN.
+    start_session_calls_sending: HashMap<u32, VecDeque<StartSessionSendingRecord>>,
+    start_session_calls_receiving: HashMap<u32, VecDeque<StartSessionReceivingRecord>>,
     received_tokens: VecDeque<u8>,
-    properties_sync: PropertiesSync,
+    properties_call: PropertiesCall,
     properties_changed_tx: async_broadcast::Sender<PropertiesChanged>,
     properties_changed_rx: async_broadcast::InactiveReceiver<PropertiesChanged>,
 }
@@ -55,25 +55,30 @@ impl Management {
             timeout,
             capabilities,
             properties: Properties::INITIAL,
-            method_calls: VecDeque::new(),
+            start_session_calls_enqueued: VecDeque::new(),
             start_session_calls_sending: HashMap::new(),
             start_session_calls_receiving: HashMap::new(),
             received_tokens: VecDeque::new(),
-            properties_sync: PropertiesSync::Idle,
+            properties_call: PropertiesCall::Idle,
             properties_changed_tx,
             properties_changed_rx: properties_changed_rx.deactivate(),
         }
     }
 
-    pub fn handle_method_call(&mut self, call: Vec<u8>, sender: Sender<Result<Vec<u8>, Error>>, span: Span) {
-        self.method_calls.push_back(MethodCallRecord { call, sender, span });
+    pub fn handle_call_start_session(
+        &mut self,
+        call: StartSession,
+        sender: Sender<Result<(SyncSession, Properties), Error>>,
+        span: Span,
+    ) {
+        self.start_session_calls_enqueued.push_back(StartSessionCallRecord { call, sender, span });
     }
 
     /// Request synchronizing the connection properties with the TPer. The
     /// request is ignored while another one is already outstanding.
-    pub fn handle_sync_properties(&mut self, span: Span) {
-        if let PropertiesSync::Idle = self.properties_sync {
-            self.properties_sync = PropertiesSync::Requested { span };
+    pub fn handle_call_properties(&mut self, span: Span) {
+        if let PropertiesCall::Idle = self.properties_call {
+            self.properties_call = PropertiesCall::Requested { span };
         } else {
             tracing::debug!(parent: &span, "ignored: another properties sync is outstanding");
         }
@@ -85,8 +90,13 @@ impl Management {
                 let deadline = time + self.timeout;
                 match &result {
                     Ok(_) => {
-                        let record =
-                            MethodReceivingRecord { sent_at: time, deadline, sender: record.sender, span: record.span };
+                        let record = StartSessionReceivingRecord {
+                            sent_at: time,
+                            deadline,
+                            properties: record.properties,
+                            sender: record.sender,
+                            span: record.span,
+                        };
                         self.start_session_calls_receiving.entry(*hsn).or_default().push_back(record);
                     }
                     Err(err) => {
@@ -97,10 +107,10 @@ impl Management {
         }
         self.start_session_calls_sending.retain(|_, queue| !queue.is_empty());
 
-        self.properties_sync = match core::mem::replace(&mut self.properties_sync, PropertiesSync::Idle) {
-            PropertiesSync::Sending { sequence_number, span } if sequence_number <= sn => match &result {
-                Ok(_) => PropertiesSync::Receiving { sent_at: time, deadline: time + self.timeout, span },
-                Err(_) => PropertiesSync::Idle,
+        self.properties_call = match core::mem::replace(&mut self.properties_call, PropertiesCall::Idle) {
+            PropertiesCall::Sending { sequence_number, span } if sequence_number <= sn => match &result {
+                Ok(_) => PropertiesCall::Receiving { sent_at: time, deadline: time + self.timeout, span },
+                Err(_) => PropertiesCall::Idle,
             },
             state => state,
         };
@@ -115,23 +125,23 @@ impl Management {
         // Drop and finalize current resources.
         let (properties_changed_tx, properties_changed_rx) = {
             let Self {
-                method_calls,
+                start_session_calls_enqueued: method_calls,
                 start_session_calls_sending,
                 start_session_calls_receiving,
                 properties_changed_tx,
                 properties_changed_rx,
                 ..
             } = current;
-            for MethodCallRecord { sender, .. } in method_calls {
+            for StartSessionCallRecord { sender, .. } in method_calls {
                 let _ = sender.send(Err(Error::Aborted));
             }
             for (_, queue) in start_session_calls_sending {
-                for MethodSendingRecord { sender, .. } in queue {
+                for StartSessionSendingRecord { sender, .. } in queue {
                     let _ = sender.send(Err(Error::Aborted));
                 }
             }
             for (_, queue) in start_session_calls_receiving {
-                for MethodReceivingRecord { sender, .. } in queue {
+                for StartSessionReceivingRecord { sender, .. } in queue {
                     let _ = sender.send(Err(Error::Aborted));
                 }
             }
@@ -161,19 +171,19 @@ impl Management {
         self.received_tokens.extend(tokens);
         loop {
             match extract_method::<MgmtMethodCall>(&mut self.received_tokens) {
-                ExtractResult::Ok { value, tokens } => match value.params {
+                ExtractResult::Ok { value, .. } => match value.params {
                     // The host should never receive a `StartSession`.
                     MgmtMethodCallParams::StartSession(_) => (),
                     MgmtMethodCallParams::SyncSession(sync_session) => {
-                        self.handle_sync_session(&mut actions, sync_session, value.status, tokens, source)
+                        self.handle_sync_session(&mut actions, sync_session, value.status, source)
                     }
                     MgmtMethodCallParams::CloseSession(close_session) => {
                         Self::handle_close_session(&mut actions, close_session, value.status);
                     }
                     MgmtMethodCallParams::Properties(properties_method) => {
-                        if let PropertiesSync::Receiving { span, .. } = &self.properties_sync {
+                        if let PropertiesCall::Receiving { span, .. } = &self.properties_call {
                             link_both_ways(source, span);
-                            self.properties_sync = PropertiesSync::Idle;
+                            self.properties_call = PropertiesCall::Idle;
                         }
                         self.handle_properties(properties_method, value.status)
                     }
@@ -191,15 +201,15 @@ impl Management {
 
     pub fn poll_action(&mut self, time: Instant) -> Action {
         // Get next packet to send.
-        let packet = self.poll_sync_properties().or_else(|| self.poll_method_calls());
+        let packet = self.poll_call_properties().or_else(|| self.poll_start_session_calls());
         let packet = packet.map(|(packet, span)| (packet, vec![span]));
 
         // Remove timed out & get next deadline. Nobody waits for the response
         // to `Properties`, so it doesn't need to wake up the protocol.
-        if let PropertiesSync::Receiving { deadline, .. } = &self.properties_sync
+        if let PropertiesCall::Receiving { deadline, .. } = &self.properties_call
             && *deadline < time
         {
-            self.properties_sync = PropertiesSync::Idle;
+            self.properties_call = PropertiesCall::Idle;
         }
         let mut deadline = None;
         for queue in self.start_session_calls_receiving.values_mut() {
@@ -224,8 +234,8 @@ impl Management {
 
     /// Returns the packet to send and the span of the `Properties` method call
     /// it carries.
-    fn poll_sync_properties(&mut self) -> Option<(Packet, Span)> {
-        let PropertiesSync::Requested { span } = &self.properties_sync else {
+    fn poll_call_properties(&mut self) -> Option<(Packet, Span)> {
+        let PropertiesCall::Requested { span } = &self.properties_call else {
             return None;
         };
         let call = MethodCall {
@@ -238,7 +248,7 @@ impl Management {
             Ok(call) => call,
             Err(err) => {
                 tracing::error!(parent: span, error = %err);
-                self.properties_sync = PropertiesSync::Idle;
+                self.properties_call = PropertiesCall::Idle;
                 return None;
             }
         };
@@ -248,53 +258,55 @@ impl Management {
         // retrieved properties can be applied sooner.
         let sequence_number = self.sequence_number.fetch_add();
         let span = span.clone();
-        self.properties_sync = PropertiesSync::Sending { sequence_number, span: span.clone() };
+        self.properties_call = PropertiesCall::Sending { sequence_number, span: span.clone() };
         Some((packetize_one(SessionId::MANAGEMENT, sequence_number, call), span))
     }
 
-    /// Returns the packet to send and the span of the method calls it carries.
+    /// Returns a packet containing one or more `StartSession` method calls.
+    /// The packet should be passed on for sending via IF-SEND.
+    ///
     /// Currently only one method call is inside a packet, there is no batching.
-    fn poll_method_calls(&mut self) -> Option<(Packet, Span)> {
+    fn poll_start_session_calls(&mut self) -> Option<(Packet, Span)> {
         const MAX_METHOD_CALL_SIZE: usize =
             Properties::INITIAL.max_gross_packet_size.get() - PACKET_HEADER_LEN - SUB_PACKET_HEADER_LEN;
 
-        let MethodCallRecord { call, sender, span } = self.method_calls.pop_front()?;
-        if call.len() > MAX_METHOD_CALL_SIZE {
-            let _ = sender.send(Err(Error::MethodTooLarge { requested: call.len(), maximum: MAX_METHOD_CALL_SIZE }));
-            return None;
-        }
+        loop {
+            let StartSessionCallRecord { call: start_session, sender, span } =
+                self.start_session_calls_enqueued.pop_front()?;
 
-        match MgmtMethodCall::from_tokens(&call) {
-            Ok(call_detok) => {
-                let sequence_number = self.sequence_number.fetch_add();
-                match call_detok.params {
-                    MgmtMethodCallParams::StartSession(start_session) => {
-                        let hsn = start_session.host_session_id;
-                        let record = MethodSendingRecord { sequence_number, sender, span: span.clone() };
-                        self.start_session_calls_sending.entry(hsn).or_default().push_back(record);
-                        Some((packetize_one(SessionId::MANAGEMENT, sequence_number, call), span))
-                    }
-                    MgmtMethodCallParams::SyncSession(_) => {
-                        // Method can only be sent by the device.
-                        let _ = sender.send(Err(Error::MethodNotAllowed(SyncSession::METHOD_ID)));
-                        None
-                    }
-                    MgmtMethodCallParams::CloseSession(_) => {
-                        // Method can only be sent by the device.
-                        let _ = sender.send(Err(Error::MethodNotAllowed(CloseSession::METHOD_ID)));
-                        None
-                    }
-                    MgmtMethodCallParams::Properties(_) => {
-                        // Could instruct the device to use capabilities that the protcol doesn't support.
-                        let _ = sender.send(Err(Error::MethodNotAllowed(PropertiesMethod::METHOD_ID)));
-                        None
-                    }
+            let hsn = start_session.host_session_id;
+            let maybe_tokens = MethodCall {
+                invoking_id: SESSION_MANAGER,
+                method_id: START_SESSION,
+                parameters: start_session,
+                status: MethodStatus::Success,
+            }
+            .to_tokens();
+
+            let tokens = match maybe_tokens {
+                Ok(tokens) => tokens,
+                Err(err) => {
+                    let _ = sender.send(Err(err.into()));
+                    continue;
                 }
+            };
+
+            if tokens.len() > MAX_METHOD_CALL_SIZE {
+                let _ =
+                    sender.send(Err(Error::MethodTooLarge { requested: tokens.len(), maximum: MAX_METHOD_CALL_SIZE }));
+                continue;
             }
-            Err(err) => {
-                let _ = sender.send(Err(err.into()));
-                None
-            }
+
+            let sequence_number = self.sequence_number.fetch_add();
+            let record = StartSessionSendingRecord {
+                sequence_number,
+                sender,
+                properties: self.properties.clone(),
+                span: span.clone(),
+            };
+            self.start_session_calls_sending.entry(hsn).or_default().push_back(record);
+
+            break Some((packetize_one(SessionId::MANAGEMENT, sequence_number, tokens), span));
         }
     }
 
@@ -303,24 +315,21 @@ impl Management {
         actions: &mut Vec<StackAction>,
         sync_session: SyncSession,
         status: MethodStatus,
-        tokens: Vec<u8>,
         source: &Span,
     ) {
+        let session_id = SessionId { hsn: sync_session.host_session_id, tsn: sync_session.sp_session_id };
         if let Some(queue) = self.start_session_calls_receiving.get_mut(&sync_session.host_session_id) {
             if let Some(record) = queue.pop_front() {
                 link_both_ways(source, &record.span);
                 if status == MethodStatus::Success {
-                    let _ = record.sender.send(Ok(tokens));
-                    let session_id = SessionId { hsn: sync_session.host_session_id, tsn: sync_session.sp_session_id };
-                    // TODO: This is not entirely correct. The properties should be snapshot and saved when
-                    // StartSession is sent out.
-                    actions.push(StackAction::Spawn { session_id, properties: self.properties.clone() });
+                    let _ = record.sender.send(Ok((sync_session, record.properties.clone())));
+                    actions.push(StackAction::Spawn { session_id, properties: record.properties });
                 } else {
                     let _ = record.sender.send(Err(status.into()));
                 }
             }
             if queue.is_empty() {
-                self.start_session_calls_receiving.remove(&sync_session.host_session_id);
+                self.start_session_calls_receiving.remove(&session_id.hsn);
             }
         }
     }
@@ -356,8 +365,8 @@ impl Management {
     fn flush(&mut self, error: Error) {
         self.received_tokens.clear();
         // The response to `Properties` may have been among the discarded tokens.
-        if let PropertiesSync::Receiving { .. } = self.properties_sync {
-            self.properties_sync = PropertiesSync::Idle;
+        if let PropertiesCall::Receiving { .. } = self.properties_call {
+            self.properties_call = PropertiesCall::Idle;
         }
         for (_, queue) in self.start_session_calls_sending.drain() {
             for record in queue {
@@ -374,8 +383,8 @@ impl Management {
     /// The span of the method call that was sent the earliest among those
     /// awaiting a response.
     pub fn next_recv_span(&self) -> Option<(Instant, &Span)> {
-        let properties = match &self.properties_sync {
-            PropertiesSync::Receiving { sent_at, span, .. } => Some((*sent_at, span)),
+        let properties = match &self.properties_call {
+            PropertiesCall::Receiving { sent_at, span, .. } => Some((*sent_at, span)),
             _ => None,
         };
         self.start_session_calls_receiving
@@ -417,7 +426,7 @@ pub enum Action {
 /// this state. Beyond requesting the method call, the state only serves to trace
 /// it, and at most one call is tracked at a time.
 #[derive(Debug)]
-enum PropertiesSync {
+enum PropertiesCall {
     /// No sync requested or outstanding.
     Idle,
     /// Requested by the client, not yet packetized.
@@ -429,27 +438,31 @@ enum PropertiesSync {
 }
 
 #[derive(Debug)]
-pub struct MethodCallRecord {
-    call: Vec<u8>,
-    sender: Sender<Result<Vec<u8>, Error>>,
+pub struct StartSessionCallRecord {
+    call: StartSession,
+    sender: Sender<Result<(SyncSession, Properties), Error>>,
     span: Span,
 }
 
 #[derive(Debug)]
-struct MethodSendingRecord {
+struct StartSessionSendingRecord {
     /// The sequence number of the packet in which the method is being sent.
     sequence_number: SequenceNumber,
-    sender: Sender<Result<Vec<u8>, Error>>,
+    properties: Properties,
+    sender: Sender<Result<(SyncSession, Properties), Error>>,
+    /// The properties the host is using to send data to the TPer at the moment
+    /// the `StartSession` was forwarded to IF-SEND.
     span: Span,
 }
 
 #[derive(Debug)]
-struct MethodReceivingRecord {
+struct StartSessionReceivingRecord {
     /// The time when the message was sent.
     sent_at: Instant,
     /// The time when the message times out.
     deadline: Instant,
-    sender: Sender<Result<Vec<u8>, Error>>,
+    properties: Properties,
+    sender: Sender<Result<(SyncSession, Properties), Error>>,
     span: Span,
 }
 
@@ -461,7 +474,6 @@ mod tests {
     use googletest::assert_that;
     use googletest::matchers::*;
     use oneshot::channel;
-    use rstest::rstest;
     use sed_packet::packet::SubPacket;
     use sed_packet::packet::SubPacketKind;
     use sed_packet::token_stream::ToTokens;
@@ -483,17 +495,6 @@ mod tests {
     const DEVICE_PROPERTIES: Properties =
         Properties { max_methods: Limit::Limited(NonZero::new(5).unwrap()), ..Properties::INITIAL };
 
-    fn properties_host_call() -> Vec<u8> {
-        MethodCall {
-            invoking_id: SESSION_MANAGER,
-            method_id: PropertiesMethod::METHOD_ID,
-            parameters: PropertiesMethod::Host { host_properties: None },
-            status: MethodStatus::Success,
-        }
-        .to_tokens()
-        .unwrap()
-    }
-
     fn properties_device_call(host: bool) -> Vec<u8> {
         MethodCall {
             invoking_id: SESSION_MANAGER,
@@ -508,27 +509,16 @@ mod tests {
         .unwrap()
     }
 
-    #[rstest]
-    #[case::properties(properties_host_call())]
-    #[case::sync_session(sync_session_call(SESSION_ID, MethodStatus::Success))]
-    #[case::close_session(close_session_call(SESSION_ID,))]
-    fn not_allowed_calls_intercepted(#[case] call: Vec<u8>) {
-        let mut mgmt = Management::new(TIMEOUT, HOST_PROPERTIES);
-        let time = Instant::now();
-        let (sender, receiver) = channel();
-
-        mgmt.handle_method_call(call, sender, Span::current());
-        assert_that!(mgmt.poll_action(time), matches_pattern!(Action::None));
-        assert_that!(receiver.try_recv(), ok(err(pat!(&Error::MethodNotAllowed { .. }))));
-    }
-
     #[test]
     fn start_session_completed_successfully() {
         let mut mgmt = Management::new(TIMEOUT, HOST_PROPERTIES);
         let time = Instant::now();
         let (sender, receiver) = channel();
 
-        mgmt.handle_method_call(start_session_call(SESSION_ID), sender, Span::current());
+        let start_session = start_session_call(SESSION_ID);
+        let sync_session = sync_session_call(SESSION_ID, MethodStatus::Success);
+
+        mgmt.handle_call_start_session(start_session.parameters.clone(), sender, Span::current());
         assert_that!(
             mgmt.poll_action(time),
             matches_pattern!(Action::Send(elements_are![(
@@ -539,7 +529,7 @@ mod tests {
                     payload: vec![SubPacket {
                         kind: SubPacketKind::Data,
                         length: PhantomData,
-                        payload: start_session_call(SESSION_ID)
+                        payload: start_session.to_tokens().unwrap()
                     }],
                     ..Default::default()
                 }),
@@ -550,15 +540,15 @@ mod tests {
         mgmt.handle_iface_send_done(time, SequenceNumber(1), Ok(()));
         assert_that!(mgmt.poll_action(time), matches_pattern!(&Action::Sleep { until: eq(time + TIMEOUT) }));
 
-        let stack_action = mgmt.handle_tokens(sync_session_call(SESSION_ID, MethodStatus::Success), &Span::none());
+        let stack_action = mgmt.handle_tokens(sync_session.to_tokens().unwrap(), &Span::none());
         assert_that!(
             stack_action,
             eq(&vec![StackAction::Spawn { session_id: SESSION_ID, properties: Properties::INITIAL }])
         );
         assert_that!(mgmt.poll_action(time), matches_pattern!(&Action::None));
-        assert_that!(receiver.try_recv(), ok(ok(eq(&sync_session_call(SESSION_ID, MethodStatus::Success)))));
+        assert_that!(receiver.try_recv(), ok(ok(eq(&(sync_session.parameters, Properties::INITIAL)))));
 
-        assert!(mgmt.method_calls.is_empty());
+        assert!(mgmt.start_session_calls_enqueued.is_empty());
         assert!(mgmt.start_session_calls_sending.is_empty());
         assert!(mgmt.start_session_calls_receiving.is_empty());
     }
@@ -569,18 +559,21 @@ mod tests {
         let time = Instant::now();
         let (sender, receiver) = channel();
 
-        mgmt.handle_method_call(start_session_call(SESSION_ID), sender, Span::current());
+        let start_session = start_session_call(SESSION_ID);
+        let sync_session = sync_session_call(SESSION_ID, MethodStatus::Fail);
+
+        mgmt.handle_call_start_session(start_session.parameters.clone(), sender, Span::current());
         assert_that!(mgmt.poll_action(time), matches_pattern!(Action::Send(len(eq(1)))));
 
         mgmt.handle_iface_send_done(time, SequenceNumber(1), Ok(()));
         assert_that!(mgmt.poll_action(time), matches_pattern!(&Action::Sleep { until: eq(time + TIMEOUT) }));
 
-        let stack_action = mgmt.handle_tokens(sync_session_call(SESSION_ID, MethodStatus::Fail), &Span::none());
+        let stack_action = mgmt.handle_tokens(sync_session.to_tokens().unwrap(), &Span::none());
         assert_that!(stack_action, eq(&vec![]));
         assert_that!(mgmt.poll_action(time), matches_pattern!(&Action::None));
         assert_that!(receiver.try_recv(), ok(err(eq(&MethodStatus::Fail.into()))));
 
-        assert!(mgmt.method_calls.is_empty());
+        assert!(mgmt.start_session_calls_enqueued.is_empty());
         assert!(mgmt.start_session_calls_sending.is_empty());
         assert!(mgmt.start_session_calls_receiving.is_empty());
     }
@@ -591,7 +584,9 @@ mod tests {
         let time = Instant::now();
         let (sender, receiver) = channel();
 
-        mgmt.handle_method_call(start_session_call(SESSION_ID), sender, Span::current());
+        let start_session = start_session_call(SESSION_ID);
+
+        mgmt.handle_call_start_session(start_session.parameters, sender, Span::current());
         assert_that!(mgmt.poll_action(time), matches_pattern!(Action::Send(len(eq(1)))));
 
         mgmt.handle_iface_send_done(time, SequenceNumber(1), Ok(()));
@@ -600,7 +595,7 @@ mod tests {
 
         assert_that!(receiver.try_recv(), ok(err(eq(&Error::TimedOut))));
 
-        assert!(mgmt.method_calls.is_empty());
+        assert!(mgmt.start_session_calls_enqueued.is_empty());
         assert!(mgmt.start_session_calls_sending.is_empty());
         assert!(mgmt.start_session_calls_receiving.is_empty());
     }
@@ -611,7 +606,9 @@ mod tests {
         let time = Instant::now();
         let (sender, receiver) = channel();
 
-        mgmt.handle_method_call(start_session_call(SESSION_ID), sender, Span::current());
+        let start_session = start_session_call(SESSION_ID);
+
+        mgmt.handle_call_start_session(start_session.parameters, sender, Span::current());
         assert_that!(mgmt.poll_action(time), matches_pattern!(Action::Send(len(eq(1)))));
 
         mgmt.handle_iface_send_done(time, SequenceNumber(1), Err(Error::NotSupported));
@@ -619,7 +616,7 @@ mod tests {
 
         assert_that!(receiver.try_recv(), ok(err(eq(&Error::NotSupported))));
 
-        assert!(mgmt.method_calls.is_empty());
+        assert!(mgmt.start_session_calls_enqueued.is_empty());
         assert!(mgmt.start_session_calls_sending.is_empty());
         assert!(mgmt.start_session_calls_receiving.is_empty());
     }
@@ -628,10 +625,12 @@ mod tests {
     fn start_session_unexpected_tokens() {
         let mut mgmt = Management::new(TIMEOUT, HOST_PROPERTIES);
 
-        let stack_action = mgmt.handle_tokens(start_session_call(SESSION_ID), &Span::none());
+        let start_session = start_session_call(SESSION_ID);
+
+        let stack_action = mgmt.handle_tokens(start_session.to_tokens().unwrap(), &Span::none());
         assert_that!(stack_action, eq(&vec![]));
 
-        assert!(mgmt.method_calls.is_empty());
+        assert!(mgmt.start_session_calls_enqueued.is_empty());
         assert!(mgmt.start_session_calls_sending.is_empty());
         assert!(mgmt.start_session_calls_receiving.is_empty());
     }
@@ -641,10 +640,14 @@ mod tests {
         let mut mgmt = Management::new(TIMEOUT, HOST_PROPERTIES);
         let time = Instant::now();
         let (sender, receiver) = channel();
-        let mut first_tokens = sync_session_call(SESSION_ID, MethodStatus::Success);
+
+        let start_session = start_session_call(SESSION_ID);
+        let sync_session = sync_session_call(SESSION_ID, MethodStatus::Success);
+
+        let mut first_tokens = sync_session.to_tokens().unwrap();
         let second_tokens = first_tokens.split_off(2);
 
-        mgmt.handle_method_call(start_session_call(SESSION_ID), sender, Span::current());
+        mgmt.handle_call_start_session(start_session.parameters.clone(), sender, Span::current());
         assert_that!(
             mgmt.poll_action(time),
             matches_pattern!(Action::Send(elements_are![(
@@ -655,7 +658,7 @@ mod tests {
                     payload: vec![SubPacket {
                         kind: SubPacketKind::Data,
                         length: PhantomData,
-                        payload: start_session_call(SESSION_ID)
+                        payload: start_session.to_tokens().unwrap(),
                     }],
                     ..Default::default()
                 }),
@@ -674,9 +677,9 @@ mod tests {
             eq(&vec![StackAction::Spawn { session_id: SESSION_ID, properties: Properties::INITIAL }])
         );
         assert_that!(mgmt.poll_action(time), matches_pattern!(&Action::None));
-        assert_that!(receiver.try_recv(), ok(ok(eq(&sync_session_call(SESSION_ID, MethodStatus::Success)))));
+        assert_that!(receiver.try_recv(), ok(ok(eq(&(sync_session.parameters, Properties::INITIAL)))));
 
-        assert!(mgmt.method_calls.is_empty());
+        assert!(mgmt.start_session_calls_enqueued.is_empty());
         assert!(mgmt.start_session_calls_sending.is_empty());
         assert!(mgmt.start_session_calls_receiving.is_empty());
     }
@@ -688,7 +691,9 @@ mod tests {
         let (sender, receiver) = channel();
         let invalid_tokens = vec![0xFE, 34, 23, 7, 2, 3, 2];
 
-        mgmt.handle_method_call(start_session_call(SESSION_ID), sender, Span::current());
+        let start_session = start_session_call(SESSION_ID);
+
+        mgmt.handle_call_start_session(start_session.parameters.clone(), sender, Span::current());
         assert_that!(
             mgmt.poll_action(time),
             matches_pattern!(Action::Send(elements_are![(
@@ -699,7 +704,7 @@ mod tests {
                     payload: vec![SubPacket {
                         kind: SubPacketKind::Data,
                         length: PhantomData,
-                        payload: start_session_call(SESSION_ID)
+                        payload: start_session.to_tokens().unwrap(),
                     }],
                     ..Default::default()
                 }),
@@ -715,7 +720,7 @@ mod tests {
         assert_that!(mgmt.poll_action(time), matches_pattern!(&Action::None));
         assert_that!(receiver.try_recv(), ok(err(pat!(&Error::TokenError(_)))));
 
-        assert!(mgmt.method_calls.is_empty());
+        assert!(mgmt.start_session_calls_enqueued.is_empty());
         assert!(mgmt.start_session_calls_sending.is_empty());
         assert!(mgmt.start_session_calls_receiving.is_empty());
     }
