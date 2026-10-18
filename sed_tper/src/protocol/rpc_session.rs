@@ -113,8 +113,10 @@ impl RpcSession {
 
     /// Process the packet received in the IF-RECV. The `source` is the span of
     /// the IF-RECV command.
-    pub fn handle_packet(&mut self, packet: Packet, source: &Span) {
+    #[must_use]
+    pub fn handle_packet(&mut self, packet: Packet, source: &Span) -> Option<RpcAction> {
         let session_id = SessionId::of(&packet);
+        let mut rpc_action = None;
         for sub_packet in packet.payload.into_iter().filter(|s| s.kind == SubPacketKind::Data) {
             if session_id == SessionId::MANAGEMENT {
                 for action in self.management.handle_tokens(sub_packet.payload, source) {
@@ -133,13 +135,16 @@ impl RpcSession {
                                 session.handle_aborted()
                             }
                         }
-                        ManagementAction::StackReset => todo!(),
+                        ManagementAction::StackReset { span } => {
+                            rpc_action = Some(RpcAction::StackReset { span });
+                        }
                     }
                 }
             } else if let Some(session) = self.sessions.get_mut(&session_id) {
                 session.handle_tokens(sub_packet.payload, source);
             }
         }
+        rpc_action
     }
 
     pub fn poll_action(&mut self, time: Instant) -> PacketAction {
@@ -191,6 +196,12 @@ fn reduce_actions(actions: Vec<PacketAction>) -> (Vec<PacketBatch>, Option<Insta
     (packets_to_send, deadline)
 }
 
+#[must_use]
+#[derive(Debug, PartialEq)]
+pub enum RpcAction {
+    StackReset { span: Span },
+}
+
 #[cfg(test)]
 mod tests {
     use googletest::assert_that;
@@ -238,10 +249,11 @@ mod tests {
         session.handle_iface_send_done(time, SessionId::MANAGEMENT, SequenceNumber(1), Ok(()));
         assert_that!(session.poll_action(time), pat!(&PacketAction::Sleep { until: eq(time + TIMEOUT) }));
 
-        session.handle_packet(
+        let action = session.handle_packet(
             packetize_one(SessionId::MANAGEMENT, SequenceNumber(1), sync_call.to_tokens().unwrap()),
             &Span::none(),
         );
+        assert_that!(action, none());
         assert_that!(session.poll_action(time), pat!(&PacketAction::None));
 
         assert_that!(receiver.try_recv(), ok(ok(eq(&(sync_call.parameters, Properties::INITIAL)))));
@@ -269,7 +281,9 @@ mod tests {
         session.handle_iface_send_done(time, SESSION_ID_1, SequenceNumber(1), Ok(()));
         assert_that!(session.poll_action(time), pat!(&PacketAction::Sleep { until: eq(time + TIMEOUT) }));
 
-        session.handle_packet(packetize_one(SESSION_ID_1, SequenceNumber(1), response.clone()), &Span::none());
+        let action =
+            session.handle_packet(packetize_one(SESSION_ID_1, SequenceNumber(1), response.clone()), &Span::none());
+        assert_that!(action, none());
         assert_that!(session.poll_action(time), pat!(&PacketAction::None));
 
         assert_that!(receiver.try_recv(), ok(ok(eq(&response))));
@@ -296,7 +310,9 @@ mod tests {
         session.handle_iface_send_done(time, SESSION_ID_1, SequenceNumber(1), Ok(()));
         assert_that!(session.poll_action(time), pat!(&PacketAction::Sleep { until: eq(time + TIMEOUT) }));
 
-        session.handle_packet(packetize_one(SESSION_ID_1, SequenceNumber(1), response.clone()), &Span::none());
+        let action =
+            session.handle_packet(packetize_one(SESSION_ID_1, SequenceNumber(1), response.clone()), &Span::none());
+        assert_that!(action, none());
         assert_that!(session.poll_action(time), pat!(&PacketAction::None));
 
         assert_that!(receiver.try_recv(), ok(ok(eq(&response))));
@@ -321,10 +337,11 @@ mod tests {
         let mut session = construct_with_sessions(&[SESSION_ID_1]);
         let time = Instant::now();
 
-        session.handle_packet(
+        let action = session.handle_packet(
             packetize_one(SessionId::MANAGEMENT, SequenceNumber(32), close_session_call(SESSION_ID_1)),
             &Span::none(),
         );
+        assert_that!(action, none());
         assert_that!(session.poll_action(time), pat!(&PacketAction::None));
 
         assert!(session.sessions.is_empty());

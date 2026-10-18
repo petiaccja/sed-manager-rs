@@ -33,7 +33,7 @@ use crate::{
     },
 };
 
-use super::{com_id_session::ComIdAction, shared::PacketAction};
+use super::{com_id_session::ComIdAction, rpc_session::RpcAction, shared::PacketAction};
 
 /// After the timeout, message sent between the host and device are considered
 /// lost.
@@ -340,8 +340,18 @@ impl ProtocolState {
         self.rpc_protocol.handle_recv(time, com_packet.as_ref());
 
         if let Ok(com_packet) = com_packet {
+            let mut stack_reset_span = None;
             for packet in com_packet.payload {
-                self.rpc_session.handle_packet(packet, source);
+                if let Some(action) = self.rpc_session.handle_packet(packet, source) {
+                    match action {
+                        RpcAction::StackReset { span } => stack_reset_span = Some(span),
+                    }
+                }
+            }
+            if let Some(span) = stack_reset_span {
+                let stack_reset_request = ComIdRequest::stack_reset(self.com_id, self.com_id_ext);
+                let (tx, _rx) = oneshot::async_channel();
+                self.com_id_session.handle_com_request(stack_reset_request, tx, span);
             }
         }
     }

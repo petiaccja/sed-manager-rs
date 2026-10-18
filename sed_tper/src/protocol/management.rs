@@ -21,7 +21,7 @@ use sed_spec::{
     },
     preconfig::core::shared::{invoking_id::SESSION_MANAGER, sm_method_id::START_SESSION},
 };
-use tracing::{Span, debug};
+use tracing::{Span, debug, info_span};
 
 use crate::{
     Error,
@@ -335,8 +335,9 @@ impl Management {
                 None
             }
             (None, MethodStatus::Success) => {
-                debug!(parent: source, %session_id, error = %status, "untracked successful `SyncSession` received");
-                Some(ManagementAction::StackReset)
+                debug!(parent: source, %session_id, "untracked successful `SyncSession` received");
+                let span = info_span!(parent: source, "stack_reset", %session_id, reason = "untracked successful `SyncSession` received");
+                Some(ManagementAction::StackReset { span })
             }
             (None, status) => {
                 debug!(parent: source, %session_id, error = %status, "untracked failed `SyncSession` received");
@@ -417,7 +418,7 @@ impl Management {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq)]
 #[must_use]
 pub enum ManagementAction {
     /// Spawn a new session in response to a successful `SyncSession`.
@@ -431,7 +432,7 @@ pub enum ManagementAction {
     NotifyAbort { session_id: SessionId },
     /// The management session is unrecoverable and a stack reset must be
     /// performed.
-    StackReset,
+    StackReset { span: Span },
 }
 
 /// The state of the `Properties` method call that synchronizes the connection
