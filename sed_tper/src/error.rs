@@ -30,7 +30,7 @@ pub enum Error {
     Closed,
     #[error("The RPC message has timed out")]
     TimedOut,
-    #[error("Use the dedicated methods of the `Controller` to send managment methods")]
+    #[error("Use the dedicated methods of the `Controller` to send management methods")]
     UnexpectedManagementMethod,
 
     // Data-related.

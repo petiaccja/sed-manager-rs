@@ -93,7 +93,7 @@ impl Management {
                         let record = StartSessionReceivingRecord {
                             sent_at: time,
                             deadline,
-                            properties: record.properties,
+                            properties: self.properties.clone(),
                             sender: record.sender,
                             span: record.span,
                         };
@@ -298,12 +298,7 @@ impl Management {
             }
 
             let sequence_number = self.sequence_number.fetch_add();
-            let record = StartSessionSendingRecord {
-                sequence_number,
-                sender,
-                properties: self.properties.clone(),
-                span: span.clone(),
-            };
+            let record = StartSessionSendingRecord { sequence_number, sender, span: span.clone() };
             self.start_session_calls_sending.entry(hsn).or_default().push_back(record);
 
             break Some((packetize_one(SessionId::MANAGEMENT, sequence_number, tokens), span));
@@ -448,10 +443,7 @@ pub struct StartSessionCallRecord {
 struct StartSessionSendingRecord {
     /// The sequence number of the packet in which the method is being sent.
     sequence_number: SequenceNumber,
-    properties: Properties,
     sender: Sender<Result<(SyncSession, Properties), Error>>,
-    /// The properties the host is using to send data to the TPer at the moment
-    /// the `StartSession` was forwarded to IF-SEND.
     span: Span,
 }
 
@@ -461,6 +453,8 @@ struct StartSessionReceivingRecord {
     sent_at: Instant,
     /// The time when the message times out.
     deadline: Instant,
+    /// The properties the host is using to send data to the TPer at the moment
+    /// the `StartSession` was sent via IF-SEND.
     properties: Properties,
     sender: Sender<Result<(SyncSession, Properties), Error>>,
     span: Span,
@@ -723,6 +717,66 @@ mod tests {
         assert!(mgmt.start_session_calls_enqueued.is_empty());
         assert!(mgmt.start_session_calls_sending.is_empty());
         assert!(mgmt.start_session_calls_receiving.is_empty());
+    }
+
+    #[test]
+    fn start_session_properties_received_before_send() {
+        let mut mgmt = Management::new(TIMEOUT, HOST_PROPERTIES);
+        let time = Instant::now();
+        let (sender, receiver) = channel();
+
+        let start_session = start_session_call(SESSION_ID);
+        let sync_session = sync_session_call(SESSION_ID, MethodStatus::Success);
+
+        // Both methods are packetized before the `Properties` response arrives.
+        mgmt.handle_call_properties(Span::current());
+        mgmt.handle_call_start_session(start_session.parameters.clone(), sender, Span::current());
+        assert_that!(mgmt.poll_action(time), matches_pattern!(Action::Send(len(eq(1)))));
+        assert_that!(mgmt.poll_action(time), matches_pattern!(Action::Send(len(eq(1)))));
+
+        // The `Properties` response arrives before the `StartSession` is sent.
+        mgmt.handle_iface_send_done(time, SequenceNumber(1), Ok(()));
+        let stack_action = mgmt.handle_tokens(properties_device_call(true), &Span::none());
+        assert_that!(stack_action, eq(&vec![]));
+        mgmt.handle_iface_send_done(time, SequenceNumber(2), Ok(()));
+
+        // The session uses the negotiated properties.
+        let stack_action = mgmt.handle_tokens(sync_session.to_tokens().unwrap(), &Span::none());
+        assert_that!(
+            stack_action,
+            eq(&vec![StackAction::Spawn { session_id: SESSION_ID, properties: CONNECTION_PROPERTIES }])
+        );
+        assert_that!(receiver.try_recv(), ok(ok(eq(&(sync_session.parameters, CONNECTION_PROPERTIES)))));
+    }
+
+    #[test]
+    fn start_session_properties_received_after_send() {
+        let mut mgmt = Management::new(TIMEOUT, HOST_PROPERTIES);
+        let time = Instant::now();
+        let (sender, receiver) = channel();
+
+        let start_session = start_session_call(SESSION_ID);
+        let sync_session = sync_session_call(SESSION_ID, MethodStatus::Success);
+
+        mgmt.handle_call_properties(Span::current());
+        mgmt.handle_call_start_session(start_session.parameters.clone(), sender, Span::current());
+        assert_that!(mgmt.poll_action(time), matches_pattern!(Action::Send(len(eq(1)))));
+        assert_that!(mgmt.poll_action(time), matches_pattern!(Action::Send(len(eq(1)))));
+
+        // The `StartSession` is sent before the `Properties` response arrives.
+        mgmt.handle_iface_send_done(time, SequenceNumber(1), Ok(()));
+        mgmt.handle_iface_send_done(time, SequenceNumber(2), Ok(()));
+        let stack_action = mgmt.handle_tokens(properties_device_call(true), &Span::none());
+        assert_that!(stack_action, eq(&vec![]));
+
+        // The TPer may have processed the `Properties` after the `StartSession`,
+        // so the session must stay on the properties confirmed at sending.
+        let stack_action = mgmt.handle_tokens(sync_session.to_tokens().unwrap(), &Span::none());
+        assert_that!(
+            stack_action,
+            eq(&vec![StackAction::Spawn { session_id: SESSION_ID, properties: Properties::INITIAL }])
+        );
+        assert_that!(receiver.try_recv(), ok(ok(eq(&(sync_session.parameters, Properties::INITIAL)))));
     }
 
     #[test]
