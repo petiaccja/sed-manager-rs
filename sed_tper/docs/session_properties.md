@@ -73,6 +73,34 @@ advertised capabilities, and we can always receive those. Limits *derived*
 from the receive direction (`max_get_bytes_len`) must assume the smaller of
 the two possibilities, i.e. the previous values.
 
+### When to take a session's snapshot
+
+The latest point at which the snapshot is still correct is the IF-SEND of the
+`StartSession`, using only the `Properties` responses received before it.
+This holds with async and any reordering, because it relies only on what the
+host has seen:
+
+- **Response received before the `StartSession` IF-SEND:** the TPer
+  processed the `Properties` call before it even received the
+  `StartSession`, so it definitely applies.
+- **Response received after that IF-SEND, or never (timeout):** unknown. The
+  TPer may have processed it before or after the `StartSession`.
+- **`Properties` sent after the `SyncSession` arrived:** definitely doesn't
+  apply.
+
+Taking the snapshot earlier (e.g. when packetizing) is correct but can be
+stale. Taking it later (e.g. when the `SyncSession` arrives) is wrong.
+
+What a `Properties` call still in flight at the IF-SEND means depends on the
+kind of property:
+
+- **Limits:** the uncertainty can be absorbed by taking the min of the
+  confirmed and the in-flight values.
+- **Functional capabilities** (Asynchronous, AckNak, SequenceNumbers,
+  ContinuedTokens): the session can't run with a mode that is "possibly on".
+  If an in-flight call could change one of these, no `StartSession` may be
+  sent until it completes.
+
 ### Initial assumptions depend on the SSC
 
 - Table 168 (Core) gives the initial assumptions: MaxComPacketSize 1024,
@@ -165,35 +193,46 @@ also not the same as the limit for `Set`.
 
 ## Problems in the current implementation
 
-1. **The session snapshot is taken at the wrong time.**
-   `Management::handle_sync_session` takes `self.properties` when the
-   `SyncSession` *arrives* (see the TODO in `management.rs`). It should use
-   the properties in effect when the `StartSession` was *sent*.
-2. **`Properties` is not explicitly ordered before `StartSession`.** It
-   currently works only because the synchronous protocol finishes one
-   IF-SEND/IF-RECV cycle before starting the next. If the `Properties`
-   response times out (`PropertiesSync::Receiving` → `Idle`), a
-   `StartSession` can go out while the TPer's view is unknown.
-3. **Internal recovery doesn't re-sync.** `Management::handle_reset` drops
+1. **In-flight `Properties` calls are not accounted for.** The snapshot is
+   taken in `Management::handle_iface_send_done`, i.e. at the
+   `StartSession`'s IF-SEND (see "When to take a session's snapshot"). It
+   contains only confirmed values. Under the synchronous protocol, a
+   `Properties` response always arrives before the next IF-SEND. So the only
+   uncertain case is a `Properties` call that timed out and whose response
+   arrives late, or never. That is harmless today, because:
+   - only limits are negotiated;
+   - the host always sends the same HostProperties;
+   - the previous values are the smaller ones, which is the safe side.
+
+   It becomes a real problem once async (several IF-SENDs outstanding) or a
+   functional capability is negotiated.
+2. **Internal recovery doesn't re-sync.** `Management::handle_reset` drops
    back to `INITIAL`, but only `Tper::stack_reset` calls `sync_properties()`.
    The automatic recovery path (`Action::Recover` in `protocol_state.rs`)
    stays on the initial properties until the user resets manually.
-4. **Power cycles on static ComIDs** aren't handled (see 5.2.2.4 above).
-5. **The size check is incomplete.** `protocol::Session::handle_method_call`
+3. **Power cycles on static ComIDs** aren't handled (see 5.2.2.4 above).
+4. **The size check is incomplete.** `protocol::Session::handle_method_call`
    only checks `max_gross_packet_size − 24 − 12`. It ignores the sub-packet
    padding, `max_gross_compacket_size − 20`, and `max_ind_token_size`. The
    last one is the binding limit for large `Set` calls.
-6. **`PropertiesChanged` events are dropped.** The broadcast channel has
+5. **`PropertiesChanged` events are dropped.** The broadcast channel has
    capacity 1 and overflow is disabled. Every `Controller` clone holds an
    *active* `Receiver` that is never read. After the first broadcast the
    channel stays full, and later `try_broadcast` calls fail silently.
-7. **The two directions are mixed.** `Properties::common(capabilities,
-   tper_properties)` merges both directions into one struct. Sending is
+6. **The two directions are mixed.** `Properties::common(capabilities,
+   tper_properties)` merges both directions into one struct, and that is
+   also what `tper::Session::properties()` returns now. Sending is
    limited by the TPer's `Properties` (what it can receive). Receiving is
    limited by the TPer's MaxResponseComPacketSize and by the HostProperties
-   the TPer echoed. Problem 5 and the `Get` limit both need the directions
-   kept separate.
-8. **The initial assumptions ignore the SSC** (see above).
+   the TPer echoed. Problem 4 and the `Get` limit both need the directions
+   kept separate. `Properties::common` should be renamed and cleaned up to
+   reflect that the two kinds of properties combine differently:
+   - **Limits** (sizes, counts) are per direction. Each direction can use
+     whatever its receiver supports, so no min across both sides is needed.
+   - **Functional capabilities** (Asynchronous, AckNak, SequenceNumbers,
+     ContinuedTokens) must be the lowest common denominator of host and
+     TPer, because both sides have to run the same protocol.
+7. **The initial assumptions ignore the SSC** (see above).
    `Properties::INITIAL` follows Core Table 168. That is too pessimistic for
    Opal and Pyrite, and too optimistic about token size for Enterprise.
 
@@ -210,30 +249,33 @@ also not the same as the limit for `Set`.
     MaxResponseComPacketSize.
 - Both start from the initial assumptions. Following 5.2.2.4, a property
   the TPer didn't return keeps its assumed value.
-- Fix problem 6. Either enable `set_overflow(true)`, or remove the active
+- Fix problem 5. Either enable `set_overflow(true)`, or remove the active
   receiver from `Controller`: keep only the `InactiveReceiver` and call
   `activate_cloned()` on demand in `properties_changed()`. I prefer the
   second, because then only receivers that actually listen are attached to
   the channel.
 
-### Step 2: Order `Properties` before every `StartSession`, and snapshot at send time
+### Step 2: Re-sync before `StartSession`, and account for in-flight calls
 
-- In `poll_method_calls`, when the next call is a `StartSession` and no sync
-  has completed since the last reset or the last `StartSession`:
-  - push a `Properties` request;
-  - **hold** the `StartSession` until the sync finishes, whether it succeeds
-    or times out.
+The snapshot is taken at the `StartSession`'s IF-SEND
+(`Management::handle_iface_send_done`) and carried through
+`StartSessionReceivingRecord` to `StackAction::Spawn` and to `tper::Session`.
+Under the synchronous protocol, with only limits negotiated, this is already
+correct without a gate. What's left:
 
-  This fixes problems 2 and 4 at the cost of one extra round trip per
-  session start. `StartSession`s queued back to back may share one sync.
+- When no sync has completed since the last reset or the last
+  `StartSession`, push a `Properties` request before releasing the
+  `StartSession`. This fixes problem 3 at the cost of one extra round trip
+  per session start. `StartSession`s queued back to back may share one sync.
   Never put `Properties` and `StartSession` in the same IF-SEND (see
   "`Properties` and `StartSession` in the same IF-SEND" above).
-- If the sync timed out, the snapshot is the minimum of the previous and the
-  requested values, because the TPer may or may not have processed the call.
-- When a `StartSession` is released, store a snapshot of the current state
-  in its `MethodSendingRecord`. Carry it through `MethodReceivingRecord` and
-  use it in `StackAction::Spawn`. This fixes problem 1, and the TODO can be
-  removed.
+- When a `Properties` call is in flight at the `StartSession`'s IF-SEND
+  (e.g. one that timed out but may still be processed), the snapshot's
+  limits are the min of the confirmed and the requested values. This fixes
+  problem 1 for limits.
+- Once async or any functional capability can be negotiated, **hold** the
+  `StartSession` in `poll_start_session_calls` while `properties_call` is not
+  `Idle`. A min can't resolve a functional capability.
 - Leave the control session's own size check on the initial assumptions, as
   it is now (see "The control (management) session" above).
 
@@ -242,7 +284,7 @@ also not the same as the limit for `Set`.
 - Request the `Properties` sync from `Management::handle_reset` itself, or
   from `ProtocolState` when it sees a successful `StackReset` response. Then
   remove the explicit call in `Tper::stack_reset`. Recovery and manual reset
-  then take the same path, which fixes problem 3. With step 2 in place this
+  then take the same path, which fixes problem 2. With step 2 in place this
   is mostly belt-and-braces, but it keeps `PropertiesChanged` accurate for
   the GUI.
 
@@ -258,21 +300,17 @@ also not the same as the limit for `Set`.
     MaxComPacketSize) − 20 − 24 − 12`, plus the corresponding packet and
     token limits from the echoed HostProperties.
 - Use it for the check in `protocol::Session::handle_method_call` (problem
-  5).
+  4).
 
-### Step 5: Hand the snapshot to `tper::Session`
+### Step 5: Chunk limits on `tper::Session`
 
-The snapshot never changes during a session, so it is handed over once, when
-the session starts. There's nothing to keep in sync.
+`tper::Session` already receives its snapshot from
+`Controller::call_start_session` and exposes it through `properties()`.
+What's left:
 
-- Add `Controller::start_session(call)` returning `Result<(Vec<u8>,
-  SessionLimits or Properties), Error>`. `StartSession` then stops going
-  through the generic `call` channel. `Management` already special-cases
-  `StartSession`, so only the type of the reply channel changes.
-- `tper::Session` gets a field for the snapshot and `pub fn properties()`
-  and/or `pub fn limits()`. `Session::start` uses the new controller call.
-  `from_started` gets an extra parameter; callers without a better value
-  pass the initial assumptions.
+- Once step 1 separates the directions, change the snapshot (and
+  `properties()`) to the two-direction type, or add `limits()` returning the
+  `SessionLimits` from step 4.
 - Add `max_set_bytes_len()` and `max_get_bytes_len()`.
   - Work out the encoding overhead by tokenizing the call or response with
     worst-case integers (`where_ = u64::MAX`) and an empty byte atom, plus
@@ -298,12 +336,10 @@ the session starts. There's nothing to keep in sync.
 ### Step 7: Tests and virtual device
 
 - `Management` unit tests:
-  - a `StartSession` queued before a sync is held until the sync completes;
-  - the snapshot reflects the properties at send time, not at `SyncSession`
-    time (inject a second `Properties` response in between);
+  - a `StartSession` is preceded by a `Properties` sync (step 2);
   - a reset triggers a re-sync;
   - two consecutive `PropertiesChanged` events both arrive (regression test
-    for problem 6).
+    for problem 5).
 - `protocol::Session`: a test at the exact boundary covering padding, the
   ComPacket limit, and the token limit.
 - Virtual device:
@@ -328,7 +364,7 @@ the session starts. There's nothing to keep in sync.
   conservative and keeps both directions on the initial assumptions.
   Recommended: follow the spec, because the directions are separate after
   step 1.
-- **Fix for problem 6:** overflow mode, or an on-demand activated receiver
+- **Fix for problem 5:** overflow mode, or an on-demand activated receiver
   (preferred).
 - **Step 6 scope:** a full SSC-aware table, or just lower the token size
   assumption to cover Enterprise.
