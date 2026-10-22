@@ -1,0 +1,19 @@
+{
+  "id": "owned-paths",
+  "version": "1.0.0",
+  "name": "Owned paths",
+  "description": "Chowns paths (typically named-volume mounts, which start out root-owned) to an unprivileged user on every container start, so no runtime sudo is needed.",
+  "options": {
+    "username": {
+      "type": "string",
+      "default": "vscode",
+      "description": "User that should own the paths."
+    },
+    "paths": {
+      "type": "string",
+      "default": "",
+      "description": "Space-separated paths to chown recursively."
+    }
+  },
+  "entrypoint": "/usr/local/share/owned-paths/entrypoint.sh"
+}

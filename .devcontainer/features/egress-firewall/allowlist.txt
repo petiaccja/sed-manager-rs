@@ -1,0 +1,32 @@
+# Domains (and all their subdomains) reachable from the container.
+# Baked into the image: edit and rebuild. Denied lookups are logged in
+# /var/log/egress-dnsmasq.log inside the container.
+
+# Claude Code
+api.anthropic.com
+statsig.anthropic.com
+sentry.io
+
+# Rust / cargo / rustup
+crates.io
+index.crates.io
+static.crates.io
+static.rust-lang.org
+
+# GitHub (sources, release downloads such as rust-analyzer)
+github.com
+api.github.com
+codeload.github.com
+objects.githubusercontent.com
+raw.githubusercontent.com
+release-assets.githubusercontent.com
+
+# npm
+registry.npmjs.org
+
+# Editors (remote server and extension downloads)
+zed.dev
+update.code.visualstudio.com
+marketplace.visualstudio.com
+vscode.blob.core.windows.net
+open-vsx.org

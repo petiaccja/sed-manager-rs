@@ -1,0 +1,13 @@
+{
+  "id": "apt-packages",
+  "version": "1.0.0",
+  "name": "APT packages",
+  "description": "Installs extra Debian/Ubuntu packages at image build time, so no runtime sudo is needed.",
+  "options": {
+    "packages": {
+      "type": "string",
+      "default": "",
+      "description": "Space-separated apt packages to install."
+    }
+  }
+}

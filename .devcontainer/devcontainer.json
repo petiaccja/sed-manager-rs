@@ -3,8 +3,18 @@
   "image": "mcr.microsoft.com/devcontainers/rust",
   "features": {
     "ghcr.io/devcontainers/features/node:1": {},
-    "ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {}
+    "ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {},
+    "./features/apt-packages": {
+      "packages": "libx11-xcb1 libxcb1 libxkbcommon0 libinput10 libgbm1"
+    },
+    "./features/owned-paths": {
+      "username": "vscode",
+      "paths": "/home/vscode/.claude"
+    },
+    "./features/egress-firewall": {}
   },
+  "containerUser": "root",
+  "remoteUser": "vscode",
   "runArgs": [
     "--name=${localWorkspaceFolderBasename}-dev"
   ],
@@ -18,7 +28,8 @@
     "CLAUDE_CODE_OAUTH_TOKEN": "${localEnv:CLAUDE_CODE_OAUTH_TOKEN}",
     "OTEL_EXPORTER_OTLP_PROTOCOL": "${localEnv:OTEL_EXPORTER_OTLP_PROTOCOL}",
     "OTEL_EXPORTER_OTLP_ENDPOINT": "${localEnv:OTEL_EXPORTER_OTLP_ENDPOINT_DEVCONTAINER}",
-    "OTEL_EXPORTER_OTLP_HEADERS": "${localEnv:OTEL_EXPORTER_OTLP_HEADERS}"
+    "OTEL_EXPORTER_OTLP_HEADERS": "${localEnv:OTEL_EXPORTER_OTLP_HEADERS}",
+    "EGRESS_ALLOW_URLS": "${localEnv:OTEL_EXPORTER_OTLP_ENDPOINT_DEVCONTAINER}"
   },
-  "postCreateCommand": "sudo chown -R vscode:vscode /home/vscode/.claude && sudo apt install -y libx11-xcb1 libxcb1 libxkbcommon0 libinput10 libgbm1 && cargo install licensesnip"
+  "postCreateCommand": "cargo install licensesnip"
 }
