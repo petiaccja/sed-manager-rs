@@ -320,6 +320,64 @@ mod tests {
     }
 
     #[test]
+    fn close_orphaned_session() {
+        let mut session = RpcSession::new(TIMEOUT, CAPABILITIES);
+        let time = Instant::now();
+        let (sender, receiver) = channel();
+
+        let start_call = start_session_call(SESSION_ID_1);
+        let sync_call = sync_session_call(SESSION_ID_1, MethodStatus::Success);
+
+        // Start a new session.
+        session.handle_call_start_session(start_call.parameters, sender, Span::current());
+        assert_that!(session.poll_action(time), pat!(PacketAction::Send(len(eq(1)))));
+        session.handle_iface_send_done(time, SessionId::MANAGEMENT, SequenceNumber(1), Ok(()));
+
+        // Drop the receiver, orphaning the session.
+        drop(receiver);
+
+        // Finish the session startup via `SyncSession`.
+        let rpc_action = session.handle_packet(
+            packetize_one(SessionId::MANAGEMENT, SequenceNumber(1), sync_call.to_tokens().unwrap()),
+            &Span::none(),
+        );
+        assert!(rpc_action.is_none());
+
+        // The orphaned session should immediately send an eos.
+        assert_that!(
+            session.poll_action(time),
+            pat!(PacketAction::Send(elements_are![(
+                eq(&packetize_one(SESSION_ID_1, SequenceNumber(1), eos())),
+                anything()
+            )]))
+        );
+        // Feed the response to the EOS back to the orphaned session.
+        session.handle_iface_send_done(time, SESSION_ID_1, SequenceNumber(1), Ok(()));
+        let rpc_action = session.handle_packet(packetize_one(SESSION_ID_1, SequenceNumber(1), eos()), &Span::none());
+        assert!(rpc_action.is_none());
+
+        // There should be no more actions and the session should be deleted.
+        assert_that!(session.poll_action(time), pat!(&PacketAction::None));
+        assert!(session.sessions.is_empty());
+    }
+
+    #[test]
+    fn reset_on_unexpected_session() {
+        let mut session = RpcSession::new(TIMEOUT, CAPABILITIES);
+        let time = Instant::now();
+
+        let sync_call = sync_session_call(SESSION_ID_1, MethodStatus::Success);
+
+        let rpc_action = session.handle_packet(
+            packetize_one(SessionId::MANAGEMENT, SequenceNumber(1), sync_call.to_tokens().unwrap()),
+            &Span::none(),
+        );
+        assert_that!(rpc_action, some(pat!(RpcAction::StackReset { .. })));
+        assert_that!(session.poll_action(time), pat!(&PacketAction::None));
+        assert!(session.sessions.is_empty());
+    }
+
+    #[test]
     fn not_allowed_calls_intercepted() {
         let mut session = construct_with_sessions(&[]);
         let time = Instant::now();
