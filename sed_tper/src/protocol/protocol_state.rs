@@ -474,4 +474,31 @@ mod tests {
         // Check if we received the response to the method call.
         assert_that!(receiver.try_recv(), ok(ok(eq(&(response.parameters, Properties::INITIAL)))));
     }
+
+    #[test]
+    fn unexpected_session_resets_stack() {
+        let mut protocol = ProtocolState::new(ComId(1), ComIdExt(0));
+
+        let sync_session = sync_session_call(SESSION_ID, MethodStatus::Success);
+        let com_packet = ComPacket {
+            com_id: ComId(1),
+            com_id_ext: ComIdExt(0),
+            outstanding_data: 0,
+            min_transfer: 0,
+            length: std::marker::PhantomData,
+            payload: vec![packetize_one(
+                SessionId::MANAGEMENT,
+                SequenceNumber(1),
+                sync_session.to_tokens().unwrap(),
+            )],
+        };
+
+        // "Recv" a `SyncSession` that no `StartSession` is waiting for.
+        protocol.handle_iface_recv_done(Instant::now(), 0x01, Ok(com_packet.to_bytes().unwrap()), &Span::none());
+
+        // A stack reset is sent.
+        let stack_reset = ComIdRequest::stack_reset(ComId(1), ComIdExt(0));
+        let (action, _) = protocol.poll_action(Instant::now());
+        assert_that!(action, eq(&Action::Send { protocol: 0x02, data: stack_reset.to_bytes().unwrap() }));
+    }
 }
