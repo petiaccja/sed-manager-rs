@@ -32,9 +32,7 @@ use super::{management::ManagementAction, shared::PacketAction};
 pub struct RpcSession {
     timeout: Duration,
     packets_to_send: VecDeque<PacketBatch>,
-    /// `StartSession` methods that are queued for IF-SEND, keyed by HSN.
     management: Management,
-    /// Session method calls that are queued for IF-SEND, keyed by session ID.
     sessions: HashMap<SessionId, Session>,
 }
 
