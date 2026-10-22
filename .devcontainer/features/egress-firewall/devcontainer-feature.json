@@ -1,0 +1,18 @@
+{
+  "id": "egress-firewall",
+  "version": "1.0.0",
+  "name": "Egress firewall",
+  "description": "Restricts outbound network access to a domain allowlist. A root entrypoint sets up dnsmasq + nftables, then sudo is removed so the unprivileged user cannot undo it.",
+  "capAdd": [
+    "NET_ADMIN"
+  ],
+  "securityOpt": [
+    "no-new-privileges"
+  ],
+  "entrypoint": "/usr/local/share/egress-firewall/entrypoint.sh",
+  "installsAfter": [
+    "ghcr.io/devcontainers/features/common-utils",
+    "ghcr.io/devcontainers/features/node",
+    "ghcr.io/anthropics/devcontainer-features/claude-code"
+  ]
+}
