@@ -335,6 +335,11 @@ impl Management {
                 None
             }
             (None, MethodStatus::Success) => {
+                // We don't know the communication properties with which the
+                // session was spawned, because we're not (or no longer)
+                // tracking it. Without the properties, we cannot send an EOS,
+                // because we don't know details like ACK/NAK. The only way out
+                // is to reset the stack.
                 debug!(parent: source, %session_id, "untracked successful `SyncSession` received");
                 let span = info_span!(parent: source, "stack_reset", %session_id, reason = "untracked successful `SyncSession` received");
                 Some(ManagementAction::StackReset { span })
