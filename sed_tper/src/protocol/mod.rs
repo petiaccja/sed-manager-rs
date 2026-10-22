@@ -23,7 +23,6 @@ use sed_packet::{
     com_id_request::{ComIdRequest, ComIdResponse},
     session_id::SessionId,
 };
-#[cfg(feature = "test-utils")]
 use sed_spec::methods::Properties;
 use sed_spec::methods::{StartSession, SyncSession};
 use tracing::{Instrument as _, Span, info_span};

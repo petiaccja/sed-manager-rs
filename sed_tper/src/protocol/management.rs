@@ -801,6 +801,70 @@ mod tests {
     }
 
     #[test]
+    fn sync_session_after_timeout() {
+        let mut mgmt = Management::new(TIMEOUT, HOST_PROPERTIES);
+        let time = Instant::now();
+        let (sender, receiver) = channel();
+
+        let start_session = start_session_call(SESSION_ID);
+        let sync_session = sync_session_call(SESSION_ID, MethodStatus::Success);
+
+        mgmt.handle_call_start_session(start_session.parameters, sender, Span::current());
+        assert_that!(mgmt.poll_action(time), matches_pattern!(PacketAction::Send(len(eq(1)))));
+        mgmt.handle_iface_send_done(time, SequenceNumber(1), Ok(()));
+        assert_that!(mgmt.poll_action(time + 2 * TIMEOUT), matches_pattern!(&PacketAction::None));
+        assert_that!(receiver.try_recv(), ok(err(eq(&Error::TimedOut))));
+
+        let stack_action = mgmt.handle_tokens(sync_session.to_tokens().unwrap(), &Span::none());
+        assert_that!(stack_action, elements_are!(pat!(ManagementAction::StackReset { .. })));
+    }
+
+    #[test]
+    fn sync_session_unexpected() {
+        let mut mgmt = Management::new(TIMEOUT, HOST_PROPERTIES);
+
+        let sync_session = sync_session_call(SESSION_ID, MethodStatus::Success);
+
+        let stack_action = mgmt.handle_tokens(sync_session.to_tokens().unwrap(), &Span::none());
+        assert_that!(stack_action, elements_are!(pat!(ManagementAction::StackReset { .. })));
+    }
+
+    #[test]
+    fn sync_session_unexpected_failed() {
+        let mut mgmt = Management::new(TIMEOUT, HOST_PROPERTIES);
+
+        let sync_session = sync_session_call(SESSION_ID, MethodStatus::Fail);
+
+        let stack_action = mgmt.handle_tokens(sync_session.to_tokens().unwrap(), &Span::none());
+        assert_that!(stack_action, is_empty());
+    }
+
+    #[test]
+    fn sync_session_receiver_dropped() {
+        let mut mgmt = Management::new(TIMEOUT, HOST_PROPERTIES);
+        let time = Instant::now();
+        let (sender, receiver) = channel();
+
+        let start_session = start_session_call(SESSION_ID);
+        let sync_session = sync_session_call(SESSION_ID, MethodStatus::Success);
+
+        mgmt.handle_call_start_session(start_session.parameters, sender, Span::current());
+        assert_that!(mgmt.poll_action(time), matches_pattern!(PacketAction::Send(len(eq(1)))));
+        mgmt.handle_iface_send_done(time, SequenceNumber(1), Ok(()));
+        drop(receiver);
+
+        let stack_action = mgmt.handle_tokens(sync_session.to_tokens().unwrap(), &Span::none());
+        assert_that!(
+            stack_action,
+            elements_are!(eq(&ManagementAction::SpawnOrphaned {
+                session_id: SESSION_ID,
+                properties: Properties::INITIAL
+            }))
+        );
+        assert!(mgmt.start_session_calls_receiving.is_empty());
+    }
+
+    #[test]
     fn close_session_received() {
         let mut mgmt = Management::new(TIMEOUT, HOST_PROPERTIES);
 
