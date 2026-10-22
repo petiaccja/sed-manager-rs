@@ -154,8 +154,17 @@ impl Session {
         match &mut self.state {
             State::Active { method_calls, method_calls_sending, method_calls_receiving, .. } => {
                 // Remove timed out calls.
+                let mut first_timed_out = None;
                 while let Some(record) = method_calls_receiving.pop_front_if(|record| record.deadline <= time) {
                     let _ = record.sender.send(Err(Error::TimedOut));
+                    first_timed_out.get_or_insert(record.span);
+                }
+                // Responses are paired to method calls by order, so a late
+                // response would be paired to the wrong method call.
+                if let Some(first_timed_out) = first_timed_out {
+                    self.flush(Error::Aborted);
+                    self.state = State::Aborting { cause: first_timed_out };
+                    return self.poll_action(time);
                 }
 
                 // Collect packets ready to be sent.
@@ -218,8 +227,9 @@ enum State {
         method_calls_receiving: VecDeque<MethodReceivingRecord>,
         received_tokens: VecDeque<u8>,
     },
-    /// The session must be aborted by sending an EOS. The `cause` is the
-    /// span of the IF-RECV that delivered the tokens that caused the abort.
+    /// The session must be aborted by sending an EOS. The `cause` is the span
+    /// of the event that caused the abort: the IF-RECV that delivered invalid
+    /// or unexpected tokens, or the method call that timed out.
     Aborting {
         cause: Span,
     },
@@ -541,7 +551,52 @@ mod tests {
         session.handle_iface_send_done(time, SequenceNumber(1), Ok(()));
         assert_that!(session.poll_action(time), matches_pattern!(&PacketAction::Sleep { until: eq(time + TIMEOUT) }));
 
-        assert_that!(session.poll_action(time + 2 * TIMEOUT), matches_pattern!(&PacketAction::None));
+        assert_that!(session.poll_action(time + 2 * TIMEOUT), matches_pattern!(PacketAction::Send(_)));
         assert_that!(receiver.try_recv(), ok(err(eq(&Error::TimedOut))));
+    }
+
+    #[test]
+    fn timeout_aborts_session() {
+        let mut session = Session::new(SESSION_ID, TIMEOUT, PROPERTIES);
+        let time = Instant::now();
+        let (sender_timed_out, receiver_timed_out) = channel();
+        let (sender_receiving, receiver_receiving) = channel();
+        let (sender_sending, receiver_sending) = channel();
+        let (sender_enqueued, receiver_enqueued) = channel();
+
+        // One call in each stage: timed out, receiving, sending, enqueued.
+        session.handle_method_call(method_call(), sender_timed_out, Span::current());
+        session.handle_method_call(method_call(), sender_receiving, Span::current());
+        session.handle_method_call(method_call(), sender_sending, Span::current());
+        assert_that!(session.poll_action(time), pat!(PacketAction::Send(_)));
+        assert_that!(session.poll_action(time), pat!(PacketAction::Send(_)));
+        assert_that!(session.poll_action(time), pat!(PacketAction::Send(_)));
+        session.handle_iface_send_done(time, SequenceNumber(1), Ok(()));
+        session.handle_iface_send_done(time + TIMEOUT, SequenceNumber(2), Ok(()));
+        session.handle_method_call(method_call(), sender_enqueued, Span::current());
+
+        // The EOS is sent right away, without waiting for another poll.
+        assert_that!(
+            session.poll_action(time + TIMEOUT),
+            matches_pattern!(PacketAction::Send(elements_are![(
+                eq(&Packet {
+                    tper_session_number: 2,
+                    host_session_number: 1,
+                    sequence_number: 4,
+                    payload: vec![SubPacket { kind: SubPacketKind::Data, length: PhantomData, payload: eos() }],
+                    ..Default::default()
+                }),
+                anything()
+            )]))
+        );
+        assert!(session.is_closed());
+        assert_that!(receiver_timed_out.try_recv(), ok(err(eq(&Error::TimedOut))));
+        assert_that!(receiver_receiving.try_recv(), ok(err(eq(&Error::Aborted))));
+        assert_that!(receiver_sending.try_recv(), ok(err(eq(&Error::Aborted))));
+        assert_that!(receiver_enqueued.try_recv(), ok(err(eq(&Error::Aborted))));
+
+        // The late response must not be delivered to anyone.
+        session.handle_tokens(method_response(), &Span::none());
+        assert_that!(session.poll_action(time + TIMEOUT), matches_pattern!(&PacketAction::None));
     }
 }
