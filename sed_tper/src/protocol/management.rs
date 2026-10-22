@@ -21,7 +21,7 @@ use sed_spec::{
     },
     preconfig::core::shared::{invoking_id::SESSION_MANAGER, sm_method_id::START_SESSION},
 };
-use tracing::{Span, debug, info_span};
+use tracing::{Span, debug, info_span, warn};
 
 use crate::{
     Error,
@@ -340,7 +340,7 @@ impl Management {
                 // tracking it. Without the properties, we cannot send an EOS,
                 // because we don't know details like ACK/NAK. The only way out
                 // is to reset the stack.
-                debug!(parent: source, %session_id, "untracked successful `SyncSession` received");
+                warn!(parent: source, %session_id, "untracked successful `SyncSession` received, triggering stack reset");
                 let span = info_span!(parent: source, "stack_reset", %session_id, reason = "untracked successful `SyncSession` received");
                 Some(ManagementAction::StackReset { span })
             }
