@@ -219,16 +219,24 @@ impl ManagementSession {
     }
 
     fn properties(&mut self, params: PropertiesMethod) -> MethodCall<PropertiesMethod> {
-        let host_properties = match &params {
-            PropertiesMethod::Host { host_properties } => host_properties.as_ref(),
-            PropertiesMethod::TPer { host_properties, .. } => host_properties.as_ref(),
+        let host_capabilities = match params {
+            PropertiesMethod::Host { host_properties } => host_properties,
+            PropertiesMethod::TPer { host_properties, .. } => host_properties,
         };
-        let common = Properties::common(host_properties.unwrap_or(&Properties::INITIAL), &CAPABILITIES);
-        self.properties = common.clone();
+
+        let outbound_properties = host_capabilities.map(|host_capabilities| {
+            let continued_tokens = host_capabilities.continued_tokens && CAPABILITIES.continued_tokens;
+            host_capabilities.with_mutual_features(&CAPABILITIES).with_continued_tokens(continued_tokens)
+        });
+
+        if let Some(outbound_properties) = &outbound_properties {
+            self.properties = outbound_properties.clone();
+        }
+
         MethodCall {
             invoking_id: SESSION_MANAGER,
             method_id: PropertiesMethod::METHOD_ID,
-            parameters: PropertiesMethod::TPer { properties: CAPABILITIES, host_properties: Some(common) },
+            parameters: PropertiesMethod::TPer { properties: CAPABILITIES, host_properties: outbound_properties },
             status: MethodStatus::Success,
         }
     }

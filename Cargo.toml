@@ -45,7 +45,7 @@ async-channel = { version = "2.5.0" }
 async-broadcast = "0.7.2"
 async-lock = "3.4.2"
 pin-project = "1.1.11"
-async-trait = "0.1.89"
+async-trait = "0.1.92"
 futures = "0.3.32"
 async-fs = "2.2.0"
 

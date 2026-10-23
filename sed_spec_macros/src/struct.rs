@@ -35,6 +35,7 @@ pub fn tokenize_struct(input: DeriveInput) -> Result<TokenStream, Error> {
 
     Ok(quote! {
         #[automatically_derived]
+        #[allow(clippy::redundant_field_names)]
         impl #impl_generics ::sed_packet::token_stream::Tokenize for #ident #ty_generics #where_clause {
             fn tokenize<T: ::sed_packet::token_stream::Tokenizer>(&self, __tokenizer: &mut T)
                 -> ::core::result::Result<(), T::Error>
@@ -100,6 +101,7 @@ pub fn detokenize_struct(input: DeriveInput) -> Result<TokenStream, Error> {
 
     Ok(quote! {
         #[automatically_derived]
+        #[allow(clippy::redundant_field_names)]
         impl #impl_generics ::sed_packet::token_stream::Detokenize  for #ident  #ty_generics #where_clause {
             fn detokenize<D: ::sed_packet::token_stream::Detokenizer>(__detokenizer: &mut D)
                 -> ::core::result::Result<Self, D::Error>

@@ -83,7 +83,7 @@ impl Management {
                         let record = StartSessionReceivingRecord {
                             sent_at: time,
                             deadline,
-                            properties: self.state.properties.clone(),
+                            properties: self.state.outbound_properties.clone(),
                             sender: record.sender,
                             span: record.span,
                         };
@@ -112,8 +112,9 @@ impl Management {
 
         // Inform that properties have been reset.
         let _ = self.properties_changed_tx.try_broadcast(PropertiesChanged {
-            remote_properties: Properties::INITIAL,
-            connection_properties: Properties::INITIAL,
+            remote_capabilities: Properties::INITIAL,
+            outbound_properties: self.state.outbound_properties.clone(),
+            inbound_properties: self.state.inbound_properties.clone(),
         });
     }
 
@@ -129,23 +130,26 @@ impl Management {
         self.state.received_tokens.extend(tokens);
         loop {
             match extract_method::<MgmtMethodCall>(&mut self.state.received_tokens) {
-                ExtractResult::Ok { value, .. } => match value.params {
-                    // The host should never receive a `StartSession`.
-                    MgmtMethodCallParams::StartSession(_) => (),
-                    MgmtMethodCallParams::SyncSession(sync_session) => {
-                        self.handle_sync_session(&mut actions, sync_session, value.status, source)
-                    }
-                    MgmtMethodCallParams::CloseSession(close_session) => {
-                        Self::handle_close_session(&mut actions, close_session, value.status);
-                    }
-                    MgmtMethodCallParams::Properties(properties_method) => {
-                        if let PropertiesCall::Receiving { span, .. } = &self.state.properties_call {
-                            link_both_ways(source, span);
-                            self.state.properties_call = PropertiesCall::Idle;
+                ExtractResult::Ok { value, .. } => {
+                    let action = match value.params {
+                        // The host should never receive a `StartSession`.
+                        MgmtMethodCallParams::StartSession(_) => None,
+                        MgmtMethodCallParams::SyncSession(sync_session) => {
+                            self.handle_sync_session(sync_session, value.status, source)
                         }
-                        self.handle_properties(properties_method, value.status)
-                    }
-                },
+                        MgmtMethodCallParams::CloseSession(close_session) => {
+                            Self::handle_close_session(close_session, value.status)
+                        }
+                        MgmtMethodCallParams::Properties(properties_method) => {
+                            if let PropertiesCall::Receiving { span, .. } = &self.state.properties_call {
+                                link_both_ways(source, span);
+                                self.state.properties_call = PropertiesCall::Idle;
+                            }
+                            self.handle_properties(properties_method, value.status, source)
+                        }
+                    };
+                    actions.extend(action);
+                }
                 ExtractResult::EndOfSession => (),
                 ExtractResult::NeedMoreTokens => break,
                 ExtractResult::InvalidTokens(error) => {
@@ -265,11 +269,10 @@ impl Management {
 
     fn handle_sync_session(
         &mut self,
-        actions: &mut Vec<ManagementAction>,
         sync_session: SyncSession,
         status: MethodStatus,
         source: &Span,
-    ) {
+    ) -> Option<ManagementAction> {
         let session_id = SessionId { hsn: sync_session.host_session_id, tsn: sync_session.sp_session_id };
 
         // Pop record (if any) and delete queue for HSN if empty.
@@ -279,7 +282,7 @@ impl Management {
             self.state.start_session_calls_receiving.remove(&session_id.hsn);
         }
 
-        let action = match (maybe_record, status) {
+        match (maybe_record, status) {
             (Some(record), MethodStatus::Success) => {
                 link_both_ways(source, &record.span);
 
@@ -307,37 +310,84 @@ impl Management {
                 debug!(parent: source, %session_id, error = %status, "untracked failed `SyncSession` received");
                 None
             }
-        };
-
-        actions.extend(action);
+        }
     }
 
-    fn handle_close_session(actions: &mut Vec<ManagementAction>, close_session: CloseSession, status: MethodStatus) {
+    fn handle_close_session(close_session: CloseSession, status: MethodStatus) -> Option<ManagementAction> {
         if status == MethodStatus::Success {
             let session_id =
                 SessionId { hsn: close_session.local_session_number, tsn: close_session.remote_session_number };
-            actions.push(ManagementAction::NotifyAbort { session_id });
+            Some(ManagementAction::NotifyAbort { session_id })
+        } else {
+            None
         }
     }
 
-    fn handle_properties(&mut self, properties_method: PropertiesMethod, status: MethodStatus) {
+    fn handle_properties(
+        &mut self,
+        properties_method: PropertiesMethod,
+        status: MethodStatus,
+        source: &Span,
+    ) -> Option<ManagementAction> {
         if status == MethodStatus::Success
-            && let PropertiesMethod::TPer { properties, host_properties } = properties_method
+            && let PropertiesMethod::TPer { properties: tper_capabilities, host_properties: inbound_properties } =
+                properties_method
         {
-            // When we haven't initially sent our host properties to the TPer,
-            // the TPer does not send the properties it will used when message
-            // us. This also means the TPer is not aware of our capabilities,
-            // and it will use the initial assumptions. If the TPer uses initial
-            // assumptions, we shouldn't upgrade the connection properties, even
-            // if the TPer indicated that it's capable of more.
-            if host_properties.is_some() {
-                self.state.properties = Properties::common(&self.capabilities, &properties);
+            // If the TPer does not tell us what properties it uses for messaging
+            // us, we must assume it uses the initial properties.
+            let inbound_properties = inbound_properties.unwrap_or(Properties::INITIAL);
+
+            let outbound_properties = tper_capabilities
+                .clone()
+                .with_mutual_features(&inbound_properties) // Let the TPer voluntarily drop mutually supported features.
+                .with_mutual_features(&self.capabilities) // Do not let the TPer unilaterally add features we don't support.
+                .with_min_limits(&self.capabilities); // Do not use overly large buffers even when the TPer supports it.
+
+            // The inbound and outbound features must match:
+            // - Inbound: the TPer computed the mutually supported features.
+            // - Outbound: we computed the mutually supported features.
+            //
+            // The TPer must also not use continued tokens when we don't support it.
+            //
+            // If the TPer violated the rules (i.e. firmware bug), we must
+            // recover with a stack reset.
+            if !outbound_properties.features_eq(&inbound_properties)
+                || (inbound_properties.continued_tokens && !self.capabilities.continued_tokens)
+            {
+                warn!(
+                    parent: source,
+                    inbound.seq_numbers = inbound_properties.seq_numbers,
+                    inbound.ack_nak = inbound_properties.ack_nak,
+                    inbound.asynchronous = inbound_properties.asynchronous,
+                    inbound.continued_tokens = inbound_properties.continued_tokens,
+                    outbound.seq_numbers = outbound_properties.seq_numbers,
+                    outbound.ack_nak = outbound_properties.ack_nak,
+                    outbound.asynchronous = outbound_properties.asynchronous,
+                    outbound.continued_tokens = outbound_properties.continued_tokens,
+                    "the TPer wants to use an invalid/unsupported feature set for communication"
+                );
+                // Turn off auto-sync so that we don't get into a stack reset loop.
+                self.auto_sync_properties = false;
+                let span = info_span!(parent: source, "stack_reset", reason = "the TPer wants to use an invalid/unsupported feature set for communication");
+                return Some(ManagementAction::StackReset { span });
             }
+
+            self.state.outbound_properties = outbound_properties;
+
+            // If the TPer wants to exceed our limits, we have to make sure not to
+            // instruct the TPer to do so for methods like `Get` or `Random` where
+            // we control the size of the data the TPer will send. If the TPer
+            // still exceeds our limits, that may later trigger a stack reset,
+            // but this is unlikely.
+            self.state.inbound_properties = inbound_properties.with_min_limits(&self.capabilities);
+
             let _ = self.properties_changed_tx.try_broadcast(PropertiesChanged {
-                remote_properties: properties,
-                connection_properties: self.state.properties.clone(),
+                remote_capabilities: tper_capabilities,
+                outbound_properties: self.state.outbound_properties.clone(),
+                inbound_properties: self.state.inbound_properties.clone(),
             });
         }
+        None
     }
 
     fn handle_invalid_tokens(&mut self, error: Error) {
@@ -384,7 +434,8 @@ impl Management {
 #[derive(Debug)]
 struct State {
     sequence_number: SequenceNumber,
-    properties: Properties,
+    outbound_properties: Properties,
+    inbound_properties: Properties,
     start_session_calls_enqueued: VecDeque<StartSessionCallRecord>,
     /// `StartSession` methods that have been submitted for IF-SEND, keyed by HSN.
     start_session_calls_sending: HashMap<u32, VecDeque<StartSessionSendingRecord>>,
@@ -405,7 +456,8 @@ impl State {
 
         Self {
             sequence_number: SequenceNumber::initial(),
-            properties: Properties::INITIAL,
+            outbound_properties: Properties::INITIAL,
+            inbound_properties: Properties::INITIAL,
             start_session_calls_enqueued: VecDeque::new(),
             start_session_calls_sending: HashMap::new(),
             start_session_calls_receiving: HashMap::new(),
@@ -424,7 +476,8 @@ impl State {
             start_session_calls_sending,
             start_session_calls_receiving,
             sequence_number: _,
-            properties: _,
+            outbound_properties: _,
+            inbound_properties: _,
             received_tokens: _,
             properties_call: _,
         } = self;
@@ -529,21 +582,20 @@ mod tests {
 
     const SESSION_ID: SessionId = SessionId { hsn: 1, tsn: 2 };
     const TIMEOUT: Duration = Duration::from_secs(1);
-    const HOST_PROPERTIES: Properties =
+    const HOST_CAPABILITIES: Properties =
         Properties { max_methods: Limit::Limited(NonZero::new(10).unwrap()), ..Properties::INITIAL };
-    const CONNECTION_PROPERTIES: Properties =
-        Properties { max_methods: Limit::Limited(NonZero::new(5).unwrap()), ..Properties::INITIAL };
-    const DEVICE_PROPERTIES: Properties =
+    const TPER_CAPABILITIES: Properties =
         Properties { max_methods: Limit::Limited(NonZero::new(5).unwrap()), ..Properties::INITIAL };
 
     fn properties_device_call(host: bool) -> Vec<u8> {
+        properties_response(TPER_CAPABILITIES, host.then_some(HOST_CAPABILITIES))
+    }
+
+    fn properties_response(properties: Properties, host_properties: Option<Properties>) -> Vec<u8> {
         MethodCall {
             invoking_id: SESSION_MANAGER,
             method_id: PropertiesMethod::METHOD_ID,
-            parameters: PropertiesMethod::TPer {
-                properties: DEVICE_PROPERTIES,
-                host_properties: host.then_some(HOST_PROPERTIES),
-            },
+            parameters: PropertiesMethod::TPer { properties, host_properties },
             status: MethodStatus::Success,
         }
         .to_tokens()
@@ -552,7 +604,7 @@ mod tests {
 
     #[test]
     fn start_session_completed_successfully() {
-        let mut mgmt = Management::new(TIMEOUT, HOST_PROPERTIES, false);
+        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, false);
         let time = Instant::now();
         let (sender, receiver) = channel();
 
@@ -596,7 +648,7 @@ mod tests {
 
     #[test]
     fn start_session_completed_with_error() {
-        let mut mgmt = Management::new(TIMEOUT, HOST_PROPERTIES, false);
+        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, false);
         let time = Instant::now();
         let (sender, receiver) = channel();
 
@@ -621,7 +673,7 @@ mod tests {
 
     #[test]
     fn start_session_timed_out() {
-        let mut mgmt = Management::new(TIMEOUT, HOST_PROPERTIES, false);
+        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, false);
         let time = Instant::now();
         let (sender, receiver) = channel();
 
@@ -643,7 +695,7 @@ mod tests {
 
     #[test]
     fn start_session_interface_send_failed() {
-        let mut mgmt = Management::new(TIMEOUT, HOST_PROPERTIES, false);
+        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, false);
         let time = Instant::now();
         let (sender, receiver) = channel();
 
@@ -664,7 +716,7 @@ mod tests {
 
     #[test]
     fn start_session_unexpected_tokens() {
-        let mut mgmt = Management::new(TIMEOUT, HOST_PROPERTIES, false);
+        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, false);
 
         let start_session = start_session_call(SESSION_ID);
 
@@ -678,7 +730,7 @@ mod tests {
 
     #[test]
     fn start_session_fragmented_tokens() {
-        let mut mgmt = Management::new(TIMEOUT, HOST_PROPERTIES, false);
+        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, false);
         let time = Instant::now();
         let (sender, receiver) = channel();
 
@@ -727,7 +779,7 @@ mod tests {
 
     #[test]
     fn start_session_invalid_tokens() {
-        let mut mgmt = Management::new(TIMEOUT, HOST_PROPERTIES, false);
+        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, false);
         let time = Instant::now();
         let (sender, receiver) = channel();
         let invalid_tokens = vec![0xFE, 34, 23, 7, 2, 3, 2];
@@ -768,7 +820,7 @@ mod tests {
 
     #[test]
     fn start_session_properties_received_before_send() {
-        let mut mgmt = Management::new(TIMEOUT, HOST_PROPERTIES, false);
+        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, false);
         let time = Instant::now();
         let (sender, receiver) = channel();
 
@@ -791,14 +843,14 @@ mod tests {
         let stack_action = mgmt.handle_tokens(sync_session.to_tokens().unwrap(), &Span::none());
         assert_that!(
             stack_action,
-            eq(&vec![ManagementAction::Spawn { session_id: SESSION_ID, properties: CONNECTION_PROPERTIES }])
+            eq(&vec![ManagementAction::Spawn { session_id: SESSION_ID, properties: TPER_CAPABILITIES }])
         );
-        assert_that!(receiver.try_recv(), ok(ok(eq(&(sync_session.parameters, CONNECTION_PROPERTIES)))));
+        assert_that!(receiver.try_recv(), ok(ok(eq(&(sync_session.parameters, TPER_CAPABILITIES)))));
     }
 
     #[test]
     fn start_session_properties_received_after_send() {
-        let mut mgmt = Management::new(TIMEOUT, HOST_PROPERTIES, false);
+        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, false);
         let time = Instant::now();
         let (sender, receiver) = channel();
 
@@ -828,7 +880,7 @@ mod tests {
 
     #[test]
     fn sync_session_after_timeout() {
-        let mut mgmt = Management::new(TIMEOUT, HOST_PROPERTIES, false);
+        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, false);
         let time = Instant::now();
         let (sender, receiver) = channel();
 
@@ -847,7 +899,7 @@ mod tests {
 
     #[test]
     fn sync_session_unexpected() {
-        let mut mgmt = Management::new(TIMEOUT, HOST_PROPERTIES, false);
+        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, false);
 
         let sync_session = sync_session_call(SESSION_ID, MethodStatus::Success);
 
@@ -857,7 +909,7 @@ mod tests {
 
     #[test]
     fn sync_session_unexpected_failed() {
-        let mut mgmt = Management::new(TIMEOUT, HOST_PROPERTIES, false);
+        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, false);
 
         let sync_session = sync_session_call(SESSION_ID, MethodStatus::Fail);
 
@@ -867,7 +919,7 @@ mod tests {
 
     #[test]
     fn sync_session_receiver_dropped() {
-        let mut mgmt = Management::new(TIMEOUT, HOST_PROPERTIES, false);
+        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, false);
         let time = Instant::now();
         let (sender, receiver) = channel();
 
@@ -892,7 +944,7 @@ mod tests {
 
     #[test]
     fn close_session_received() {
-        let mut mgmt = Management::new(TIMEOUT, HOST_PROPERTIES, false);
+        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, false);
 
         let stack_action = mgmt.handle_tokens(close_session_call(SESSION_ID), &Span::none());
         assert_that!(stack_action, eq(&vec![ManagementAction::NotifyAbort { session_id: SESSION_ID }]));
@@ -900,37 +952,39 @@ mod tests {
 
     #[test]
     fn properties_received_without_host() {
-        let mut mgmt = Management::new(TIMEOUT, HOST_PROPERTIES, false);
+        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, false);
         let mut event = mgmt.properties_changed();
 
         let _ = mgmt.handle_tokens(properties_device_call(false), &Span::none());
         assert_that!(
             event.try_recv(),
             ok(&eq(&PropertiesChanged {
-                remote_properties: DEVICE_PROPERTIES,
-                connection_properties: Properties::INITIAL
+                remote_capabilities: TPER_CAPABILITIES,
+                outbound_properties: TPER_CAPABILITIES,
+                inbound_properties: Properties::INITIAL,
             }))
         );
     }
 
     #[test]
     fn properties_received_with_host() {
-        let mut mgmt = Management::new(TIMEOUT, HOST_PROPERTIES, false);
+        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, false);
         let mut event = mgmt.properties_changed();
 
         let _ = mgmt.handle_tokens(properties_device_call(true), &Span::none());
         assert_that!(
             event.try_recv(),
             ok(&eq(&PropertiesChanged {
-                remote_properties: DEVICE_PROPERTIES,
-                connection_properties: CONNECTION_PROPERTIES
+                remote_capabilities: TPER_CAPABILITIES,
+                outbound_properties: TPER_CAPABILITIES,
+                inbound_properties: HOST_CAPABILITIES,
             }))
         );
     }
 
     #[test]
     fn properties_changed_lagging_receiver_gets_latest() {
-        let mut mgmt = Management::new(TIMEOUT, HOST_PROPERTIES, false);
+        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, false);
         let mut event = mgmt.properties_changed();
 
         mgmt.handle_reset();
@@ -942,8 +996,9 @@ mod tests {
         assert_that!(
             event.try_recv(),
             ok(&eq(&PropertiesChanged {
-                remote_properties: DEVICE_PROPERTIES,
-                connection_properties: CONNECTION_PROPERTIES
+                remote_capabilities: TPER_CAPABILITIES,
+                outbound_properties: TPER_CAPABILITIES,
+                inbound_properties: HOST_CAPABILITIES,
             }))
         );
         assert_that!(event.try_recv(), err(eq(&async_broadcast::TryRecvError::Empty)));
@@ -951,7 +1006,7 @@ mod tests {
 
     #[test]
     fn properties_changed_idle_receiver_does_not_block() {
-        let mut mgmt = Management::new(TIMEOUT, HOST_PROPERTIES, false);
+        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, false);
         let _idle = mgmt.properties_changed();
         let mut event = mgmt.properties_changed();
 
@@ -959,8 +1014,9 @@ mod tests {
         assert_that!(
             event.try_recv(),
             ok(&eq(&PropertiesChanged {
-                remote_properties: Properties::INITIAL,
-                connection_properties: Properties::INITIAL
+                remote_capabilities: Properties::INITIAL,
+                outbound_properties: Properties::INITIAL,
+                inbound_properties: Properties::INITIAL,
             }))
         );
 
@@ -968,15 +1024,16 @@ mod tests {
         assert_that!(
             event.try_recv(),
             ok(&eq(&PropertiesChanged {
-                remote_properties: DEVICE_PROPERTIES,
-                connection_properties: CONNECTION_PROPERTIES
+                remote_capabilities: TPER_CAPABILITIES,
+                outbound_properties: TPER_CAPABILITIES,
+                inbound_properties: HOST_CAPABILITIES,
             }))
         );
     }
 
     #[test]
     fn properties_not_auto_synced() {
-        let mut mgmt = Management::new(TIMEOUT, HOST_PROPERTIES, false);
+        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, false);
         let time = Instant::now();
 
         let action = mgmt.poll_action(time);
@@ -985,10 +1042,132 @@ mod tests {
 
     #[test]
     fn properties_auto_synced() {
-        let mut mgmt = Management::new(TIMEOUT, HOST_PROPERTIES, true);
+        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, true);
         let time = Instant::now();
 
         let action = mgmt.poll_action(time);
         assert_that!(action, pat!(PacketAction::Send(len(eq(1)))));
+    }
+
+    #[test]
+    fn properties_limits_capped_by_host() {
+        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, false);
+        let mut event = mgmt.properties_changed();
+
+        // Both the TPer's capabilities and the echo exceed the host's
+        // `MaxMethods` of 10.
+        let exceeding = Properties { max_methods: Limit::Limited(NonZero::new(20).unwrap()), ..Properties::INITIAL };
+        let _ = mgmt.handle_tokens(properties_response(exceeding.clone(), Some(exceeding.clone())), &Span::none());
+        assert_that!(
+            event.try_recv(),
+            ok(&eq(&PropertiesChanged {
+                remote_capabilities: exceeding,
+                outbound_properties: HOST_CAPABILITIES,
+                inbound_properties: HOST_CAPABILITIES,
+            }))
+        );
+    }
+
+    /// Returns a [`Properties`] with the given features (sequence numbers,
+    /// ACK/NAK) and initial values otherwise.
+    fn features((seq_numbers, ack_nak): (bool, bool)) -> Properties {
+        Properties { seq_numbers, ack_nak, ..Properties::INITIAL }
+    }
+
+    #[rstest::rstest]
+    #[case::none((false, false), (false, false), (false, false), (false, false))]
+    #[case::mutual((true, true), (true, true), (true, true), (true, true))]
+    #[case::tper_downgrades_echo((true, true), (true, true), (true, false), (true, false))]
+    #[case::echo_omits_features((true, true), (true, true), (false, false), (false, false))]
+    fn properties_mutual_features(
+        #[case] host: (bool, bool),
+        #[case] tper: (bool, bool),
+        #[case] echo: (bool, bool),
+        #[case] expected: (bool, bool),
+    ) {
+        let mut mgmt = Management::new(TIMEOUT, features(host), false);
+        let mut event = mgmt.properties_changed();
+
+        let actions = mgmt.handle_tokens(properties_response(features(tper), Some(features(echo))), &Span::none());
+        assert_that!(actions, is_empty());
+        let event = event.try_recv().unwrap();
+        let outbound = &event.outbound_properties;
+        let inbound = &event.inbound_properties;
+        assert_that!((outbound.seq_numbers, outbound.ack_nak), eq(expected));
+        assert_that!((inbound.seq_numbers, inbound.ack_nak), eq(expected));
+    }
+
+    #[rstest::rstest]
+    #[case::echo_exceeds_host((false, false), (true, true), (true, true))]
+    #[case::echo_exceeds_tper((true, true), (true, false), (true, true))]
+    #[case::ack_nak_without_seq_numbers((true, true), (true, true), (false, true))]
+    fn properties_feature_mismatch_resets_stack(
+        #[case] host: (bool, bool),
+        #[case] tper: (bool, bool),
+        #[case] echo: (bool, bool),
+    ) {
+        let mut mgmt = Management::new(TIMEOUT, features(host), true);
+        let mut event = mgmt.properties_changed();
+
+        let actions = mgmt.handle_tokens(properties_response(features(tper), Some(features(echo))), &Span::none());
+        assert_that!(actions, elements_are![pat!(ManagementAction::StackReset { .. })]);
+        assert!(!mgmt.auto_sync_properties);
+
+        // The mismatched properties are not applied.
+        assert_that!(event.try_recv(), err(eq(&async_broadcast::TryRecvError::Empty)));
+        assert_that!(mgmt.state.outbound_properties, eq(&Properties::INITIAL));
+        assert_that!(mgmt.state.inbound_properties, eq(&Properties::INITIAL));
+    }
+
+    #[rstest::rstest]
+    #[case::not_used(false, false, false)]
+    #[case::supported_and_used(true, true, false)]
+    #[case::supported_not_used(true, false, false)]
+    #[case::unsupported_but_used(false, true, true)]
+    fn properties_continued_tokens(#[case] host: bool, #[case] echo: bool, #[case] reset: bool) {
+        let host = Properties { continued_tokens: host, ..Properties::INITIAL };
+        // The TPer accepting continued tokens from us has no bearing on whether
+        // it may send them to us.
+        let tper = Properties { continued_tokens: true, ..Properties::INITIAL };
+        let echo = Properties { continued_tokens: echo, ..Properties::INITIAL };
+        let mut mgmt = Management::new(TIMEOUT, host, true);
+        let mut event = mgmt.properties_changed();
+
+        let actions = mgmt.handle_tokens(properties_response(tper, Some(echo.clone())), &Span::none());
+        if reset {
+            assert_that!(actions, elements_are![pat!(ManagementAction::StackReset { .. })]);
+            assert!(!mgmt.auto_sync_properties);
+            assert_that!(event.try_recv(), err(eq(&async_broadcast::TryRecvError::Empty)));
+        } else {
+            assert_that!(actions, is_empty());
+            assert!(mgmt.auto_sync_properties);
+            let event = event.try_recv().unwrap();
+            assert_that!(event.inbound_properties.continued_tokens, eq(echo.continued_tokens));
+        }
+    }
+
+    #[test]
+    fn reset_resyncs_properties_with_auto_sync() {
+        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, true);
+        let time = Instant::now();
+
+        mgmt.handle_reset();
+        let action = mgmt.poll_action(time);
+        assert_that!(action, pat!(PacketAction::Send(len(eq(1)))));
+    }
+
+    #[test]
+    fn reset_after_feature_mismatch_does_not_resync() {
+        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, true);
+        let time = Instant::now();
+
+        let mismatch = features((true, true));
+        let actions = mgmt.handle_tokens(properties_response(mismatch.clone(), Some(mismatch)), &Span::none());
+        assert_that!(actions, elements_are![pat!(ManagementAction::StackReset { .. })]);
+
+        // Another sync would get the same echo and trigger another reset.
+        mgmt.handle_reset();
+        let action = mgmt.poll_action(time);
+        assert_that!(action, pat!(PacketAction::None));
     }
 }

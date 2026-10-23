@@ -63,8 +63,9 @@ pub enum PacketAction {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PropertiesChanged {
-    pub remote_properties: Properties,
-    pub connection_properties: Properties,
+    pub remote_capabilities: Properties,
+    pub outbound_properties: Properties,
+    pub inbound_properties: Properties,
 }
 
 #[cfg(test)]

@@ -99,40 +99,90 @@ impl Properties {
         asynchronous: false,
     };
 
-    /// Computes the properties that both parties consider acceptable. Normally,
-    /// one argument should be the host's properties, the other the tper's, but
-    /// the order of arguments doesn't matter.
-    pub fn common(lhs: &Properties, rhs: &Properties) -> Properties {
-        use core::cmp::min;
-
-        Properties {
-            max_methods: min(lhs.max_methods, rhs.max_methods),
-            max_subpackets: min(lhs.max_subpackets, rhs.max_subpackets),
-            max_gross_packet_size: min(lhs.max_gross_packet_size, rhs.max_gross_packet_size),
-            max_packets: min(lhs.max_packets, rhs.max_packets),
-            max_gross_compacket_size: min(lhs.max_gross_compacket_size, rhs.max_gross_compacket_size),
-            max_gross_compacket_response_size: min(
-                lhs.max_gross_compacket_response_size,
-                rhs.max_gross_compacket_response_size,
-            ),
-            max_sessions: lhs.max_sessions.or(rhs.max_sessions),
-            max_read_sessions: lhs.max_read_sessions.or(rhs.max_read_sessions),
-            max_ind_token_size: min(lhs.max_ind_token_size, rhs.max_ind_token_size),
-            max_agg_token_size: min(lhs.max_agg_token_size, rhs.max_agg_token_size),
-            max_authentications: lhs.max_authentications.or(rhs.max_authentications),
-            max_transaction_limit: lhs.max_transaction_limit.or(rhs.max_transaction_limit),
-            def_session_timeout: lhs.def_session_timeout.or(rhs.def_session_timeout),
-            max_session_timeout: lhs.max_session_timeout.or(rhs.max_session_timeout),
-            min_session_timeout: lhs.min_session_timeout.or(rhs.min_session_timeout),
-            def_trans_timeout: lhs.def_trans_timeout.or(rhs.def_trans_timeout),
-            max_trans_timeout: lhs.max_trans_timeout.or(rhs.max_trans_timeout),
-            min_trans_timeout: lhs.min_trans_timeout.or(rhs.min_trans_timeout),
-            max_com_id_time: lhs.max_com_id_time.or(rhs.max_com_id_time),
-            continued_tokens: lhs.continued_tokens && rhs.continued_tokens,
-            seq_numbers: lhs.seq_numbers && rhs.seq_numbers,
-            ack_nak: lhs.ack_nak && rhs.ack_nak,
-            asynchronous: lhs.asynchronous && rhs.asynchronous,
+    /// Following the core specification's rules, determine from the capabilities
+    /// of `self` and `remote` whether sequence number, ACK/NAK, and async shall
+    /// be used.
+    ///
+    /// The features are determined as follows:
+    /// - Sequence numbers: if both the host and remote support it, it is enabled.
+    /// - ACK/NAK: enabled if:
+    ///     - supported by both the host and the remote,
+    ///     - AND sequence numbers are supported by both parties.
+    /// - Async: if both the host and remote support it, it is enabled.
+    ///     - Note: both parties must also use buffer management.
+    ///
+    /// The limits of `self` are kept.
+    pub fn with_mutual_features(self, remote: &Self) -> Self {
+        let seq_numbers = self.seq_numbers && remote.seq_numbers;
+        Self {
+            seq_numbers,
+            ack_nak: self.ack_nak && remote.ack_nak && seq_numbers,
+            asynchronous: self.asynchronous && remote.asynchronous,
+            ..self
         }
+    }
+
+    /// Compares the features of `self` to `other`. If support for sequence
+    /// numbers, ACK/NAK, and async are the same, returns `true`. If any of
+    /// them differ, returns `false`.
+    pub fn features_eq(&self, other: &Self) -> bool {
+        self.seq_numbers == other.seq_numbers
+            && self.ack_nak == other.ack_nak
+            && self.asynchronous == other.asynchronous
+    }
+
+    /// Compute the more conservative of the limits set by `self` and `other`.
+    ///
+    /// For example, if `self` sets `MaxMethods` at 9, and `other` sets it at 5,
+    /// the returned properties will contain `min(9, 5) = 5`.
+    ///
+    /// Normally, the host can use whatever limits the TPer has as its capabilities,
+    /// independent of the host's capabilities. However, it makes sense to limit
+    /// the outbound traffic based on the host's capabilities as well. In case
+    /// the TPer specified really large buffer, we may want to constrain memory
+    /// usage on the host more strictly.
+    ///
+    /// The features of `self` and TPer-only properties are kept.
+    pub fn with_min_limits(self, other: &Self) -> Self {
+        Self {
+            max_methods: min(self.max_methods, other.max_methods),
+            max_subpackets: min(self.max_subpackets, other.max_subpackets),
+            max_gross_packet_size: min(self.max_gross_packet_size, other.max_gross_packet_size),
+            max_packets: min(self.max_packets, other.max_packets),
+            max_gross_compacket_size: min(self.max_gross_compacket_size, other.max_gross_compacket_size),
+            max_gross_compacket_response_size: min(
+                self.max_gross_compacket_response_size,
+                other.max_gross_compacket_response_size,
+            ),
+            max_ind_token_size: min(self.max_ind_token_size, other.max_ind_token_size),
+            max_agg_token_size: min(self.max_agg_token_size, other.max_agg_token_size),
+
+            max_sessions: self.max_sessions,
+            max_read_sessions: self.max_read_sessions,
+            max_authentications: self.max_authentications,
+            max_transaction_limit: self.max_transaction_limit,
+            def_session_timeout: self.def_session_timeout,
+            max_session_timeout: self.max_session_timeout,
+            min_session_timeout: self.min_session_timeout,
+            def_trans_timeout: self.def_trans_timeout,
+            max_trans_timeout: self.max_trans_timeout,
+            min_trans_timeout: self.min_trans_timeout,
+            max_com_id_time: self.max_com_id_time,
+
+            continued_tokens: self.continued_tokens,
+            seq_numbers: self.seq_numbers,
+            ack_nak: self.ack_nak,
+            asynchronous: self.asynchronous,
+        }
+    }
+
+    /// Replaces the continued tokens property of `self`.
+    ///
+    /// The continued tokens property is separate per direction, and needs no
+    /// negotiation. This method helps inject the remote's support for
+    /// continued tokens into the `self` properties structure.
+    pub fn with_continued_tokens(self, continued_tokens: bool) -> Self {
+        Self { continued_tokens, ..self }
     }
 }
 
@@ -507,5 +557,114 @@ mod tests {
         let tokens = value.to_tokens().unwrap();
         let restored = Properties::from_tokens(&tokens).unwrap();
         assert_eq!(value, restored);
+    }
+
+    fn limit(value: usize) -> Limit<NonZero<usize>> {
+        Limit::Limited(NonZero::new(value).unwrap())
+    }
+
+    fn features(seq_numbers: bool, ack_nak: bool, asynchronous: bool) -> Properties {
+        Properties { seq_numbers, ack_nak, asynchronous, ..Properties::INITIAL }
+    }
+
+    #[rstest]
+    #[case::none(features(false, false, false), features(false, false, false), features(false, false, false))]
+    #[case::all(features(true, true, true), features(true, true, true), features(true, true, true))]
+    #[case::seq_numbers_one_sided(
+        features(true, false, false),
+        features(false, false, false),
+        features(false, false, false)
+    )]
+    #[case::ack_nak_one_sided(features(true, true, false), features(true, false, false), features(true, false, false))]
+    #[case::ack_nak_without_seq_numbers(
+        features(false, true, false),
+        features(true, true, false),
+        features(false, false, false)
+    )]
+    #[case::ack_nak_seq_numbers_one_sided(
+        features(true, true, false),
+        features(false, true, false),
+        features(false, false, false)
+    )]
+    #[case::async_one_sided(features(false, false, true), features(false, false, false), features(false, false, false))]
+    #[case::async_mutual(features(false, false, true), features(false, false, true), features(false, false, true))]
+    fn with_mutual_features(#[case] lhs: Properties, #[case] rhs: Properties, #[case] expected: Properties) {
+        assert_eq!(lhs.clone().with_mutual_features(&rhs), expected);
+        assert_eq!(rhs.with_mutual_features(&lhs), expected);
+    }
+
+    #[rstest]
+    #[case::async_differs(features(false, false, true), features(false, false, false), false)]
+    #[case::ack_nak_differs(features(false, true, false), features(false, false, false), false)]
+    #[case::seq_numbers_differs(features(true, false, false), features(false, false, false), false)]
+    #[case::all_equal(features(true, true, false), features(true, true, false), true)]
+    fn features_eq(#[case] lhs: Properties, #[case] rhs: Properties, #[case] expected: bool) {
+        assert_eq!(lhs.features_eq(&rhs), expected);
+    }
+
+    #[test]
+    fn with_mutual_features_keeps_rest_of_self() {
+        let this = Properties {
+            max_methods: limit(7),
+            max_sessions: Some(limit(3)),
+            continued_tokens: true,
+            ..Properties::INITIAL
+        };
+        let remote = Properties {
+            max_methods: limit(2),
+            max_sessions: Some(limit(1)),
+            continued_tokens: false,
+            ..Properties::INITIAL
+        };
+        assert_eq!(this.clone().with_mutual_features(&remote), this);
+    }
+
+    #[test]
+    fn with_min_limits() {
+        let this = Properties {
+            max_methods: Limit::Unlimited,
+            max_subpackets: limit(4),
+            max_gross_packet_size: limit(2000),
+            max_packets: limit(2),
+            max_gross_compacket_size: limit(4096),
+            max_gross_compacket_response_size: limit(1024),
+            max_ind_token_size: limit(1000),
+            max_agg_token_size: Limit::Unlimited,
+            max_sessions: Some(limit(5)),
+            def_trans_timeout: Some(Limit::Limited(Duration::from_millis(100))),
+            continued_tokens: true,
+            seq_numbers: true,
+            ..Properties::INITIAL
+        };
+        let other = Properties {
+            max_methods: limit(10),
+            max_subpackets: limit(8),
+            max_gross_packet_size: limit(1004),
+            max_packets: limit(1),
+            max_gross_compacket_size: Limit::Unlimited,
+            max_gross_compacket_response_size: limit(65536),
+            max_ind_token_size: limit(968),
+            max_agg_token_size: limit(968),
+            max_sessions: Some(limit(1)),
+            max_read_sessions: Some(limit(1)),
+            def_trans_timeout: Some(Limit::Limited(Duration::from_millis(1))),
+            ack_nak: true,
+            asynchronous: true,
+            ..Properties::INITIAL
+        };
+        // The TPer-only properties and the features come from `this`, even
+        // where only `other` has a value (e.g. `max_read_sessions`).
+        let expected = Properties {
+            max_methods: limit(10),
+            max_subpackets: limit(4),
+            max_gross_packet_size: limit(1004),
+            max_packets: limit(1),
+            max_gross_compacket_size: limit(4096),
+            max_gross_compacket_response_size: limit(1024),
+            max_ind_token_size: limit(968),
+            max_agg_token_size: limit(968),
+            ..this.clone()
+        };
+        assert_eq!(this.with_min_limits(&other), expected);
     }
 }

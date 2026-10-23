@@ -380,8 +380,11 @@ mod tests {
     fn reset_keeps_properties_changed_channel() {
         let mut session = RpcSession::new(TIMEOUT, CAPABILITIES, false);
         let mut event = session.properties_changed();
-        let expected =
-            PropertiesChanged { remote_properties: Properties::INITIAL, connection_properties: Properties::INITIAL };
+        let expected = PropertiesChanged {
+            remote_capabilities: Properties::INITIAL,
+            outbound_properties: Properties::INITIAL,
+            inbound_properties: Properties::INITIAL,
+        };
 
         // Reset twice: the channel must survive more than one reset.
         session.handle_reset();
