@@ -206,7 +206,7 @@ also not the same as the limit for `Set`.
 
    It becomes a real problem once async (several IF-SENDs outstanding) or a
    functional capability is negotiated.
-2. **Internal recovery doesn't re-sync.** `Management::handle_reset` drops
+2. ~~**Internal recovery doesn't re-sync.**~~ `Management::handle_reset` drops
    back to `INITIAL`, but only `Tper::stack_reset` calls `sync_properties()`.
    The automatic recovery path (`Action::Recover` in `protocol_state.rs`)
    stays on the initial properties until the user resets manually.
@@ -215,7 +215,7 @@ also not the same as the limit for `Set`.
    only checks `max_gross_packet_size − 24 − 12`. It ignores the sub-packet
    padding, `max_gross_compacket_size − 20`, and `max_ind_token_size`. The
    last one is the binding limit for large `Set` calls.
-5. **`PropertiesChanged` events are dropped.** The broadcast channel has
+5. ~~**`PropertiesChanged` events are dropped.**~~ The broadcast channel has
    capacity 1 and overflow is disabled. Every `Controller` clone holds an
    *active* `Receiver` that is never read. After the first broadcast the
    channel stays full, and later `try_broadcast` calls fail silently.
