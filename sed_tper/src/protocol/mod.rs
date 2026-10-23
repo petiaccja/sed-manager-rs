@@ -99,7 +99,7 @@ impl Protocol {
 #[derive(Debug, Clone)]
 pub struct Controller {
     command_tx: async_channel::Sender<Command>,
-    conn_rx: async_broadcast::Receiver<PropertiesChanged>,
+    conn_rx: async_broadcast::InactiveReceiver<PropertiesChanged>,
 }
 
 impl Controller {
@@ -107,7 +107,7 @@ impl Controller {
         command_tx: async_channel::Sender<Command>,
         conn_rx: async_broadcast::Receiver<PropertiesChanged>,
     ) -> Self {
-        Self { command_tx, conn_rx }
+        Self { command_tx, conn_rx: conn_rx.deactivate() }
     }
 
     /// Perform an remote procedure call using tokenized methods.
@@ -156,7 +156,7 @@ impl Controller {
     /// channel, it means that the device did not respond to the request to
     /// negotiate properties.
     pub fn properties_changed(&self) -> async_broadcast::Receiver<PropertiesChanged> {
-        self.conn_rx.clone()
+        self.conn_rx.activate_cloned()
     }
 
     /// Spawn a new session with the given ID and properties.

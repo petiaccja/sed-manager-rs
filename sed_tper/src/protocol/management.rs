@@ -43,7 +43,8 @@ pub struct Management {
 
 impl Management {
     pub fn new(timeout: Duration, capabilities: Properties, auto_sync_properties: bool) -> Self {
-        let (properties_changed_tx, properties_changed_rx) = async_broadcast::broadcast(1);
+        let (mut properties_changed_tx, properties_changed_rx) = async_broadcast::broadcast(1);
+        properties_changed_tx.set_overflow(true);
         Self {
             timeout,
             capabilities,
@@ -916,6 +917,52 @@ mod tests {
     fn properties_received_with_host() {
         let mut mgmt = Management::new(TIMEOUT, HOST_PROPERTIES, false);
         let mut event = mgmt.properties_changed();
+
+        let _ = mgmt.handle_tokens(properties_device_call(true), &Span::none());
+        assert_that!(
+            event.try_recv(),
+            ok(&eq(&PropertiesChanged {
+                remote_properties: DEVICE_PROPERTIES,
+                connection_properties: CONNECTION_PROPERTIES
+            }))
+        );
+    }
+
+    #[test]
+    fn properties_changed_lagging_receiver_gets_latest() {
+        let mut mgmt = Management::new(TIMEOUT, HOST_PROPERTIES, false);
+        let mut event = mgmt.properties_changed();
+
+        mgmt.handle_reset();
+        let _ = mgmt.handle_tokens(properties_device_call(true), &Span::none());
+
+        // The receiver is told that it missed an event, and then sees the
+        // latest value only.
+        assert_that!(event.try_recv(), err(eq(&async_broadcast::TryRecvError::Overflowed(1))));
+        assert_that!(
+            event.try_recv(),
+            ok(&eq(&PropertiesChanged {
+                remote_properties: DEVICE_PROPERTIES,
+                connection_properties: CONNECTION_PROPERTIES
+            }))
+        );
+        assert_that!(event.try_recv(), err(eq(&async_broadcast::TryRecvError::Empty)));
+    }
+
+    #[test]
+    fn properties_changed_idle_receiver_does_not_block() {
+        let mut mgmt = Management::new(TIMEOUT, HOST_PROPERTIES, false);
+        let _idle = mgmt.properties_changed();
+        let mut event = mgmt.properties_changed();
+
+        mgmt.handle_reset();
+        assert_that!(
+            event.try_recv(),
+            ok(&eq(&PropertiesChanged {
+                remote_properties: Properties::INITIAL,
+                connection_properties: Properties::INITIAL
+            }))
+        );
 
         let _ = mgmt.handle_tokens(properties_device_call(true), &Span::none());
         assert_that!(
