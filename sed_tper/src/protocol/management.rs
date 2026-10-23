@@ -373,16 +373,8 @@ impl Management {
             .min_by_key(|(sent_at, _)| *sent_at)
     }
 
-    pub fn capabilities(&self) -> &Properties {
-        &self.capabilities
-    }
-
     pub fn properties_changed(&self) -> async_broadcast::Receiver<PropertiesChanged> {
         self.properties_changed_rx.activate_cloned()
-    }
-
-    pub fn auto_sync_properties(&self) -> bool {
-        self.auto_sync_properties
     }
 }
 

@@ -82,13 +82,13 @@ impl RpcSession {
     }
 
     pub fn handle_reset(&mut self) {
-        let capabilities = self.management.capabilities().clone();
-        let auto_sync_properties = self.management.auto_sync_properties();
-        self.management.handle_reset();
-        for (_, mut session) in self.sessions.drain() {
+        let Self { timeout: _, packets_to_send, management, sessions } = self;
+
+        packets_to_send.clear();
+        management.handle_reset();
+        for (_, mut session) in sessions.drain() {
             session.handle_aborted();
         }
-        *self = Self::new(self.timeout, capabilities, auto_sync_properties);
     }
 
     #[cfg(feature = "test-utils")]
@@ -374,6 +374,21 @@ mod tests {
         assert_that!(rpc_action, some(pat!(RpcAction::StackReset { .. })));
         assert_that!(session.poll_action(time), pat!(&PacketAction::None));
         assert!(session.sessions.is_empty());
+    }
+
+    #[test]
+    fn reset_keeps_properties_changed_channel() {
+        let mut session = RpcSession::new(TIMEOUT, CAPABILITIES, false);
+        let mut event = session.properties_changed();
+        let expected =
+            PropertiesChanged { remote_properties: Properties::INITIAL, connection_properties: Properties::INITIAL };
+
+        // Reset twice: the channel must survive more than one reset.
+        session.handle_reset();
+        assert_that!(event.try_recv(), ok(&eq(&expected)));
+        session.handle_reset();
+        assert_that!(event.try_recv(), ok(&eq(&expected)));
+        assert!(!event.is_closed());
     }
 
     #[test]
