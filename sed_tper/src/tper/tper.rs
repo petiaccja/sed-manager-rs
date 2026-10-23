@@ -105,18 +105,19 @@ impl Tper {
         device: Arc<dyn StorageDevice>,
         runtime: Arc<PolyRuntime>,
     ) -> Self {
-        let (protocol, controller) = Protocol::new(com_id, com_id_ext, device.clone(), runtime.clone());
+        let (protocol, controller) = Protocol::new(com_id, com_id_ext, device.clone(), runtime.clone(), true);
         let protocol_task = runtime.spawn(protocol.run());
         let host_session_id = Arc::new(AtomicU32::new(1));
-        let tper = Self { com_id, com_id_ext, device, controller, protocol_task, host_session_id };
-        tper.sync_properties();
-        tper
+        Self { com_id, com_id_ext, device, controller, protocol_task, host_session_id }
     }
 
     /// Initiate a communication properties synchronization with the device's
     /// protocol stack.
+    ///
+    /// Note: the [`Tper`] requests the protocol stack to automatically sync
+    /// properties, so this is not normally necessary to call.
     #[instrument(level = "info", skip(self))]
-    fn sync_properties(&self) {
+    pub fn sync_properties(&self) {
         self.controller.call_properties();
     }
 
@@ -162,10 +163,7 @@ impl Tper {
         let request = ComIdRequest::stack_reset(com_id, com_id_ext);
         let response = self.controller.com_id_request(request).await.map_err(|_| Error::Closed)??;
         match response.payload {
-            StackReset { status: Success, available_data_length: 1.. } => {
-                self.sync_properties();
-                Ok(())
-            }
+            StackReset { status: Success, available_data_length: 1.. } => Ok(()),
             StackReset { available_data_length: 0, .. } => {
                 tracing::error!(context = "this event should not escape the protocol", "stack_reset_pending");
                 Err(Error::StackResetFailed)

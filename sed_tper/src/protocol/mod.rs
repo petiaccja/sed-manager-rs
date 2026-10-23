@@ -55,9 +55,10 @@ impl Protocol {
         com_id_ext: ComIdExt,
         device: Arc<dyn StorageDevice>,
         runtime: Arc<PolyRuntime>,
+        auto_sync_properties: bool,
     ) -> (Self, Controller) {
         let (command_tx, command_rx) = async_channel::unbounded();
-        let state = ProtocolState::new(com_id, com_id_ext);
+        let state = ProtocolState::new(com_id, com_id_ext, auto_sync_properties);
         let controller = Controller::new(command_tx, state.properties_changed());
         let protocol = Self { com_id, device, command_rx, state, runtime };
         (protocol, controller)
@@ -329,7 +330,7 @@ mod tests {
 
         let device = MockDevice::new(scenario.into_iter());
         let runtime = PolyRuntime::Tokio(TokioRuntime::current().unwrap());
-        let (protocol, controller) = Protocol::new(ComId(1), ComIdExt(0), Arc::new(device), Arc::new(runtime));
+        let (protocol, controller) = Protocol::new(ComId(1), ComIdExt(0), Arc::new(device), Arc::new(runtime), false);
         let task = tokio::spawn(protocol.run());
 
         let response_rx = controller.call_start_session(call.parameters.clone());

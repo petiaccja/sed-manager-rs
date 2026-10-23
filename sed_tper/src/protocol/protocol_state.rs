@@ -104,12 +104,12 @@ pub struct ProtocolState {
 }
 
 impl ProtocolState {
-    pub fn new(com_id: ComId, com_id_ext: ComIdExt) -> Self {
+    pub fn new(com_id: ComId, com_id_ext: ComIdExt, auto_sync_properties: bool) -> Self {
         let max_transfer_len = CAPABILITIES.max_gross_compacket_size.get();
         Self {
             com_id,
             com_id_ext,
-            rpc_session: RpcSession::new(DEF_TRANS_TIMEOUT, CAPABILITIES),
+            rpc_session: RpcSession::new(DEF_TRANS_TIMEOUT, CAPABILITIES, auto_sync_properties),
             com_id_session: ComIdSession::new(DEF_TRANS_TIMEOUT),
             rpc_protocol: SynchronousProtocol::new(PACKETIZED_PROTOCOL, max_transfer_len),
             com_id_protocol: SynchronousProtocol::new(COM_ID_PROTOCOL, COM_ID_RESPONSE_LEN),
@@ -386,7 +386,7 @@ mod tests {
 
     #[test]
     fn com_id_request_completed() {
-        let mut protocol = ProtocolState::new(ComId(1), ComIdExt(0));
+        let mut protocol = ProtocolState::new(ComId(1), ComIdExt(0), false);
         let (sender, receiver) = channel();
 
         let request = ComIdRequest::stack_reset(ComId(1), ComIdExt(0));
@@ -419,7 +419,7 @@ mod tests {
 
     #[test]
     fn method_call_completed() {
-        let mut protocol = ProtocolState::new(ComId(1), ComIdExt(0));
+        let mut protocol = ProtocolState::new(ComId(1), ComIdExt(0), false);
         let (sender, receiver) = channel();
 
         let call = start_session_call(SESSION_ID);
@@ -477,7 +477,7 @@ mod tests {
 
     #[test]
     fn unexpected_session_resets_stack() {
-        let mut protocol = ProtocolState::new(ComId(1), ComIdExt(0));
+        let mut protocol = ProtocolState::new(ComId(1), ComIdExt(0), false);
 
         let sync_session = sync_session_call(SESSION_ID, MethodStatus::Success);
         let com_packet = ComPacket {

@@ -37,11 +37,11 @@ pub struct RpcSession {
 }
 
 impl RpcSession {
-    pub fn new(timeout: Duration, capabilities: Properties) -> Self {
+    pub fn new(timeout: Duration, capabilities: Properties, auto_sync_properties: bool) -> Self {
         Self {
             timeout,
             packets_to_send: VecDeque::new(),
-            management: Management::new(timeout, capabilities),
+            management: Management::new(timeout, capabilities, auto_sync_properties),
             sessions: HashMap::new(),
         }
     }
@@ -83,11 +83,12 @@ impl RpcSession {
 
     pub fn handle_reset(&mut self) {
         let capabilities = self.management.capabilities().clone();
+        let auto_sync_properties = self.management.auto_sync_properties();
         self.management.handle_reset();
         for (_, mut session) in self.sessions.drain() {
             session.handle_aborted();
         }
-        *self = Self::new(self.timeout, capabilities);
+        *self = Self::new(self.timeout, capabilities, auto_sync_properties);
     }
 
     #[cfg(feature = "test-utils")]
@@ -219,7 +220,7 @@ mod tests {
     const CAPABILITIES: Properties = Properties::INITIAL;
 
     fn construct_with_sessions(sessions: &[SessionId]) -> RpcSession {
-        let mut session = RpcSession::new(TIMEOUT, CAPABILITIES);
+        let mut session = RpcSession::new(TIMEOUT, CAPABILITIES, false);
         for session_id in sessions {
             session.sessions.insert(*session_id, Session::new(*session_id, TIMEOUT, Properties::INITIAL));
         }
@@ -228,7 +229,7 @@ mod tests {
 
     #[test]
     fn start_session_successfully() {
-        let mut session = RpcSession::new(TIMEOUT, CAPABILITIES);
+        let mut session = RpcSession::new(TIMEOUT, CAPABILITIES, false);
         let time = Instant::now();
         let (sender, receiver) = channel();
 
@@ -319,7 +320,7 @@ mod tests {
 
     #[test]
     fn close_orphaned_session() {
-        let mut session = RpcSession::new(TIMEOUT, CAPABILITIES);
+        let mut session = RpcSession::new(TIMEOUT, CAPABILITIES, false);
         let time = Instant::now();
         let (sender, receiver) = channel();
 
@@ -361,7 +362,7 @@ mod tests {
 
     #[test]
     fn reset_on_unexpected_session() {
-        let mut session = RpcSession::new(TIMEOUT, CAPABILITIES);
+        let mut session = RpcSession::new(TIMEOUT, CAPABILITIES, false);
         let time = Instant::now();
 
         let sync_call = sync_session_call(SESSION_ID_1, MethodStatus::Success);
