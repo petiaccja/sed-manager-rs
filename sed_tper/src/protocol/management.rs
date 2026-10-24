@@ -9,11 +9,7 @@ use std::{
 };
 
 use oneshot::Sender;
-use sed_packet::{
-    packet::{PACKET_HEADER_LEN, Packet, SUB_PACKET_HEADER_LEN},
-    session_id::SessionId,
-    token_stream::ToTokens,
-};
+use sed_packet::{packet::Packet, session_id::SessionId, token_stream::ToTokens};
 use sed_spec::{
     methods::{
         CloseSession, ExtractResult, MethodCall, MethodParam, MethodStatus, MgmtMethodCall, MgmtMethodCallParams,
@@ -27,7 +23,7 @@ use crate::{
     Error,
     protocol::{
         sequence_number::SequenceNumber,
-        shared::{PacketAction, PropertiesChanged, link_both_ways, min_deadline, packetize_one},
+        shared::{PacketAction, PropertiesChanged, StartedSession, link_both_ways, min_deadline, packetize_one},
     },
 };
 
@@ -58,7 +54,7 @@ impl Management {
     pub fn handle_call_start_session(
         &mut self,
         call: StartSession,
-        sender: Sender<Result<(SyncSession, Properties), Error>>,
+        sender: Sender<Result<StartedSession, Error>>,
         span: Span,
     ) {
         self.state.start_session_calls_enqueued.push_back(StartSessionCallRecord { call, sender, span });
@@ -83,7 +79,8 @@ impl Management {
                         let record = StartSessionReceivingRecord {
                             sent_at: time,
                             deadline,
-                            properties: self.state.outbound_properties.clone(),
+                            outbound_properties: self.state.outbound_properties.clone(),
+                            inbound_properties: self.state.inbound_properties.clone(),
                             sender: record.sender,
                             span: record.span,
                         };
@@ -229,9 +226,6 @@ impl Management {
     ///
     /// Currently only one method call is inside a packet, there is no batching.
     fn poll_start_session_calls(&mut self) -> Option<(Packet, Span)> {
-        const MAX_METHOD_CALL_SIZE: usize =
-            Properties::INITIAL.max_gross_packet_size.get() - PACKET_HEADER_LEN - SUB_PACKET_HEADER_LEN;
-
         loop {
             let StartSessionCallRecord { call: start_session, sender, span } =
                 self.state.start_session_calls_enqueued.pop_front()?;
@@ -253,9 +247,12 @@ impl Management {
                 }
             };
 
-            if tokens.len() > MAX_METHOD_CALL_SIZE {
-                let _ =
-                    sender.send(Err(Error::MethodTooLarge { requested: tokens.len(), maximum: MAX_METHOD_CALL_SIZE }));
+            // The negotiated limits are safe to use on the control session,
+            // unlike the negotiated features, which the control session never
+            // switches to.
+            let max_method_len = self.state.outbound_properties.max_method_len();
+            if tokens.len() > max_method_len {
+                let _ = sender.send(Err(Error::MethodTooLarge { requested: tokens.len(), maximum: max_method_len }));
                 continue;
             }
 
@@ -284,12 +281,20 @@ impl Management {
 
         match (maybe_record, status) {
             (Some(record), MethodStatus::Success) => {
-                link_both_ways(source, &record.span);
+                let StartSessionReceivingRecord { outbound_properties, inbound_properties, sender, span, .. } = record;
 
-                if record.sender.send(Ok((sync_session, record.properties.clone()))).is_ok() {
-                    Some(ManagementAction::Spawn { session_id, properties: record.properties })
+                link_both_ways(source, &span);
+
+                let started_session = StartedSession {
+                    sync_session,
+                    outbound_properties: outbound_properties.clone(),
+                    inbound_properties: inbound_properties.clone(),
+                };
+
+                if sender.send(Ok(started_session)).is_ok() {
+                    Some(ManagementAction::Spawn { session_id, outbound_properties, inbound_properties })
                 } else {
-                    Some(ManagementAction::SpawnOrphaned { session_id, properties: record.properties })
+                    Some(ManagementAction::SpawnOrphaned { session_id, outbound_properties, inbound_properties })
                 }
             }
             (Some(record), status) => {
@@ -501,12 +506,12 @@ impl State {
 #[must_use]
 pub enum ManagementAction {
     /// Spawn a new session in response to a successful `SyncSession`.
-    Spawn { session_id: SessionId, properties: Properties },
+    Spawn { session_id: SessionId, outbound_properties: Properties, inbound_properties: Properties },
     /// Spawn a new session in response to a successful `SyncSession` when the
     /// caller is no longer interested in the session (e.g. they dropped the
     /// channel or timed out). Since nobody will be sending anything on the
     /// session, it should be closed immediately.
-    SpawnOrphaned { session_id: SessionId, properties: Properties },
+    SpawnOrphaned { session_id: SessionId, outbound_properties: Properties, inbound_properties: Properties },
     /// Notify an active session that it has been aborted via a `CloseSession`.
     NotifyAbort { session_id: SessionId },
     /// The management session is unrecoverable and a stack reset must be
@@ -535,7 +540,7 @@ enum PropertiesCall {
 #[derive(Debug)]
 pub struct StartSessionCallRecord {
     call: StartSession,
-    sender: Sender<Result<(SyncSession, Properties), Error>>,
+    sender: Sender<Result<StartedSession, Error>>,
     span: Span,
 }
 
@@ -543,7 +548,7 @@ pub struct StartSessionCallRecord {
 struct StartSessionSendingRecord {
     /// The sequence number of the packet in which the method is being sent.
     sequence_number: SequenceNumber,
-    sender: Sender<Result<(SyncSession, Properties), Error>>,
+    sender: Sender<Result<StartedSession, Error>>,
     span: Span,
 }
 
@@ -555,8 +560,9 @@ struct StartSessionReceivingRecord {
     deadline: Instant,
     /// The properties the host is using to send data to the TPer at the moment
     /// the `StartSession` was sent via IF-SEND.
-    properties: Properties,
-    sender: Sender<Result<(SyncSession, Properties), Error>>,
+    outbound_properties: Properties,
+    inbound_properties: Properties,
+    sender: Sender<Result<StartedSession, Error>>,
     span: Span,
 }
 
@@ -636,10 +642,21 @@ mod tests {
         let stack_action = mgmt.handle_tokens(sync_session.to_tokens().unwrap(), &Span::none());
         assert_that!(
             stack_action,
-            eq(&vec![ManagementAction::Spawn { session_id: SESSION_ID, properties: Properties::INITIAL }])
+            eq(&vec![ManagementAction::Spawn {
+                session_id: SESSION_ID,
+                outbound_properties: Properties::INITIAL,
+                inbound_properties: Properties::INITIAL
+            }])
         );
         assert_that!(mgmt.poll_action(time), matches_pattern!(&PacketAction::None));
-        assert_that!(receiver.try_recv(), ok(ok(eq(&(sync_session.parameters, Properties::INITIAL)))));
+        assert_that!(
+            receiver.try_recv(),
+            ok(ok(eq(&StartedSession {
+                sync_session: sync_session.parameters,
+                outbound_properties: Properties::INITIAL,
+                inbound_properties: Properties::INITIAL
+            })))
+        );
 
         assert!(mgmt.state.start_session_calls_enqueued.is_empty());
         assert!(mgmt.state.start_session_calls_sending.is_empty());
@@ -767,10 +784,21 @@ mod tests {
         let stack_action = mgmt.handle_tokens(second_tokens, &Span::none());
         assert_that!(
             stack_action,
-            eq(&vec![ManagementAction::Spawn { session_id: SESSION_ID, properties: Properties::INITIAL }])
+            eq(&vec![ManagementAction::Spawn {
+                session_id: SESSION_ID,
+                outbound_properties: Properties::INITIAL,
+                inbound_properties: Properties::INITIAL
+            }])
         );
         assert_that!(mgmt.poll_action(time), matches_pattern!(&PacketAction::None));
-        assert_that!(receiver.try_recv(), ok(ok(eq(&(sync_session.parameters, Properties::INITIAL)))));
+        assert_that!(
+            receiver.try_recv(),
+            ok(ok(eq(&StartedSession {
+                sync_session: sync_session.parameters,
+                outbound_properties: Properties::INITIAL,
+                inbound_properties: Properties::INITIAL
+            })))
+        );
 
         assert!(mgmt.state.start_session_calls_enqueued.is_empty());
         assert!(mgmt.state.start_session_calls_sending.is_empty());
@@ -835,7 +863,8 @@ mod tests {
 
         // The `Properties` response arrives before the `StartSession` is sent.
         mgmt.handle_iface_send_done(time, SequenceNumber(1), Ok(()));
-        let stack_action = mgmt.handle_tokens(properties_device_call(true), &Span::none());
+        let stack_action =
+            mgmt.handle_tokens(properties_response(TPER_CAPABILITIES, Some(HOST_CAPABILITIES)), &Span::none());
         assert_that!(stack_action, eq(&vec![]));
         mgmt.handle_iface_send_done(time, SequenceNumber(2), Ok(()));
 
@@ -843,9 +872,20 @@ mod tests {
         let stack_action = mgmt.handle_tokens(sync_session.to_tokens().unwrap(), &Span::none());
         assert_that!(
             stack_action,
-            eq(&vec![ManagementAction::Spawn { session_id: SESSION_ID, properties: TPER_CAPABILITIES }])
+            eq(&vec![ManagementAction::Spawn {
+                session_id: SESSION_ID,
+                outbound_properties: TPER_CAPABILITIES,
+                inbound_properties: HOST_CAPABILITIES
+            }])
         );
-        assert_that!(receiver.try_recv(), ok(ok(eq(&(sync_session.parameters, TPER_CAPABILITIES)))));
+        assert_that!(
+            receiver.try_recv(),
+            ok(ok(eq(&StartedSession {
+                sync_session: sync_session.parameters,
+                outbound_properties: TPER_CAPABILITIES,
+                inbound_properties: HOST_CAPABILITIES,
+            })))
+        );
     }
 
     #[test]
@@ -873,9 +913,20 @@ mod tests {
         let stack_action = mgmt.handle_tokens(sync_session.to_tokens().unwrap(), &Span::none());
         assert_that!(
             stack_action,
-            eq(&vec![ManagementAction::Spawn { session_id: SESSION_ID, properties: Properties::INITIAL }])
+            eq(&vec![ManagementAction::Spawn {
+                session_id: SESSION_ID,
+                outbound_properties: Properties::INITIAL,
+                inbound_properties: Properties::INITIAL
+            }])
         );
-        assert_that!(receiver.try_recv(), ok(ok(eq(&(sync_session.parameters, Properties::INITIAL)))));
+        assert_that!(
+            receiver.try_recv(),
+            ok(ok(eq(&StartedSession {
+                sync_session: sync_session.parameters,
+                outbound_properties: Properties::INITIAL,
+                inbound_properties: Properties::INITIAL
+            })))
+        );
     }
 
     #[test]
@@ -936,7 +987,8 @@ mod tests {
             stack_action,
             elements_are!(eq(&ManagementAction::SpawnOrphaned {
                 session_id: SESSION_ID,
-                properties: Properties::INITIAL
+                outbound_properties: Properties::INITIAL,
+                inbound_properties: Properties::INITIAL,
             }))
         );
         assert!(mgmt.state.start_session_calls_receiving.is_empty());

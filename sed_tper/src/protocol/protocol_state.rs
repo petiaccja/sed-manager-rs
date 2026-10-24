@@ -18,7 +18,7 @@ use sed_packet::{
     packet::{COM_PACKET_HEADER_LEN, ComPacket, PACKET_HEADER_LEN, PACKETIZED_PROTOCOL, SUB_PACKET_HEADER_LEN},
     session_id::SessionId,
 };
-use sed_spec::methods::{Limit, Properties, SyncSession};
+use sed_spec::methods::{Limit, Properties};
 use sorbit::ser_de::FromBytes;
 use tracing::{Span, info_span};
 
@@ -28,7 +28,7 @@ use crate::{
         com_id_session::ComIdSession,
         rpc_session::RpcSession,
         sequence_number::SequenceNumber,
-        shared::{Action, PropertiesChanged, min_deadline},
+        shared::{Action, PropertiesChanged, StartedSession, min_deadline},
         synchronous_protocol::SynchronousProtocol,
     },
 };
@@ -131,7 +131,7 @@ impl ProtocolState {
     pub fn handle_call_start_session(
         &mut self,
         call: sed_spec::methods::StartSession,
-        sender: Sender<Result<(SyncSession, Properties), Error>>,
+        sender: Sender<Result<StartedSession, Error>>,
         span: Span,
     ) {
         self.rpc_session.handle_call_start_session(call, sender, span);
@@ -146,8 +146,13 @@ impl ProtocolState {
     }
 
     #[cfg(feature = "test-utils")]
-    pub fn handle_spawn_session(&mut self, session_id: SessionId, properties: Properties) {
-        self.rpc_session.handle_spawn_session(session_id, properties);
+    pub fn handle_spawn_session(
+        &mut self,
+        session_id: SessionId,
+        outbound_properties: Properties,
+        inbound_properties: Properties,
+    ) {
+        self.rpc_session.handle_spawn_session(session_id, outbound_properties, inbound_properties);
     }
 
     pub fn handle_com_request(
@@ -472,7 +477,14 @@ mod tests {
         assert_that!(action, eq(&Action::None));
 
         // Check if we received the response to the method call.
-        assert_that!(receiver.try_recv(), ok(ok(eq(&(response.parameters, Properties::INITIAL)))));
+        assert_that!(
+            receiver.try_recv(),
+            ok(ok(eq(&StartedSession {
+                sync_session: response.parameters,
+                outbound_properties: Properties::INITIAL,
+                inbound_properties: Properties::INITIAL
+            })))
+        );
     }
 
     #[test]

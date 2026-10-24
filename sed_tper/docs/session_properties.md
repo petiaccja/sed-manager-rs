@@ -143,9 +143,13 @@ kind of property:
   on a ComID and not others. It also forces MaxMethods = 0 (Table 167).
 
 **Conclusion:** the only interpretation that is clearly safe is to keep the
-control session on the initial assumptions (SSC-adjusted) with no sequence
+control session on the initial *features* (SSC-adjusted): no sequence
 numbers, ACK/NAK, credits, or async, regardless of the negotiated
-properties. Both sides are required to support that baseline. Control session
+properties. Both sides are required to support that baseline, and the spec
+doesn't define how the control session would switch modes. The negotiated
+*limits* are fine to use on the control session: they only bound sizes, and
+the TPer's `Properties` state what it can receive on the ComID, so staying
+within them is safe whichever session the data is for. Control session
 traffic is small (`Properties`, `StartSession` with at most a 32-byte
 password, `SyncSession`, `CloseSession`). `StartTrustedSession` with
 certificate chains could get large, but it isn't implemented. If async or
@@ -276,8 +280,9 @@ correct without a gate. What's left:
 - Once async or any functional capability can be negotiated, **hold** the
   `StartSession` in `poll_start_session_calls` while `properties_call` is not
   `Idle`. A min can't resolve a functional capability.
-- Leave the control session's own size check on the initial assumptions, as
-  it is now (see "The control (management) session" above).
+- The control session's own size check uses the negotiated outbound limits,
+  but the control session keeps the initial features (see "The control
+  (management) session" above).
 
 ### Step 3: Re-sync after any successful stack reset
 

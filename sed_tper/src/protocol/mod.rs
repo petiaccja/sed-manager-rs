@@ -24,7 +24,7 @@ use sed_packet::{
     session_id::SessionId,
 };
 use sed_spec::methods::Properties;
-use sed_spec::methods::{StartSession, SyncSession};
+use sed_spec::methods::StartSession;
 use tracing::{Instrument as _, Span, info_span};
 
 use crate::Error;
@@ -32,7 +32,7 @@ use protocol_state::ProtocolState;
 use shared::{Action, link_both_ways};
 
 pub use protocol_state::CAPABILITIES;
-pub use shared::PropertiesChanged;
+pub use shared::{PropertiesChanged, StartedSession};
 
 /// The full protocol to communicate with the TPer via packets and ComID requests.
 #[derive(Debug)]
@@ -118,10 +118,7 @@ impl Controller {
         rx
     }
 
-    pub fn call_start_session(
-        &self,
-        start_session: StartSession,
-    ) -> oneshot::Receiver<Result<(SyncSession, Properties), Error>> {
+    pub fn call_start_session(&self, start_session: StartSession) -> oneshot::Receiver<Result<StartedSession, Error>> {
         let (tx, rx) = oneshot::channel();
         let span = Span::current();
         let _ = self.command_tx.try_send(Command::StartSessionCall { call: start_session, sender: tx, span });
@@ -161,8 +158,8 @@ impl Controller {
 
     /// Spawn a new session with the given ID and properties.
     #[cfg(feature = "test-utils")]
-    pub fn spawn(&self, session_id: SessionId, properties: Properties) {
-        let _ = self.command_tx.try_send(Command::Spawn { session_id, properties });
+    pub fn spawn(&self, session_id: SessionId, outbound_properties: Properties, inbound_properties: Properties) {
+        let _ = self.command_tx.try_send(Command::Spawn { session_id, outbound_properties, inbound_properties });
     }
 }
 
@@ -170,12 +167,12 @@ impl Controller {
 #[rustfmt::skip] // Puts everything on a new line with the #[cfg].
 pub enum Command {
     MethodCall { session_id: SessionId, call: Vec<u8>, sender: oneshot::Sender<Result<Vec<u8>, Error>>, span: Span },
-    StartSessionCall { call: StartSession, sender: oneshot::Sender<Result<(SyncSession, Properties), Error>>, span: Span },
+    StartSessionCall { call: StartSession, sender: oneshot::Sender<Result<StartedSession, Error>>, span: Span },
     PropertiesCall { span: Span },
     ComRequest { request: ComIdRequest, sender: oneshot::Sender<Result<ComIdResponse, Error>>, span: Span },
     ReportAborted { session_id: SessionId },
     #[cfg(feature = "test-utils")]
-    Spawn { session_id: SessionId, properties: Properties },
+    Spawn { session_id: SessionId, outbound_properties: Properties, inbound_properties: Properties },
 }
 
 fn inject_command(state: &mut ProtocolState, command: Command) {
@@ -188,7 +185,9 @@ fn inject_command(state: &mut ProtocolState, command: Command) {
         Command::ComRequest { request, sender, span } => state.handle_com_request(request, sender, span),
         Command::ReportAborted { session_id } => state.handle_session_aborted(session_id),
         #[cfg(feature = "test-utils")]
-        Command::Spawn { session_id, properties } => state.handle_spawn_session(session_id, properties),
+        Command::Spawn { session_id, outbound_properties, inbound_properties } => {
+            state.handle_spawn_session(session_id, outbound_properties, inbound_properties)
+        }
     }
 }
 
@@ -335,7 +334,14 @@ mod tests {
 
         let response_rx = controller.call_start_session(call.parameters.clone());
         let response_result = tokio::time::timeout(Duration::from_secs(5), response_rx).await;
-        assert_that!(response_result, ok(ok(ok(eq(&(response.parameters, Properties::INITIAL))))));
+        assert_that!(
+            response_result,
+            ok(ok(ok(eq(&StartedSession {
+                sync_session: response.parameters,
+                outbound_properties: Properties::INITIAL,
+                inbound_properties: Properties::INITIAL
+            }))))
+        );
 
         drop(controller);
         let task_result = tokio::time::timeout(Duration::from_secs(5), task).await;

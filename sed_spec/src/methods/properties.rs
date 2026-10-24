@@ -8,6 +8,7 @@ use core::num::NonZero;
 use core::time::Duration;
 use std::cmp::Ordering;
 
+use sed_packet::packet::{COM_PACKET_HEADER_LEN, PACKET_HEADER_LEN, SUB_PACKET_HEADER_LEN};
 use sed_packet::{
     Named,
     token_stream::{Detokenize, Detokenizer, Tokenize, Tokenizer},
@@ -183,6 +184,20 @@ impl Properties {
     /// continued tokens into the `self` properties structure.
     pub fn with_continued_tokens(self, continued_tokens: bool) -> Self {
         Self { continued_tokens, ..self }
+    }
+
+    /// Compute the maximum number of bytes a method may be to meet the limits
+    /// with packet overheads.
+    ///
+    /// Limits too small to fit the headers (which violate the core
+    /// specification's minimums) result in zero.
+    pub fn max_method_len(&self) -> usize {
+        const SUB_PACKET_PADDING_MASK: usize = !0b11;
+        let max_gross_packet_size = min(
+            self.max_gross_packet_size.get(),
+            self.max_gross_compacket_size.get().saturating_sub(COM_PACKET_HEADER_LEN),
+        );
+        max_gross_packet_size.saturating_sub(PACKET_HEADER_LEN + SUB_PACKET_HEADER_LEN) & SUB_PACKET_PADDING_MASK
     }
 }
 
@@ -666,5 +681,18 @@ mod tests {
             ..this.clone()
         };
         assert_eq!(this.with_min_limits(&other), expected);
+    }
+
+    #[rstest]
+    #[case::initial_equals_ind_token_size(Properties::INITIAL, Properties::INITIAL.max_ind_token_size.get())]
+    #[case::only_packet(Properties { max_gross_packet_size: limit(2000), max_gross_compacket_size: Limit::Unlimited, ..Properties::INITIAL }, 1964)]
+    #[case::only_compacket(Properties { max_gross_packet_size: Limit::Unlimited, max_gross_compacket_size: limit(2000), ..Properties::INITIAL }, 1944)]
+    #[case::stricter_compacket(Properties { max_gross_packet_size: limit(3000), max_gross_compacket_size: limit(2000), ..Properties::INITIAL }, 1944)]
+    #[case::stricter_packet(Properties { max_gross_packet_size: limit(2000), max_gross_compacket_size: limit(3000), ..Properties::INITIAL }, 1964)]
+    #[case::unaligned(Properties { max_gross_packet_size: limit(1999), max_gross_compacket_size: Limit::Unlimited, ..Properties::INITIAL }, 1960)]
+    #[case::packet_too_small(Properties { max_gross_packet_size: limit(20), max_gross_compacket_size: Limit::Unlimited, ..Properties::INITIAL }, 0)]
+    #[case::compacket_too_small(Properties { max_gross_packet_size: Limit::Unlimited, max_gross_compacket_size: limit(10), ..Properties::INITIAL }, 0)]
+    fn max_method_len(#[case] properties: Properties, #[case] expected: usize) {
+        assert_eq!(properties.max_method_len(), expected);
     }
 }

@@ -22,7 +22,7 @@ use crate::{
         management::Management,
         sequence_number::SequenceNumber,
         session::Session,
-        shared::{PacketBatch, PropertiesChanged, eos, min_deadline},
+        shared::{PacketBatch, PropertiesChanged, StartedSession, eos, min_deadline},
     },
 };
 
@@ -65,7 +65,7 @@ impl RpcSession {
     pub fn handle_call_start_session(
         &mut self,
         call: sed_spec::methods::StartSession,
-        sender: Sender<Result<(sed_spec::methods::SyncSession, Properties), Error>>,
+        sender: Sender<Result<StartedSession, Error>>,
         span: Span,
     ) {
         self.management.handle_call_start_session(call, sender, span);
@@ -92,8 +92,18 @@ impl RpcSession {
     }
 
     #[cfg(feature = "test-utils")]
-    pub fn handle_spawn_session(&mut self, session_id: SessionId, properties: Properties) {
-        self.sessions.entry(session_id).or_insert(Session::new(session_id, self.timeout, properties));
+    pub fn handle_spawn_session(
+        &mut self,
+        session_id: SessionId,
+        outbound_properties: Properties,
+        inbound_properties: Properties,
+    ) {
+        self.sessions.entry(session_id).or_insert(Session::new(
+            session_id,
+            self.timeout,
+            outbound_properties,
+            inbound_properties,
+        ));
     }
 
     pub fn handle_iface_send_done(
@@ -120,11 +130,15 @@ impl RpcSession {
             if session_id == SessionId::MANAGEMENT {
                 for action in self.management.handle_tokens(sub_packet.payload, source) {
                     match action {
-                        ManagementAction::Spawn { session_id, properties } => {
-                            self.sessions.insert(session_id, Session::new(session_id, self.timeout, properties));
+                        ManagementAction::Spawn { session_id, outbound_properties, inbound_properties } => {
+                            self.sessions.insert(
+                                session_id,
+                                Session::new(session_id, self.timeout, outbound_properties, inbound_properties),
+                            );
                         }
-                        ManagementAction::SpawnOrphaned { session_id, properties } => {
-                            let mut session = Session::new(session_id, self.timeout, properties);
+                        ManagementAction::SpawnOrphaned { session_id, outbound_properties, inbound_properties } => {
+                            let mut session =
+                                Session::new(session_id, self.timeout, outbound_properties, inbound_properties);
                             let (tx, _rx) = oneshot::async_channel();
                             session.handle_method_call(eos(), tx, source.clone());
                             self.sessions.insert(session_id, session);
@@ -222,7 +236,9 @@ mod tests {
     fn construct_with_sessions(sessions: &[SessionId]) -> RpcSession {
         let mut session = RpcSession::new(TIMEOUT, CAPABILITIES, false);
         for session_id in sessions {
-            session.sessions.insert(*session_id, Session::new(*session_id, TIMEOUT, Properties::INITIAL));
+            session
+                .sessions
+                .insert(*session_id, Session::new(*session_id, TIMEOUT, Properties::INITIAL, Properties::INITIAL));
         }
         session
     }
@@ -255,7 +271,14 @@ mod tests {
         assert_that!(action, none());
         assert_that!(session.poll_action(time), pat!(&PacketAction::None));
 
-        assert_that!(receiver.try_recv(), ok(ok(eq(&(sync_call.parameters, Properties::INITIAL)))));
+        assert_that!(
+            receiver.try_recv(),
+            ok(ok(eq(&StartedSession {
+                sync_session: sync_call.parameters,
+                outbound_properties: Properties::INITIAL,
+                inbound_properties: Properties::INITIAL
+            })))
+        );
         assert!(session.sessions.contains_key(&SESSION_ID_1));
     }
 

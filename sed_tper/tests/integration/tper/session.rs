@@ -50,8 +50,8 @@ async fn activate() {
     let (protocol, controller) = Protocol::new(BASE_COM_ID, ComIdExt(0), device.clone(), runtime, false);
     let protocol = tokio::spawn(protocol.run());
 
-    controller.spawn(session_id, Properties::INITIAL);
-    let session = Session::from_started(sp::ADMIN, session_id, Properties::INITIAL, controller);
+    controller.spawn(session_id, Properties::INITIAL, Properties::INITIAL);
+    let session = Session::from_started(sp::ADMIN, session_id, Properties::INITIAL, Properties::INITIAL, controller);
     assert_that!(session.activate(sp::LOCKING).await, ok(eq(&())));
     let _ = session.close().await;
     let _ = protocol.await;
@@ -70,8 +70,8 @@ async fn authenticate() {
     let (protocol, controller) = Protocol::new(BASE_COM_ID, ComIdExt(0), device.clone(), runtime, false);
     let protocol = tokio::spawn(protocol.run());
 
-    controller.spawn(session_id, Properties::INITIAL);
-    let session = Session::from_started(sp::ADMIN, session_id, Properties::INITIAL, controller);
+    controller.spawn(session_id, Properties::INITIAL, Properties::INITIAL);
+    let session = Session::from_started(sp::ADMIN, session_id, Properties::INITIAL, Properties::INITIAL, controller);
     assert_that!(
         session.authenticate(admin::authority::MAKERS, None).await,
         err(eq(&Error::MethodCallFailed(MethodStatus::InvalidParameter)))
@@ -95,8 +95,8 @@ async fn gen_key() {
     let (protocol, controller) = Protocol::new(BASE_COM_ID, ComIdExt(0), device.clone(), runtime, false);
     let protocol = tokio::spawn(protocol.run());
 
-    controller.spawn(session_id, Properties::INITIAL);
-    let session = Session::from_started(sp::LOCKING, session_id, Properties::INITIAL, controller);
+    controller.spawn(session_id, Properties::INITIAL, Properties::INITIAL);
+    let session = Session::from_started(sp::LOCKING, session_id, Properties::INITIAL, Properties::INITIAL, controller);
     assert_that!(session.gen_key(locking::k_aes_256::GLOBAL_RANGE_KEY, None, None).await, ok(eq(&())));
     let _ = session.close().await;
     let _ = protocol.await;
@@ -112,8 +112,8 @@ async fn get_field() {
     let (protocol, controller) = Protocol::new(BASE_COM_ID, ComIdExt(0), device.clone(), runtime, false);
     let protocol = tokio::spawn(protocol.run());
 
-    controller.spawn(session_id, Properties::INITIAL);
-    let session = Session::from_started(sp::ADMIN, session_id, Properties::INITIAL, controller);
+    controller.spawn(session_id, Properties::INITIAL, Properties::INITIAL);
+    let session = Session::from_started(sp::ADMIN, session_id, Properties::INITIAL, Properties::INITIAL, controller);
     assert_that!(session.get_field(admin::c_pin::MSID.pin()).await, ok(eq(&INITIAL_SID_PASSWORD)));
     let _ = session.close().await;
     let _ = protocol.await;
@@ -129,8 +129,8 @@ async fn get_object() {
     let (protocol, controller) = Protocol::new(BASE_COM_ID, ComIdExt(0), device.clone(), runtime, false);
     let protocol = tokio::spawn(protocol.run());
 
-    controller.spawn(session_id, Properties::INITIAL);
-    let session = Session::from_started(sp::ADMIN, session_id, Properties::INITIAL, controller);
+    controller.spawn(session_id, Properties::INITIAL, Properties::INITIAL);
+    let session = Session::from_started(sp::ADMIN, session_id, Properties::INITIAL, Properties::INITIAL, controller);
     let c_pin_msid = session.get_object::<CPin>(admin::c_pin::MSID, ..).await.unwrap();
     assert_that!(c_pin_msid.uid, some(eq(admin::c_pin::MSID)));
     assert_that!(c_pin_msid.pin, some(eq(&INITIAL_SID_PASSWORD)));
@@ -148,8 +148,8 @@ async fn get_bytes() {
     let (protocol, controller) = Protocol::new(BASE_COM_ID, ComIdExt(0), device.clone(), runtime, false);
     let protocol = tokio::spawn(protocol.run());
 
-    controller.spawn(session_id, Properties::INITIAL);
-    let session = Session::from_started(sp::LOCKING, session_id, Properties::INITIAL, controller);
+    controller.spawn(session_id, Properties::INITIAL, Properties::INITIAL);
+    let session = Session::from_started(sp::LOCKING, session_id, Properties::INITIAL, Properties::INITIAL, controller);
     assert_that!(session.get_bytes(table_id::MBR, ..6).await, ok(len(eq(6))));
     let _ = session.close().await;
     let _ = protocol.await;
@@ -165,8 +165,8 @@ async fn get_acl() {
     let (protocol, controller) = Protocol::new(BASE_COM_ID, ComIdExt(0), device.clone(), runtime, false);
     let protocol = tokio::spawn(protocol.run());
 
-    controller.spawn(session_id, Properties::INITIAL);
-    let session = Session::from_started(sp::ADMIN, session_id, Properties::INITIAL, controller);
+    controller.spawn(session_id, Properties::INITIAL, Properties::INITIAL);
+    let session = Session::from_started(sp::ADMIN, session_id, Properties::INITIAL, Properties::INITIAL, controller);
     assert_that!(session.get_acl(admin::c_pin::MSID.into(), method_id::GET).await, ok(not(is_empty())));
     let _ = session.close().await;
     let _ = protocol.await;
@@ -182,8 +182,8 @@ async fn next() {
     let (protocol, controller) = Protocol::new(BASE_COM_ID, ComIdExt(0), device.clone(), runtime, false);
     let protocol = tokio::spawn(protocol.run());
 
-    controller.spawn(session_id, Properties::INITIAL);
-    let session = Session::from_started(sp::ADMIN, session_id, Properties::INITIAL, controller);
+    controller.spawn(session_id, Properties::INITIAL, Properties::INITIAL);
+    let session = Session::from_started(sp::ADMIN, session_id, Properties::INITIAL, Properties::INITIAL, controller);
     assert_that!(session.next(None, None).await, ok(eq(&vec![admin::sp::ADMIN, admin::sp::LOCKING])));
     assert_that!(session.next(Some(admin::sp::ADMIN), None).await, ok(eq(&vec![admin::sp::LOCKING])));
     assert_that!(session.next(Some(admin::sp::LOCKING), None).await, ok(eq(&vec![])));
@@ -203,8 +203,8 @@ async fn revert() {
     let (protocol, controller) = Protocol::new(BASE_COM_ID, ComIdExt(0), device, runtime, false);
     let protocol = tokio::spawn(protocol.run());
 
-    controller.spawn(session_id, Properties::INITIAL);
-    let session = Session::from_started(sp::ADMIN, session_id, Properties::INITIAL, controller);
+    controller.spawn(session_id, Properties::INITIAL, Properties::INITIAL);
+    let session = Session::from_started(sp::ADMIN, session_id, Properties::INITIAL, Properties::INITIAL, controller);
     assert_that!(session.revert(sp::LOCKING).await, ok(anything()));
     let _ = session.close().await;
     let _ = protocol.await;
@@ -220,8 +220,8 @@ async fn revert_sp() {
     let (protocol, controller) = Protocol::new(BASE_COM_ID, ComIdExt(0), device, runtime, false);
     let protocol = tokio::spawn(protocol.run());
 
-    controller.spawn(session_id, Properties::INITIAL);
-    let session = Session::from_started(sp::LOCKING, session_id, Properties::INITIAL, controller);
+    controller.spawn(session_id, Properties::INITIAL, Properties::INITIAL);
+    let session = Session::from_started(sp::LOCKING, session_id, Properties::INITIAL, Properties::INITIAL, controller);
     match session.revert_sp(None).await {
         Ok(_) => (),
         Err((session, err)) => {
@@ -242,8 +242,8 @@ async fn random() {
     let (protocol, controller) = Protocol::new(BASE_COM_ID, ComIdExt(0), device, runtime, false);
     let protocol = tokio::spawn(protocol.run());
 
-    controller.spawn(session_id, Properties::INITIAL);
-    let session = Session::from_started(sp::ADMIN, session_id, Properties::INITIAL, controller);
+    controller.spawn(session_id, Properties::INITIAL, Properties::INITIAL);
+    let session = Session::from_started(sp::ADMIN, session_id, Properties::INITIAL, Properties::INITIAL, controller);
     assert_that!(session.random(4).await, ok(len(eq(4))));
     let _ = session.close().await;
     let _ = protocol.await;
@@ -259,8 +259,8 @@ async fn set_field() {
     let (protocol, controller) = Protocol::new(BASE_COM_ID, ComIdExt(0), device.clone(), runtime, false);
     let protocol = tokio::spawn(protocol.run());
 
-    controller.spawn(session_id, Properties::INITIAL);
-    let session = Session::from_started(sp::ADMIN, session_id, Properties::INITIAL, controller);
+    controller.spawn(session_id, Properties::INITIAL, Properties::INITIAL);
+    let session = Session::from_started(sp::ADMIN, session_id, Properties::INITIAL, Properties::INITIAL, controller);
     assert_that!(session.set_field(admin::c_pin::SID.pin(), b"asd".as_slice().into()).await, ok(anything()));
     let _ = session.close().await;
     let _ = protocol.await;
@@ -276,8 +276,8 @@ async fn set_object() {
     let (protocol, controller) = Protocol::new(BASE_COM_ID, ComIdExt(0), device.clone(), runtime, false);
     let protocol = tokio::spawn(protocol.run());
 
-    controller.spawn(session_id, Properties::INITIAL);
-    let session = Session::from_started(sp::ADMIN, session_id, Properties::INITIAL, controller);
+    controller.spawn(session_id, Properties::INITIAL, Properties::INITIAL);
+    let session = Session::from_started(sp::ADMIN, session_id, Properties::INITIAL, Properties::INITIAL, controller);
     let values = CPin { pin: Some(b"asd".as_slice().into()), ..Default::default() };
     assert_that!(session.set_object(admin::c_pin::SID, values).await, ok(anything()));
     let _ = session.close().await;
@@ -294,8 +294,8 @@ async fn set_bytes() {
     let (protocol, controller) = Protocol::new(BASE_COM_ID, ComIdExt(0), device.clone(), runtime, false);
     let protocol = tokio::spawn(protocol.run());
 
-    controller.spawn(session_id, Properties::INITIAL);
-    let session = Session::from_started(sp::LOCKING, session_id, Properties::INITIAL, controller);
+    controller.spawn(session_id, Properties::INITIAL, Properties::INITIAL);
+    let session = Session::from_started(sp::LOCKING, session_id, Properties::INITIAL, Properties::INITIAL, controller);
     assert_that!(session.set_bytes(table_id::MBR, 0, &[1, 2, 3]).await, ok(anything()));
     let _ = session.close().await;
     let _ = protocol.await;
