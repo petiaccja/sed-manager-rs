@@ -236,181 +236,105 @@ also not the same as the limit for `Set`.
 
 ## Problems in the current implementation
 
-1. ~~**In-flight `Properties` calls are not accounted for.**~~ The snapshot is
-   taken in `Management::handle_iface_send_done`, i.e. at the
-   `StartSession`'s IF-SEND (see "When to take a session's snapshot"). It
-   contains only confirmed values. Under the synchronous protocol, a
-   `Properties` response always arrives before the next IF-SEND. So the only
-   uncertain case is a `Properties` call that timed out and whose response
-   arrives late, or never. That is harmless today, because:
+1. **Power cycles on static ComIDs** aren't handled (see 5.2.2.4 above). This
+   is deferred for now.
+2. **A timed-out `Properties` call releases the `StartSession`s.**
+   `Management::poll_action` never has a `Properties` and a `StartSession` in
+   flight at the same time, so the snapshot taken at the `StartSession`'s
+   IF-SEND is always exact, except when the `Properties` call times out. The
+   TPer may still process it, but the `StartSession`s are released and get
+   the confirmed values. That is harmless today, because:
    - only limits are negotiated;
    - the host always sends the same HostProperties;
    - the previous values are the smaller ones, which is the safe side.
 
-   It becomes a real problem once async (several IF-SENDs outstanding) or a
-   functional capability is negotiated.
-2. ~~**Internal recovery doesn't re-sync.**~~ `Management::handle_reset` drops
-   back to `INITIAL`, but only `Tper::stack_reset` calls `sync_properties()`.
-   The automatic recovery path (`Action::Recover` in `protocol_state.rs`)
-   stays on the initial properties until the user resets manually.
-3. **Power cycles on static ComIDs** aren't handled (see 5.2.2.4 above).
-4. ~~**The size check is incomplete.**~~ `protocol::Session::handle_method_call`
-   only checks `max_gross_packet_size − 24 − 12`. It ignores the sub-packet
-   padding, `max_gross_compacket_size − 20`, and `max_ind_token_size`. The
-   last one is the binding limit for large `Set` calls.
-5. ~~**`PropertiesChanged` events are dropped.**~~ The broadcast channel has
-   capacity 1 and overflow is disabled. Every `Controller` clone holds an
-   *active* `Receiver` that is never read. After the first broadcast the
-   channel stays full, and later `try_broadcast` calls fail silently.
-6. ~~**The two directions are mixed.**~~ `Properties::common(capabilities,
-   tper_properties)` merges both directions into one struct, and that is
-   also what `tper::Session::properties()` returns now. Sending is
-   limited by the TPer's `Properties` (what it can receive). Receiving is
-   limited by the TPer's MaxResponseComPacketSize and by the HostProperties
-   the TPer echoed. Problem 4 and the `Get` limit both need the directions
-   kept separate. `Properties::common` should be renamed and cleaned up to
-   reflect that the two kinds of properties combine differently:
-   - **Limits** (sizes, counts) are per direction. Each direction can use
-     whatever its receiver supports, so no min across both sides is needed.
-   - **Functional capabilities** (Asynchronous, AckNak, SequenceNumbers,
-     ContinuedTokens) must be the lowest common denominator of host and
-     TPer, because both sides have to run the same protocol.
-7. ~~**The initial assumptions ignore the SSC**~~ (see above).
-   `Properties::INITIAL` follows Core Table 168. That is too pessimistic for
-   Opal and Pyrite, and too optimistic about token size for Enterprise.
+   It becomes a real problem once a functional capability is negotiated.
+3. **The size check is incomplete.** `max_method_len()` covers the
+   sub-packet padding, `MaxPacketSize`, and `MaxComPacketSize`, and is used
+   by `protocol::Session::handle_method_call` and the control session. Still
+   missing:
+   - `MaxIndTokenSize` is not checked anywhere. It is the binding limit for
+     large `Set` calls when the TPer's token limit is below its packet
+     limit, which is always the case on Enterprise (256).
+   - The inbound limit (`properties().inbound.max_method_len()`) ignores the
+     TPer's `MaxResponseComPacketSize`. It's only stored in
+     `outbound.max_gross_compacket_response_size` and never folded into the
+     inbound direction.
 
 ## Plan
 
-### ✓ ~~Step 1~~: Model the negotiated state explicitly in `Management`
-
-- Replace `properties: Properties` with a struct that holds the two
-  directions separately:
-  - `tper_properties`: the TPer's receive capabilities from the `Properties`
-    response. This bounds what we send.
-  - `host_properties_echoed`: the HostProperties the TPer echoed. This
-    bounds what the TPer sends us, together with its
-    MaxResponseComPacketSize.
-- Both start from the initial assumptions. Following 5.2.2.4, a property
-  the TPer didn't return keeps its assumed value.
-- Fix problem 5. Either enable `set_overflow(true)`, or remove the active
-  receiver from `Controller`: keep only the `InactiveReceiver` and call
-  `activate_cloned()` on demand in `properties_changed()`. I prefer the
-  second, because then only receivers that actually listen are attached to
-  the channel.
-
-### Step 2: Re-sync before `StartSession`, and ~~account for in-flight calls~~
+### Step 2: Re-sync before `StartSession` (deferred)
 
 The snapshot is taken at the `StartSession`'s IF-SEND
 (`Management::handle_iface_send_done`) and carried through
-`StartSessionReceivingRecord` to `StackAction::Spawn` and to `tper::Session`.
-Under the synchronous protocol, with only limits negotiated, this is already
-correct without a gate. What's left:
+`StartSessionReceivingRecord` to `ManagementAction::Spawn` and to
+`tper::Session`. `Properties` and `StartSession` are never in flight at the
+same time, and a requested `Properties` takes priority over enqueued
+`StartSession`s. The control session uses the negotiated outbound limits for
+its size check. What's left:
 
 - When no sync has completed since the last reset or the last
   `StartSession`, push a `Properties` request before releasing the
-  `StartSession`. This fixes problem 3 at the cost of one extra round trip
+  `StartSession`. This fixes problem 1 at the cost of one extra round trip
   per session start. `StartSession`s queued back to back may share one sync.
   Never put `Properties` and `StartSession` in the same IF-SEND (see
   "`Properties` and `StartSession` in the same IF-SEND" above).
-- When a `Properties` call is in flight at the `StartSession`'s IF-SEND
-  (e.g. one that timed out but may still be processed), the snapshot's
-  limits are the min of the confirmed and the requested values. This fixes
-  problem 1 for limits.
-- Once async or any functional capability can be negotiated, **hold** the
-  `StartSession` in `poll_start_session_calls` while `properties_call` is not
-  `Idle`. A min can't resolve a functional capability.
-- The control session's own size check uses the negotiated outbound limits,
-  but the control session keeps the initial features (see "The control
-  (management) session" above).
+- Once any functional capability can be negotiated, a `Properties` call that
+  timed out must keep blocking `StartSession`s (e.g. until a stack reset
+  makes the state known again), because a min can't resolve a functional
+  capability (problem 2).
 
-### ✓ ~~Step 3~~: Re-sync after any successful stack reset
+### Step 4: Complete the limits
 
-- Request the `Properties` sync from `Management::handle_reset` itself, or
-  from `ProtocolState` when it sees a successful `StackReset` response. Then
-  remove the explicit call in `Tper::stack_reset`. Recovery and manual reset
-  then take the same path, which fixes problem 2. With step 2 in place this
-  is mostly belt-and-braces, but it keeps `PropertiesChanged` accurate for
-  the GUI.
+The limits are computed per direction by `Properties::max_method_len()` on
+`SessionProperties::outbound` and `inbound`, instead of a separate
+`SessionLimits` type. What's left (problem 3):
 
-### ✓ ~~Step 4~~: Compute the limits in one place
-
-- Add a type in `sed_tper` (e.g. `SessionLimits`) computed from the
-  snapshot:
-  - `max_method_len()` = `min(MaxPacketSize − 24, MaxComPacketSize − 20 −
-    24) − 12`, rounded down to a multiple of 4, using the TPer's
-    `Properties`;
-  - `max_token_len()` = the TPer's `MaxIndTokenSize`;
-  - `max_response_len()` = `min(TPer MaxResponseComPacketSize, echoed host
-    MaxComPacketSize) − 20 − 24 − 12`, plus the corresponding packet and
-    token limits from the echoed HostProperties.
-- Use it for the check in `protocol::Session::handle_method_call` (problem
-  4).
+- `max_token_len()` = the TPer's `MaxIndTokenSize`, enforced for outbound
+  method calls.
+- Include the TPer's `MaxResponseComPacketSize` in the inbound limit:
+  `min(TPer MaxResponseComPacketSize, echoed host MaxComPacketSize) − 20 −
+  24 − 12`, e.g. by folding it into `inbound` in
+  `Management::handle_properties`.
 
 ### Step 5: Chunk limits on `tper::Session`
 
-`tper::Session` already receives its snapshot from
-`Controller::call_start_session` and exposes it through `properties()`.
-What's left:
+`tper::Session::properties()` already returns the two-direction
+`SessionProperties` snapshot. What's left:
 
-- Once step 1 separates the directions, change the snapshot (and
-  `properties()`) to the two-direction type, or add `limits()` returning the
-  `SessionLimits` from step 4.
 - Add `max_set_bytes_len()` and `max_get_bytes_len()`.
   - Work out the encoding overhead by tokenizing the call or response with
     worst-case integers (`where_ = u64::MAX`) and an empty byte atom, plus
-    the difference between a short and a long atom header.
+    the difference between a short and a long atom header. The
+    `max_set_payload` and `max_get_payload` helpers in
+    `sed_tper/tests/integration/tper/session.rs` do a simpler version of
+    this (`where_ = 0`, no token limit).
   - For `Set`: `min(max_method_len − overhead, max_token_len −
     long_atom_header)`.
-  - For `Get`: the same, using `max_response_len` and the response encoding.
+  - For `Get`: the same, using the inbound limits and the response encoding.
 
   Deriving the overhead from the real serialization avoids hard-coding token
   sizes.
 - Keep `set_bytes`/`get_bytes` as a single RPC each. The chunking loop lives
   in `sed_manager` (`write_mbr`, and a read-back loop for verification).
 
-### ~~Step 6~~: SSC-aware initial assumptions
-
-- Make the initial assumptions a function of the SSC found in discovery,
-  using the three groups in "Initial assumptions depend on the SSC" above:
-  Core Table 168 by default, the 2048-based values for the Opal family, and
-  Core's values with MaxIndTokenSize lowered to 256 for Enterprise.
-  `Tper::connect` doesn't know the SSC today, so this either takes the
-  discovery as a parameter or keeps Core's values and lowers the token size
-  to 256 everywhere. It is low priority as long as the sync normally
-  succeeds, but it matters for the Enterprise fallback.
-
 ### Step 7: Tests and virtual device
 
-- `Management` unit tests:
-  - a `StartSession` is preceded by a `Properties` sync (step 2);
-  - a reset triggers a re-sync;
-  - two consecutive `PropertiesChanged` events both arrive (regression test
-    for problem 5).
-- `protocol::Session`: a test at the exact boundary covering padding, the
-  ComPacket limit, and the token limit.
+- `Management` unit test: a `StartSession` is preceded by a `Properties`
+  sync (step 2).
+- `protocol::Session`: a test at the token limit (step 4).
 - Virtual device:
-  - reject IF-SEND above its MaxComPacketSize (interface error) and
-    oversized packets/tokens, as the spec requires;
-  - return RESPONSE_OVERFLOW for responses that don't fit;
-  - make its capabilities configurable (64 KiB today) so a small limit
-    (e.g. 2 KiB) exercises many chunks quickly.
-- Integration test against the virtual device: `set_bytes` of exactly
-  `max_set_bytes_len()` succeeds, one byte more returns `MethodTooLarge`
-  without touching the device, and the same for `get_bytes` /
-  `max_get_bytes_len()`.
+  - reject oversized tokens, as the spec requires;
+  - exercise a small limit (e.g. 2 KiB) to get many chunks quickly. The
+    capabilities can be set through `VirtualDevice::new`, but no test does
+    it yet, and `VirtualDeviceBuilder` has no public constructor.
+- Integration test against the virtual device: `get_bytes` of one byte more
+  than `max_get_bytes_len()` returns `MethodTooLarge` without touching the
+  device. Today the oversized request reaches the device, which answers with
+  RESPONSE_OVERFLOW.
 
 ## Open decisions
 
 - **Sync before every `StartSession`, or only after a reset?** Recommended:
   every time. The spec advises it for static ComIDs, and it covers
   suspend/resume.
-- **The TPer omits the HostProperties echo.** Per 5.2.2.4, using the TPer's
-  own `Properties` for the send direction is spec-correct, and the receive
-  direction stays on the initial assumptions. The current code is more
-  conservative and keeps both directions on the initial assumptions.
-  Recommended: follow the spec, because the directions are separate after
-  step 1.
-- **Fix for problem 5:** overflow mode, or an on-demand activated receiver
-  (preferred).
-- **Step 6 scope:** a full SSC-aware table, or just lower the token size
-  assumption to cover Enterprise.
