@@ -285,7 +285,10 @@ pub struct SetBytes {
 impl SetBytes {
     /// The number of bytes the method encoding adds to the payload. This
     /// excludes the entire payload, including its token header and bytes.
-    pub const HEADER_LEN: usize = 34;
+    ///
+    /// A pessimistic `where` argument that take a full 8 bytes as an
+    /// unsigned integer is assumed.
+    pub const HEADER_LEN: usize = 42;
 }
 
 impl SessionMethodParam for SetBytes {
@@ -300,29 +303,46 @@ pub struct SetResult;
 mod tests {
     use super::*;
 
-    use sed_packet::{Uid, token_stream::ToTokens as _};
+    use rstest::rstest;
+    use sed_packet::{
+        Uid,
+        token_stream::{
+            ToTokens as _,
+            token::{Atom as _, MediumAtom, ShortAtom, TinyAtom},
+        },
+    };
 
     use crate::methods::{MethodCall, MethodResult, MethodStatus};
 
-    const PROBE_LEN: usize = 1;
-
-    #[test]
-    fn get_bytes_response_header_len() {
-        let probe = Bytes(vec![0; PROBE_LEN]);
+    #[rstest]
+    #[case::short_atom_lower(TinyAtom::DATA_LEN_MAX + 1)]
+    #[case::short_atom_upper(ShortAtom::DATA_LEN_MAX)]
+    #[case::medium_atom_lower(ShortAtom::DATA_LEN_MAX + 1)]
+    #[case::medium_atom_upper(MediumAtom::DATA_LEN_MAX)]
+    #[case::long_atom_lower(MediumAtom::DATA_LEN_MAX + 1)]
+    #[case::long_atom_random(131072)]
+    fn get_bytes_response_header_len(#[case] probe_len: usize) {
+        let probe = Bytes(vec![0; probe_len]);
         let tokenized_probe = probe.to_tokens().unwrap();
         let overhead_probe = MethodResult(Ok(GetBytesResult { result: probe }));
         let overhead = overhead_probe.to_tokens().unwrap().len() - tokenized_probe.len();
         assert_eq!(GetBytesResult::HEADER_LEN, overhead);
     }
 
-    #[test]
-    fn set_bytes_request_header_len() {
-        let probe = Bytes(vec![0; PROBE_LEN]);
+    #[rstest]
+    #[case::short_atom_lower(TinyAtom::DATA_LEN_MAX + 1)]
+    #[case::short_atom_upper(ShortAtom::DATA_LEN_MAX)]
+    #[case::medium_atom_lower(ShortAtom::DATA_LEN_MAX + 1)]
+    #[case::medium_atom_upper(MediumAtom::DATA_LEN_MAX)]
+    #[case::long_atom_lower(MediumAtom::DATA_LEN_MAX + 1)]
+    #[case::long_atom_random(131072)]
+    fn set_bytes_request_header_len(#[case] probe_len: usize) {
+        let probe = Bytes(vec![0; probe_len]);
         let tokenized_probe = probe.to_tokens().unwrap();
         let overhead_probe = MethodCall {
             invoking_id: Uid::null(),
             method_id: Uid::null(),
-            parameters: SetBytes { where_: Some(0), values: Some(probe) },
+            parameters: SetBytes { where_: Some(u64::MAX), values: Some(probe) },
             status: MethodStatus::Success,
         };
         let overhead = overhead_probe.to_tokens().unwrap().len() - tokenized_probe.len();
