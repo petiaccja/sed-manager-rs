@@ -7,9 +7,9 @@ use std::sync::Arc;
 
 use googletest::{assert_that, matchers::*};
 use sed_async::{PolyRuntime, TokioRuntime};
-use sed_packet::{com_id::ComIdExt, discovery::LockingDescriptor};
+use sed_packet::{Bytes, Uid, com_id::ComIdExt, discovery::LockingDescriptor, token_stream::ToTokens as _};
 use sed_spec::{
-    methods::{MethodStatus, SessionProperties},
+    methods::{GetBytesResult, MethodCall, MethodResult, MethodStatus, Properties, SessionProperties, SetBytes},
     objects::{AuthorityRef, CPin, CPinRefExt, SecurityProviderRef},
     preconfig::{
         core::shared::{self, method_id, table_id},
@@ -40,8 +40,8 @@ fn spawn_session(
     let (protocol, controller) = Protocol::new(BASE_COM_ID, ComIdExt(0), None, device.clone(), runtime, false);
     let protocol = tokio::spawn(protocol.run());
 
-    controller.spawn(session_id, SessionProperties::INITIAL);
-    let session = Session::from_started(sp, session_id, SessionProperties::INITIAL, controller);
+    controller.spawn(session_id, SessionProperties::INITIAL_OPAL_FAMILY);
+    let session = Session::from_started(sp, session_id, SessionProperties::INITIAL_OPAL_FAMILY, controller);
     (session, protocol)
 }
 
@@ -143,6 +143,36 @@ async fn get_bytes() {
 #[instrument]
 #[tokio::test]
 #[with_tracing]
+async fn get_bytes_oversize() {
+    let device = Arc::new(VirtualDevice::default());
+    let (session, protocol) = spawn_session(&device, sp::LOCKING, Some(locking::authority::ADMIN.get(0).unwrap()));
+
+    let max_payload_len = max_get_payload(&session.properties().inbound) as u64;
+
+    let result = session.get_bytes(table_id::MBR, 0..(max_payload_len + 1)).await;
+    assert_that!(result, err(eq(&Error::MethodCallFailed(MethodStatus::ResponseOverflow))));
+    let _ = session.close().await;
+    let _ = protocol.await;
+}
+
+#[instrument]
+#[tokio::test]
+#[with_tracing]
+async fn get_bytes_limit_size() {
+    let device = Arc::new(VirtualDevice::default());
+    let (session, protocol) = spawn_session(&device, sp::LOCKING, Some(locking::authority::ADMIN.get(0).unwrap()));
+
+    let max_payload_len = max_get_payload(&session.properties().inbound) as u64;
+
+    let result = session.get_bytes(table_id::MBR, 0..(max_payload_len)).await;
+    assert_that!(result, ok(len(eq(max_payload_len as usize))));
+    let _ = session.close().await;
+    let _ = protocol.await;
+}
+
+#[instrument]
+#[tokio::test]
+#[with_tracing]
 async fn get_acl() {
     let device = Arc::new(VirtualDevice::default());
     let (session, protocol) = spawn_session(&device, sp::ADMIN, None);
@@ -236,4 +266,59 @@ async fn set_bytes() {
     assert_that!(session.set_bytes(table_id::MBR, 0, &[1, 2, 3]).await, ok(anything()));
     let _ = session.close().await;
     let _ = protocol.await;
+}
+
+#[instrument]
+#[tokio::test]
+#[with_tracing]
+async fn set_bytes_oversize() {
+    let device = Arc::new(VirtualDevice::default());
+    let (session, protocol) = spawn_session(&device, sp::LOCKING, Some(locking::authority::ADMIN.get(0).unwrap()));
+
+    let max_method_len = session.properties().outbound.max_method_len();
+    let max_payload = max_set_payload(&session.properties().outbound);
+    let payload = vec![0; max_payload + 1];
+
+    assert_that!(
+        session.set_bytes(table_id::MBR, 0, &payload).await,
+        err(eq(&Error::MethodTooLarge { requested: max_method_len + 1, maximum: max_method_len }))
+    );
+    let _ = session.close().await;
+    let _ = protocol.await;
+}
+
+#[instrument]
+#[tokio::test]
+#[with_tracing]
+async fn set_bytes_limit_size() {
+    let device = Arc::new(VirtualDevice::default());
+    let (session, protocol) = spawn_session(&device, sp::LOCKING, Some(locking::authority::ADMIN.get(0).unwrap()));
+
+    let max_payload = max_set_payload(&session.properties().outbound);
+    let payload = vec![0; max_payload];
+
+    assert_that!(session.set_bytes(table_id::MBR, 0, &payload).await, ok(anything()));
+    let _ = session.close().await;
+    let _ = protocol.await;
+}
+
+fn max_set_payload(outbound_properties: &Properties) -> usize {
+    let probe_len = 968;
+    let overhead_probe = MethodCall {
+        invoking_id: Uid::null(),
+        method_id: Uid::null(),
+        parameters: SetBytes { where_: Some(0), values: Some(Bytes(vec![0; probe_len])) },
+        status: MethodStatus::Success,
+    };
+    let overhead = overhead_probe.to_tokens().unwrap().len() - probe_len;
+    let max_method_len = outbound_properties.max_method_len();
+    max_method_len - overhead
+}
+
+fn max_get_payload(inbound_properties: &Properties) -> usize {
+    let probe_len = 968;
+    let overhead_probe = MethodResult(Ok(GetBytesResult { result: Bytes(vec![0; probe_len]) }));
+    let overhead = overhead_probe.to_tokens().unwrap().len() - probe_len;
+    let max_method_len = inbound_properties.max_method_len();
+    max_method_len - overhead
 }

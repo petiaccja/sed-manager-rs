@@ -190,7 +190,14 @@ impl ManagementSession {
                     sessions
                         .insert(
                             session_id,
-                            Session::new(tper, session_id, params.spid, self.capabilities.clone(), authority_uid)?
+                            Session::new(
+                                tper,
+                                session_id,
+                                params.spid,
+                                self.capabilities.clone(),
+                                self.outbound_properties.clone(),
+                                authority_uid
+                            )?
                         )
                         .is_none(),
                     "the same TSN was erronously assigned to multiple sessions"
@@ -230,5 +237,9 @@ impl ManagementSession {
 
     fn reset(&mut self) {
         self.recv_buffer.clear();
+    }
+
+    pub fn outbound_properties(&self) -> &Properties {
+        &self.outbound_properties
     }
 }

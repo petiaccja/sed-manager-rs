@@ -35,6 +35,7 @@ pub enum Session {
         session_id: SessionId,
         sp: SecurityProviderRef,
         capabilities: Properties,
+        outbound_properties: Properties,
         authenticated: HashSet<AuthorityRef>,
         recv_buffer: VecDeque<u8>,
     },
@@ -47,13 +48,21 @@ impl Session {
         session_id: SessionId,
         sp_uid: SecurityProviderRef,
         capabilities: Properties,
+        outbound_properties: Properties,
         authority_uid: AuthorityRef,
     ) -> Result<Self, MethodStatus> {
         let sp = tper.sp(sp_uid).ok_or(MethodStatus::InvalidParameter)?;
         let authority = sp.authority().get(&authority_uid).ok_or(MethodStatus::InvalidParameter)?;
         let class = authority.class.filter(|class| !class.is_null());
         let authenticated = std::iter::once(authority_uid).chain(class).chain(std::iter::once(ANYBODY)).collect();
-        Ok(Self::Open { session_id, sp: sp_uid, capabilities, authenticated, recv_buffer: VecDeque::new() })
+        Ok(Self::Open {
+            session_id,
+            sp: sp_uid,
+            capabilities,
+            outbound_properties,
+            authenticated,
+            recv_buffer: VecDeque::new(),
+        })
     }
 
     #[must_use]
@@ -106,13 +115,14 @@ impl Session {
     fn call(&mut self, tper: &mut Tper, call: SessionMethodCall) -> Option<(Packet, Vec<SecurityProviderRef>)> {
         use SessionMethodCallParams::*;
 
-        if let Self::Open { session_id, .. } = self {
+        if let Self::Open { session_id, outbound_properties, .. } = self {
             use SecurityProvider as Sp;
 
             let session_id = *session_id;
+            let max_method_len = outbound_properties.max_method_len();
 
             let invoking_id = call.invoking_id;
-            let (result_tokens, reverted_sps) = match call.params {
+            let (mut result_tokens, reverted_sps) = match call.params {
                 Activate(params) => make_result(self.activate(tper, invoking_id, &params)),
                 Authenticate(params) => make_result(self.authenticate(tper, invoking_id, &params)),
                 GenKey(params) => make_result(self.gen_key(tper, invoking_id, &params)),
@@ -132,7 +142,14 @@ impl Session {
                 SetSecurityProvider(p) => make_result(self.set_obj_opt(tper, invoking_id, p, Sp::sp_mut)),
                 SetTableDesc(p) => make_result(self.set_obj(tper, invoking_id, p, Sp::table_mut)),
             };
-            tracing::debug!(method_result = tracing::field::debug(&result_tokens), "response");
+            tracing::debug!(method_result = ?result_tokens, "response");
+
+            if result_tokens.len() > max_method_len {
+                result_tokens = MethodResult::<SetResult>(Err(MethodStatus::ResponseOverflow))
+                    .to_tokens()
+                    .expect("input must be valid tokens");
+            }
+
             Some((
                 session_id.assign(Packet {
                     payload: vec![SubPacket {

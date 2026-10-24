@@ -242,6 +242,10 @@ impl SessionProperties {
     /// The initial assumptions in both directions.
     pub const INITIAL: SessionProperties =
         SessionProperties { outbound: Properties::INITIAL, inbound: Properties::INITIAL };
+    pub const INITIAL_OPAL_FAMILY: SessionProperties =
+        SessionProperties { outbound: Properties::INITIAL_OPAL_FAMILY, inbound: Properties::INITIAL_OPAL_FAMILY };
+    pub const INITIAL_ENTERPRISE: SessionProperties =
+        SessionProperties { outbound: Properties::INITIAL_ENTERPRISE, inbound: Properties::INITIAL_ENTERPRISE };
 }
 
 impl Default for SessionProperties {

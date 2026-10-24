@@ -66,8 +66,17 @@ impl PacketSession {
         let authority = authority.unwrap_or(ANYBODY);
         let tsn = self.management_session.next_tsn();
         let session_id = SessionId { hsn: host_session_number, tsn };
-        self.sessions
-            .insert(session_id, Session::new(tper, session_id, sp, self.capabilities.clone(), authority)?);
+        self.sessions.insert(
+            session_id,
+            Session::new(
+                tper,
+                session_id,
+                sp,
+                self.capabilities.clone(),
+                self.management_session.outbound_properties().clone(),
+                authority,
+            )?,
+        );
         Ok(session_id)
     }
 

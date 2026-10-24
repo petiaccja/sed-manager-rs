@@ -241,7 +241,7 @@ pub struct VirtualDeviceBuilder {
 
 impl VirtualDeviceBuilder {
     pub fn with_capabilities(self, capabilities: Properties) -> Self {
-        Self { capabilities, ..self }
+        Self { capabilities }
     }
 
     pub fn opal_2(self) -> VirtualDevice {
