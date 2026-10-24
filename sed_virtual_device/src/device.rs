@@ -239,6 +239,7 @@ pub struct VirtualDeviceBuilder {
     capabilities: Properties,
 }
 
+#[expect(clippy::new_without_default)]
 impl VirtualDeviceBuilder {
     pub fn new() -> Self {
         Self { capabilities: CAPABILITIES }
