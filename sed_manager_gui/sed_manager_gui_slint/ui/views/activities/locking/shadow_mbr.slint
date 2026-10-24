@@ -30,6 +30,8 @@ export component ShadowMbrTab {
     in-out property <Mbr> mbr;
 
     callback commit-mbr-control();
+    callback write-mbr(path: string);
+    callback cancel-mbr-write();
     callback logout();
 
     VerticalLayout {
@@ -131,7 +133,7 @@ export component ShadowMbrTab {
                         spacing: 0.8rem;
                         padding: 0.8rem;
 
-                        LineEdit {
+                        path := LineEdit {
                             placeholder-text: "Path to the PBA image file";
                         }
 
@@ -140,16 +142,24 @@ export component ShadowMbrTab {
                             icon: Icons.file-open;
                             text: "Open";
                             colorize-icon: true;
-                            enabled: !command-status.session-busy && !command-status.tper-busy && mbr.supported;
+                            enabled: !command-status.session-busy && !command-status.tper-busy && mbr.supported && false;
                         }
 
                         Button {
                             width: 90px;
                             icon: Icons.upload;
-                            text: "Upload";
+                            text: !mbr.writing-in-progress ? "Upload" : "Cancel";
                             colorize-icon: true;
                             primary: true;
-                            enabled: !command-status.session-busy && !command-status.tper-busy && mbr.supported;
+                            enabled: (!command-status.session-busy && !command-status.tper-busy && mbr.supported && !path.text.is-empty) || mbr.writing-in-progress;
+
+                            clicked => {
+                                if !mbr.writing-in-progress {
+                                    write-mbr(path.text)
+                                } else {
+                                    cancel-mbr-write()
+                                }
+                            }
                         }
                     }
                 }

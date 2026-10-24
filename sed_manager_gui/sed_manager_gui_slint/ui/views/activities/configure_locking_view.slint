@@ -46,6 +46,8 @@ export component ConfigureLockingView {
     callback commit-authorities();
     callback change-password(authority: Uid, password: string);
     callback commit-mbr-control();
+    callback write-mbr(path: string);
+    callback cancel-mbr-write();
 
     if !command-status.secondary-session-active: VerticalLayout {
         alignment: start;
@@ -130,6 +132,14 @@ export component ConfigureLockingView {
 
                     commit-mbr-control() => {
                         commit-mbr-control()
+                    }
+
+                    write-mbr(path) => {
+                        write-mbr(path)
+                    }
+
+                    cancel-mbr-write() => {
+                        cancel-mbr-write()
                     }
 
                     logout() => {
