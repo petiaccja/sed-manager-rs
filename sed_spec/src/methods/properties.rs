@@ -71,10 +71,12 @@ pub struct Properties {
 }
 
 impl Properties {
-    /// The initial assumption about the other end's capabilities. The protocol
-    /// must stick to these values before exchanging properties and upping the
-    /// levels.
-    pub const INITIAL: Properties = Properties {
+    /// The initial assumption according to the core specification. Use when the
+    /// SSC is unknown.
+    ///
+    /// The protocol must stick to these values before exchanging properties and
+    /// upping the levels.
+    pub const INITIAL: Self = Self {
         max_methods: Limit::Limited(NonZero::new(1).unwrap()),
         max_subpackets: Limit::Limited(NonZero::new(1).unwrap()),
         max_gross_packet_size: Limit::Limited(NonZero::new(1004).unwrap()),
@@ -98,6 +100,24 @@ impl Properties {
         seq_numbers: false,
         ack_nak: false,
         asynchronous: false,
+    };
+
+    /// Initial assumptions of Opal 1-2, Opalite, Pyrite 1-2, Ruby, and KPIO
+    /// devices in both directions.
+    pub const INITIAL_OPAL_FAMILY: Self = Self {
+        max_gross_packet_size: Limit::Limited(NonZero::new(2028).unwrap()),
+        max_gross_compacket_size: Limit::Limited(NonZero::new(2048).unwrap()),
+        max_gross_compacket_response_size: Limit::Limited(NonZero::new(2048).unwrap()),
+        max_ind_token_size: Limit::Limited(NonZero::new(1992).unwrap()),
+        max_agg_token_size: Limit::Limited(NonZero::new(1992).unwrap()), // Matches individual tokens on purpose.
+        ..Self::INITIAL
+    };
+
+    /// Initial assumptions of Enterprise devices in both directions.
+    pub const INITIAL_ENTERPRISE: Self = Self {
+        max_ind_token_size: Limit::Limited(NonZero::new(256).unwrap()),
+        max_agg_token_size: Limit::Limited(NonZero::new(256).unwrap()), // Matches individual tokens on purpose.
+        ..Self::INITIAL
     };
 
     /// Following the core specification's rules, determine from the capabilities
@@ -707,7 +727,8 @@ mod tests {
     }
 
     #[rstest]
-    #[case::initial_equals_ind_token_size(Properties::INITIAL, Properties::INITIAL.max_ind_token_size.get())]
+    #[case::core_initial_equals_ind_token_size(Properties::INITIAL, Properties::INITIAL.max_ind_token_size.get())]
+    #[case::opal_initial_equals_ind_token_size(Properties::INITIAL_OPAL_FAMILY, Properties::INITIAL_OPAL_FAMILY.max_ind_token_size.get())]
     #[case::only_packet(Properties { max_gross_packet_size: limit(2000), max_gross_compacket_size: Limit::Unlimited, ..Properties::INITIAL }, 1964)]
     #[case::only_compacket(Properties { max_gross_packet_size: Limit::Unlimited, max_gross_compacket_size: limit(2000), ..Properties::INITIAL }, 1944)]
     #[case::stricter_compacket(Properties { max_gross_packet_size: limit(3000), max_gross_compacket_size: limit(2000), ..Properties::INITIAL }, 1944)]
