@@ -249,6 +249,12 @@ pub struct GetObjectResult<O> {
     pub result: O,
 }
 
+impl GetBytesResult {
+    /// The number of bytes the method result encoding adds to the payload. This
+    /// excludes the entire payload, including its token header and bytes.
+    pub const HEADER_LEN: usize = 8;
+}
+
 //------------------------------------------------------------------------------
 // Set
 //------------------------------------------------------------------------------
@@ -276,6 +282,12 @@ pub struct SetBytes {
     pub values: Option<Bytes>,
 }
 
+impl SetBytes {
+    /// The number of bytes the method encoding adds to the payload. This
+    /// excludes the entire payload, including its token header and bytes.
+    pub const HEADER_LEN: usize = 34;
+}
+
 impl SessionMethodParam for SetBytes {
     const METHOD_ID: MethodRef = method_id::SET;
     type Result = SetResult;
@@ -283,3 +295,37 @@ impl SessionMethodParam for SetBytes {
 
 #[derive(Debug, Clone, PartialEq, Eq, DetokenizeStruct, TokenizeStruct)]
 pub struct SetResult;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use sed_packet::{Uid, token_stream::ToTokens as _};
+
+    use crate::methods::{MethodCall, MethodResult, MethodStatus};
+
+    const PROBE_LEN: usize = 1;
+
+    #[test]
+    fn get_bytes_response_header_len() {
+        let probe = Bytes(vec![0; PROBE_LEN]);
+        let tokenized_probe = probe.to_tokens().unwrap();
+        let overhead_probe = MethodResult(Ok(GetBytesResult { result: probe }));
+        let overhead = overhead_probe.to_tokens().unwrap().len() - tokenized_probe.len();
+        assert_eq!(GetBytesResult::HEADER_LEN, overhead);
+    }
+
+    #[test]
+    fn set_bytes_request_header_len() {
+        let probe = Bytes(vec![0; PROBE_LEN]);
+        let tokenized_probe = probe.to_tokens().unwrap();
+        let overhead_probe = MethodCall {
+            invoking_id: Uid::null(),
+            method_id: Uid::null(),
+            parameters: SetBytes { where_: Some(0), values: Some(probe) },
+            status: MethodStatus::Success,
+        };
+        let overhead = overhead_probe.to_tokens().unwrap().len() - tokenized_probe.len();
+        assert_eq!(SetBytes::HEADER_LEN, overhead);
+    }
+}

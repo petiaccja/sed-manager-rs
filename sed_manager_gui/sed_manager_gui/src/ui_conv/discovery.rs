@@ -505,12 +505,12 @@ impl FromBackend<&Discovery> for (ui::DeviceConfig, ui::Discovery) {
         let ssc_features = value
             .feature_descriptors
             .iter()
-            .filter(|desc| desc.as_ssc().is_some())
+            .filter(|desc| desc.is_ssc())
             .map(ui::DiscoveryFeature::from_backend);
         let common_features = value
             .feature_descriptors
             .iter()
-            .filter(|desc| desc.as_ssc().is_none())
+            .filter(|desc| !desc.is_ssc())
             .map(ui::DiscoveryFeature::from_backend);
 
         let mut config = ui::DeviceConfig { sid_msid_pin_differ: true, locking_enabled: false };

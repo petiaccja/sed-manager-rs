@@ -11,7 +11,7 @@ use sed_packet::{
     MaxBytes,
     com_id::{ComId, ComIdExt},
     com_id_request::ComIdState,
-    discovery::Discovery,
+    discovery::{Discovery, SecuritySubsystemClass},
 };
 use sed_spec::{methods::Properties, objects::AuthorityRef};
 use sed_tper::{PropertiesChanged, Tper};
@@ -35,12 +35,9 @@ impl Device {
             .await
             .map_err(Error::from)
             .and_then(|discovery| Spec::try_from(discovery).map_err(|_| Error::NoSscAvailable));
-        let tper = spec
-            .as_ref()
-            .ok()
-            .and_then(|spec| spec.default_ssc())
-            .and_then(|ssc| ssc.as_ssc())
-            .map(|ssc| Tper::connect(ssc.static_com_ids_p1().start, ComIdExt(0), storage_device.clone(), runtime));
+        let tper = spec.as_ref().ok().and_then(|spec| spec.default_ssc()).map(|ssc| {
+            Tper::connect(ssc.static_com_ids_p1().start, ComIdExt(0), Some(&ssc), storage_device.clone(), runtime)
+        });
         Self { storage_device, spec, tper }
     }
 

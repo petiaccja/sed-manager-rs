@@ -35,11 +35,6 @@ pub trait Feature {
     fn minor_version(&self) -> u8 {
         0
     }
-
-    /// Additional properties in case the feature is an SSC.
-    fn as_ssc(&self) -> Option<&dyn SecuritySubsystemClass> {
-        None
-    }
 }
 
 /// The shared properties of security subsystem classes.
@@ -301,10 +296,6 @@ impl Feature for EnterpriseDescriptor {
     fn version(&self) -> u8 {
         self.version
     }
-
-    fn as_ssc(&self) -> Option<&dyn SecuritySubsystemClass> {
-        Some(self)
-    }
 }
 
 impl SecuritySubsystemClass for EnterpriseDescriptor {
@@ -334,10 +325,6 @@ impl Feature for OpalV1Descriptor {
 
     fn version(&self) -> u8 {
         self.version
-    }
-
-    fn as_ssc(&self) -> Option<&dyn SecuritySubsystemClass> {
-        Some(self)
     }
 }
 
@@ -373,10 +360,6 @@ impl Feature for OpalV2Descriptor {
     fn version(&self) -> u8 {
         self.version
     }
-
-    fn as_ssc(&self) -> Option<&dyn SecuritySubsystemClass> {
-        Some(self)
-    }
 }
 
 impl SecuritySubsystemClass for OpalV2Descriptor {
@@ -407,10 +390,6 @@ impl Feature for OpaliteDescriptor {
 
     fn version(&self) -> u8 {
         self.version
-    }
-
-    fn as_ssc(&self) -> Option<&dyn SecuritySubsystemClass> {
-        Some(self)
     }
 }
 
@@ -443,10 +422,6 @@ impl Feature for PyriteV1Descriptor {
     fn version(&self) -> u8 {
         self.version
     }
-
-    fn as_ssc(&self) -> Option<&dyn SecuritySubsystemClass> {
-        Some(self)
-    }
 }
 
 impl SecuritySubsystemClass for PyriteV1Descriptor {
@@ -477,10 +452,6 @@ impl Feature for PyriteV2Descriptor {
 
     fn version(&self) -> u8 {
         self.version
-    }
-
-    fn as_ssc(&self) -> Option<&dyn SecuritySubsystemClass> {
-        Some(self)
     }
 }
 
@@ -515,10 +486,6 @@ impl Feature for RubyDescriptor {
 
     fn version(&self) -> u8 {
         self.version
-    }
-
-    fn as_ssc(&self) -> Option<&dyn SecuritySubsystemClass> {
-        Some(self)
     }
 }
 
@@ -601,10 +568,6 @@ impl Feature for KeyPerIODescriptor {
 
     fn version(&self) -> u8 {
         self.version
-    }
-
-    fn as_ssc(&self) -> Option<&dyn SecuritySubsystemClass> {
-        Some(self)
     }
 }
 
@@ -716,27 +679,130 @@ impl Feature for FeatureDescriptor {
             FeatureDescriptor::Unrecognized(_, desc) => desc.minor_version(),
         }
     }
+}
 
-    fn as_ssc(&self) -> Option<&dyn SecuritySubsystemClass> {
+impl FeatureDescriptor {
+    /// Return the SSC feature descriptor if the feature is an SSC.
+    pub fn to_ssc(&self) -> Option<SscFeatureDescriptor> {
+        self.clone().try_into().ok()
+    }
+
+    /// Whether the feature is an SSC.
+    pub fn is_ssc(&self) -> bool {
+        self.to_ssc().is_some()
+    }
+}
+
+/// The feature descriptor of a security subsystem class (SSC).
+///
+/// This is the subset of [`FeatureDescriptor`] that holds SSCs.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SscFeatureDescriptor {
+    Enterprise(EnterpriseDescriptor),
+    OpalV1(OpalV1Descriptor),
+    OpalV2(OpalV2Descriptor),
+    Opalite(OpaliteDescriptor),
+    PyriteV1(PyriteV1Descriptor),
+    PyriteV2(PyriteV2Descriptor),
+    Ruby(RubyDescriptor),
+    KeyPerIO(KeyPerIODescriptor),
+}
+
+impl SscFeatureDescriptor {
+    fn as_dyn(&self) -> &dyn SecuritySubsystemClass {
         match self {
-            FeatureDescriptor::TPer(desc) => desc.as_ssc(),
-            FeatureDescriptor::Locking(desc) => desc.as_ssc(),
-            FeatureDescriptor::Geometry(desc) => desc.as_ssc(),
-            FeatureDescriptor::DataRemoval(desc) => desc.as_ssc(),
-            FeatureDescriptor::BlockSIDAuth(desc) => desc.as_ssc(),
-            FeatureDescriptor::AdditionalDataStoreTables(desc) => desc.as_ssc(),
-            FeatureDescriptor::Enterprise(desc) => desc.as_ssc(),
-            FeatureDescriptor::OpalV1(desc) => desc.as_ssc(),
-            FeatureDescriptor::OpalV2(desc) => desc.as_ssc(),
-            FeatureDescriptor::Opalite(desc) => desc.as_ssc(),
-            FeatureDescriptor::PyriteV1(desc) => desc.as_ssc(),
-            FeatureDescriptor::PyriteV2(desc) => desc.as_ssc(),
-            FeatureDescriptor::Ruby(desc) => desc.as_ssc(),
-            FeatureDescriptor::KeyPerIO(desc) => desc.as_ssc(),
-            FeatureDescriptor::Unrecognized(_, desc) => desc.as_ssc(),
+            SscFeatureDescriptor::Enterprise(desc) => desc,
+            SscFeatureDescriptor::OpalV1(desc) => desc,
+            SscFeatureDescriptor::OpalV2(desc) => desc,
+            SscFeatureDescriptor::Opalite(desc) => desc,
+            SscFeatureDescriptor::PyriteV1(desc) => desc,
+            SscFeatureDescriptor::PyriteV2(desc) => desc,
+            SscFeatureDescriptor::Ruby(desc) => desc,
+            SscFeatureDescriptor::KeyPerIO(desc) => desc,
         }
     }
 }
+
+impl Feature for SscFeatureDescriptor {
+    fn name(&self) -> &'static str {
+        self.as_dyn().name()
+    }
+
+    fn version(&self) -> u8 {
+        self.as_dyn().version()
+    }
+
+    fn minor_version(&self) -> u8 {
+        self.as_dyn().minor_version()
+    }
+}
+
+impl SecuritySubsystemClass for SscFeatureDescriptor {
+    fn static_com_ids_p1(&self) -> Range<ComId> {
+        self.as_dyn().static_com_ids_p1()
+    }
+
+    fn static_com_ids_p3(&self) -> Range<ComId> {
+        self.as_dyn().static_com_ids_p3()
+    }
+}
+
+impl TryFrom<FeatureDescriptor> for SscFeatureDescriptor {
+    type Error = FeatureDescriptor;
+    fn try_from(value: FeatureDescriptor) -> Result<Self, Self::Error> {
+        match value {
+            FeatureDescriptor::Enterprise(desc) => Ok(SscFeatureDescriptor::Enterprise(desc)),
+            FeatureDescriptor::OpalV1(desc) => Ok(SscFeatureDescriptor::OpalV1(desc)),
+            FeatureDescriptor::OpalV2(desc) => Ok(SscFeatureDescriptor::OpalV2(desc)),
+            FeatureDescriptor::Opalite(desc) => Ok(SscFeatureDescriptor::Opalite(desc)),
+            FeatureDescriptor::PyriteV1(desc) => Ok(SscFeatureDescriptor::PyriteV1(desc)),
+            FeatureDescriptor::PyriteV2(desc) => Ok(SscFeatureDescriptor::PyriteV2(desc)),
+            FeatureDescriptor::Ruby(desc) => Ok(SscFeatureDescriptor::Ruby(desc)),
+            FeatureDescriptor::KeyPerIO(desc) => Ok(SscFeatureDescriptor::KeyPerIO(desc)),
+            FeatureDescriptor::TPer(_)
+            | FeatureDescriptor::Locking(_)
+            | FeatureDescriptor::Geometry(_)
+            | FeatureDescriptor::DataRemoval(_)
+            | FeatureDescriptor::BlockSIDAuth(_)
+            | FeatureDescriptor::AdditionalDataStoreTables(_)
+            | FeatureDescriptor::Unrecognized(_, _) => Err(value),
+        }
+    }
+}
+
+impl From<SscFeatureDescriptor> for FeatureDescriptor {
+    fn from(value: SscFeatureDescriptor) -> Self {
+        match value {
+            SscFeatureDescriptor::Enterprise(desc) => FeatureDescriptor::Enterprise(desc),
+            SscFeatureDescriptor::OpalV1(desc) => FeatureDescriptor::OpalV1(desc),
+            SscFeatureDescriptor::OpalV2(desc) => FeatureDescriptor::OpalV2(desc),
+            SscFeatureDescriptor::Opalite(desc) => FeatureDescriptor::Opalite(desc),
+            SscFeatureDescriptor::PyriteV1(desc) => FeatureDescriptor::PyriteV1(desc),
+            SscFeatureDescriptor::PyriteV2(desc) => FeatureDescriptor::PyriteV2(desc),
+            SscFeatureDescriptor::Ruby(desc) => FeatureDescriptor::Ruby(desc),
+            SscFeatureDescriptor::KeyPerIO(desc) => FeatureDescriptor::KeyPerIO(desc),
+        }
+    }
+}
+
+macro_rules! impl_ssc_from {
+    ($desc:ty, $variant:ident) => {
+        impl From<$desc> for SscFeatureDescriptor {
+            fn from(value: $desc) -> Self {
+                SscFeatureDescriptor::$variant(value)
+            }
+        }
+    };
+}
+
+impl_ssc_from!(EnterpriseDescriptor, Enterprise);
+impl_ssc_from!(OpalV1Descriptor, OpalV1);
+impl_ssc_from!(OpalV2Descriptor, OpalV2);
+impl_ssc_from!(OpaliteDescriptor, Opalite);
+impl_ssc_from!(PyriteV1Descriptor, PyriteV1);
+impl_ssc_from!(PyriteV2Descriptor, PyriteV2);
+impl_ssc_from!(RubyDescriptor, Ruby);
+impl_ssc_from!(KeyPerIODescriptor, KeyPerIO);
 
 macro_rules! impl_convert {
     ($desc:ty, $variant:ident) => {
@@ -801,11 +867,11 @@ impl Discovery {
     }
 
     pub fn common_features(&self) -> impl Iterator<Item = &FeatureDescriptor> {
-        self.feature_descriptors.iter().filter(|desc| desc.as_ssc().is_none())
+        self.feature_descriptors.iter().filter(|desc| !desc.is_ssc())
     }
 
-    pub fn ssc_features(&self) -> impl Iterator<Item = &dyn SecuritySubsystemClass> {
-        self.feature_descriptors.iter().filter_map(|desc| desc.as_ssc())
+    pub fn ssc_features(&self) -> impl Iterator<Item = SscFeatureDescriptor> {
+        self.feature_descriptors.iter().filter_map(FeatureDescriptor::to_ssc)
     }
 }
 
@@ -1364,5 +1430,79 @@ mod tests {
 
         assert_eq!(value.to_bytes().unwrap(), bytes);
         assert_eq!(Discovery::from_bytes(&bytes).unwrap(), value);
+    }
+
+    const ENTERPRISE_DESC: EnterpriseDescriptor = EnterpriseDescriptor {
+        version: 1,
+        length: PhantomData,
+        base_com_id: ComId(2),
+        num_com_ids: 3,
+        no_range_crossing: true,
+    };
+
+    #[test]
+    fn ssc_feature_descriptor_from_ssc() {
+        let feature = FeatureDescriptor::Enterprise(ENTERPRISE_DESC);
+        let ssc = SscFeatureDescriptor::Enterprise(ENTERPRISE_DESC);
+        assert!(feature.is_ssc());
+        assert_eq!(feature.to_ssc(), Some(ssc.clone()));
+        assert_eq!(FeatureDescriptor::from(ssc), feature);
+    }
+
+    #[test]
+    fn ssc_feature_descriptor_from_non_ssc() {
+        let feature = TPER_DESC_VALUE;
+        assert!(!feature.is_ssc());
+        assert_eq!(feature.to_ssc(), None);
+        assert_eq!(SscFeatureDescriptor::try_from(feature.clone()), Err(feature));
+    }
+
+    #[test]
+    fn ssc_feature_descriptor_delegates() {
+        let ssc = SscFeatureDescriptor::from(ENTERPRISE_DESC);
+        assert_eq!(ssc.name(), "Enterprise");
+        assert_eq!(ssc.version(), 1);
+        assert_eq!(ssc.static_com_ids_p1(), ComId(2)..ComId(5));
+        assert_eq!(ssc.static_com_ids_p3(), ComId(0)..ComId(0));
+    }
+
+    #[test]
+    fn ssc_feature_descriptor_delegates_p3() {
+        // KPIO is the only SSC with protocol 0x03 ComIDs.
+        let ssc = SscFeatureDescriptor::from(KeyPerIODescriptor {
+            version: 1,
+            minor_version: 0,
+            length: PhantomData,
+            base_com_id_p1: ComId(2),
+            num_com_ids_p1: 1,
+            base_com_id_p3: ComId(4),
+            num_com_ids_p3: 2,
+            initial_owner_pw: OwnerPasswordState::VendorSpecified,
+            reverted_owner_pw: OwnerPasswordState::VendorSpecified,
+            num_kpio_admins_supported: 4,
+            replay_protection_enabled: false,
+            replay_protection_supported: true,
+            incorrect_key_detection_supported: false,
+            tweak_key_required: true,
+            kpio_scope: false,
+            kpio_enabled: true,
+            max_key_uid_len: 256,
+            kmip_key_injection_supported: true,
+            nist_rsa_oaep_supported: true,
+            nist_aes_gcm_supported: false,
+            nist_aes_kw_supported: true,
+            aes256_wrapping_supported: true,
+            rsa4k_wrapping_supported: true,
+            rsa3k_wrapping_supported: false,
+            rsa2k_wrapping_supported: true,
+            pki_kek_transport_supported: true,
+            plaintext_kek_prov_supported: true,
+            num_keks_supported: 1,
+            total_key_tags_supported: 2,
+            max_key_tags_per_namespace: 3,
+            get_nonce_cmd_nonce_len: 4,
+        });
+        assert_eq!(ssc.static_com_ids_p1(), ComId(2)..ComId(3));
+        assert_eq!(ssc.static_com_ids_p3(), ComId(4)..ComId(6));
     }
 }

@@ -35,8 +35,8 @@ async fn setup_tper() -> Tper {
 
 async fn setup() -> (Tper, Arc<VirtualDevice>) {
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
-    let device = Arc::new(VirtualDevice::new());
-    let tper = Tper::connect(BASE_COM_ID, ComIdExt(0), device.clone(), runtime);
+    let device = Arc::new(VirtualDevice::default());
+    let tper = Tper::connect(BASE_COM_ID, ComIdExt(0), None, device.clone(), runtime);
     let setup_session = SetupSession::new_on_primary_ssc(&tper).await.unwrap();
 
     setup_session.take_owneship(NEW_SID_PASSWORD).await.unwrap();

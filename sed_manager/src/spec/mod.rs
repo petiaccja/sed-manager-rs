@@ -11,7 +11,7 @@ pub use admin::Admin;
 pub use kpio::Kpio;
 pub use locking::Locking;
 
-use sed_packet::discovery::{Discovery, Feature, FeatureDescriptor, SecuritySubsystemClass};
+use sed_packet::discovery::{Discovery, FeatureDescriptor, SscFeatureDescriptor};
 use sed_spec::{objects::SecurityProviderRef, preconfig::psid};
 
 use crate::spec::admin::{AuthorityTable, CPinTable};
@@ -28,12 +28,9 @@ pub struct Spec {
 }
 
 impl Spec {
-    pub fn default_ssc(&self) -> Option<&dyn SecuritySubsystemClass> {
-        self.default_ssc_descriptor().and_then(|desc| desc.as_ssc())
-    }
-
-    pub fn default_ssc_descriptor(&self) -> Option<&FeatureDescriptor> {
-        self.discovery.feature_descriptors.iter().find(|desc| desc.as_ssc().is_some())
+    /// The highest priority SSC of the device.
+    pub fn default_ssc(&self) -> Option<SscFeatureDescriptor> {
+        self.discovery.feature_descriptors.iter().find_map(FeatureDescriptor::to_ssc)
     }
 
     pub fn secondary_sp_uid(&self) -> Option<SecurityProviderRef> {
@@ -50,9 +47,9 @@ impl TryFrom<Discovery> for Spec {
 
     fn try_from(mut discovery: Discovery) -> Result<Self, Self::Error> {
         Self::sort(&mut discovery);
-        let ssc = discovery.feature_descriptors.iter().find(|feature| feature.as_ssc().is_some());
+        let ssc = discovery.feature_descriptors.iter().find_map(FeatureDescriptor::to_ssc);
         let (admin, locking, kpio) = match ssc {
-            Some(feature) => ssc_spec(feature),
+            Some(ssc) => ssc_spec(&ssc),
             None => (None, None, None),
         };
         match admin {
@@ -90,18 +87,17 @@ fn feature_priority(feature: &FeatureDescriptor) -> usize {
     }
 }
 
-fn ssc_spec(feature: &FeatureDescriptor) -> (Option<Admin>, Option<Locking>, Option<Kpio>) {
-    match feature {
-        FeatureDescriptor::Enterprise(_) => enterprise(),
+fn ssc_spec(ssc: &SscFeatureDescriptor) -> (Option<Admin>, Option<Locking>, Option<Kpio>) {
+    match ssc {
+        SscFeatureDescriptor::Enterprise(_) => enterprise(),
         // The Opal 2 values are used for Opal 1 as well.
-        FeatureDescriptor::OpalV1(_) => opal(),
-        FeatureDescriptor::OpalV2(_) => opal(),
-        FeatureDescriptor::Opalite(_) => opalite(),
-        FeatureDescriptor::PyriteV1(_) => pyrite(),
-        FeatureDescriptor::PyriteV2(_) => pyrite(),
-        FeatureDescriptor::Ruby(_) => ruby(),
-        FeatureDescriptor::KeyPerIO(_) => kpio(),
-        _ => (None, None, None),
+        SscFeatureDescriptor::OpalV1(_) => opal(),
+        SscFeatureDescriptor::OpalV2(_) => opal(),
+        SscFeatureDescriptor::Opalite(_) => opalite(),
+        SscFeatureDescriptor::PyriteV1(_) => pyrite(),
+        SscFeatureDescriptor::PyriteV2(_) => pyrite(),
+        SscFeatureDescriptor::Ruby(_) => ruby(),
+        SscFeatureDescriptor::KeyPerIO(_) => kpio(),
     }
 }
 

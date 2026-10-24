@@ -14,7 +14,7 @@ use sed_packet::{Bytes, Object, ObjectRef, TableRef, TokenizeField, Uid};
 use sed_spec::methods::{
     Activate, ActivateResult, Authenticate, AuthenticateResult, ByteCellBlock, CloseSession, ExtractResult, GenKey,
     GenKeyResult, Get, GetAcl, GetAclResult, MethodResult, MethodStatus, MgmtMethodCall, MgmtMethodCallParams,
-    NextResultUntyped, NextUntyped, ObjectCellBlock, Random, RandomResult, Revert, RevertResult, RevertSp,
+    NextResultUntyped, NextUntyped, ObjectCellBlock, Properties, Random, RandomResult, Revert, RevertResult, RevertSp,
     RevertSpResult, SessionMethodCall, SessionMethodCallParams, SessionMethodParam as _, SetBytes, SetObject,
     SetResult, extract_method,
 };
@@ -34,6 +34,8 @@ pub enum Session {
     Open {
         session_id: SessionId,
         sp: SecurityProviderRef,
+        capabilities: Properties,
+        outbound_properties: Properties,
         authenticated: HashSet<AuthorityRef>,
         recv_buffer: VecDeque<u8>,
     },
@@ -45,17 +47,39 @@ impl Session {
         tper: &Tper,
         session_id: SessionId,
         sp_uid: SecurityProviderRef,
+        capabilities: Properties,
+        outbound_properties: Properties,
         authority_uid: AuthorityRef,
     ) -> Result<Self, MethodStatus> {
         let sp = tper.sp(sp_uid).ok_or(MethodStatus::InvalidParameter)?;
         let authority = sp.authority().get(&authority_uid).ok_or(MethodStatus::InvalidParameter)?;
         let class = authority.class.filter(|class| !class.is_null());
         let authenticated = std::iter::once(authority_uid).chain(class).chain(std::iter::once(ANYBODY)).collect();
-        Ok(Self::Open { session_id, sp: sp_uid, authenticated, recv_buffer: VecDeque::new() })
+        Ok(Self::Open {
+            session_id,
+            sp: sp_uid,
+            capabilities,
+            outbound_properties,
+            authenticated,
+            recv_buffer: VecDeque::new(),
+        })
     }
 
     #[must_use]
     pub fn dispatch(&mut self, tper: &mut Tper, packet: Packet) -> Vec<(Packet, Vec<SecurityProviderRef>)> {
+        if let Session::Open { capabilities, .. } = self {
+            // The TPer SHALL abort the session if a packet exceeds the maximum
+            // gross packet size (Core 5.2.2.4.1.2).
+            if packet.gross_size() > capabilities.max_gross_packet_size.get() {
+                return self.abort().map(|packet| (packet, vec![])).into_iter().collect();
+            }
+            // The TPer SHALL abort the session if a packet exceeds the maximum
+            // number of sub-packets (Core 5.2.2.4.1.1).
+            if packet.payload.len() > capabilities.max_subpackets.get() {
+                return self.abort().map(|packet| (packet, vec![])).into_iter().collect();
+            }
+        }
+
         if let Session::Open { recv_buffer, .. } = self {
             let data_sub_packets = packet.payload.iter().filter(|sub_packet| sub_packet.kind == SubPacketKind::Data);
             for sub_packet in data_sub_packets {
@@ -91,13 +115,14 @@ impl Session {
     fn call(&mut self, tper: &mut Tper, call: SessionMethodCall) -> Option<(Packet, Vec<SecurityProviderRef>)> {
         use SessionMethodCallParams::*;
 
-        if let Self::Open { session_id, .. } = self {
+        if let Self::Open { session_id, outbound_properties, .. } = self {
             use SecurityProvider as Sp;
 
             let session_id = *session_id;
+            let max_method_len = outbound_properties.max_method_len();
 
             let invoking_id = call.invoking_id;
-            let (result_tokens, reverted_sps) = match call.params {
+            let (mut result_tokens, reverted_sps) = match call.params {
                 Activate(params) => make_result(self.activate(tper, invoking_id, &params)),
                 Authenticate(params) => make_result(self.authenticate(tper, invoking_id, &params)),
                 GenKey(params) => make_result(self.gen_key(tper, invoking_id, &params)),
@@ -117,7 +142,14 @@ impl Session {
                 SetSecurityProvider(p) => make_result(self.set_obj_opt(tper, invoking_id, p, Sp::sp_mut)),
                 SetTableDesc(p) => make_result(self.set_obj(tper, invoking_id, p, Sp::table_mut)),
             };
-            tracing::debug!(method_result = tracing::field::debug(&result_tokens), "response");
+            tracing::debug!(method_result = ?result_tokens, "response");
+
+            if result_tokens.len() > max_method_len {
+                result_tokens = MethodResult::<SetResult>(Err(MethodStatus::ResponseOverflow))
+                    .to_tokens()
+                    .expect("input must be valid tokens");
+            }
+
             Some((
                 session_id.assign(Packet {
                     payload: vec![SubPacket {

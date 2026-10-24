@@ -21,10 +21,12 @@ use sed_device::StorageDevice;
 use sed_packet::{
     com_id::{ComId, ComIdExt},
     com_id_request::{ComIdRequest, ComIdResponse},
+    discovery::SscFeatureDescriptor,
     session_id::SessionId,
 };
 #[cfg(feature = "test-utils")]
-use sed_spec::methods::Properties;
+use sed_spec::methods::SessionProperties;
+use sed_spec::methods::StartSession;
 use tracing::{Instrument as _, Span, info_span};
 
 use crate::Error;
@@ -32,7 +34,7 @@ use protocol_state::ProtocolState;
 use shared::{Action, link_both_ways};
 
 pub use protocol_state::CAPABILITIES;
-pub use shared::PropertiesChanged;
+pub use shared::{PropertiesChanged, StartedSession};
 
 /// The full protocol to communicate with the TPer via packets and ComID requests.
 #[derive(Debug)]
@@ -48,16 +50,22 @@ impl Protocol {
     /// Create a new protocol stack for the `device` on the given ComID and
     /// ComID extension.
     ///
+    /// The `ssc` the ComID belongs to determines the initial assumptions about
+    /// the communication properties. If it's not known, the core
+    /// specification's initial assumptions are used.
+    ///
     /// This initializes the protocol stack, but no messages will be delivered
     /// until you call [`run`](Self::run).
     pub fn new(
         com_id: ComId,
         com_id_ext: ComIdExt,
+        ssc: Option<&SscFeatureDescriptor>,
         device: Arc<dyn StorageDevice>,
         runtime: Arc<PolyRuntime>,
+        auto_sync_properties: bool,
     ) -> (Self, Controller) {
         let (command_tx, command_rx) = async_channel::unbounded();
-        let state = ProtocolState::new(com_id, com_id_ext);
+        let state = ProtocolState::new(com_id, com_id_ext, ssc, auto_sync_properties);
         let controller = Controller::new(command_tx, state.properties_changed());
         let protocol = Self { com_id, device, command_rx, state, runtime };
         (protocol, controller)
@@ -98,7 +106,7 @@ impl Protocol {
 #[derive(Debug, Clone)]
 pub struct Controller {
     command_tx: async_channel::Sender<Command>,
-    conn_rx: async_broadcast::Receiver<PropertiesChanged>,
+    conn_rx: async_broadcast::InactiveReceiver<PropertiesChanged>,
 }
 
 impl Controller {
@@ -106,7 +114,7 @@ impl Controller {
         command_tx: async_channel::Sender<Command>,
         conn_rx: async_broadcast::Receiver<PropertiesChanged>,
     ) -> Self {
-        Self { command_tx, conn_rx }
+        Self { command_tx, conn_rx: conn_rx.deactivate() }
     }
 
     /// Perform an remote procedure call using tokenized methods.
@@ -117,8 +125,15 @@ impl Controller {
         rx
     }
 
-    pub fn sync_properties(&self) {
-        let _ = self.command_tx.try_send(Command::SyncProperties { span: Span::current() });
+    pub fn call_start_session(&self, start_session: StartSession) -> oneshot::Receiver<Result<StartedSession, Error>> {
+        let (tx, rx) = oneshot::channel();
+        let span = Span::current();
+        let _ = self.command_tx.try_send(Command::StartSessionCall { call: start_session, sender: tx, span });
+        rx
+    }
+
+    pub fn call_properties(&self) {
+        let _ = self.command_tx.try_send(Command::PropertiesCall { span: Span::current() });
     }
 
     /// Notify the protocol stack that a session has been aborted by the device.
@@ -145,12 +160,12 @@ impl Controller {
     /// channel, it means that the device did not respond to the request to
     /// negotiate properties.
     pub fn properties_changed(&self) -> async_broadcast::Receiver<PropertiesChanged> {
-        self.conn_rx.clone()
+        self.conn_rx.activate_cloned()
     }
 
     /// Spawn a new session with the given ID and properties.
     #[cfg(feature = "test-utils")]
-    pub fn spawn(&self, session_id: SessionId, properties: Properties) {
+    pub fn spawn(&self, session_id: SessionId, properties: SessionProperties) {
         let _ = self.command_tx.try_send(Command::Spawn { session_id, properties });
     }
 }
@@ -159,11 +174,12 @@ impl Controller {
 #[rustfmt::skip] // Puts everything on a new line with the #[cfg].
 pub enum Command {
     MethodCall { session_id: SessionId, call: Vec<u8>, sender: oneshot::Sender<Result<Vec<u8>, Error>>, span: Span },
-    SyncProperties { span: Span },
+    StartSessionCall { call: StartSession, sender: oneshot::Sender<Result<StartedSession, Error>>, span: Span },
+    PropertiesCall { span: Span },
     ComRequest { request: ComIdRequest, sender: oneshot::Sender<Result<ComIdResponse, Error>>, span: Span },
     ReportAborted { session_id: SessionId },
     #[cfg(feature = "test-utils")]
-    Spawn { session_id: SessionId, properties: Properties },
+    Spawn { session_id: SessionId, properties: SessionProperties },
 }
 
 fn inject_command(state: &mut ProtocolState, command: Command) {
@@ -171,7 +187,8 @@ fn inject_command(state: &mut ProtocolState, command: Command) {
         Command::MethodCall { session_id, call, sender, span } => {
             state.handle_method_call(session_id, call, sender, span)
         }
-        Command::SyncProperties { span } => state.handle_sync_properties(span),
+        Command::StartSessionCall { call, sender, span } => state.handle_call_start_session(call, sender, span),
+        Command::PropertiesCall { span } => state.handle_call_properties(span),
         Command::ComRequest { request, sender, span } => state.handle_com_request(request, sender, span),
         Command::ReportAborted { session_id } => state.handle_session_aborted(session_id),
         #[cfg(feature = "test-utils")]
@@ -256,6 +273,7 @@ mod tests {
     use sed_packet::com_id::ComId;
     use sed_packet::com_id::ComIdExt;
     use sed_packet::packet::ComPacket;
+    use sed_packet::token_stream::ToTokens;
     use sed_spec::methods::MethodStatus;
     use sorbit::ser_de::ToBytes as _;
 
@@ -282,7 +300,7 @@ mod tests {
             payload: vec![packetize_one(
                 SessionId::MANAGEMENT,
                 SequenceNumber(1),
-                call.clone(),
+                call.to_tokens().unwrap(),
             )],
         };
         let response_packet = ComPacket {
@@ -294,7 +312,7 @@ mod tests {
             payload: vec![packetize_one(
                 SessionId::MANAGEMENT,
                 SequenceNumber(1),
-                response.clone(),
+                response.to_tokens().unwrap(),
             )],
         };
 
@@ -316,12 +334,19 @@ mod tests {
 
         let device = MockDevice::new(scenario.into_iter());
         let runtime = PolyRuntime::Tokio(TokioRuntime::current().unwrap());
-        let (protocol, controller) = Protocol::new(ComId(1), ComIdExt(0), Arc::new(device), Arc::new(runtime));
+        let (protocol, controller) =
+            Protocol::new(ComId(1), ComIdExt(0), None, Arc::new(device), Arc::new(runtime), false);
         let task = tokio::spawn(protocol.run());
 
-        let response_rx = controller.call(SessionId::MANAGEMENT, call);
+        let response_rx = controller.call_start_session(call.parameters.clone());
         let response_result = tokio::time::timeout(Duration::from_secs(5), response_rx).await;
-        assert_that!(response_result, ok(ok(ok(eq(&response)))));
+        assert_that!(
+            response_result,
+            ok(ok(ok(eq(&StartedSession {
+                sync_session: response.parameters,
+                properties: SessionProperties::INITIAL
+            }))))
+        );
 
         drop(controller);
         let task_result = tokio::time::timeout(Duration::from_secs(5), task).await;

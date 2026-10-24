@@ -30,3 +30,7 @@ update.code.visualstudio.com
 marketplace.visualstudio.com
 vscode.blob.core.windows.net
 open-vsx.org
+
+# Editors (support sites)
+www.schemastore.org
+cdn.agentclientprotocol.com

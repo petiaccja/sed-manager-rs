@@ -15,8 +15,9 @@ the [README.md](README.md).
 The project has two sibling projects:
 
 - `sed-manager-pba`: a pre-boot authentication environment that ships SEDManager's binaries inside
-  an Alpine Linux image. The PBA project is a consumer of this project, and must be adapted to
-  changes in here.
+  an Alpine Linux image. The PBA project only consumes the compiled executables, not the crates or
+  their Rust API, so it only needs to be adapted to changes in the executables (e.g. their command
+  line interface or runtime dependencies), not to API changes.
 - `sed-manager-website`: a front page and documentation for SEDManager. The documentation should be
   updated to reflect changes in SEDManager.
 
