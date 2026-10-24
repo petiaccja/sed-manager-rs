@@ -275,7 +275,7 @@ also not the same as the limit for `Set`.
    - **Functional capabilities** (Asynchronous, AckNak, SequenceNumbers,
      ContinuedTokens) must be the lowest common denominator of host and
      TPer, because both sides have to run the same protocol.
-7. **The initial assumptions ignore the SSC** (see above).
+7. ~~**The initial assumptions ignore the SSC**~~ (see above).
    `Properties::INITIAL` follows Core Table 168. That is too pessimistic for
    Opal and Pyrite, and too optimistic about token size for Enterprise.
 
@@ -368,7 +368,7 @@ What's left:
 - Keep `set_bytes`/`get_bytes` as a single RPC each. The chunking loop lives
   in `sed_manager` (`write_mbr`, and a read-back loop for verification).
 
-### Step 6: SSC-aware initial assumptions
+### ~~Step 6~~: SSC-aware initial assumptions
 
 - Make the initial assumptions a function of the SSC found in discovery,
   using the three groups in "Initial assumptions depend on the SSC" above:
