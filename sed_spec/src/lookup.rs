@@ -7,7 +7,7 @@ use std::ops::{Add, Sub};
 
 use sed_packet::{
     ObjectRef, TableRef, Uid, UidRange,
-    discovery::{Feature, FeatureDescriptor},
+    discovery::{FeatureDescriptor, SscFeatureDescriptor},
 };
 
 use crate::path::Path;
@@ -287,19 +287,18 @@ impl GlobalLookup {
 
     fn search<T>(&self, features: &[FeatureDescriptor], f: impl Fn(FeatureLookup) -> Option<T>) -> Option<T> {
         use crate::preconfig;
-        let ssc_features = features.iter().filter(|feature| feature.as_ssc().is_some());
-        let common_features = features.iter().filter(|feature| feature.as_ssc().is_none());
-        for feature in ssc_features {
-            let result = match feature {
-                FeatureDescriptor::Enterprise(_) => f(preconfig::enterprise::LOOKUP),
-                FeatureDescriptor::OpalV1(_) => f(preconfig::opal_2::LOOKUP),
-                FeatureDescriptor::OpalV2(_) => f(preconfig::opal_2::LOOKUP),
-                FeatureDescriptor::Opalite(_) => f(preconfig::opalite::LOOKUP),
-                FeatureDescriptor::PyriteV1(_) => f(preconfig::pyrite_2::LOOKUP),
-                FeatureDescriptor::PyriteV2(_) => f(preconfig::pyrite_2::LOOKUP),
-                FeatureDescriptor::Ruby(_) => f(preconfig::ruby::LOOKUP),
-                FeatureDescriptor::KeyPerIO(_) => f(preconfig::kpio::LOOKUP),
-                _ => None,
+        let ssc_features = features.iter().filter_map(FeatureDescriptor::to_ssc);
+        let common_features = features.iter().filter(|feature| !feature.is_ssc());
+        for ssc in ssc_features {
+            let result = match ssc {
+                SscFeatureDescriptor::Enterprise(_) => f(preconfig::enterprise::LOOKUP),
+                SscFeatureDescriptor::OpalV1(_) => f(preconfig::opal_2::LOOKUP),
+                SscFeatureDescriptor::OpalV2(_) => f(preconfig::opal_2::LOOKUP),
+                SscFeatureDescriptor::Opalite(_) => f(preconfig::opalite::LOOKUP),
+                SscFeatureDescriptor::PyriteV1(_) => f(preconfig::pyrite_2::LOOKUP),
+                SscFeatureDescriptor::PyriteV2(_) => f(preconfig::pyrite_2::LOOKUP),
+                SscFeatureDescriptor::Ruby(_) => f(preconfig::ruby::LOOKUP),
+                SscFeatureDescriptor::KeyPerIO(_) => f(preconfig::kpio::LOOKUP),
             };
             if result.is_some() {
                 return result;

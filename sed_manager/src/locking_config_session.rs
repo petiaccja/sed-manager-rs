@@ -5,7 +5,7 @@
 
 use sed_packet::{
     MaxBytes,
-    discovery::{FeatureDescriptor, LockingDescriptor},
+    discovery::{LockingDescriptor, SscFeatureDescriptor},
 };
 use sed_spec::{
     methods::MethodStatus,
@@ -227,11 +227,11 @@ impl LockingConfigSession {
     #[instrument(skip(self), err)]
     pub async fn erase_locking_range(&self, locking_range: LockingRangeRef) -> Result<(), Error> {
         let locking_descriptor = self.spec.discovery.get::<LockingDescriptor>();
-        let ssc_descriptor = self.spec.default_ssc_descriptor();
+        let ssc_descriptor = self.spec.default_ssc();
 
         if !locking_descriptor.is_some_and(|desc| desc.media_encryption) {
             Err(Error::NotSupported)
-        } else if matches!(ssc_descriptor, Some(FeatureDescriptor::Enterprise(_))) {
+        } else if matches!(ssc_descriptor, Some(SscFeatureDescriptor::Enterprise(_))) {
             Err(Error::NotImplemented)
         } else {
             let key = self.session.get_field(locking_range.active_key()).await?;
