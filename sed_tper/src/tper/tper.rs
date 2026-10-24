@@ -16,7 +16,7 @@ use sed_packet::{
 };
 use sed_packet::{
     com_id::{ComId, ComIdExt},
-    discovery::Discovery,
+    discovery::{Discovery, SscFeatureDescriptor},
 };
 use sed_spec::{
     methods::Properties,
@@ -91,6 +91,11 @@ impl Tper {
     /// The ComID pair has to either be a static ComID or dynamically allocated
     /// prior to calling this function.
     ///
+    /// The `ssc` the ComID belongs to determines the initial assumptions about
+    /// the communication properties, used until they are synced with the
+    /// device. If it's not known, the core specification's initial assumptions
+    /// are used.
+    ///
     /// To run the communication protocol, an async runtime is required. If you
     /// don't specify one explicitly, the one associated with the current thread
     /// will be picked.
@@ -102,10 +107,11 @@ impl Tper {
     pub fn connect(
         com_id: ComId,
         com_id_ext: ComIdExt,
+        ssc: Option<&SscFeatureDescriptor>,
         device: Arc<dyn StorageDevice>,
         runtime: Arc<PolyRuntime>,
     ) -> Self {
-        let (protocol, controller) = Protocol::new(com_id, com_id_ext, device.clone(), runtime.clone(), true);
+        let (protocol, controller) = Protocol::new(com_id, com_id_ext, ssc, device.clone(), runtime.clone(), true);
         let protocol_task = runtime.spawn(protocol.run());
         let host_session_id = Arc::new(AtomicU32::new(1));
         Self { com_id, com_id_ext, device, controller, protocol_task, host_session_id }

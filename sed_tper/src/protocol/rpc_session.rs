@@ -13,9 +13,7 @@ use sed_packet::{
     packet::{Packet, SubPacketKind},
     session_id::SessionId,
 };
-use sed_spec::methods::Properties;
-#[cfg(feature = "test-utils")]
-use sed_spec::methods::SessionProperties;
+use sed_spec::methods::{Properties, SessionProperties};
 use tracing::Span;
 
 use crate::{
@@ -39,11 +37,16 @@ pub struct RpcSession {
 }
 
 impl RpcSession {
-    pub fn new(timeout: Duration, capabilities: Properties, auto_sync_properties: bool) -> Self {
+    pub fn new(
+        timeout: Duration,
+        capabilities: Properties,
+        initial_properties: SessionProperties,
+        auto_sync_properties: bool,
+    ) -> Self {
         Self {
             timeout,
             packets_to_send: VecDeque::new(),
-            management: Management::new(timeout, capabilities, auto_sync_properties),
+            management: Management::new(timeout, capabilities, initial_properties, auto_sync_properties),
             sessions: HashMap::new(),
         }
     }
@@ -222,7 +225,7 @@ mod tests {
     const CAPABILITIES: Properties = Properties::INITIAL;
 
     fn construct_with_sessions(sessions: &[SessionId]) -> RpcSession {
-        let mut session = RpcSession::new(TIMEOUT, CAPABILITIES, false);
+        let mut session = RpcSession::new(TIMEOUT, CAPABILITIES, SessionProperties::INITIAL, false);
         for session_id in sessions {
             session.sessions.insert(*session_id, Session::new(*session_id, TIMEOUT, SessionProperties::INITIAL));
         }
@@ -231,7 +234,7 @@ mod tests {
 
     #[test]
     fn start_session_successfully() {
-        let mut session = RpcSession::new(TIMEOUT, CAPABILITIES, false);
+        let mut session = RpcSession::new(TIMEOUT, CAPABILITIES, SessionProperties::INITIAL, false);
         let time = Instant::now();
         let (sender, receiver) = channel();
 
@@ -328,7 +331,7 @@ mod tests {
 
     #[test]
     fn close_orphaned_session() {
-        let mut session = RpcSession::new(TIMEOUT, CAPABILITIES, false);
+        let mut session = RpcSession::new(TIMEOUT, CAPABILITIES, SessionProperties::INITIAL, false);
         let time = Instant::now();
         let (sender, receiver) = channel();
 
@@ -370,7 +373,7 @@ mod tests {
 
     #[test]
     fn reset_on_unexpected_session() {
-        let mut session = RpcSession::new(TIMEOUT, CAPABILITIES, false);
+        let mut session = RpcSession::new(TIMEOUT, CAPABILITIES, SessionProperties::INITIAL, false);
         let time = Instant::now();
 
         let sync_call = sync_session_call(SESSION_ID_1, MethodStatus::Success);
@@ -386,7 +389,7 @@ mod tests {
 
     #[test]
     fn reset_keeps_properties_changed_channel() {
-        let mut session = RpcSession::new(TIMEOUT, CAPABILITIES, false);
+        let mut session = RpcSession::new(TIMEOUT, CAPABILITIES, SessionProperties::INITIAL, false);
         let mut event = session.properties_changed();
         let expected =
             PropertiesChanged { remote_capabilities: Properties::INITIAL, properties: SessionProperties::INITIAL };

@@ -30,7 +30,7 @@ use tracing::instrument;
 async fn session_lifetime() {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
-    let tper = Tper::connect(BASE_COM_ID, ComIdExt(0), device.clone(), runtime);
+    let tper = Tper::connect(BASE_COM_ID, ComIdExt(0), None, device.clone(), runtime);
     assert!(device.sessions(BASE_COM_ID, ComIdExt(0)).unwrap().is_empty());
 
     let session = tper.start_session(sp::ADMIN, None, None).await.unwrap();
@@ -47,7 +47,7 @@ async fn activate() {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
     let session_id = device.insert_session(1, sp::ADMIN, Some(admin::authority::SID)).unwrap();
-    let (protocol, controller) = Protocol::new(BASE_COM_ID, ComIdExt(0), device.clone(), runtime, false);
+    let (protocol, controller) = Protocol::new(BASE_COM_ID, ComIdExt(0), None, device.clone(), runtime, false);
     let protocol = tokio::spawn(protocol.run());
 
     controller.spawn(session_id, SessionProperties::INITIAL);
@@ -67,7 +67,7 @@ async fn authenticate() {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
     let session_id = device.insert_session(1, sp::ADMIN, None).unwrap();
-    let (protocol, controller) = Protocol::new(BASE_COM_ID, ComIdExt(0), device.clone(), runtime, false);
+    let (protocol, controller) = Protocol::new(BASE_COM_ID, ComIdExt(0), None, device.clone(), runtime, false);
     let protocol = tokio::spawn(protocol.run());
 
     controller.spawn(session_id, SessionProperties::INITIAL);
@@ -92,7 +92,7 @@ async fn gen_key() {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
     let session_id = device.insert_session(1, sp::LOCKING, Some(locking::authority::ADMIN.get(1).unwrap())).unwrap();
-    let (protocol, controller) = Protocol::new(BASE_COM_ID, ComIdExt(0), device.clone(), runtime, false);
+    let (protocol, controller) = Protocol::new(BASE_COM_ID, ComIdExt(0), None, device.clone(), runtime, false);
     let protocol = tokio::spawn(protocol.run());
 
     controller.spawn(session_id, SessionProperties::INITIAL);
@@ -109,7 +109,7 @@ async fn get_field() {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
     let session_id = device.insert_session(1, sp::ADMIN, None).unwrap();
-    let (protocol, controller) = Protocol::new(BASE_COM_ID, ComIdExt(0), device.clone(), runtime, false);
+    let (protocol, controller) = Protocol::new(BASE_COM_ID, ComIdExt(0), None, device.clone(), runtime, false);
     let protocol = tokio::spawn(protocol.run());
 
     controller.spawn(session_id, SessionProperties::INITIAL);
@@ -126,7 +126,7 @@ async fn get_object() {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
     let session_id = device.insert_session(1, sp::ADMIN, None).unwrap();
-    let (protocol, controller) = Protocol::new(BASE_COM_ID, ComIdExt(0), device.clone(), runtime, false);
+    let (protocol, controller) = Protocol::new(BASE_COM_ID, ComIdExt(0), None, device.clone(), runtime, false);
     let protocol = tokio::spawn(protocol.run());
 
     controller.spawn(session_id, SessionProperties::INITIAL);
@@ -145,7 +145,7 @@ async fn get_bytes() {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
     let session_id = device.insert_session(1, sp::LOCKING, Some(locking::authority::ADMIN.get(0).unwrap())).unwrap();
-    let (protocol, controller) = Protocol::new(BASE_COM_ID, ComIdExt(0), device.clone(), runtime, false);
+    let (protocol, controller) = Protocol::new(BASE_COM_ID, ComIdExt(0), None, device.clone(), runtime, false);
     let protocol = tokio::spawn(protocol.run());
 
     controller.spawn(session_id, SessionProperties::INITIAL);
@@ -162,7 +162,7 @@ async fn get_acl() {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
     let session_id = device.insert_session(1, sp::ADMIN, None).unwrap();
-    let (protocol, controller) = Protocol::new(BASE_COM_ID, ComIdExt(0), device.clone(), runtime, false);
+    let (protocol, controller) = Protocol::new(BASE_COM_ID, ComIdExt(0), None, device.clone(), runtime, false);
     let protocol = tokio::spawn(protocol.run());
 
     controller.spawn(session_id, SessionProperties::INITIAL);
@@ -179,7 +179,7 @@ async fn next() {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
     let session_id = device.insert_session(1, sp::ADMIN, None).unwrap();
-    let (protocol, controller) = Protocol::new(BASE_COM_ID, ComIdExt(0), device.clone(), runtime, false);
+    let (protocol, controller) = Protocol::new(BASE_COM_ID, ComIdExt(0), None, device.clone(), runtime, false);
     let protocol = tokio::spawn(protocol.run());
 
     controller.spawn(session_id, SessionProperties::INITIAL);
@@ -200,7 +200,7 @@ async fn revert() {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
     let session_id = device.insert_session(1, sp::ADMIN, Some(admin::authority::SID)).unwrap();
-    let (protocol, controller) = Protocol::new(BASE_COM_ID, ComIdExt(0), device, runtime, false);
+    let (protocol, controller) = Protocol::new(BASE_COM_ID, ComIdExt(0), None, device, runtime, false);
     let protocol = tokio::spawn(protocol.run());
 
     controller.spawn(session_id, SessionProperties::INITIAL);
@@ -217,7 +217,7 @@ async fn revert_sp() {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
     let session_id = device.insert_session(1, sp::LOCKING, Some(locking::authority::ADMIN.get(1).unwrap())).unwrap();
-    let (protocol, controller) = Protocol::new(BASE_COM_ID, ComIdExt(0), device, runtime, false);
+    let (protocol, controller) = Protocol::new(BASE_COM_ID, ComIdExt(0), None, device, runtime, false);
     let protocol = tokio::spawn(protocol.run());
 
     controller.spawn(session_id, SessionProperties::INITIAL);
@@ -239,7 +239,7 @@ async fn random() {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
     let session_id = device.insert_session(1, sp::ADMIN, None).unwrap();
-    let (protocol, controller) = Protocol::new(BASE_COM_ID, ComIdExt(0), device, runtime, false);
+    let (protocol, controller) = Protocol::new(BASE_COM_ID, ComIdExt(0), None, device, runtime, false);
     let protocol = tokio::spawn(protocol.run());
 
     controller.spawn(session_id, SessionProperties::INITIAL);
@@ -256,7 +256,7 @@ async fn set_field() {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
     let session_id = device.insert_session(1, sp::ADMIN, Some(admin::authority::SID)).unwrap();
-    let (protocol, controller) = Protocol::new(BASE_COM_ID, ComIdExt(0), device.clone(), runtime, false);
+    let (protocol, controller) = Protocol::new(BASE_COM_ID, ComIdExt(0), None, device.clone(), runtime, false);
     let protocol = tokio::spawn(protocol.run());
 
     controller.spawn(session_id, SessionProperties::INITIAL);
@@ -273,7 +273,7 @@ async fn set_object() {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
     let session_id = device.insert_session(1, sp::ADMIN, Some(admin::authority::SID)).unwrap();
-    let (protocol, controller) = Protocol::new(BASE_COM_ID, ComIdExt(0), device.clone(), runtime, false);
+    let (protocol, controller) = Protocol::new(BASE_COM_ID, ComIdExt(0), None, device.clone(), runtime, false);
     let protocol = tokio::spawn(protocol.run());
 
     controller.spawn(session_id, SessionProperties::INITIAL);
@@ -291,7 +291,7 @@ async fn set_bytes() {
     let device = Arc::new(VirtualDevice::new());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
     let session_id = device.insert_session(1, sp::LOCKING, Some(locking::authority::ADMIN.get(0).unwrap())).unwrap();
-    let (protocol, controller) = Protocol::new(BASE_COM_ID, ComIdExt(0), device.clone(), runtime, false);
+    let (protocol, controller) = Protocol::new(BASE_COM_ID, ComIdExt(0), None, device.clone(), runtime, false);
     let protocol = tokio::spawn(protocol.run());
 
     controller.spawn(session_id, SessionProperties::INITIAL);

@@ -31,6 +31,9 @@ use crate::{
 pub struct Management {
     timeout: Duration,
     capabilities: Properties,
+    /// The initial assumptions about the communication properties, used until
+    /// they are synced, and restored on a stack reset.
+    initial_properties: SessionProperties,
     auto_sync_properties: bool,
     state: State,
     properties_changed_tx: async_broadcast::Sender<PropertiesChanged>,
@@ -38,14 +41,20 @@ pub struct Management {
 }
 
 impl Management {
-    pub fn new(timeout: Duration, capabilities: Properties, auto_sync_properties: bool) -> Self {
+    pub fn new(
+        timeout: Duration,
+        capabilities: Properties,
+        initial_properties: SessionProperties,
+        auto_sync_properties: bool,
+    ) -> Self {
         let (mut properties_changed_tx, properties_changed_rx) = async_broadcast::broadcast(1);
         properties_changed_tx.set_overflow(true);
         Self {
             timeout,
             capabilities,
+            state: State::new(initial_properties.clone(), auto_sync_properties, Span::current()),
+            initial_properties,
             auto_sync_properties,
-            state: State::new(auto_sync_properties, Span::current()),
             properties_changed_tx,
             properties_changed_rx: properties_changed_rx.deactivate(),
         }
@@ -103,12 +112,12 @@ impl Management {
     }
 
     pub fn handle_reset(&mut self) {
-        let state = State::new(self.auto_sync_properties, Span::current());
+        let state = State::new(self.initial_properties.clone(), self.auto_sync_properties, Span::current());
         core::mem::replace(&mut self.state, state).abort();
 
         // Inform that properties have been reset.
         let _ = self.properties_changed_tx.try_broadcast(PropertiesChanged {
-            remote_capabilities: Properties::INITIAL,
+            remote_capabilities: self.initial_properties.outbound.clone(),
             properties: self.state.properties.clone(),
         });
     }
@@ -345,7 +354,7 @@ impl Management {
         {
             // If the TPer does not tell us what properties it uses for messaging
             // us, we must assume it uses the initial properties.
-            let inbound_properties = inbound_properties.unwrap_or(Properties::INITIAL);
+            let inbound_properties = inbound_properties.unwrap_or_else(|| self.initial_properties.inbound.clone());
 
             let outbound_properties = tper_capabilities
                 .clone()
@@ -462,7 +471,7 @@ struct State {
 impl State {
     /// Create a new state. The `context` will be used for any packets that need
     /// to be sent right after startup.
-    fn new(auto_sync_properties: bool, context: Span) -> Self {
+    fn new(properties: SessionProperties, auto_sync_properties: bool, context: Span) -> Self {
         let properties_call = if auto_sync_properties {
             PropertiesCall::Requested { span: context }
         } else {
@@ -471,7 +480,7 @@ impl State {
 
         Self {
             sequence_number: SequenceNumber::initial(),
-            properties: SessionProperties::INITIAL,
+            properties,
             start_session_calls_enqueued: VecDeque::new(),
             start_session_calls_sending: HashMap::new(),
             start_session_calls_receiving: HashMap::new(),
@@ -636,7 +645,7 @@ mod tests {
 
     #[test]
     fn start_session_completed_successfully() {
-        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, false);
+        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, SessionProperties::INITIAL, false);
         let time = Instant::now();
         let (sender, receiver) = channel();
 
@@ -686,7 +695,7 @@ mod tests {
 
     #[test]
     fn start_session_completed_with_error() {
-        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, false);
+        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, SessionProperties::INITIAL, false);
         let time = Instant::now();
         let (sender, receiver) = channel();
 
@@ -711,7 +720,7 @@ mod tests {
 
     #[test]
     fn start_session_timed_out() {
-        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, false);
+        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, SessionProperties::INITIAL, false);
         let time = Instant::now();
         let (sender, receiver) = channel();
 
@@ -733,7 +742,7 @@ mod tests {
 
     #[test]
     fn start_session_interface_send_failed() {
-        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, false);
+        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, SessionProperties::INITIAL, false);
         let time = Instant::now();
         let (sender, receiver) = channel();
 
@@ -754,7 +763,7 @@ mod tests {
 
     #[test]
     fn start_session_unexpected_tokens() {
-        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, false);
+        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, SessionProperties::INITIAL, false);
 
         let start_session = start_session_call(SESSION_ID);
 
@@ -768,7 +777,7 @@ mod tests {
 
     #[test]
     fn start_session_fragmented_tokens() {
-        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, false);
+        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, SessionProperties::INITIAL, false);
         let time = Instant::now();
         let (sender, receiver) = channel();
 
@@ -823,7 +832,7 @@ mod tests {
 
     #[test]
     fn start_session_invalid_tokens() {
-        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, false);
+        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, SessionProperties::INITIAL, false);
         let time = Instant::now();
         let (sender, receiver) = channel();
         let invalid_tokens = vec![0xFE, 34, 23, 7, 2, 3, 2];
@@ -864,7 +873,7 @@ mod tests {
 
     #[test]
     fn start_session_properties_received_before_send() {
-        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, false);
+        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, SessionProperties::INITIAL, false);
         let time = Instant::now();
         let (sender, receiver) = channel();
         let negotiated = SessionProperties { outbound: TPER_CAPABILITIES, inbound: HOST_CAPABILITIES };
@@ -901,7 +910,7 @@ mod tests {
 
     #[test]
     fn start_session_properties_received_after_send() {
-        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, false);
+        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, SessionProperties::INITIAL, false);
         let time = Instant::now();
         let timed_out = time + TIMEOUT + Duration::from_millis(1);
         let (sender, receiver) = channel();
@@ -946,7 +955,7 @@ mod tests {
 
     #[test]
     fn prioritize_properties_over_start_session() {
-        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, false);
+        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, SessionProperties::INITIAL, false);
         let time = Instant::now();
         let (sender, receiver) = channel();
         let negotiated = SessionProperties { outbound: TPER_CAPABILITIES, inbound: HOST_CAPABILITIES };
@@ -986,7 +995,7 @@ mod tests {
 
     #[test]
     fn properties_held_while_start_session_in_flight() {
-        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, false);
+        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, SessionProperties::INITIAL, false);
         let time = Instant::now();
         let (sender, receiver) = channel();
         let negotiated = SessionProperties { outbound: TPER_CAPABILITIES, inbound: HOST_CAPABILITIES };
@@ -1028,7 +1037,7 @@ mod tests {
 
     #[test]
     fn properties_timed_out() {
-        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, false);
+        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, SessionProperties::INITIAL, false);
         let time = Instant::now();
         let timed_out = time + TIMEOUT + Duration::from_millis(1);
 
@@ -1044,7 +1053,7 @@ mod tests {
 
     #[test]
     fn sync_session_after_timeout() {
-        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, false);
+        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, SessionProperties::INITIAL, false);
         let time = Instant::now();
         let (sender, receiver) = channel();
 
@@ -1063,7 +1072,7 @@ mod tests {
 
     #[test]
     fn sync_session_unexpected() {
-        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, false);
+        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, SessionProperties::INITIAL, false);
 
         let sync_session = sync_session_call(SESSION_ID, MethodStatus::Success);
 
@@ -1073,7 +1082,7 @@ mod tests {
 
     #[test]
     fn sync_session_unexpected_failed() {
-        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, false);
+        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, SessionProperties::INITIAL, false);
 
         let sync_session = sync_session_call(SESSION_ID, MethodStatus::Fail);
 
@@ -1083,7 +1092,7 @@ mod tests {
 
     #[test]
     fn sync_session_receiver_dropped() {
-        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, false);
+        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, SessionProperties::INITIAL, false);
         let time = Instant::now();
         let (sender, receiver) = channel();
 
@@ -1108,7 +1117,7 @@ mod tests {
 
     #[test]
     fn close_session_received() {
-        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, false);
+        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, SessionProperties::INITIAL, false);
 
         let stack_action = mgmt.handle_tokens(close_session_call(SESSION_ID), &Span::none());
         assert_that!(stack_action, eq(&vec![ManagementAction::NotifyAbort { session_id: SESSION_ID }]));
@@ -1116,7 +1125,7 @@ mod tests {
 
     #[test]
     fn properties_received_without_host() {
-        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, false);
+        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, SessionProperties::INITIAL, false);
         let mut event = mgmt.properties_changed();
 
         let _ = mgmt.handle_tokens(properties_device_call(false), &Span::none());
@@ -1131,7 +1140,7 @@ mod tests {
 
     #[test]
     fn properties_received_with_host() {
-        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, false);
+        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, SessionProperties::INITIAL, false);
         let mut event = mgmt.properties_changed();
 
         let _ = mgmt.handle_tokens(properties_device_call(true), &Span::none());
@@ -1146,7 +1155,7 @@ mod tests {
 
     #[test]
     fn properties_changed_lagging_receiver_gets_latest() {
-        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, false);
+        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, SessionProperties::INITIAL, false);
         let mut event = mgmt.properties_changed();
 
         mgmt.handle_reset();
@@ -1167,7 +1176,7 @@ mod tests {
 
     #[test]
     fn properties_changed_idle_receiver_does_not_block() {
-        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, false);
+        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, SessionProperties::INITIAL, false);
         let _idle = mgmt.properties_changed();
         let mut event = mgmt.properties_changed();
 
@@ -1192,7 +1201,7 @@ mod tests {
 
     #[test]
     fn properties_not_auto_synced() {
-        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, false);
+        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, SessionProperties::INITIAL, false);
         let time = Instant::now();
 
         let action = mgmt.poll_action(time);
@@ -1201,7 +1210,7 @@ mod tests {
 
     #[test]
     fn properties_auto_synced() {
-        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, true);
+        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, SessionProperties::INITIAL, true);
         let time = Instant::now();
 
         let action = mgmt.poll_action(time);
@@ -1210,7 +1219,7 @@ mod tests {
 
     #[test]
     fn properties_limits_capped_by_host() {
-        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, false);
+        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, SessionProperties::INITIAL, false);
         let mut event = mgmt.properties_changed();
 
         // Both the TPer's capabilities and the echo exceed the host's
@@ -1243,7 +1252,7 @@ mod tests {
         #[case] echo: (bool, bool),
         #[case] expected: (bool, bool),
     ) {
-        let mut mgmt = Management::new(TIMEOUT, features(host), false);
+        let mut mgmt = Management::new(TIMEOUT, features(host), SessionProperties::INITIAL, false);
         let mut event = mgmt.properties_changed();
 
         let actions = mgmt.handle_tokens(properties_response(features(tper), Some(features(echo))), &Span::none());
@@ -1264,7 +1273,7 @@ mod tests {
         #[case] tper: (bool, bool),
         #[case] echo: (bool, bool),
     ) {
-        let mut mgmt = Management::new(TIMEOUT, features(host), true);
+        let mut mgmt = Management::new(TIMEOUT, features(host), SessionProperties::INITIAL, true);
         let mut event = mgmt.properties_changed();
 
         let actions = mgmt.handle_tokens(properties_response(features(tper), Some(features(echo))), &Span::none());
@@ -1287,7 +1296,7 @@ mod tests {
         // it may send them to us.
         let tper = Properties { continued_tokens: true, ..Properties::INITIAL };
         let echo = Properties { continued_tokens: echo, ..Properties::INITIAL };
-        let mut mgmt = Management::new(TIMEOUT, host, true);
+        let mut mgmt = Management::new(TIMEOUT, host, SessionProperties::INITIAL, true);
         let mut event = mgmt.properties_changed();
 
         let actions = mgmt.handle_tokens(properties_response(tper, Some(echo.clone())), &Span::none());
@@ -1304,8 +1313,42 @@ mod tests {
     }
 
     #[test]
+    fn reset_restores_initial_properties() {
+        let initial =
+            SessionProperties { outbound: Properties::INITIAL_OPAL_FAMILY, inbound: Properties::INITIAL_OPAL_FAMILY };
+        let mut mgmt = Management::new(TIMEOUT, Properties::INITIAL_OPAL_FAMILY, initial.clone(), false);
+        assert_that!(mgmt.state.properties, eq(&initial));
+
+        // The properties are synced, then reset.
+        let _ = mgmt.handle_tokens(properties_device_call(true), &Span::none());
+        assert_that!(mgmt.state.properties, not(eq(&initial)));
+        let mut event = mgmt.properties_changed();
+        mgmt.handle_reset();
+
+        // Both the state and the event go back to the initial assumptions, not
+        // to the core specification's.
+        assert_that!(mgmt.state.properties, eq(&initial));
+        let event = event.try_recv().unwrap();
+        assert_that!(event.remote_capabilities, eq(&Properties::INITIAL_OPAL_FAMILY));
+        assert_that!(event.properties, eq(&initial));
+    }
+
+    #[test]
+    fn properties_without_echo_use_initial_inbound() {
+        let initial =
+            SessionProperties { outbound: Properties::INITIAL_OPAL_FAMILY, inbound: Properties::INITIAL_OPAL_FAMILY };
+        let mut mgmt = Management::new(TIMEOUT, Properties::INITIAL_OPAL_FAMILY, initial, false);
+
+        // Without the echo, the TPer keeps using its initial assumptions about
+        // the host, which are the SSC's, not the core specification's.
+        let stack_action = mgmt.handle_tokens(properties_response(TPER_CAPABILITIES, None), &Span::none());
+        assert_that!(stack_action, eq(&vec![]));
+        assert_that!(mgmt.state.properties.inbound, eq(&Properties::INITIAL_OPAL_FAMILY));
+    }
+
+    #[test]
     fn reset_resyncs_properties_with_auto_sync() {
-        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, true);
+        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, SessionProperties::INITIAL, true);
         let time = Instant::now();
 
         mgmt.handle_reset();
@@ -1315,7 +1358,7 @@ mod tests {
 
     #[test]
     fn reset_after_feature_mismatch_does_not_resync() {
-        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, true);
+        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, SessionProperties::INITIAL, true);
         let time = Instant::now();
 
         let mismatch = features((true, true));

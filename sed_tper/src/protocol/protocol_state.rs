@@ -10,6 +10,7 @@ use std::{
 };
 
 use oneshot::Sender;
+use sed_packet::discovery::SscFeatureDescriptor;
 use sed_packet::{
     com_id::{ComId, ComIdExt},
     com_id_request::{
@@ -18,9 +19,7 @@ use sed_packet::{
     packet::{COM_PACKET_HEADER_LEN, ComPacket, PACKET_HEADER_LEN, PACKETIZED_PROTOCOL, SUB_PACKET_HEADER_LEN},
     session_id::SessionId,
 };
-#[cfg(feature = "test-utils")]
-use sed_spec::methods::SessionProperties;
-use sed_spec::methods::{Limit, Properties};
+use sed_spec::methods::{Limit, Properties, SessionProperties};
 use sorbit::ser_de::FromBytes;
 use tracing::{Span, info_span};
 
@@ -93,6 +92,27 @@ pub const CAPABILITIES: Properties = Properties {
     asynchronous: false,
 };
 
+/// The initial assumptions about the communication properties in both
+/// directions, as defined by the SSC the ComID belongs to.
+///
+/// Without a known SSC, the core specification's initial assumptions are used.
+pub fn initial_properties(ssc: Option<&SscFeatureDescriptor>) -> SessionProperties {
+    let properties = match ssc {
+        None => Properties::INITIAL,
+        Some(SscFeatureDescriptor::Enterprise(_)) => Properties::INITIAL_ENTERPRISE,
+        Some(
+            SscFeatureDescriptor::OpalV1(_)
+            | SscFeatureDescriptor::OpalV2(_)
+            | SscFeatureDescriptor::Opalite(_)
+            | SscFeatureDescriptor::PyriteV1(_)
+            | SscFeatureDescriptor::PyriteV2(_)
+            | SscFeatureDescriptor::Ruby(_)
+            | SscFeatureDescriptor::KeyPerIO(_),
+        ) => Properties::INITIAL_OPAL_FAMILY,
+    };
+    SessionProperties { outbound: properties.clone(), inbound: properties }
+}
+
 #[derive(Debug)]
 pub struct ProtocolState {
     com_id: ComId,
@@ -106,12 +126,18 @@ pub struct ProtocolState {
 }
 
 impl ProtocolState {
-    pub fn new(com_id: ComId, com_id_ext: ComIdExt, auto_sync_properties: bool) -> Self {
+    pub fn new(
+        com_id: ComId,
+        com_id_ext: ComIdExt,
+        ssc: Option<&SscFeatureDescriptor>,
+        auto_sync_properties: bool,
+    ) -> Self {
         let max_transfer_len = CAPABILITIES.max_gross_compacket_size.get();
+        let initial_properties = initial_properties(ssc);
         Self {
             com_id,
             com_id_ext,
-            rpc_session: RpcSession::new(DEF_TRANS_TIMEOUT, CAPABILITIES, auto_sync_properties),
+            rpc_session: RpcSession::new(DEF_TRANS_TIMEOUT, CAPABILITIES, initial_properties, auto_sync_properties),
             com_id_session: ComIdSession::new(DEF_TRANS_TIMEOUT),
             rpc_protocol: SynchronousProtocol::new(PACKETIZED_PROTOCOL, max_transfer_len),
             com_id_protocol: SynchronousProtocol::new(COM_ID_PROTOCOL, COM_ID_RESPONSE_LEN),
@@ -370,11 +396,14 @@ struct ComPacketSendingRecord {
 
 #[cfg(test)]
 mod tests {
+    use std::marker::PhantomData;
+
     use googletest::assert_that;
     use googletest::matchers::*;
     use oneshot::channel;
     use sed_packet::com_id_request::ComIdResponsePayload;
     use sed_packet::com_id_request::StackResetStatus;
+    use sed_packet::discovery::{EnterpriseDescriptor, OpalV2Descriptor, OwnerPasswordState};
     use sed_packet::token_stream::ToTokens;
     use sed_spec::methods::MethodStatus;
     use sorbit::ser_de::ToBytes;
@@ -387,8 +416,45 @@ mod tests {
     const SESSION_ID: SessionId = SessionId { hsn: 1, tsn: 2 };
 
     #[test]
+    fn initial_properties_core() {
+        assert_that!(initial_properties(None), eq(&SessionProperties::INITIAL));
+    }
+
+    #[test]
+    fn initial_properties_enterprise() {
+        let ssc = SscFeatureDescriptor::Enterprise(EnterpriseDescriptor {
+            version: 1,
+            length: PhantomData,
+            base_com_id: ComId(0x7FE),
+            num_com_ids: 1,
+            no_range_crossing: true,
+        });
+        let expected =
+            SessionProperties { outbound: Properties::INITIAL_ENTERPRISE, inbound: Properties::INITIAL_ENTERPRISE };
+        assert_that!(initial_properties(Some(&ssc)), eq(&expected));
+    }
+
+    #[test]
+    fn initial_properties_opal_family() {
+        let ssc = SscFeatureDescriptor::OpalV2(OpalV2Descriptor {
+            version: 1,
+            length: PhantomData,
+            base_com_id: ComId(0x7FE),
+            num_com_ids: 1,
+            no_range_crossing: true,
+            num_locking_admins_supported: 4,
+            num_locking_users_supported: 8,
+            initial_owner_pw: OwnerPasswordState::SameAsMSID,
+            reverted_owner_pw: OwnerPasswordState::SameAsMSID,
+        });
+        let expected =
+            SessionProperties { outbound: Properties::INITIAL_OPAL_FAMILY, inbound: Properties::INITIAL_OPAL_FAMILY };
+        assert_that!(initial_properties(Some(&ssc)), eq(&expected));
+    }
+
+    #[test]
     fn com_id_request_completed() {
-        let mut protocol = ProtocolState::new(ComId(1), ComIdExt(0), false);
+        let mut protocol = ProtocolState::new(ComId(1), ComIdExt(0), None, false);
         let (sender, receiver) = channel();
 
         let request = ComIdRequest::stack_reset(ComId(1), ComIdExt(0));
@@ -421,7 +487,7 @@ mod tests {
 
     #[test]
     fn method_call_completed() {
-        let mut protocol = ProtocolState::new(ComId(1), ComIdExt(0), false);
+        let mut protocol = ProtocolState::new(ComId(1), ComIdExt(0), None, false);
         let (sender, receiver) = channel();
 
         let call = start_session_call(SESSION_ID);
@@ -485,7 +551,7 @@ mod tests {
 
     #[test]
     fn unexpected_session_resets_stack() {
-        let mut protocol = ProtocolState::new(ComId(1), ComIdExt(0), false);
+        let mut protocol = ProtocolState::new(ComId(1), ComIdExt(0), None, false);
 
         let sync_session = sync_session_call(SESSION_ID, MethodStatus::Success);
         let com_packet = ComPacket {

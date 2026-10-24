@@ -21,6 +21,7 @@ use sed_device::StorageDevice;
 use sed_packet::{
     com_id::{ComId, ComIdExt},
     com_id_request::{ComIdRequest, ComIdResponse},
+    discovery::SscFeatureDescriptor,
     session_id::SessionId,
 };
 #[cfg(feature = "test-utils")]
@@ -49,17 +50,22 @@ impl Protocol {
     /// Create a new protocol stack for the `device` on the given ComID and
     /// ComID extension.
     ///
+    /// The `ssc` the ComID belongs to determines the initial assumptions about
+    /// the communication properties. If it's not known, the core
+    /// specification's initial assumptions are used.
+    ///
     /// This initializes the protocol stack, but no messages will be delivered
     /// until you call [`run`](Self::run).
     pub fn new(
         com_id: ComId,
         com_id_ext: ComIdExt,
+        ssc: Option<&SscFeatureDescriptor>,
         device: Arc<dyn StorageDevice>,
         runtime: Arc<PolyRuntime>,
         auto_sync_properties: bool,
     ) -> (Self, Controller) {
         let (command_tx, command_rx) = async_channel::unbounded();
-        let state = ProtocolState::new(com_id, com_id_ext, auto_sync_properties);
+        let state = ProtocolState::new(com_id, com_id_ext, ssc, auto_sync_properties);
         let controller = Controller::new(command_tx, state.properties_changed());
         let protocol = Self { com_id, device, command_rx, state, runtime };
         (protocol, controller)
@@ -328,7 +334,8 @@ mod tests {
 
         let device = MockDevice::new(scenario.into_iter());
         let runtime = PolyRuntime::Tokio(TokioRuntime::current().unwrap());
-        let (protocol, controller) = Protocol::new(ComId(1), ComIdExt(0), Arc::new(device), Arc::new(runtime), false);
+        let (protocol, controller) =
+            Protocol::new(ComId(1), ComIdExt(0), None, Arc::new(device), Arc::new(runtime), false);
         let task = tokio::spawn(protocol.run());
 
         let response_rx = controller.call_start_session(call.parameters.clone());

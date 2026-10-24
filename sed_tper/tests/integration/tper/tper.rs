@@ -33,7 +33,7 @@ async fn discovery() {
 async fn verify_com_id_valid_base() {
     let device = VirtualDevice::new();
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
-    let tper = Tper::connect(BASE_COM_ID, ComIdExt(0), Arc::new(device), runtime);
+    let tper = Tper::connect(BASE_COM_ID, ComIdExt(0), None, Arc::new(device), runtime);
     let result = tper.verify_com_id_valid(BASE_COM_ID, ComIdExt(0)).await;
     let expected = ComIdState::Issued;
     assert_eq!(result, Ok(expected));
@@ -45,7 +45,7 @@ async fn verify_com_id_valid_base() {
 async fn verify_com_id_valid_incorrent_id() {
     let device = VirtualDevice::new();
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
-    let tper = Tper::connect(BASE_COM_ID, ComIdExt(0), Arc::new(device), runtime);
+    let tper = Tper::connect(BASE_COM_ID, ComIdExt(0), None, Arc::new(device), runtime);
     let result = tper.verify_com_id_valid(BASE_COM_ID + 1, ComIdExt(0)).await;
     let expected = ComIdState::Inactive;
     assert_eq!(result, Ok(expected));
@@ -57,7 +57,7 @@ async fn verify_com_id_valid_incorrent_id() {
 async fn verify_com_id_valid_incorrent_ext() {
     let device = VirtualDevice::new();
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
-    let tper = Tper::connect(BASE_COM_ID, ComIdExt(0), Arc::new(device), runtime);
+    let tper = Tper::connect(BASE_COM_ID, ComIdExt(0), None, Arc::new(device), runtime);
     let result = tper.verify_com_id_valid(BASE_COM_ID, ComIdExt(1)).await;
     let expected = ComIdState::Invalid;
     assert_eq!(result, Ok(expected));
@@ -69,7 +69,7 @@ async fn verify_com_id_valid_incorrent_ext() {
 async fn stack_reset_base() {
     let device = VirtualDevice::new();
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
-    let tper = Tper::connect(BASE_COM_ID, ComIdExt(0), Arc::new(device), runtime);
+    let tper = Tper::connect(BASE_COM_ID, ComIdExt(0), None, Arc::new(device), runtime);
     let result = tper.stack_reset(BASE_COM_ID, ComIdExt(0)).await;
     assert_eq!(result, Ok(()));
     // Do another reset just to see that the base ComId was left intact.
@@ -83,7 +83,7 @@ async fn stack_reset_base() {
 async fn stack_reset_incorrent_id() {
     let device = VirtualDevice::new();
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
-    let tper = Tper::connect(BASE_COM_ID, ComIdExt(0), Arc::new(device), runtime);
+    let tper = Tper::connect(BASE_COM_ID, ComIdExt(0), None, Arc::new(device), runtime);
     let result = tper.stack_reset(BASE_COM_ID + 1, ComIdExt(0)).await;
     assert_eq!(result, Err(Error::StackResetFailed));
 }
@@ -94,7 +94,7 @@ async fn stack_reset_incorrent_id() {
 async fn stack_reset_incorrent_ext() {
     let device = VirtualDevice::new();
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
-    let tper = Tper::connect(BASE_COM_ID, ComIdExt(0), Arc::new(device), runtime);
+    let tper = Tper::connect(BASE_COM_ID, ComIdExt(0), None, Arc::new(device), runtime);
     let result = tper.stack_reset(BASE_COM_ID, ComIdExt(1)).await;
     assert_eq!(result, Err(Error::StackResetFailed));
 }
