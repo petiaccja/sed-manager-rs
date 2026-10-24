@@ -157,18 +157,16 @@ impl Management {
     }
 
     pub fn poll_action(&mut self, time: Instant) -> PacketAction {
-        // Get next packet to send.
-        let packet = self.poll_call_properties().or_else(|| self.poll_start_session_calls());
-        let packet = packet.map(|(packet, span)| (packet, vec![span]));
-
-        // Remove timed out & get next deadline. Nobody waits for the response
-        // to `Properties`, so it doesn't need to wake up the protocol.
-        if let PropertiesCall::Receiving { deadline, .. } = &self.state.properties_call
-            && *deadline < time
-        {
-            self.state.properties_call = PropertiesCall::Idle;
-        }
+        // Remove timed out & get next deadline. The `Properties` deadline is
+        // needed because pending `StartSession`s wait for it to complete.
         let mut deadline = None;
+        if let PropertiesCall::Receiving { deadline: properties_deadline, .. } = &self.state.properties_call {
+            if *properties_deadline < time {
+                self.state.properties_call = PropertiesCall::Idle;
+            } else {
+                deadline = Some(*properties_deadline);
+            }
+        }
         for queue in self.state.start_session_calls_receiving.values_mut() {
             while let Some(record) = queue.pop_front_if(|record| record.deadline < time) {
                 let _ = record.sender.send(Err(Error::TimedOut));
@@ -178,6 +176,23 @@ impl Management {
             }
         }
         self.state.start_session_calls_receiving.retain(|_, queue| !queue.is_empty());
+
+        // Get next packet to send. Make sure either only `Properties` or
+        // only `StartSession` methods are in flight at a time, or else
+        // we cannot determine the active properties when the `StartSession` was
+        // processed by the device.
+        //
+        // A requested `Properties` takes priority over enqueued `StartSession`s,
+        // but it waits for the ones already in flight to complete.
+        let properties_call = &self.state.properties_call;
+        let packet = if !properties_call.is_requested() && !properties_call.is_in_flight() {
+            self.poll_start_session_calls()
+        } else if properties_call.is_requested() && !self.has_start_sessions_in_flight() {
+            self.poll_call_properties()
+        } else {
+            None
+        };
+        let packet = packet.map(|(packet, span)| (packet, vec![span]));
 
         // Decide action.
         if let Some(packet) = packet {
@@ -209,10 +224,6 @@ impl Management {
                 return None;
             }
         };
-        // This call is pushed to the FRONT of the queue, NOT to the back.
-        // This is fine, as SM methods are paired with the response by key,
-        // not by order. This gives higher priority to property sync, so the
-        // retrieved properties can be applied sooner.
         let sequence_number = self.state.sequence_number.fetch_add();
         let span = span.clone();
         self.state.properties_call = PropertiesCall::Sending { sequence_number, span: span.clone() };
@@ -391,7 +402,7 @@ impl Management {
     fn handle_invalid_tokens(&mut self, error: Error) {
         self.state.received_tokens.clear();
         // The response to `Properties` may have been among the discarded tokens.
-        if let PropertiesCall::Sending { .. } | PropertiesCall::Receiving { .. } = self.state.properties_call {
+        if self.state.properties_call.is_in_flight() {
             self.state.properties_call = PropertiesCall::Idle;
         }
         for (_, queue) in self.state.start_session_calls_sending.drain() {
@@ -404,6 +415,13 @@ impl Management {
                 let _ = record.sender.send(Err(error.clone()));
             }
         }
+    }
+
+    /// Whether any `StartSession` method has been packetized and is waiting
+    /// for its IF-SEND or for its response. Enqueued methods don't count.
+    fn has_start_sessions_in_flight(&self) -> bool {
+        let State { start_session_calls_sending, start_session_calls_receiving, .. } = &self.state;
+        !start_session_calls_sending.is_empty() || !start_session_calls_receiving.is_empty()
     }
 
     /// The span of the method call that was sent the earliest among those
@@ -525,6 +543,25 @@ enum PropertiesCall {
     Sending { sequence_number: SequenceNumber, span: Span },
     /// Sent, waiting for the TPer's `Properties` response.
     Receiving { sent_at: Instant, deadline: Instant, span: Span },
+}
+
+impl PropertiesCall {
+    /// A sync has been requested, but not yet packetized.
+    fn is_requested(&self) -> bool {
+        match self {
+            PropertiesCall::Requested { .. } => true,
+            PropertiesCall::Idle | PropertiesCall::Sending { .. } | PropertiesCall::Receiving { .. } => false,
+        }
+    }
+
+    /// The `Properties` call has been packetized, and awaits its IF-SEND or
+    /// its response.
+    fn is_in_flight(&self) -> bool {
+        match self {
+            PropertiesCall::Sending { .. } | PropertiesCall::Receiving { .. } => true,
+            PropertiesCall::Idle | PropertiesCall::Requested { .. } => false,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -830,38 +867,35 @@ mod tests {
         let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, false);
         let time = Instant::now();
         let (sender, receiver) = channel();
+        let negotiated = SessionProperties { outbound: TPER_CAPABILITIES, inbound: HOST_CAPABILITIES };
 
         let start_session = start_session_call(SESSION_ID);
         let sync_session = sync_session_call(SESSION_ID, MethodStatus::Success);
 
-        // Both methods are packetized before the `Properties` response arrives.
+        // Both are queued, but only the `Properties` is sent. The `StartSession`
+        // waits for its response.
         mgmt.handle_call_properties(Span::current());
         mgmt.handle_call_start_session(start_session.parameters.clone(), sender, Span::current());
         assert_that!(mgmt.poll_action(time), matches_pattern!(PacketAction::Send(len(eq(1)))));
-        assert_that!(mgmt.poll_action(time), matches_pattern!(PacketAction::Send(len(eq(1)))));
+        assert_that!(mgmt.poll_action(time), matches_pattern!(PacketAction::None));
 
-        // The `Properties` response arrives before the `StartSession` is sent.
+        // The `Properties` response arrives, which releases the `StartSession`.
         mgmt.handle_iface_send_done(time, SequenceNumber(1), Ok(()));
         let stack_action =
             mgmt.handle_tokens(properties_response(TPER_CAPABILITIES, Some(HOST_CAPABILITIES)), &Span::none());
         assert_that!(stack_action, eq(&vec![]));
+        assert_that!(mgmt.poll_action(time), matches_pattern!(PacketAction::Send(len(eq(1)))));
         mgmt.handle_iface_send_done(time, SequenceNumber(2), Ok(()));
 
         // The session uses the negotiated properties.
         let stack_action = mgmt.handle_tokens(sync_session.to_tokens().unwrap(), &Span::none());
         assert_that!(
             stack_action,
-            eq(&vec![ManagementAction::Spawn {
-                session_id: SESSION_ID,
-                properties: SessionProperties { outbound: TPER_CAPABILITIES, inbound: HOST_CAPABILITIES }
-            }])
+            eq(&vec![ManagementAction::Spawn { session_id: SESSION_ID, properties: negotiated.clone() }])
         );
         assert_that!(
             receiver.try_recv(),
-            ok(ok(eq(&StartedSession {
-                sync_session: sync_session.parameters,
-                properties: SessionProperties { outbound: TPER_CAPABILITIES, inbound: HOST_CAPABILITIES },
-            })))
+            ok(ok(eq(&StartedSession { sync_session: sync_session.parameters, properties: negotiated })))
         );
     }
 
@@ -869,21 +903,30 @@ mod tests {
     fn start_session_properties_received_after_send() {
         let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, false);
         let time = Instant::now();
+        let timed_out = time + TIMEOUT + Duration::from_millis(1);
         let (sender, receiver) = channel();
+        let negotiated = SessionProperties { outbound: TPER_CAPABILITIES, inbound: HOST_CAPABILITIES };
 
         let start_session = start_session_call(SESSION_ID);
         let sync_session = sync_session_call(SESSION_ID, MethodStatus::Success);
 
+        // The `Properties` is sent, and the `StartSession` waits for it.
         mgmt.handle_call_properties(Span::current());
         mgmt.handle_call_start_session(start_session.parameters.clone(), sender, Span::current());
         assert_that!(mgmt.poll_action(time), matches_pattern!(PacketAction::Send(len(eq(1)))));
-        assert_that!(mgmt.poll_action(time), matches_pattern!(PacketAction::Send(len(eq(1)))));
-
-        // The `StartSession` is sent before the `Properties` response arrives.
         mgmt.handle_iface_send_done(time, SequenceNumber(1), Ok(()));
-        mgmt.handle_iface_send_done(time, SequenceNumber(2), Ok(()));
+        assert_that!(mgmt.poll_action(time), matches_pattern!(PacketAction::Sleep { .. }));
+
+        // The `Properties` times out, which releases the `StartSession`, even
+        // though the TPer may still process the `Properties`.
+        assert_that!(mgmt.poll_action(timed_out), matches_pattern!(PacketAction::Send(len(eq(1)))));
+        mgmt.handle_iface_send_done(timed_out, SequenceNumber(2), Ok(()));
+
+        // The late `Properties` response arrives after the `StartSession` was
+        // sent. It's applied, but it doesn't affect the session being started.
         let stack_action = mgmt.handle_tokens(properties_device_call(true), &Span::none());
         assert_that!(stack_action, eq(&vec![]));
+        assert_that!(mgmt.state.properties, eq(&negotiated));
 
         // The TPer may have processed the `Properties` after the `StartSession`,
         // so the session must stay on the properties confirmed at sending.
@@ -899,6 +942,104 @@ mod tests {
                 properties: SessionProperties::INITIAL
             })))
         );
+    }
+
+    #[test]
+    fn prioritize_properties_over_start_session() {
+        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, false);
+        let time = Instant::now();
+        let (sender, receiver) = channel();
+        let negotiated = SessionProperties { outbound: TPER_CAPABILITIES, inbound: HOST_CAPABILITIES };
+
+        let start_session = start_session_call(SESSION_ID);
+        let sync_session = sync_session_call(SESSION_ID, MethodStatus::Success);
+
+        // Both are queued, the `StartSession` first, but the `Properties` is
+        // sent first.
+        mgmt.handle_call_start_session(start_session.parameters.clone(), sender, Span::current());
+        mgmt.handle_call_properties(Span::current());
+        assert_that!(mgmt.poll_action(time), matches_pattern!(PacketAction::Send(len(eq(1)))));
+        assert_that!(mgmt.poll_action(time), matches_pattern!(PacketAction::None));
+
+        // While the `Properties` awaits its response, the protocol sleeps until
+        // the `Properties` times out.
+        mgmt.handle_iface_send_done(time, SequenceNumber(1), Ok(()));
+        assert_that!(mgmt.poll_action(time), matches_pattern!(PacketAction::Sleep { .. }));
+
+        // The `Properties` response arrives, which releases the `StartSession`.
+        let stack_action = mgmt.handle_tokens(properties_device_call(true), &Span::none());
+        assert_that!(stack_action, eq(&vec![]));
+        assert_that!(mgmt.poll_action(time), matches_pattern!(PacketAction::Send(len(eq(1)))));
+        mgmt.handle_iface_send_done(time, SequenceNumber(2), Ok(()));
+
+        // The session uses the negotiated properties.
+        let stack_action = mgmt.handle_tokens(sync_session.to_tokens().unwrap(), &Span::none());
+        assert_that!(
+            stack_action,
+            eq(&vec![ManagementAction::Spawn { session_id: SESSION_ID, properties: negotiated.clone() }])
+        );
+        assert_that!(
+            receiver.try_recv(),
+            ok(ok(eq(&StartedSession { sync_session: sync_session.parameters, properties: negotiated })))
+        );
+    }
+
+    #[test]
+    fn properties_held_while_start_session_in_flight() {
+        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, false);
+        let time = Instant::now();
+        let (sender, receiver) = channel();
+        let negotiated = SessionProperties { outbound: TPER_CAPABILITIES, inbound: HOST_CAPABILITIES };
+
+        let start_session = start_session_call(SESSION_ID);
+        let sync_session = sync_session_call(SESSION_ID, MethodStatus::Success);
+
+        // The `StartSession` is sent first, so a `Properties` requested
+        // afterwards must wait for the `StartSession` to complete.
+        mgmt.handle_call_start_session(start_session.parameters.clone(), sender, Span::current());
+        assert_that!(mgmt.poll_action(time), matches_pattern!(PacketAction::Send(len(eq(1)))));
+        mgmt.handle_call_properties(Span::current());
+        assert_that!(mgmt.poll_action(time), matches_pattern!(PacketAction::None));
+        mgmt.handle_iface_send_done(time, SequenceNumber(1), Ok(()));
+        assert_that!(mgmt.poll_action(time), matches_pattern!(PacketAction::Sleep { .. }));
+
+        // The session uses the properties from before the `Properties` call,
+        // since the TPer hasn't received it yet.
+        let stack_action = mgmt.handle_tokens(sync_session.to_tokens().unwrap(), &Span::none());
+        assert_that!(
+            stack_action,
+            eq(&vec![ManagementAction::Spawn { session_id: SESSION_ID, properties: SessionProperties::INITIAL }])
+        );
+        assert_that!(
+            receiver.try_recv(),
+            ok(ok(eq(&StartedSession {
+                sync_session: sync_session.parameters,
+                properties: SessionProperties::INITIAL
+            })))
+        );
+
+        // The `StartSession` completed, which releases the `Properties`.
+        assert_that!(mgmt.poll_action(time), matches_pattern!(PacketAction::Send(len(eq(1)))));
+        mgmt.handle_iface_send_done(time, SequenceNumber(2), Ok(()));
+        let stack_action = mgmt.handle_tokens(properties_device_call(true), &Span::none());
+        assert_that!(stack_action, eq(&vec![]));
+        assert_that!(mgmt.state.properties, eq(&negotiated));
+    }
+
+    #[test]
+    fn properties_timed_out() {
+        let mut mgmt = Management::new(TIMEOUT, HOST_CAPABILITIES, false);
+        let time = Instant::now();
+        let timed_out = time + TIMEOUT + Duration::from_millis(1);
+
+        mgmt.handle_call_properties(Span::current());
+        assert_that!(mgmt.poll_action(time), matches_pattern!(PacketAction::Send(len(eq(1)))));
+        mgmt.handle_iface_send_done(time, SequenceNumber(1), Ok(()));
+        assert_that!(mgmt.poll_action(time), matches_pattern!(PacketAction::Sleep { .. }));
+
+        // The expired deadline must not be reported for sleeping.
+        assert_that!(mgmt.poll_action(timed_out), matches_pattern!(PacketAction::None));
+        assert_that!(mgmt.state.properties_call, matches_pattern!(PropertiesCall::Idle));
     }
 
     #[test]
