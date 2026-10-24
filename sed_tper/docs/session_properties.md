@@ -215,7 +215,7 @@ also not the same as the limit for `Set`.
    The automatic recovery path (`Action::Recover` in `protocol_state.rs`)
    stays on the initial properties until the user resets manually.
 3. **Power cycles on static ComIDs** aren't handled (see 5.2.2.4 above).
-4. **The size check is incomplete.** `protocol::Session::handle_method_call`
+4. ~~**The size check is incomplete.**~~ `protocol::Session::handle_method_call`
    only checks `max_gross_packet_size − 24 − 12`. It ignores the sub-packet
    padding, `max_gross_compacket_size − 20`, and `max_ind_token_size`. The
    last one is the binding limit for large `Set` calls.
@@ -242,7 +242,7 @@ also not the same as the limit for `Set`.
 
 ## Plan
 
-### Step 1: Model the negotiated state explicitly in `Management`
+### ✓ ~~Step 1~~: Model the negotiated state explicitly in `Management`
 
 - Replace `properties: Properties` with a struct that holds the two
   directions separately:
@@ -284,7 +284,7 @@ correct without a gate. What's left:
   but the control session keeps the initial features (see "The control
   (management) session" above).
 
-### Step 3: Re-sync after any successful stack reset
+### ✓ ~~Step 3~~: Re-sync after any successful stack reset
 
 - Request the `Properties` sync from `Management::handle_reset` itself, or
   from `ProtocolState` when it sees a successful `StackReset` response. Then
@@ -293,7 +293,7 @@ correct without a gate. What's left:
   is mostly belt-and-braces, but it keeps `PropertiesChanged` accurate for
   the GUI.
 
-### Step 4: Compute the limits in one place
+### ✓ ~~Step 4~~: Compute the limits in one place
 
 - Add a type in `sed_tper` (e.g. `SessionLimits`) computed from the
   snapshot:
