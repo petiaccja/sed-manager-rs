@@ -108,13 +108,52 @@ kind of property:
 - "SSCs MAY redefine the initial assumptions ... the initial assumptions the
   host makes about the TPer are based on the supported SSC the host discovers
   during Level 0 Discovery" (5.2.2.4).
-- Opal 2 (4.1.1.1, Table 17) and Pyrite 2 raise them to MaxComPacketSize
-  2048, MaxPacketSize 2028, and MaxIndTokenSize 1992.
-- Enterprise (9.2.2.1) requires only **MaxIndTokenSize ≥ 256**, which is
-  *lower* than Core's 968. `Properties::INITIAL` is therefore not a safe
-  assumption for token size on Enterprise. In practice the management traffic
-  has no tokens that large, but a regular session must not fall back to
-  `INITIAL` on Enterprise if the properties sync fails.
+- The first `Properties` call "SHALL be encoded using the minimum assumptions
+  outlined above in Table 168, or the minimum assumptions defined by the
+  TPer's SSC" (5.2.2.4), so the SSC's values may be used from the start.
+
+The SSCs fall into three groups:
+
+| SSC (Level 0 feature code)                                                                                             | MaxComPacketSize | MaxPacketSize | MaxIndTokenSize | MaxPackets / MaxSubpackets / MaxMethods | MaxResponseComPacketSize (TPer reports) | Other Table 168 properties |
+| ---------------------------------------------------------------------------------------------------------------------- | ---------------- | ------------- | --------------- | --------------------------------------- | --------------------------------------- | -------------------------- |
+| No recognized SSC: Core Table 168                                                                                      | 1024             | 1004          | 968             | 1 / 1 / 1                               | not listed                              | see below                  |
+| Opal 1.00 (0x0200), Opal 2 (0x0203), Opalite (0x0301), Pyrite 1 (0x0302), Pyrite 2 (0x0303), Ruby (0x0304), KPIO (0x0305) | **2048**         | **2028**      | **1992**        | 1 / 1 / 1                               | ≥ 2048                                  | Core Table 168             |
+| Enterprise (0x0100)                                                                                                    | 1024             | 1004          | **256**         | 1 / 1 / 1 (Core Table 168)              | ≥ 1024                                  | Core Table 168             |
+
+The other Table 168 properties are MaxAggTokenSize 968, and ContinuedTokens,
+SequenceNumbers, AckNak, and Asynchronous all `false`. None of the SSCs
+redefine them.
+
+Sources: Opal 1.00 4.1.1.1, Opal 2.30 4.1.1.1 (Table 17), Opalite, Pyrite
+1.0, Pyrite 2.01, Ruby, and KPIO all have the same properties table (KPIO adds
+KMIP-specific rows). Enterprise 9.2.2.1 lists the values in its `Properties`
+method description.
+
+Notes:
+
+- **Directions in the Opal family.** "Initial Assumption" appears only in the
+  "Host Property ... Values Accepted" column, i.e. the TPer's assumption
+  about the host (our inbound direction). The "TPer Property ... Values
+  Reported" column gives the same numbers as guaranteed minimums. Using
+  those as the host's assumption about the TPer (our outbound direction) is
+  safe, because the TPer SHALL support at least that much.
+- **Directions in Enterprise.** 9.2.2.1 states the MaxPacketSize,
+  MaxComPacketSize, and MaxIndTokenSize values "also apply to communications
+  from the TPer to the Host", so they cover both directions.
+- **Enterprise's Table 14 contradicts 9.2.2.1.** It says MaxPacketSize and
+  MaxComPacketSize "SHALL be at least 512". We go with the 1024-based
+  values from 9.2.2.1 (which match Core): 512 bytes is too small to be
+  practical, likely even for the `Properties` call itself, and devices
+  limited to less than 1024 bytes aren't expected to be around anymore.
+  Such devices will fail with SEDManager.
+- **Enterprise's token size is lower than Core's.** MaxIndTokenSize ≥ 256
+  is *lower* than Core's 968, so `Properties::INITIAL` is not a safe
+  assumption for token size on Enterprise. In practice the management
+  traffic has no tokens that large, but a regular session must not fall back
+  to `INITIAL` on Enterprise if the properties sync fails.
+- **MaxAggTokenSize** stays at Core's 968 even where MaxIndTokenSize is
+  larger. This is harmless: ContinuedTokens is initially `false`, and then
+  MaxAggTokenSize is ignored (5.2.2.4.1.8).
 
 ### The control (management) session
 
@@ -197,7 +236,7 @@ also not the same as the limit for `Set`.
 
 ## Problems in the current implementation
 
-1. **In-flight `Properties` calls are not accounted for.** The snapshot is
+1. ~~**In-flight `Properties` calls are not accounted for.**~~ The snapshot is
    taken in `Management::handle_iface_send_done`, i.e. at the
    `StartSession`'s IF-SEND (see "When to take a session's snapshot"). It
    contains only confirmed values. Under the synchronous protocol, a
@@ -259,7 +298,7 @@ also not the same as the limit for `Set`.
   second, because then only receivers that actually listen are attached to
   the channel.
 
-### Step 2: Re-sync before `StartSession`, and account for in-flight calls
+### Step 2: Re-sync before `StartSession`, and ~~account for in-flight calls~~
 
 The snapshot is taken at the `StartSession`'s IF-SEND
 (`Management::handle_iface_send_done`) and carried through
@@ -331,12 +370,14 @@ What's left:
 
 ### Step 6: SSC-aware initial assumptions
 
-- Make the initial assumptions a function of the SSC found in discovery:
-  Core Table 168 by default, raised for Opal/Pyrite, and with the Enterprise
-  token minimum lowered. `Tper::connect` doesn't know the SSC today, so this
-  either takes the discovery as a parameter or keeps Core's values and lowers
-  the token size to 256 everywhere. It is low priority as long as the sync
-  normally succeeds, but it matters for the Enterprise fallback.
+- Make the initial assumptions a function of the SSC found in discovery,
+  using the three groups in "Initial assumptions depend on the SSC" above:
+  Core Table 168 by default, the 2048-based values for the Opal family, and
+  Core's values with MaxIndTokenSize lowered to 256 for Enterprise.
+  `Tper::connect` doesn't know the SSC today, so this either takes the
+  discovery as a parameter or keeps Core's values and lowers the token size
+  to 256 everywhere. It is low priority as long as the sync normally
+  succeeds, but it matters for the Enterprise fallback.
 
 ### Step 7: Tests and virtual device
 
