@@ -219,7 +219,7 @@ also not the same as the limit for `Set`.
    capacity 1 and overflow is disabled. Every `Controller` clone holds an
    *active* `Receiver` that is never read. After the first broadcast the
    channel stays full, and later `try_broadcast` calls fail silently.
-6. **The two directions are mixed.** `Properties::common(capabilities,
+6. ~~**The two directions are mixed.**~~ `Properties::common(capabilities,
    tper_properties)` merges both directions into one struct, and that is
    also what `tper::Session::properties()` returns now. Sending is
    limited by the TPer's `Properties` (what it can receive). Receiving is
