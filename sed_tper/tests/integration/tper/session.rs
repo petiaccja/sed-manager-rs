@@ -7,9 +7,13 @@ use std::sync::Arc;
 
 use googletest::{assert_that, matchers::*};
 use sed_async::{PolyRuntime, TokioRuntime};
-use sed_packet::{Bytes, Uid, com_id::ComIdExt, discovery::LockingDescriptor, token_stream::ToTokens as _};
+use sed_packet::{
+    com_id::ComIdExt,
+    discovery::LockingDescriptor,
+    token_stream::token::{Atom as _, MediumAtom},
+};
 use sed_spec::{
-    methods::{GetBytesResult, MethodCall, MethodResult, MethodStatus, Properties, SessionProperties, SetBytes},
+    methods::{GetBytesResult, MethodStatus, Properties, SessionProperties, SetBytes},
     objects::{AuthorityRef, CPin, CPinRefExt, SecurityProviderRef},
     preconfig::{
         core::shared::{self, method_id, table_id},
@@ -303,22 +307,13 @@ async fn set_bytes_limit_size() {
 }
 
 fn max_set_payload(outbound_properties: &Properties) -> usize {
-    let probe_len = 968;
-    let overhead_probe = MethodCall {
-        invoking_id: Uid::null(),
-        method_id: Uid::null(),
-        parameters: SetBytes { where_: Some(0), values: Some(Bytes(vec![0; probe_len])) },
-        status: MethodStatus::Success,
-    };
-    let overhead = overhead_probe.to_tokens().unwrap().len() - probe_len;
+    // The initial properties will always use a medium atom (len: 16..2047).
     let max_method_len = outbound_properties.max_method_len();
-    max_method_len - overhead
+    max_method_len - SetBytes::HEADER_LEN - MediumAtom::HEADER_LEN
 }
 
 fn max_get_payload(inbound_properties: &Properties) -> usize {
-    let probe_len = 968;
-    let overhead_probe = MethodResult(Ok(GetBytesResult { result: Bytes(vec![0; probe_len]) }));
-    let overhead = overhead_probe.to_tokens().unwrap().len() - probe_len;
+    // The initial properties will always use a medium atom (len: 16..2047).
     let max_method_len = inbound_properties.max_method_len();
-    max_method_len - overhead
+    max_method_len - GetBytesResult::HEADER_LEN - MediumAtom::HEADER_LEN
 }

@@ -50,9 +50,10 @@ enum Tag {
     Empty = 0xFF,
 }
 
-trait Atom {
+pub trait Atom {
     const DATA_LEN_MIN: usize;
     const DATA_LEN_MAX: usize;
+    const HEADER_LEN: usize;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -67,6 +68,7 @@ pub struct TinyAtom {
 impl Atom for TinyAtom {
     const DATA_LEN_MIN: usize = 0;
     const DATA_LEN_MAX: usize = 0;
+    const HEADER_LEN: usize = 1;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -86,6 +88,7 @@ pub struct ShortAtom {
 impl Atom for ShortAtom {
     const DATA_LEN_MIN: usize = 0;
     const DATA_LEN_MAX: usize = 15;
+    const HEADER_LEN: usize = 1;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -105,6 +108,7 @@ pub struct MediumAtom {
 impl Atom for MediumAtom {
     const DATA_LEN_MIN: usize = 1;
     const DATA_LEN_MAX: usize = 2047;
+    const HEADER_LEN: usize = 2;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -124,6 +128,7 @@ pub struct LongAtom {
 impl Atom for LongAtom {
     const DATA_LEN_MIN: usize = 1;
     const DATA_LEN_MAX: usize = 16777215;
+    const HEADER_LEN: usize = 4;
 }
 
 #[derive(Debug, PartialEq, Eq, Deserialize)]
@@ -283,5 +288,23 @@ mod tests {
     fn serialize(#[case] token: Token, #[case] bytes: Vec<u8>) {
         assert_eq!(token.to_bytes().as_ref(), Ok(&bytes));
         assert_eq!(Token::from_bytes(&bytes), Ok(token));
+    }
+
+    #[test]
+    fn header_len_short_atom() {
+        let atom = ShortAtom { tag: PhantomData, byte: true, signed: false, length: PhantomData, data: vec![0; 1] };
+        assert_eq!(atom.to_bytes().unwrap().len(), ShortAtom::HEADER_LEN + 1);
+    }
+
+    #[test]
+    fn header_len_medium_atom() {
+        let atom = MediumAtom { tag: PhantomData, byte: true, signed: false, length: PhantomData, data: vec![0; 1] };
+        assert_eq!(atom.to_bytes().unwrap().len(), MediumAtom::HEADER_LEN + 1);
+    }
+
+    #[test]
+    fn header_len_long_atom() {
+        let atom = LongAtom { tag: PhantomData, byte: true, signed: false, length: PhantomData, data: vec![0; 1] };
+        assert_eq!(atom.to_bytes().unwrap().len(), LongAtom::HEADER_LEN + 1);
     }
 }

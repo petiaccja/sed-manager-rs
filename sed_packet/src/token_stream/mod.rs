@@ -6,7 +6,7 @@
 mod command;
 mod error;
 mod sorbit_tokenizer;
-mod token;
+pub mod token;
 mod tokenize;
 
 pub use command::Command;
