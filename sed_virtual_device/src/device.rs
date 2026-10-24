@@ -4,6 +4,7 @@
 //L-----------------------------------------------------------------------------
 
 use std::collections::{HashMap, HashSet};
+use std::num::NonZero;
 use std::ops::{Deref as _, DerefMut as _};
 use std::path::Path;
 use std::sync::Mutex;
@@ -12,9 +13,9 @@ use sed_device::{Error, Interface, StorageDevice};
 use sed_packet::com_id::{ComId, ComIdExt};
 use sed_packet::com_id_request::ComIdRequest;
 use sed_packet::discovery::Discovery;
-use sed_packet::packet::ComPacket;
+use sed_packet::packet::{COM_PACKET_HEADER_LEN, ComPacket, PACKET_HEADER_LEN, SUB_PACKET_HEADER_LEN};
 use sed_packet::session_id::SessionId;
-use sed_spec::methods::MethodStatus;
+use sed_spec::methods::{Limit, MethodStatus, OptionalLimit, Properties};
 use sed_spec::objects::{AuthorityRef, SecurityProviderRef};
 use sorbit::ser_de::{FromBytes, ToBytes as _};
 use tracing::instrument;
@@ -33,22 +34,21 @@ pub const LOGICAL_SECTOR_COUNT: u64 = 8_589_934_592; // 4 TiB
 pub struct VirtualDevice {
     tper: Mutex<Tper>,
     sessions: Mutex<Sessions>,
+    capabilities: Properties,
 }
 
 impl VirtualDevice {
-    /// Create a new virtual device.
-    ///
-    /// The device's configuration is the preconfiguration for the Opal 2.0 SSC.
-    #[expect(clippy::new_without_default, reason = "the SSC cannot be defaulted, even though it's harcoded")]
-    pub fn new() -> Self {
+    pub fn new(capabilities: Properties, tper: Tper) -> Self {
         let static_com_ids = (BASE_COM_ID.0..BASE_COM_ID.0 + NUM_COM_IDS).map(ComId);
-        let com_sessions = static_com_ids.clone().map(|com_id| (com_id, ComSession::new(com_id))).collect();
-        let packet_sessions = static_com_ids.map(|com_id| (com_id, PacketSession::new(com_id, ComIdExt(0)))).collect();
+        let com_sessions = static_com_ids
+            .clone()
+            .map(|com_id| (com_id, ComSession::new(com_id, capabilities.clone())))
+            .collect();
+        let packet_sessions = static_com_ids
+            .map(|com_id| (com_id, PacketSession::new(com_id, ComIdExt(0), capabilities.clone())))
+            .collect();
 
-        Self {
-            tper: Tper::Opal2(Opal2Tper::default()).into(),
-            sessions: Sessions { com_sessions, packet_sessions }.into(),
-        }
+        Self { tper: tper.into(), sessions: Sessions { com_sessions, packet_sessions }.into(), capabilities }
     }
 
     /// Start a session on the smallest base ComID.
@@ -83,7 +83,7 @@ impl VirtualDevice {
     ///
     /// Use this in tests to check device state.
     pub fn discover(&self) -> Discovery {
-        self.tper.lock().unwrap().discover()
+        self.tper.lock().unwrap().discover(&self.capabilities)
     }
 
     /// Get information about the device's internal state, like the content of
@@ -139,6 +139,10 @@ impl StorageDevice for VirtualDevice {
 
     #[instrument(skip(self, data), fields(len = debug(data.len())), ret, err)]
     async fn security_send(&self, security_protocol: u8, protocol_specific: [u8; 2], data: &[u8]) -> Result<(), Error> {
+        if data.len() > self.capabilities.max_gross_compacket_size.get() {
+            return Err(Error::BufferTooLarge);
+        }
+
         let mut tper = self.tper.lock().expect("the virtual device panicked in another thread");
         let mut sessions = self.sessions.lock().expect("the virtual device panicked in another thread");
         let Sessions { com_sessions, packet_sessions } = sessions.deref_mut();
@@ -186,7 +190,7 @@ impl StorageDevice for VirtualDevice {
         match (security_protocol, com_id) {
             // Discovery
             (0x01, 0x0001) => {
-                let mut message = tper.pop_discovery();
+                let mut message = tper.pop_discovery(&self.capabilities);
                 // In case `len` is too small, we must return the truncated buffer.
                 message.resize(len, 0);
                 Ok(message)
@@ -213,8 +217,70 @@ impl StorageDevice for VirtualDevice {
     }
 }
 
+impl Default for VirtualDevice {
+    /// Create a new virtual device.
+    ///
+    /// The device's configuration is the preconfiguration for the Opal 2.0 SSC.
+    fn default() -> Self {
+        let tper = Tper::Opal2(Opal2Tper::default());
+        let capabilities = CAPABILITIES;
+
+        Self::new(capabilities, tper)
+    }
+}
+
 #[derive(Debug, Default)]
 struct Sessions {
     com_sessions: HashMap<ComId, ComSession>,
     packet_sessions: HashMap<ComId, PacketSession>,
 }
+
+pub struct VirtualDeviceBuilder {
+    capabilities: Properties,
+}
+
+impl VirtualDeviceBuilder {
+    pub fn with_capabilities(self, capabilities: Properties) -> Self {
+        Self { capabilities, ..self }
+    }
+
+    pub fn opal_2(self) -> VirtualDevice {
+        let tper = Tper::Opal2(Opal2Tper::default());
+        VirtualDevice::new(self.capabilities, tper)
+    }
+}
+
+/// Give it a realistic number based on what I've seen on real hardware.
+const MAX_GROSS_COM_PACKET_SIZE: usize = 65536;
+
+pub const CAPABILITIES: Properties = Properties {
+    max_methods: Limit::Unlimited,
+    max_subpackets: Limit::Unlimited,
+    max_gross_packet_size: Limit::Limited(NonZero::new(MAX_GROSS_COM_PACKET_SIZE - COM_PACKET_HEADER_LEN).unwrap()),
+    max_packets: Limit::Unlimited,
+    max_gross_compacket_size: Limit::Limited(NonZero::new(MAX_GROSS_COM_PACKET_SIZE).unwrap()),
+    max_gross_compacket_response_size: Limit::Limited(NonZero::new(MAX_GROSS_COM_PACKET_SIZE).unwrap()),
+    max_sessions: Some(Limit::Unlimited),
+    max_read_sessions: Some(Limit::Unlimited),
+    max_ind_token_size: Limit::Limited(
+        NonZero::new(MAX_GROSS_COM_PACKET_SIZE - COM_PACKET_HEADER_LEN - PACKET_HEADER_LEN - SUB_PACKET_HEADER_LEN)
+            .unwrap(),
+    ),
+    max_agg_token_size: Limit::Limited(
+        NonZero::new(MAX_GROSS_COM_PACKET_SIZE - COM_PACKET_HEADER_LEN - PACKET_HEADER_LEN - SUB_PACKET_HEADER_LEN)
+            .unwrap(),
+    ),
+    max_authentications: Some(Limit::Unlimited),
+    max_transaction_limit: Some(Limit::Unlimited),
+    def_session_timeout: Some(Limit::Unlimited),
+    max_session_timeout: Some(Limit::Unlimited),
+    min_session_timeout: Some(OptionalLimit::Unsupported),
+    def_trans_timeout: Some(Limit::Unlimited),
+    max_trans_timeout: Some(Limit::Unlimited),
+    min_trans_timeout: Some(OptionalLimit::Unsupported),
+    max_com_id_time: Some(Limit::Unlimited),
+    continued_tokens: false,
+    seq_numbers: false,
+    ack_nak: false,
+    asynchronous: false,
+};

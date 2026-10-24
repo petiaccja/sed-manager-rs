@@ -51,7 +51,7 @@ impl Host {
         if path.as_ref() == sed_virtual_device::VIRTUAL_DEVICE_PATH {
             use sed_virtual_device::VirtualDevice;
 
-            return Ok(Device::new(Box::new(VirtualDevice::new()), self.runtime.clone()).await);
+            return Ok(Device::new(Box::new(VirtualDevice::default()), self.runtime.clone()).await);
         }
         let device = open_storage_device(path).await?;
         Ok(Device::new(device, self.runtime.clone()).await)

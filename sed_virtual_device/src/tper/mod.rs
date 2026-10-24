@@ -23,12 +23,12 @@ use sed_packet::discovery::{
 };
 use sorbit::ser_de::ToBytes;
 
-use crate::{
-    device::{BASE_COM_ID, NUM_COM_IDS},
-    management_session::CAPABILITIES,
-};
+use crate::device::{BASE_COM_ID, NUM_COM_IDS};
 use sed_spec::{
-    methods::MethodStatus, objects::SecurityProviderRef, preconfig::opal_2::admin::c_pin, types::LifeCycleState,
+    methods::{MethodStatus, Properties},
+    objects::SecurityProviderRef,
+    preconfig::opal_2::admin::c_pin,
+    types::LifeCycleState,
 };
 
 #[derive(Debug)]
@@ -80,9 +80,9 @@ impl Tper {
         }
     }
 
-    pub fn discover(&self) -> Discovery {
+    pub fn discover(&self, capabilities: &Properties) -> Discovery {
         let fixed = [
-            Self::tper_feature_desc(),
+            Self::tper_feature_desc(capabilities),
             self.ssc_feature_desc(),
             Self::geometry_feature_desc(),
             self.block_sid_authentication_desc(),
@@ -91,17 +91,17 @@ impl Tper {
         Discovery { feature_descriptors: fixed.into_iter().chain(locking).collect(), ..Default::default() }
     }
 
-    pub fn pop_discovery(&self) -> Vec<u8> {
-        self.discover().to_bytes().expect("serializing discovery failed")
+    pub fn pop_discovery(&self, capabilities: &Properties) -> Vec<u8> {
+        self.discover(capabilities).to_bytes().expect("serializing discovery failed")
     }
 
-    fn tper_feature_desc() -> FeatureDescriptor {
+    fn tper_feature_desc(capabilities: &Properties) -> FeatureDescriptor {
         let desc = TperDescriptor {
             version: PhantomData,
             length: PhantomData,
             sync_supported: true,
-            async_supported: CAPABILITIES.asynchronous,
-            ack_nak_supported: CAPABILITIES.ack_nak,
+            async_supported: capabilities.asynchronous,
+            ack_nak_supported: capabilities.ack_nak,
             buffer_mgmt_supported: false,
             streaming_supported: true,
             com_id_mgmt_supported: false,

@@ -44,6 +44,12 @@ pub struct SubPacket {
     pub payload: Vec<u8>,
 }
 
+impl SubPacket {
+    pub fn gross_size(&self) -> usize {
+        SUB_PACKET_HEADER_LEN + self.payload.len().next_multiple_of(4)
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 #[sorbit(byte_order=big_endian)]
 pub struct Packet {
@@ -56,47 +62,6 @@ pub struct Packet {
     #[sorbit(value = byte_count(payload))]
     pub length: PhantomData<u32>,
     pub payload: Vec<SubPacket>,
-}
-
-#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
-#[sorbit(byte_order=big_endian)]
-pub struct ComPacket {
-    #[sorbit(offset = 4)]
-    pub com_id: ComId,
-    pub com_id_ext: ComIdExt,
-    pub outstanding_data: u32,
-    pub min_transfer: u32,
-    #[sorbit(value = byte_count(payload))]
-    pub length: PhantomData<u32>,
-    #[sorbit(multi_pass)]
-    pub payload: Vec<Packet>,
-}
-
-impl Default for Packet {
-    fn default() -> Self {
-        Self {
-            tper_session_number: 0,
-            host_session_number: 0,
-            sequence_number: 0,
-            ack_type: AckType::None,
-            acknowledgement: 0,
-            length: PhantomData,
-            payload: Vec::new(),
-        }
-    }
-}
-
-impl Default for ComPacket {
-    fn default() -> Self {
-        Self {
-            com_id: ComId(0),
-            com_id_ext: ComIdExt(0),
-            outstanding_data: 0,
-            min_transfer: 0,
-            length: PhantomData,
-            payload: Vec::new(),
-        }
-    }
 }
 
 impl Packet {
@@ -121,6 +86,38 @@ impl Packet {
             .reduce(|a, b| a + b);
         credit.unwrap_or(0) as u32
     }
+
+    pub fn gross_size(&self) -> usize {
+        PACKET_HEADER_LEN + self.payload.iter().map(SubPacket::gross_size).sum::<usize>()
+    }
+}
+
+impl Default for Packet {
+    fn default() -> Self {
+        Self {
+            tper_session_number: 0,
+            host_session_number: 0,
+            sequence_number: 0,
+            ack_type: AckType::None,
+            acknowledgement: 0,
+            length: PhantomData,
+            payload: Vec::new(),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
+#[sorbit(byte_order=big_endian)]
+pub struct ComPacket {
+    #[sorbit(offset = 4)]
+    pub com_id: ComId,
+    pub com_id_ext: ComIdExt,
+    pub outstanding_data: u32,
+    pub min_transfer: u32,
+    #[sorbit(value = byte_count(payload))]
+    pub length: PhantomData<u32>,
+    #[sorbit(multi_pass)]
+    pub payload: Vec<Packet>,
 }
 
 impl ComPacket {
@@ -143,8 +140,22 @@ impl ComPacket {
     }
 }
 
+impl Default for ComPacket {
+    fn default() -> Self {
+        Self {
+            com_id: ComId(0),
+            com_id_ext: ComIdExt(0),
+            outstanding_data: 0,
+            min_transfer: 0,
+            length: PhantomData,
+            payload: Vec::new(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use rstest::rstest;
     use sorbit::ser_de::{FromBytes, ToBytes};
 
     use super::*;
@@ -252,5 +263,26 @@ mod tests {
         assert_eq!(value.transfer_len() as usize, bytes.len());
         assert_eq!(value.to_bytes().unwrap(), &bytes);
         assert_eq!(ComPacket::from_bytes(&bytes).unwrap(), value);
+    }
+
+    fn data_sub_packet(len: usize) -> SubPacket {
+        SubPacket { kind: SubPacketKind::Data, length: PhantomData, payload: vec![0; len] }
+    }
+
+    #[rstest]
+    #[case::credit_control(SubPacket { kind: SubPacketKind::CreditControl, length: PhantomData, payload: vec![0; 4] })]
+    #[case::aligned(data_sub_packet(16))]
+    #[case::unaligned(data_sub_packet(73))]
+    fn gross_sub_packet_size(#[case] sub_packet: SubPacket) {
+        let tokens = sub_packet.to_bytes().unwrap();
+        assert_eq!(sub_packet.gross_size(), tokens.len());
+    }
+
+    #[rstest]
+    #[case::multiple_sub_packets(Packet { payload: vec![data_sub_packet(93), data_sub_packet(24)], ..Default::default() })]
+    #[case::empty(Packet { payload: vec![], ..Default::default() })]
+    fn gross_packet_size(#[case] packet: Packet) {
+        let tokens = packet.to_bytes().unwrap();
+        assert_eq!(packet.gross_size(), tokens.len());
     }
 }

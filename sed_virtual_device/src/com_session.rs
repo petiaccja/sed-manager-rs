@@ -9,6 +9,7 @@ use sed_packet::com_id::{ComId, ComIdExt};
 use sed_packet::com_id_request::{
     ComIdRequest, ComIdRequestCode, ComIdResponse, ComIdResponsePayload, ComIdState, Date, StackResetStatus,
 };
+use sed_spec::methods::Properties;
 
 use crate::NUM_COM_IDS;
 use crate::device::BASE_COM_ID;
@@ -17,12 +18,13 @@ use crate::packet_session::PacketSession;
 #[derive(Debug)]
 pub struct ComSession {
     com_id: ComId,
+    capabilities: Properties,
     response_queue: Option<ComIdResponse>,
 }
 
 impl ComSession {
-    pub fn new(com_id: ComId) -> Self {
-        Self { com_id, response_queue: None }
+    pub fn new(com_id: ComId, capabilities: Properties) -> Self {
+        Self { com_id, capabilities, response_queue: None }
     }
 
     pub fn push(&mut self, packet_sessions: &mut HashMap<ComId, PacketSession>, request: ComIdRequest) {
@@ -79,7 +81,7 @@ impl ComSession {
             && session.com_id_ext() == com_id_ext
         {
             let new_com_id_ext = increment_dynamic_com_id_ext(com_id, session.com_id_ext());
-            *session = PacketSession::new(com_id, new_com_id_ext);
+            *session = PacketSession::new(com_id, new_com_id_ext, self.capabilities.clone());
             StackResetStatus::Success
         } else {
             StackResetStatus::Failure

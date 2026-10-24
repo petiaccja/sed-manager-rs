@@ -14,7 +14,7 @@ use sed_packet::{Bytes, Object, ObjectRef, TableRef, TokenizeField, Uid};
 use sed_spec::methods::{
     Activate, ActivateResult, Authenticate, AuthenticateResult, ByteCellBlock, CloseSession, ExtractResult, GenKey,
     GenKeyResult, Get, GetAcl, GetAclResult, MethodResult, MethodStatus, MgmtMethodCall, MgmtMethodCallParams,
-    NextResultUntyped, NextUntyped, ObjectCellBlock, Random, RandomResult, Revert, RevertResult, RevertSp,
+    NextResultUntyped, NextUntyped, ObjectCellBlock, Properties, Random, RandomResult, Revert, RevertResult, RevertSp,
     RevertSpResult, SessionMethodCall, SessionMethodCallParams, SessionMethodParam as _, SetBytes, SetObject,
     SetResult, extract_method,
 };
@@ -34,6 +34,7 @@ pub enum Session {
     Open {
         session_id: SessionId,
         sp: SecurityProviderRef,
+        capabilities: Properties,
         authenticated: HashSet<AuthorityRef>,
         recv_buffer: VecDeque<u8>,
     },
@@ -45,17 +46,31 @@ impl Session {
         tper: &Tper,
         session_id: SessionId,
         sp_uid: SecurityProviderRef,
+        capabilities: Properties,
         authority_uid: AuthorityRef,
     ) -> Result<Self, MethodStatus> {
         let sp = tper.sp(sp_uid).ok_or(MethodStatus::InvalidParameter)?;
         let authority = sp.authority().get(&authority_uid).ok_or(MethodStatus::InvalidParameter)?;
         let class = authority.class.filter(|class| !class.is_null());
         let authenticated = std::iter::once(authority_uid).chain(class).chain(std::iter::once(ANYBODY)).collect();
-        Ok(Self::Open { session_id, sp: sp_uid, authenticated, recv_buffer: VecDeque::new() })
+        Ok(Self::Open { session_id, sp: sp_uid, capabilities, authenticated, recv_buffer: VecDeque::new() })
     }
 
     #[must_use]
     pub fn dispatch(&mut self, tper: &mut Tper, packet: Packet) -> Vec<(Packet, Vec<SecurityProviderRef>)> {
+        if let Session::Open { capabilities, .. } = self {
+            // The TPer SHALL abort the session if a packet exceeds the maximum
+            // gross packet size (Core 5.2.2.4.1.2).
+            if packet.gross_size() > capabilities.max_gross_packet_size.get() {
+                return self.abort().map(|packet| (packet, vec![])).into_iter().collect();
+            }
+            // The TPer SHALL abort the session if a packet exceeds the maximum
+            // number of sub-packets (Core 5.2.2.4.1.1).
+            if packet.payload.len() > capabilities.max_subpackets.get() {
+                return self.abort().map(|packet| (packet, vec![])).into_iter().collect();
+            }
+        }
+
         if let Session::Open { recv_buffer, .. } = self {
             let data_sub_packets = packet.payload.iter().filter(|sub_packet| sub_packet.kind == SubPacketKind::Data);
             for sub_packet in data_sub_packets {

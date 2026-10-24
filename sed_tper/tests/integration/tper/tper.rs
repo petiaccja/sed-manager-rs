@@ -20,7 +20,7 @@ use tracing::instrument;
 #[tokio::test]
 #[with_tracing]
 async fn discovery() {
-    let device = VirtualDevice::new();
+    let device = VirtualDevice::default();
     let discovery = Tper::discover(&device).await.unwrap();
     assert!(discovery.get::<TperDescriptor>().is_some(), "discovery: {discovery:?}");
     assert!(discovery.get::<LockingDescriptor>().is_some(), "discovery: {discovery:?}");
@@ -31,7 +31,7 @@ async fn discovery() {
 #[tokio::test]
 #[with_tracing]
 async fn verify_com_id_valid_base() {
-    let device = VirtualDevice::new();
+    let device = VirtualDevice::default();
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
     let tper = Tper::connect(BASE_COM_ID, ComIdExt(0), None, Arc::new(device), runtime);
     let result = tper.verify_com_id_valid(BASE_COM_ID, ComIdExt(0)).await;
@@ -43,7 +43,7 @@ async fn verify_com_id_valid_base() {
 #[tokio::test]
 #[with_tracing]
 async fn verify_com_id_valid_incorrent_id() {
-    let device = VirtualDevice::new();
+    let device = VirtualDevice::default();
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
     let tper = Tper::connect(BASE_COM_ID, ComIdExt(0), None, Arc::new(device), runtime);
     let result = tper.verify_com_id_valid(BASE_COM_ID + 1, ComIdExt(0)).await;
@@ -55,7 +55,7 @@ async fn verify_com_id_valid_incorrent_id() {
 #[tokio::test]
 #[with_tracing]
 async fn verify_com_id_valid_incorrent_ext() {
-    let device = VirtualDevice::new();
+    let device = VirtualDevice::default();
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
     let tper = Tper::connect(BASE_COM_ID, ComIdExt(0), None, Arc::new(device), runtime);
     let result = tper.verify_com_id_valid(BASE_COM_ID, ComIdExt(1)).await;
@@ -67,7 +67,7 @@ async fn verify_com_id_valid_incorrent_ext() {
 #[tokio::test]
 #[with_tracing]
 async fn stack_reset_base() {
-    let device = VirtualDevice::new();
+    let device = VirtualDevice::default();
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
     let tper = Tper::connect(BASE_COM_ID, ComIdExt(0), None, Arc::new(device), runtime);
     let result = tper.stack_reset(BASE_COM_ID, ComIdExt(0)).await;
@@ -81,7 +81,7 @@ async fn stack_reset_base() {
 #[tokio::test]
 #[with_tracing]
 async fn stack_reset_incorrent_id() {
-    let device = VirtualDevice::new();
+    let device = VirtualDevice::default();
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
     let tper = Tper::connect(BASE_COM_ID, ComIdExt(0), None, Arc::new(device), runtime);
     let result = tper.stack_reset(BASE_COM_ID + 1, ComIdExt(0)).await;
@@ -92,7 +92,7 @@ async fn stack_reset_incorrent_id() {
 #[tokio::test]
 #[with_tracing]
 async fn stack_reset_incorrent_ext() {
-    let device = VirtualDevice::new();
+    let device = VirtualDevice::default();
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
     let tper = Tper::connect(BASE_COM_ID, ComIdExt(0), None, Arc::new(device), runtime);
     let result = tper.stack_reset(BASE_COM_ID, ComIdExt(1)).await;

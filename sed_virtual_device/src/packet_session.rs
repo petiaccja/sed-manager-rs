@@ -9,7 +9,7 @@ use sed_device::Error;
 use sed_packet::com_id::{ComId, ComIdExt};
 use sed_packet::packet::ComPacket;
 use sed_packet::session_id::SessionId;
-use sed_spec::methods::MethodStatus;
+use sed_spec::methods::{MethodStatus, Properties};
 use sed_spec::objects::{AuthorityRef, SecurityProviderRef};
 use sed_spec::preconfig::core::shared::authority::ANYBODY;
 
@@ -21,6 +21,7 @@ use crate::tper::Tper;
 pub struct PacketSession {
     com_id: ComId,
     com_id_ext: ComIdExt,
+    capabilities: Properties,
     is_associated: bool,
     management_session: ManagementSession,
     sessions: HashMap<SessionId, Session>,
@@ -28,12 +29,13 @@ pub struct PacketSession {
 }
 
 impl PacketSession {
-    pub fn new(com_id: ComId, com_id_ext: ComIdExt) -> Self {
+    pub fn new(com_id: ComId, com_id_ext: ComIdExt, capabilities: Properties) -> Self {
         Self {
             com_id,
             com_id_ext,
+            capabilities: capabilities.clone(),
             is_associated: false,
-            management_session: ManagementSession::new(),
+            management_session: ManagementSession::new(capabilities),
             sessions: HashMap::new(),
             response_queue: VecDeque::new(),
         }
@@ -64,12 +66,15 @@ impl PacketSession {
         let authority = authority.unwrap_or(ANYBODY);
         let tsn = self.management_session.next_tsn();
         let session_id = SessionId { hsn: host_session_number, tsn };
-        self.sessions.insert(session_id, Session::new(tper, session_id, sp, authority)?);
+        self.sessions
+            .insert(session_id, Session::new(tper, session_id, sp, self.capabilities.clone(), authority)?);
         Ok(session_id)
     }
 
     pub fn push(&mut self, tper: &mut Tper, com_packet: ComPacket) {
-        for packet in com_packet.payload {
+        // The TPer MAY ignore extra packets beyond MaxPackets (Core 5.2.2.4.1.3).
+        let truncated_packets = com_packet.payload.into_iter().take(self.capabilities.max_packets.get());
+        for packet in truncated_packets {
             let session_id = SessionId::of(&packet);
             let mut reverted_sps = HashSet::new();
 
