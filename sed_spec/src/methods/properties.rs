@@ -105,11 +105,11 @@ impl Properties {
     /// be used.
     ///
     /// The features are determined as follows:
-    /// - Sequence numbers: if both the host and remote support it, it is enabled.
+    /// - Sequence numbers: if both `self` and `remote` support it, it is enabled.
     /// - ACK/NAK: enabled if:
-    ///     - supported by both the host and the remote,
+    ///     - supported by both `self` and `remote`,
     ///     - AND sequence numbers are supported by both parties.
-    /// - Async: if both the host and remote support it, it is enabled.
+    /// - Async: if both `self` and `remote` support it, it is enabled.
     ///     - Note: both parties must also use buffer management.
     ///
     /// The limits of `self` are kept.
@@ -137,13 +137,14 @@ impl Properties {
     /// For example, if `self` sets `MaxMethods` at 9, and `other` sets it at 5,
     /// the returned properties will contain `min(9, 5) = 5`.
     ///
-    /// Normally, the host can use whatever limits the TPer has as its capabilities,
-    /// independent of the host's capabilities. However, it makes sense to limit
-    /// the outbound traffic based on the host's capabilities as well. In case
-    /// the TPer specified really large buffer, we may want to constrain memory
-    /// usage on the host more strictly.
+    /// Normally, the local end can send using whatever limits the remote end
+    /// has as its capabilities, independent of the local end's capabilities.
+    /// However, it makes sense to limit the outbound traffic based on the local
+    /// end's capabilities as well. In case the remote end specified really
+    /// large buffers, the local end may want to constrain its memory usage more
+    /// strictly.
     ///
-    /// The features of `self` and TPer-only properties are kept.
+    /// The features and the TPer-only properties of `self` are kept.
     pub fn with_min_limits(self, other: &Self) -> Self {
         Self {
             max_methods: min(self.max_methods, other.max_methods),
@@ -207,13 +208,13 @@ impl Default for Properties {
     }
 }
 
-/// The communication properties of a session in each direction, as seen by
-/// the host.
+/// The communication properties of a session in each direction, from the
+/// perspective of the local end.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct SessionProperties {
-    /// The properties the host uses to send data to the TPer.
+    /// The properties the local end uses to send data to the remote end.
     pub outbound: Properties,
-    /// The properties the TPer uses to send data to the host.
+    /// The properties the remote end uses to send data to the local end.
     pub inbound: Properties,
 }
 
