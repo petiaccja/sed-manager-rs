@@ -240,6 +240,10 @@ pub struct VirtualDeviceBuilder {
 }
 
 impl VirtualDeviceBuilder {
+    pub fn new() -> Self {
+        Self { capabilities: CAPABILITIES }
+    }
+
     pub fn with_capabilities(self, capabilities: Properties) -> Self {
         Self { capabilities }
     }
