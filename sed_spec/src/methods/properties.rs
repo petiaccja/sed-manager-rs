@@ -207,6 +207,28 @@ impl Default for Properties {
     }
 }
 
+/// The communication properties of a session in each direction, as seen by
+/// the host.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct SessionProperties {
+    /// The properties the host uses to send data to the TPer.
+    pub outbound: Properties,
+    /// The properties the TPer uses to send data to the host.
+    pub inbound: Properties,
+}
+
+impl SessionProperties {
+    /// The initial assumptions in both directions.
+    pub const INITIAL: SessionProperties =
+        SessionProperties { outbound: Properties::INITIAL, inbound: Properties::INITIAL };
+}
+
+impl Default for SessionProperties {
+    fn default() -> Self {
+        SessionProperties::INITIAL
+    }
+}
+
 #[rustfmt::skip]
 #[macro_export]
 macro_rules! property_name {

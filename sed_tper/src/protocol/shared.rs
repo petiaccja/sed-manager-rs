@@ -10,7 +10,7 @@ use sed_packet::{
     session_id::SessionId,
     token_stream::{Command, ToTokens as _},
 };
-use sed_spec::methods::{Properties, SyncSession};
+use sed_spec::methods::{Properties, SessionProperties, SyncSession};
 use tracing::Span;
 
 use crate::protocol::sequence_number::SequenceNumber;
@@ -64,8 +64,7 @@ pub enum PacketAction {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PropertiesChanged {
     pub remote_capabilities: Properties,
-    pub outbound_properties: Properties,
-    pub inbound_properties: Properties,
+    pub properties: SessionProperties,
 }
 
 /// The result of a successful `StartSession` call: the TPer's `SyncSession`
@@ -73,8 +72,7 @@ pub struct PropertiesChanged {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StartedSession {
     pub sync_session: SyncSession,
-    pub outbound_properties: Properties,
-    pub inbound_properties: Properties,
+    pub properties: SessionProperties,
 }
 
 #[cfg(test)]

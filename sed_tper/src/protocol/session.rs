@@ -10,7 +10,7 @@ use std::{
 
 use oneshot::Sender;
 use sed_packet::{Ignore, session_id::SessionId};
-use sed_spec::methods::{ExtractResult, MethodResult, Properties, extract_method};
+use sed_spec::methods::{ExtractResult, MethodResult, SessionProperties, extract_method};
 use tracing::Span;
 
 use crate::{
@@ -25,25 +25,17 @@ use crate::{
 pub struct Session {
     session_id: SessionId,
     timeout: Duration,
-    outbound_properties: Properties,
-    #[expect(dead_code, reason = "keeping track of it for future use")]
-    inbound_properties: Properties,
+    properties: SessionProperties,
     sequence_number: SequenceNumber,
     state: State,
 }
 
 impl Session {
-    pub fn new(
-        session_id: SessionId,
-        timeout: Duration,
-        outbound_properties: Properties,
-        inbound_properties: Properties,
-    ) -> Self {
+    pub fn new(session_id: SessionId, timeout: Duration, properties: SessionProperties) -> Self {
         Self {
             session_id,
             timeout,
-            outbound_properties,
-            inbound_properties,
+            properties,
             sequence_number: SequenceNumber::initial(),
             state: State::Active {
                 method_calls: VecDeque::new(),
@@ -55,7 +47,7 @@ impl Session {
     }
 
     pub fn handle_method_call(&mut self, call: Vec<u8>, sender: Sender<Result<Vec<u8>, Error>>, span: Span) {
-        let max_method_len = self.outbound_properties.max_method_len();
+        let max_method_len = self.properties.outbound.max_method_len();
         if call.len() > max_method_len {
             let _ = sender.send(Err(Error::MethodTooLarge { requested: call.len(), maximum: max_method_len }));
         } else {
@@ -279,11 +271,11 @@ mod tests {
 
     const SESSION_ID: SessionId = SessionId { hsn: 1, tsn: 2 };
     const TIMEOUT: Duration = Duration::from_secs(1);
-    const PROPERTIES: Properties = Properties::INITIAL;
+    const PROPERTIES: SessionProperties = SessionProperties::INITIAL;
 
     #[test]
     fn method_completed_successfully() {
-        let mut session = Session::new(SESSION_ID, TIMEOUT, PROPERTIES, PROPERTIES);
+        let mut session = Session::new(SESSION_ID, TIMEOUT, PROPERTIES);
         let time = Instant::now();
         let (sender, receiver) = channel();
 
@@ -312,7 +304,7 @@ mod tests {
 
     #[test]
     fn overlapped_methods_completed_successfully() {
-        let mut session = Session::new(SESSION_ID, TIMEOUT, PROPERTIES, PROPERTIES);
+        let mut session = Session::new(SESSION_ID, TIMEOUT, PROPERTIES);
         let time = Instant::now();
         let delay = TIMEOUT / 10;
         let (sender_1, receiver_1) = channel();
@@ -360,7 +352,7 @@ mod tests {
 
     #[test]
     fn sequential_methods_completed_successfully() {
-        let mut session = Session::new(SESSION_ID, TIMEOUT, PROPERTIES, PROPERTIES);
+        let mut session = Session::new(SESSION_ID, TIMEOUT, PROPERTIES);
         let time = Instant::now();
 
         for i in 0..1 {
@@ -399,7 +391,7 @@ mod tests {
 
     #[test]
     fn interface_send_failed() {
-        let mut session = Session::new(SESSION_ID, TIMEOUT, PROPERTIES, PROPERTIES);
+        let mut session = Session::new(SESSION_ID, TIMEOUT, PROPERTIES);
         let time = Instant::now();
         let (sender, receiver) = channel();
 
@@ -413,7 +405,7 @@ mod tests {
 
     #[test]
     fn unexpected_tokens() {
-        let mut session = Session::new(SESSION_ID, TIMEOUT, PROPERTIES, PROPERTIES);
+        let mut session = Session::new(SESSION_ID, TIMEOUT, PROPERTIES);
         let time = Instant::now();
 
         session.handle_tokens(method_response(), &Span::none());
@@ -436,7 +428,7 @@ mod tests {
 
     #[test]
     fn fragmented_tokens() {
-        let mut session = Session::new(SESSION_ID, TIMEOUT, PROPERTIES, PROPERTIES);
+        let mut session = Session::new(SESSION_ID, TIMEOUT, PROPERTIES);
         let time = Instant::now();
         let (sender, receiver) = channel();
         let mut first_tokens = method_response();
@@ -459,7 +451,7 @@ mod tests {
 
     #[test]
     fn invalid_tokens() {
-        let mut session = Session::new(SESSION_ID, TIMEOUT, PROPERTIES, PROPERTIES);
+        let mut session = Session::new(SESSION_ID, TIMEOUT, PROPERTIES);
         let time = Instant::now();
         let (sender, receiver) = channel();
         let invalid_tokens = vec![0xFE, 34, 23, 7, 2, 3, 2];
@@ -491,7 +483,7 @@ mod tests {
 
     #[test]
     fn end_session() {
-        let mut session = Session::new(SESSION_ID, TIMEOUT, PROPERTIES, PROPERTIES);
+        let mut session = Session::new(SESSION_ID, TIMEOUT, PROPERTIES);
         let time = Instant::now();
         let (sender, receiver) = channel();
 
@@ -519,7 +511,7 @@ mod tests {
 
     #[test]
     fn reject_calls_when_closed() {
-        let mut session = Session::new(SESSION_ID, TIMEOUT, PROPERTIES, PROPERTIES);
+        let mut session = Session::new(SESSION_ID, TIMEOUT, PROPERTIES);
         let time = Instant::now();
 
         session.handle_aborted();
@@ -533,7 +525,7 @@ mod tests {
 
     #[test]
     fn reject_oversized_calls() {
-        let mut session = Session::new(SESSION_ID, TIMEOUT, PROPERTIES, PROPERTIES);
+        let mut session = Session::new(SESSION_ID, TIMEOUT, PROPERTIES);
         let time = Instant::now();
 
         let (sender, receiver) = channel();
@@ -544,7 +536,7 @@ mod tests {
 
     #[test]
     fn timeout() {
-        let mut session = Session::new(SESSION_ID, TIMEOUT, PROPERTIES, PROPERTIES);
+        let mut session = Session::new(SESSION_ID, TIMEOUT, PROPERTIES);
         let time = Instant::now();
         let (sender, receiver) = channel();
 
@@ -560,7 +552,7 @@ mod tests {
 
     #[test]
     fn timeout_aborts_session() {
-        let mut session = Session::new(SESSION_ID, TIMEOUT, PROPERTIES, PROPERTIES);
+        let mut session = Session::new(SESSION_ID, TIMEOUT, PROPERTIES);
         let time = Instant::now();
         let (sender_timed_out, receiver_timed_out) = channel();
         let (sender_receiving, receiver_receiving) = channel();

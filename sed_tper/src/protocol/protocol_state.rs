@@ -18,6 +18,8 @@ use sed_packet::{
     packet::{COM_PACKET_HEADER_LEN, ComPacket, PACKET_HEADER_LEN, PACKETIZED_PROTOCOL, SUB_PACKET_HEADER_LEN},
     session_id::SessionId,
 };
+#[cfg(feature = "test-utils")]
+use sed_spec::methods::SessionProperties;
 use sed_spec::methods::{Limit, Properties};
 use sorbit::ser_de::FromBytes;
 use tracing::{Span, info_span};
@@ -146,13 +148,8 @@ impl ProtocolState {
     }
 
     #[cfg(feature = "test-utils")]
-    pub fn handle_spawn_session(
-        &mut self,
-        session_id: SessionId,
-        outbound_properties: Properties,
-        inbound_properties: Properties,
-    ) {
-        self.rpc_session.handle_spawn_session(session_id, outbound_properties, inbound_properties);
+    pub fn handle_spawn_session(&mut self, session_id: SessionId, properties: SessionProperties) {
+        self.rpc_session.handle_spawn_session(session_id, properties);
     }
 
     pub fn handle_com_request(
@@ -481,8 +478,7 @@ mod tests {
             receiver.try_recv(),
             ok(ok(eq(&StartedSession {
                 sync_session: response.parameters,
-                outbound_properties: Properties::INITIAL,
-                inbound_properties: Properties::INITIAL
+                properties: SessionProperties::INITIAL
             })))
         );
     }

@@ -947,7 +947,7 @@ impl App {
                             let combined = CombinedProperties {
                                 host: host_capabilities,
                                 device: Some(value.remote_capabilities),
-                                connection: Some(value.outbound_properties),
+                                connection: Some(value.properties.outbound),
                             };
                             let status = ui_device.stack_status.clone().with_protocol((&combined).into_ui());
                             ui_device.with_stack_status(status)

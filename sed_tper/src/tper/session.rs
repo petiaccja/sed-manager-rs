@@ -11,7 +11,7 @@ use sed_packet::token_stream::{Command, Detokenize, Detokenizer, FromTokens, ToT
 use sed_packet::{Bytes, Field, FieldRef, Ignore, MaxBytes, Named, Object, ObjectRef, TableRef, Uid};
 use sed_spec::methods::{
     Activate, Authenticate, AuthenticateResult, CellBlock, GenKey, Get, GetAcl, GetBytesResult, MethodCall,
-    MethodResult, MethodStatus, Next, Properties, Random, Revert, RevertSp, SessionMethodParam as _, SetBytes,
+    MethodResult, MethodStatus, Next, Random, Revert, RevertSp, SessionMethodParam as _, SessionProperties, SetBytes,
     SetObject, SetResult, StartSession,
 };
 use sed_spec::objects::{AceRef, AuthorityRef, CredentialRef, MethodRef, SecurityProviderRef};
@@ -41,8 +41,7 @@ use crate::protocol::{Controller, StartedSession};
 pub struct Session {
     security_provider: SecurityProviderRef,
     session_id: SessionId,
-    outbound_properties: Properties,
-    inbound_properties: Properties,
+    properties: SessionProperties,
     controller: Controller,
     needs_eos: AtomicBool,
 }
@@ -77,14 +76,14 @@ impl Session {
             initial_credit: None,
             signed_hash: None,
         };
-        let StartedSession { sync_session, outbound_properties, inbound_properties } = controller
+        let StartedSession { sync_session, properties } = controller
             .call_start_session(start_session)
             .await
             .map_err(|_: oneshot::RecvError| Error::Closed)??;
 
         let tper_session_id = sync_session.sp_session_id;
         let session_id = SessionId { hsn: host_session_number, tsn: tper_session_id };
-        Ok(Self::from_started(sp, session_id, outbound_properties, inbound_properties, controller))
+        Ok(Self::from_started(sp, session_id, properties, controller))
     }
 
     /// Create a [`Session`] object from an already established session.
@@ -101,30 +100,17 @@ impl Session {
     pub fn from_started(
         security_provider: SecurityProviderRef,
         session_id: SessionId,
-        outbound_properties: Properties,
-        inbound_properties: Properties,
+        properties: SessionProperties,
         controller: Controller,
     ) -> Self {
-        Self {
-            security_provider,
-            session_id,
-            outbound_properties,
-            inbound_properties,
-            controller,
-            needs_eos: true.into(),
-        }
+        Self { security_provider, session_id, properties, controller, needs_eos: true.into() }
     }
 
-    /// Return the communication properties this session is using to send RPC
-    /// calls to the device.
-    pub fn outbound_properties(&self) -> &Properties {
-        &self.outbound_properties
-    }
-
-    /// Return the communication properties the device is using to send RPC
-    /// responses to this session.
-    pub fn inbound_properties(&self) -> &Properties {
-        &self.inbound_properties
+    /// Return the communication properties of this session: those used to
+    /// send RPC calls to the device, and those the device uses to send RPC
+    /// responses.
+    pub fn properties(&self) -> &SessionProperties {
+        &self.properties
     }
 
     /// Execute a procedure using this session and then close the session.

@@ -23,7 +23,8 @@ use sed_packet::{
     com_id_request::{ComIdRequest, ComIdResponse},
     session_id::SessionId,
 };
-use sed_spec::methods::Properties;
+#[cfg(feature = "test-utils")]
+use sed_spec::methods::SessionProperties;
 use sed_spec::methods::StartSession;
 use tracing::{Instrument as _, Span, info_span};
 
@@ -158,8 +159,8 @@ impl Controller {
 
     /// Spawn a new session with the given ID and properties.
     #[cfg(feature = "test-utils")]
-    pub fn spawn(&self, session_id: SessionId, outbound_properties: Properties, inbound_properties: Properties) {
-        let _ = self.command_tx.try_send(Command::Spawn { session_id, outbound_properties, inbound_properties });
+    pub fn spawn(&self, session_id: SessionId, properties: SessionProperties) {
+        let _ = self.command_tx.try_send(Command::Spawn { session_id, properties });
     }
 }
 
@@ -172,7 +173,7 @@ pub enum Command {
     ComRequest { request: ComIdRequest, sender: oneshot::Sender<Result<ComIdResponse, Error>>, span: Span },
     ReportAborted { session_id: SessionId },
     #[cfg(feature = "test-utils")]
-    Spawn { session_id: SessionId, outbound_properties: Properties, inbound_properties: Properties },
+    Spawn { session_id: SessionId, properties: SessionProperties },
 }
 
 fn inject_command(state: &mut ProtocolState, command: Command) {
@@ -185,9 +186,7 @@ fn inject_command(state: &mut ProtocolState, command: Command) {
         Command::ComRequest { request, sender, span } => state.handle_com_request(request, sender, span),
         Command::ReportAborted { session_id } => state.handle_session_aborted(session_id),
         #[cfg(feature = "test-utils")]
-        Command::Spawn { session_id, outbound_properties, inbound_properties } => {
-            state.handle_spawn_session(session_id, outbound_properties, inbound_properties)
-        }
+        Command::Spawn { session_id, properties } => state.handle_spawn_session(session_id, properties),
     }
 }
 
@@ -338,8 +337,7 @@ mod tests {
             response_result,
             ok(ok(ok(eq(&StartedSession {
                 sync_session: response.parameters,
-                outbound_properties: Properties::INITIAL,
-                inbound_properties: Properties::INITIAL
+                properties: SessionProperties::INITIAL
             }))))
         );
 
