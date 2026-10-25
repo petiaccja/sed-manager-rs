@@ -295,7 +295,6 @@ impl LockingConfigSession {
     /// the `data` is partially written.
     pub async fn write_mbr(&self, mut offset: u64, data: &[u8]) -> Result<(), Error> {
         let max_method_len = self.session.properties().outbound.max_method_len();
-        println!("max_method_len = {max_method_len}");
         let method_call_overhead = SetBytes::HEADER_LEN + LongAtom::HEADER_LEN;
         let max_payload_len = max_method_len.saturating_sub(method_call_overhead).max(1);
         for chunk in data.chunks(max_payload_len) {

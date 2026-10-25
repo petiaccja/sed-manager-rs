@@ -23,6 +23,7 @@ tracing.workspace = true
 async-lock.workspace = true
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 async-broadcast.workspace = true
+async-fs.workspace = true
 futures.workspace = true
 oneshot.workspace = true
 clap.workspace = true

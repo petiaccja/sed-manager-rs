@@ -5,12 +5,15 @@
 
 use std::{
     collections::HashSet,
+    io,
     path::{Path, PathBuf},
     rc::{Rc, Weak},
     sync::Arc,
 };
 
+use async_broadcast::RecvError;
 use async_lock::RwLock;
+use futures::AsyncReadExt;
 use sed_async::PolyRuntime;
 use sed_manager::{Device, Error, Geometry, Host, Spec};
 use sed_manager_gui_slint as ui;
@@ -25,7 +28,7 @@ use slint::{
     CloseRequestResponse, ComponentHandle, Model, ModelExt as _, ModelRc, SharedString, ToSharedString,
     quit_event_loop, spawn_local,
 };
-use tracing::{error, instrument};
+use tracing::{Instrument, Span, debug, error, info_span, instrument};
 
 use crate::{
     algorithm::sector_lib,
@@ -153,6 +156,12 @@ impl App {
         {
             let view_model = view_model.clone();
             ui.on_commit_mbr_control(move |path| view_model.clone().commit_mbr_control(path.to_string().into()));
+        }
+        {
+            let view_model = view_model.clone();
+            ui.on_write_mbr(move |device_path, image_path| {
+                view_model.clone().write_mbr(device_path.to_string().into(), image_path.to_string().into())
+            });
         }
         {
             let view_model = view_model.clone();
@@ -758,6 +767,68 @@ impl App {
         .expect_in_event_loop();
     }
 
+    #[instrument(skip(self), fields(file_len))]
+    fn write_mbr(self: Rc<Self>, device_path: PathBuf, image_path: PathBuf) {
+        let (mut progress_tx, mut progress_rx) = async_broadcast::broadcast::<f32>(1);
+        progress_tx.set_overflow(true);
+
+        let self_ = self.clone();
+        let device_path_ = device_path.clone();
+        slint::spawn_local(
+            async move {
+                let device_list = self_.device_list.read().await;
+                let set_progress = |progress: f32, in_progress: bool| {
+                    if let Some(mut ui_device) = device_list.ui.get(&device_path_) {
+                        ui_device.locking_sp.mbr.writing_in_progress = in_progress;
+                        ui_device.locking_sp.mbr.upload_progress = progress;
+                        debug!(progress);
+                        device_list.ui.set(&device_path_, ui_device);
+                    }
+                };
+
+                loop {
+                    match progress_rx.recv().await {
+                        Ok(progress) => set_progress(progress, true),
+                        Err(RecvError::Overflowed(_)) => continue,
+                        Err(RecvError::Closed) => break,
+                    };
+                }
+                set_progress(0.0, false);
+            }
+            .instrument(info_span!(parent: Span::current(), "write_mbr_progress")),
+        )
+        .expect_in_event_loop();
+
+        self.command()
+            .success_message("MBR image written")
+            .error_message("Failed to write MBR image")
+            .on_session(device_path, async move |_device: &Device, session: &mut Session| {
+                let Session::LockingConfig(locking_session) = session else {
+                    return Err(CommandError::Skipped);
+                };
+                let mut file = async_fs::File::open(&image_path).await.map_err(|_| Error::NotImplemented)?;
+                let metadata = file.metadata().await.map_err(|_| Error::NotImplemented)?;
+                let file_len = metadata.len();
+                Span::current().record("file_len", file_len);
+                let mut buffer = vec![0; 1048576];
+                let mut offset = 0;
+                let _ = progress_tx.try_broadcast(0.0);
+                loop {
+                    let bytes_read = match file.read(&mut buffer).await {
+                        Ok(0) => break Ok(()),
+                        Ok(bytes_read) => bytes_read,
+                        Err(err) if err.kind() == io::ErrorKind::UnexpectedEof => break Ok(()),
+                        Err(_) => break Err(Error::NotImplemented.into()),
+                    };
+                    let chunk = &buffer[..bytes_read];
+                    locking_session.write_mbr(offset, chunk).await?;
+                    offset += bytes_read as u64;
+                    let _ = progress_tx.try_broadcast(offset as f32 / file_len as f32);
+                }
+            })
+            .run();
+    }
+
     #[instrument(skip(self))]
     fn logout(self: Rc<Self>, path: PathBuf) {
         self.command()
@@ -954,8 +1025,8 @@ impl App {
                         })
                         .run();
                 }
-                Err(async_broadcast::RecvError::Overflowed(_)) => (),
-                Err(async_broadcast::RecvError::Closed) => break,
+                Err(RecvError::Overflowed(_)) => (),
+                Err(RecvError::Closed) => break,
             }
         }
     }

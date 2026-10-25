@@ -254,6 +254,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-fs"
+version = "2.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8034a681df4aed8b8edbd7fbe472401ecf009251c8b40556b304567052e294c5"
+dependencies = [
+ "async-lock",
+ "blocking",
+ "futures-lite",
+]
+
+[[package]]
 name = "async-io"
 version = "2.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4572,6 +4583,7 @@ name = "sed_manager_gui"
 version = "0.1.0"
 dependencies = [
  "async-broadcast",
+ "async-fs",
  "async-lock",
  "chrono",
  "clap",
