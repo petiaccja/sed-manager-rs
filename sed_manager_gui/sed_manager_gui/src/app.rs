@@ -169,6 +169,12 @@ impl App {
         }
         {
             let view_model = view_model.clone();
+            ui.on_pick_and_write_mbr(move |device_path| {
+                view_model.clone().pick_and_write_mbr(device_path.to_string().into())
+            });
+        }
+        {
+            let view_model = view_model.clone();
             ui.on_cancel_mbr_write(move |device_path| {
                 view_model.cancel_requests.lock().unwrap().insert(device_path.to_string().into());
             });
@@ -849,6 +855,23 @@ impl App {
                 }
             })
             .run();
+    }
+
+    #[instrument(skip(self))]
+    fn pick_and_write_mbr(self: Rc<Self>, device_path: PathBuf) {
+        slint::spawn_local(async {
+            let file = rfd::AsyncFileDialog::new()
+                .add_filter("Disk images", &["iso", "img", "bin", "raw", "dd"])
+                .add_filter("All files", &["*"])
+                .pick_file()
+                .await;
+
+            if let Some(file) = file {
+                let image_path = file.path().to_owned();
+                self.write_mbr(device_path, image_path);
+            }
+        })
+        .expect_in_event_loop();
     }
 
     #[instrument(skip(self))]

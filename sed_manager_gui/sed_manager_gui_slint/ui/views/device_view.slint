@@ -211,6 +211,7 @@ export component DeviceView {
     callback change-locking-password(authority: Uid, password: string);
     callback commit-mbr-control();
     callback write-mbr(path: string);
+    callback pick-and-write-mbr();
     callback cancel-mbr-write();
     callback revert-device(scope: RevertScope, authority: RevertAuthority, password: string);
     callback query-stack-status();
@@ -340,6 +341,9 @@ export component DeviceView {
                 }
                 write-mbr(path) => {
                     write-mbr(path)
+                }
+                pick-and-write-mbr() => {
+                    pick-and-write-mbr()
                 }
                 cancel-mbr-write() => {
                     cancel-mbr-write()

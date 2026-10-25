@@ -146,7 +146,7 @@ export component ShadowMbrTab {
                             text: !mbr.writing-in-progress ? "Upload" : "Cancel";
                             colorize-icon: true;
                             primary: true;
-                            enabled: !command-status.session-busy && !command-status.tper-busy && mbr.supported;
+                            enabled: (!command-status.session-busy && !command-status.tper-busy && mbr.supported) || mbr.writing-in-progress;
 
                             clicked => {
                                 if !mbr.writing-in-progress && !use-file-picker {

@@ -47,6 +47,7 @@ export component ConfigureLockingView {
     callback change-password(authority: Uid, password: string);
     callback commit-mbr-control();
     callback write-mbr(path: string);
+    callback pick-and-write-mbr();
     callback cancel-mbr-write();
 
     if !command-status.secondary-session-active: VerticalLayout {
@@ -136,6 +137,10 @@ export component ConfigureLockingView {
 
                     write-mbr(path) => {
                         write-mbr(path)
+                    }
+
+                    pick-and-write-mbr() => {
+                        pick-and-write-mbr()
                     }
 
                     cancel-mbr-write() => {

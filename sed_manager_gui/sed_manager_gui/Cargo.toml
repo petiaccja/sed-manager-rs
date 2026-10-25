@@ -29,6 +29,7 @@ oneshot.workspace = true
 clap.workspace = true
 chrono.workspace = true
 thiserror.workspace = true
+rfd.workspace = true
 
 [dev-dependencies]
 sed_async = { workspace = true, features = ["slint"] }
