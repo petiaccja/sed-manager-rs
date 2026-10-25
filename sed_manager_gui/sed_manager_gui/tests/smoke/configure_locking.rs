@@ -3,6 +3,7 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
+use std::io::Write as _;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -258,6 +259,71 @@ fn configure_mbr_control() {
 
         logout(&ui).await;
     });
+}
+
+/// This test takes ownership, activates locking, logs into the locking SP as "Admin1" to reach
+/// the "Configure locking" page, and uploads an image to the shadow MBR by typing in its path.
+///
+/// This test exercises the following functionality:
+/// - Take ownership
+/// - Activate locking
+/// - Login (to the locking SP)
+/// - Writing the shadow MBR
+/// - Logout
+#[test]
+fn upload_mbr() {
+    // The image spans multiple of the UI's 1 MiB chunks. Its size is a prime
+    // number, so it can't line up with the chunks, or any other power-of-two
+    // transfer size, and the last chunk is always a partial one. The contents
+    // repeat with a prime period too, so misplaced chunks would corrupt the
+    // image.
+    let image_len = 2_999_999;
+    let image: Vec<u8> = (0..image_len).map(|i: u32| (i % 251) as u8).collect();
+    let mut image_file = tempfile::NamedTempFile::new().unwrap();
+    image_file.write_all(&image).unwrap();
+    image_file.flush().unwrap();
+    let image_path = image_file.path().to_str().unwrap().to_owned();
+
+    run_test(move || async move {
+        let runtime = Arc::new(PolyRuntime::Slint(SlintRuntime));
+        let ui = ui::MainWindow::new().unwrap();
+        let notification_queue = ToastQueue::new(ui.clone_strong());
+        let host = Arc::new(Host::new(runtime.clone()));
+        let _app = App::new(ui.clone_strong(), notification_queue, host, runtime.clone());
+
+        let ui = Driver::new(ui, Duration::from_secs(5));
+
+        scan_devices(&ui).await;
+        select_virtual_device(&ui).await;
+        take_ownership(&ui).await;
+        activate_locking(&ui).await;
+        login_admin1(&ui).await;
+
+        // Switch to the "Shadow MBR" tab, and switch from the file picker to
+        // the text field. The OS's file picker can't be driven by the test.
+        ui.single_click_by_label("Shadow MBR", Left).await.unwrap();
+        ui.check_enabled("mbr-toggle-file-picker").await.unwrap();
+        ui.invoke_default_action("mbr-toggle-file-picker").unwrap();
+        ui.enter_text("mbr-image-path", &image_path).await.unwrap();
+        assert_eq!(ui.accessible_value("mbr-image-path").unwrap().as_deref(), Some(image_path.as_str()));
+
+        // Same as for the save buttons, the upload is invoked synchronously so
+        // that the button can't get disabled by background commands mid-click.
+        ui.check_enabled("mbr-upload-submit").await.unwrap();
+        ui.invoke_default_action("mbr-upload-submit").unwrap();
+        ui.check_appearance_toast("MBR image written").await.unwrap();
+
+        // Once the upload is finished, the button turns back from "Cancel" to
+        // "Upload", and becomes usable again.
+        ui.check_enabled("mbr-upload-submit").await.unwrap();
+        ui.check_condition("mbr-upload-submit", |element| element.accessible_label().as_deref() == Some("Upload"))
+            .await
+            .unwrap();
+
+        logout(&ui).await;
+    });
+
+    drop(image_file);
 }
 
 async fn scan_devices(ui: &Driver<sed_manager_gui_slint::MainWindow>) {

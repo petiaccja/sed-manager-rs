@@ -136,11 +136,13 @@ export component ShadowMbrTab {
                         padding: 0.8rem;
 
                         path := LineEdit {
+                            accessible-id: "mbr-image-path";
                             placeholder-text: "Enter path to PBA image";
                             visible: !use-file-picker;
                         }
 
                         Button {
+                            accessible-id: "mbr-upload-submit";
                             width: 90px;
                             icon: use-file-picker ? Icons.file-open : Icons.upload;
                             text: !mbr.writing-in-progress ? "Upload" : "Cancel";
@@ -160,6 +162,7 @@ export component ShadowMbrTab {
                         }
 
                         Button {
+                            accessible-id: "mbr-toggle-file-picker";
                             icon: !use-file-picker ? Icons.file-open : Icons.text-fields;
                             colorize-icon: true;
                             enabled: !command-status.session-busy && !command-status.tper-busy && mbr.supported;

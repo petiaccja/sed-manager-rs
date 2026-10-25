@@ -69,6 +69,7 @@ rustix = "1.1.4"
 # -- Testing
 rstest = { version = "0.26.1" }
 googletest = { version = "0.14.2" }
+tempfile = { version = "3.27.0" }
 
 # -- Tracing
 # The opentelemetry dependencies have to be pinned to the same version.
