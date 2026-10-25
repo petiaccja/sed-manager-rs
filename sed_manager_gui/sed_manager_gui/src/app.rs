@@ -851,7 +851,7 @@ impl App {
                     let chunk = &buffer[..bytes_read];
                     locking_session.write_mbr(offset, chunk).await?;
                     offset += bytes_read as u64;
-                    let _ = progress_tx.try_broadcast(offset as f32 / file_len as f32);
+                    let _ = progress_tx.try_broadcast(offset as f32 / file_len.max(1).max(offset) as f32);
                 }
             })
             .run();
