@@ -10,6 +10,8 @@ pub enum Error {
     Sed(#[from] SedError),
     #[error(transparent)]
     File(#[from] FileError),
+    #[error("The command was cancelled")]
+    CommandCancelled,
 }
 
 #[derive(Debug, thiserror::Error)]

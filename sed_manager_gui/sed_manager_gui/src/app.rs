@@ -8,7 +8,7 @@ use std::{
     io,
     path::{Path, PathBuf},
     rc::{Rc, Weak},
-    sync::Arc,
+    sync::{Arc, Mutex},
 };
 
 use async_broadcast::RecvError;
@@ -49,6 +49,7 @@ pub struct App {
     toast_queue: Rc<ToastQueue>,
     host: Arc<Host>,
     runtime: Arc<PolyRuntime>,
+    cancel_requests: Arc<Mutex<HashSet<PathBuf>>>,
 }
 
 impl App {
@@ -67,6 +68,7 @@ impl App {
             device_list: Rc::new(RwLock::new(device_list)),
             host,
             runtime,
+            cancel_requests: Arc::new(Mutex::new(HashSet::new())),
         });
 
         // Algorithm callbacks.
@@ -163,6 +165,12 @@ impl App {
             let view_model = view_model.clone();
             ui.on_write_mbr(move |device_path, image_path| {
                 view_model.clone().write_mbr(device_path.to_string().into(), image_path.to_string().into())
+            });
+        }
+        {
+            let view_model = view_model.clone();
+            ui.on_cancel_mbr_write(move |device_path| {
+                view_model.cancel_requests.lock().unwrap().insert(device_path.to_string().into());
             });
         }
         {
@@ -801,6 +809,9 @@ impl App {
         )
         .expect_in_event_loop();
 
+        let cancel_requests = self.cancel_requests.clone();
+        let device_path_ = device_path.clone();
+
         self.command()
             .success_message("MBR image written")
             .error_message("Failed to write MBR image")
@@ -822,6 +833,9 @@ impl App {
                 let mut offset = 0;
                 let _ = progress_tx.try_broadcast(0.0);
                 loop {
+                    if cancel_requests.lock().unwrap().remove(&device_path_) {
+                        return Err(Error::CommandCancelled);
+                    }
                     let bytes_read = match file.read(&mut buffer).await {
                         Ok(0) => break Ok(()),
                         Ok(bytes_read) => bytes_read,
