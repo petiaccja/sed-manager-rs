@@ -3,6 +3,8 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
+use std::cmp::min;
+
 use sed_packet::{
     MaxBytes,
     discovery::{LockingDescriptor, SscFeatureDescriptor},
@@ -295,9 +297,15 @@ impl LockingConfigSession {
     /// the `data` is partially written.
     #[instrument(skip(self, data), fields(data_len = data.len()))]
     pub async fn write_mbr(&self, mut offset: u64, data: &[u8]) -> Result<(), Error> {
-        let max_method_len = self.session.properties().outbound.max_method_len();
+        let outbound_properties = &self.session.properties().outbound;
+        let max_method_len = outbound_properties.max_method_len();
+        let max_ind_token_size = outbound_properties.max_ind_token_size.get();
+
         let method_call_overhead = SetBytes::HEADER_LEN + LongAtom::HEADER_LEN;
-        let max_payload_len = max_method_len.saturating_sub(method_call_overhead).max(1);
+        let max_method_payload_len = max_method_len.saturating_sub(method_call_overhead).max(1);
+        let max_token_payload_len = max_ind_token_size.saturating_sub(LongAtom::HEADER_LEN).max(1);
+        let max_payload_len = min(max_method_payload_len, max_token_payload_len);
+
         for chunk in data.chunks(max_payload_len) {
             self.session.set_bytes(table_id::MBR, offset, chunk).await?;
             offset += chunk.len() as u64;
