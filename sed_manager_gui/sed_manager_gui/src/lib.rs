@@ -10,8 +10,11 @@ mod busy;
 mod command;
 mod device_list;
 mod diff_model;
+mod error;
 mod session;
 pub mod telemetry;
 pub mod toast;
 mod ui_conv;
 mod ui_ext;
+
+pub use error::Error;

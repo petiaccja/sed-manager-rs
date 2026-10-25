@@ -15,7 +15,7 @@ use async_broadcast::RecvError;
 use async_lock::RwLock;
 use futures::AsyncReadExt;
 use sed_async::PolyRuntime;
-use sed_manager::{Device, Error, Geometry, Host, Spec};
+use sed_manager::{Device, Error as SedError, Geometry, Host, Spec};
 use sed_manager_gui_slint as ui;
 use sed_packet::{MaxBytes, com_id_request::ComIdState};
 use sed_spec::{
@@ -31,10 +31,12 @@ use slint::{
 use tracing::{Instrument, Span, debug, error, info_span, instrument};
 
 use crate::{
+    Error,
     algorithm::sector_lib,
-    command::{Command, CommandError, ExpectInEventLoop},
+    command::{Command, ExpectInEventLoop},
     device_list::{DeviceEntry, DeviceList},
     diff_model::{self, DiffModel},
+    error::FileError,
     session::Session,
     toast::ToastQueue,
     ui_conv::{CombinedProperties, ConversionError, FromUi as _, IntoUi, IntoUiName, MbrDesc, TryFromUi},
@@ -400,7 +402,7 @@ impl App {
         self.command()
             .on_device(path.clone(), async |device: &Device| {
                 let discovery = device.discover().await?;
-                Spec::try_from(discovery).map_err(|_| Error::NoSscAvailable.into())
+                Spec::try_from(discovery).map_err(|_| SedError::NoSscAvailable.into())
             })
             .on_success(move |mut ui_device, spec| {
                 let features = &spec.discovery.feature_descriptors;
@@ -500,7 +502,7 @@ impl App {
             .error_message("Could not get alignment")
             .on_session(path.clone(), async |_device: &Device, session: &mut Session| {
                 let Session::LockingConfig(locking_config_session) = &*session else {
-                    return Err(CommandError::Skipped);
+                    return Err(Error::CommandSkipped);
                 };
                 locking_config_session.get_alignment().await.map_err(Into::into)
             })
@@ -518,7 +520,7 @@ impl App {
             .error_message("Failed to list locking authorities")
             .on_session(path.clone(), async |_device: &Device, session: &mut Session| {
                 let Session::LockingConfig(locking_config_session) = &*session else {
-                    return Err(CommandError::Skipped);
+                    return Err(Error::CommandSkipped);
                 };
                 locking_config_session.get_authorities().await.map_err(Into::into)
             })
@@ -542,7 +544,7 @@ impl App {
             .error_message("Failed to update locking ranges")
             .on_session(path.clone(), async |_device: &Device, session: &mut Session| {
                 let Session::LockingConfig(locking_config_session) = &*session else {
-                    return Err(CommandError::Skipped);
+                    return Err(Error::CommandSkipped);
                 };
                 locking_config_session.get_locking_ranges().await.map_err(Into::into)
             })
@@ -564,14 +566,14 @@ impl App {
             .error_message("Failed to update shadow MBR status")
             .on_session(path.clone(), async |device: &Device, session: &mut Session| {
                 let Session::LockingConfig(locking_config_session) = &*session else {
-                    return Err(CommandError::Skipped);
+                    return Err(Error::CommandSkipped);
                 };
 
                 let geometry = device.geometry().await?;
 
                 let size = match locking_config_session.get_mbr_size().await {
                     Ok(size) => size,
-                    Err(Error::TperError(TperError::MethodCallFailed(MethodStatus::InvalidParameter))) => {
+                    Err(SedError::TperError(TperError::MethodCallFailed(MethodStatus::InvalidParameter))) => {
                         return Ok(MbrDesc { supported: false, size: None, control: None });
                     }
                     Err(err) => return Err(err.into()),
@@ -614,7 +616,7 @@ impl App {
                     .error_message("Could not write locking ranges")
                     .on_session(path, async move |device: &Device, session: &mut Session| {
                         let Session::LockingConfig(locking_session) = session else {
-                            return Err(CommandError::Skipped);
+                            return Err(Error::CommandSkipped);
                         };
                         let geometry = device.geometry().await?;
                         locking_session
@@ -628,7 +630,7 @@ impl App {
                     })
                     .on_error(move |ui_device, _spec, err| {
                         match err {
-                            Error::LockingRangeUpdateRejected(_) => (),
+                            Error::Sed(SedError::LockingRangeUpdateRejected(_)) => (),
                             _ => self_e.list_locking_ranges(path_e, true),
                         }
                         ui_device
@@ -655,7 +657,7 @@ impl App {
             .error_message("Failed to erase locking range")
             .on_session(path, async move |_: &Device, session: &mut Session| {
                 let Session::LockingConfig(locking_session) = session else {
-                    return Err(CommandError::Skipped);
+                    return Err(Error::CommandSkipped);
                 };
                 locking_session.erase_locking_range(locking_range).await?;
                 Ok(())
@@ -689,7 +691,7 @@ impl App {
                     .error_message("Could not write authorities")
                     .on_session(path, async move |_device: &Device, session: &mut Session| {
                         let Session::LockingConfig(locking_session) = session else {
-                            return Err(CommandError::Skipped);
+                            return Err(Error::CommandSkipped);
                         };
                         locking_session.set_authorities(committed.as_deref(), &desired).await?;
                         Ok(())
@@ -700,7 +702,7 @@ impl App {
                     })
                     .on_error(move |ui_device, _spec, err| {
                         match err {
-                            Error::AuthorityUpdateRejected(_) => (),
+                            Error::Sed(SedError::AuthorityUpdateRejected(_)) => (),
                             _ => self_e.list_locking_authorities_ext(path_e, true),
                         }
                         ui_device
@@ -728,7 +730,7 @@ impl App {
             .error_message("Could not change password")
             .on_session(path.clone(), async move |_device: &Device, session: &mut Session| {
                 let Session::LockingConfig(locking_session) = session else {
-                    return Err(CommandError::Skipped);
+                    return Err(Error::CommandSkipped);
                 };
                 locking_session.change_password(authority, new_password).await?;
                 Ok(())
@@ -752,7 +754,7 @@ impl App {
                     .error_message("Could not update MBR control")
                     .on_session(path, async move |_device: &Device, session: &mut Session| {
                         let Session::LockingConfig(locking_session) = session else {
-                            return Err(CommandError::Skipped);
+                            return Err(Error::CommandSkipped);
                         };
                         locking_session.set_mbr_control(mbr_control).await?;
                         Ok(())
@@ -804,12 +806,18 @@ impl App {
             .error_message("Failed to write MBR image")
             .on_session(device_path, async move |_device: &Device, session: &mut Session| {
                 let Session::LockingConfig(locking_session) = session else {
-                    return Err(CommandError::Skipped);
+                    return Err(Error::CommandSkipped);
                 };
-                let mut file = async_fs::File::open(&image_path).await.map_err(|_| Error::NotImplemented)?;
-                let metadata = file.metadata().await.map_err(|_| Error::NotImplemented)?;
+                let mut file = async_fs::File::open(&image_path).await.map_err(FileError::Io)?;
+
+                let metadata = file.metadata().await.map_err(FileError::Io)?;
                 let file_len = metadata.len();
+                let mbr_len = locking_session.get_mbr_size().await? as u64;
                 Span::current().record("file_len", file_len);
+                if file_len > mbr_len {
+                    return Err(FileError::FileTooBig { maximum_size: mbr_len, actual_size: file_len }.into());
+                }
+
                 let mut buffer = vec![0; 1048576];
                 let mut offset = 0;
                 let _ = progress_tx.try_broadcast(0.0);
@@ -818,7 +826,7 @@ impl App {
                         Ok(0) => break Ok(()),
                         Ok(bytes_read) => bytes_read,
                         Err(err) if err.kind() == io::ErrorKind::UnexpectedEof => break Ok(()),
-                        Err(_) => break Err(Error::NotImplemented.into()),
+                        Err(err) => break Err(FileError::Io(err).into()),
                     };
                     let chunk = &buffer[..bytes_read];
                     locking_session.write_mbr(offset, chunk).await?;
