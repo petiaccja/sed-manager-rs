@@ -3,10 +3,8 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use std::{
-    rc::Rc,
-    sync::atomic::{AtomicI32, Ordering},
-};
+use std::rc::Rc;
+use std::sync::atomic::{AtomicI32, Ordering};
 
 use sed_manager_gui_slint as ui;
 use slint::{ComponentHandle, Model, ModelExt, ModelRc, ToSharedString, VecModel};

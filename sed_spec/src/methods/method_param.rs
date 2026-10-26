@@ -3,12 +3,11 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use sed_packet::{Uid, token_stream::Detokenize, token_stream::Error as TokenError, token_stream::FromTokens as _};
+use sed_packet::Uid;
+use sed_packet::token_stream::{Detokenize, Error as TokenError, FromTokens as _};
 
-use crate::{
-    methods::{MethodCall, MethodResult, MethodStatus},
-    objects::MethodRef,
-};
+use crate::methods::{MethodCall, MethodResult, MethodStatus};
+use crate::objects::MethodRef;
 
 pub trait MethodParam {
     const METHOD_ID: Uid;

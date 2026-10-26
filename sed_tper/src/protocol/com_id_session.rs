@@ -3,16 +3,15 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use std::{
-    collections::VecDeque,
-    time::{Duration, Instant},
-};
+use std::collections::VecDeque;
+use std::time::{Duration, Instant};
 
 use oneshot::Sender;
 use sed_packet::com_id_request::{ComIdRequest, ComIdResponse};
 use tracing::Span;
 
-use crate::{Error, protocol::shared::link_both_ways};
+use crate::Error;
+use crate::protocol::shared::link_both_ways;
 
 #[derive(Debug)]
 pub struct ComIdSession {

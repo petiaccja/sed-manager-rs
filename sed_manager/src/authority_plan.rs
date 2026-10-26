@@ -134,11 +134,12 @@ impl MatchCurrent for Authority {
 mod tests {
     use std::num::NonZero;
 
-    use super::*;
-
-    use googletest::{assert_that, matchers::*};
+    use googletest::assert_that;
+    use googletest::matchers::*;
     use rstest::rstest;
     use sed_packet::UidRange;
+
+    use super::*;
 
     const AUTHORITY_UID: UidRange<AuthorityRef> = UidRange {
         start: AuthorityRef::from_half(NonZero::new(1).unwrap()),

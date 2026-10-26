@@ -10,15 +10,16 @@ use std::path::Path;
 use opentelemetry::KeyValue;
 use opentelemetry::trace::TracerProvider as _;
 use opentelemetry_otlp::ExporterBuildError;
+use opentelemetry_sdk::Resource;
 use opentelemetry_sdk::error::OTelSdkError;
-use opentelemetry_sdk::trace::{SpanExporter, TracerProviderBuilder};
-use opentelemetry_sdk::{Resource, trace::SdkTracerProvider};
+use opentelemetry_sdk::trace::{SdkTracerProvider, SpanExporter, TracerProviderBuilder};
 use opentelemetry_semantic_conventions::attribute::{
     HOST_ARCH, OS_BUILD_ID, OS_NAME, OS_TYPE, OS_VERSION, SERVICE_NAME, SERVICE_VERSION,
 };
 use opentelemetry_semantic_conventions::trace::PROCESS_EXECUTABLE_NAME;
 use tracing::Metadata;
-use tracing_subscriber::{Layer, Registry, layer::Context};
+use tracing_subscriber::layer::Context;
+use tracing_subscriber::{Layer, Registry};
 
 mod file;
 mod network;

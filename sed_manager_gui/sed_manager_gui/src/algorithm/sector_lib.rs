@@ -3,7 +3,8 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use std::{fmt::Display, str::FromStr};
+use std::fmt::Display;
+use std::str::FromStr;
 
 use sed_manager::Alignment;
 use sed_manager_gui_slint as ui;
@@ -174,9 +175,9 @@ pub fn align(sector: ui::Sector, alignment: ui::Alignment) -> ui::Sector {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     use rstest::rstest;
+
+    use super::*;
 
     fn geometry(logical_sector_size: i32) -> ui::Geometry {
         ui::Geometry { logical_sector_size, logical_sector_count: ui::Sector { value: 0 } }

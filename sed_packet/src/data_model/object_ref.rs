@@ -282,8 +282,9 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use rstest::rstest;
+
+    use super::*;
 
     //--------------------------------------------------------------------------
     // ObjectRef

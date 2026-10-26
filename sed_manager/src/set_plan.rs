@@ -157,12 +157,13 @@ pub trait MatchCurrent {
 mod tests {
     use std::num::NonZero;
 
-    use super::*;
-
-    use googletest::{assert_that, matchers::*};
+    use googletest::assert_that;
+    use googletest::matchers::*;
     use rstest::rstest;
     use sed_packet::{ObjectRef, TableRef};
     use sed_spec_macros::Object;
+
+    use super::*;
 
     const GIZMO_TABLE: TableRef = TableRef::new(0xF100_0000_0000_0000);
 

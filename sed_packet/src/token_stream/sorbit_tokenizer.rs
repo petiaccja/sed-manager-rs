@@ -5,12 +5,11 @@
 
 use sorbit::ser_de::{Deserialize as _, Deserializer, Serialize as _, Serializer};
 
-use crate::token_stream::{Detokenizer, MessageError, Tokenize, Tokenizer};
-
 use super::command::Command;
 use super::error::Error;
 use super::token::Token;
 use super::tokenize::TokenType;
+use crate::token_stream::{Detokenizer, MessageError, Tokenize, Tokenizer};
 
 macro_rules! convert {
     ($token:expr, $type:ty) => {{
@@ -279,15 +278,15 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
-    use crate::Named;
-    use crate::token_stream::{Detokenize, FromTokens, ToTokens};
-
     use googletest::assert_that;
     use googletest::matchers::*;
     use rstest::rstest;
-    use sorbit::{io::FixedMemoryStream, stream_ser_de::StreamDeserializer};
+    use sorbit::io::FixedMemoryStream;
+    use sorbit::stream_ser_de::StreamDeserializer;
+
+    use super::*;
+    use crate::Named;
+    use crate::token_stream::{Detokenize, FromTokens, ToTokens};
 
     #[rstest]
     #[case(3, &[0x03])]

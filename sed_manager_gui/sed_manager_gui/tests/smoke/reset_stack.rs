@@ -6,17 +6,17 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use PointerEventButton::Left;
 use sed_async::{PolyRuntime, SlintRuntime};
 use sed_manager::Host;
-use sed_manager_gui::{app::App, toast::ToastQueue};
+use sed_manager_gui::app::App;
+use sed_manager_gui::toast::ToastQueue;
 use sed_manager_gui_slint as ui;
 use slint::ComponentHandle as _;
 use slint::platform::PointerEventButton;
 
 pub use crate::driver::Driver;
 use crate::test_utils::run_test;
-
-use PointerEventButton::Left;
 
 /// This test exercises the following functionality:
 /// - Reset stack

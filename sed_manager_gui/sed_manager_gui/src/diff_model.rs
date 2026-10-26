@@ -3,10 +3,8 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use std::{
-    cell::{Ref, RefCell},
-    sync::atomic::{AtomicBool, Ordering},
-};
+use std::cell::{Ref, RefCell};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use slint::{Model, ModelNotify, ModelRc, ModelTracker as _};
 

@@ -4,9 +4,8 @@
 //L-----------------------------------------------------------------------------
 
 use sed_packet::ObjectUid;
-use smallvec::SmallVec;
-
 use sed_spec_macros::{DetokenizeStruct, FieldList, Object, TokenizeField, TokenizeStruct};
+use smallvec::SmallVec;
 
 use crate::objects::{AuthorityRef, SecurityProviderRef};
 use crate::preconfig::core::shared::table_id;

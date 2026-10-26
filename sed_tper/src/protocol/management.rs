@@ -3,28 +3,25 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use std::{
-    collections::{HashMap, VecDeque},
-    time::{Duration, Instant},
-};
+use std::collections::{HashMap, VecDeque};
+use std::time::{Duration, Instant};
 
 use oneshot::Sender;
-use sed_packet::{packet::Packet, session_id::SessionId, token_stream::ToTokens};
-use sed_spec::{
-    methods::{
-        CloseSession, ExtractResult, MethodCall, MethodParam, MethodStatus, MgmtMethodCall, MgmtMethodCallParams,
-        Properties, PropertiesMethod, SessionProperties, StartSession, SyncSession, extract_method,
-    },
-    preconfig::core::shared::{invoking_id::SESSION_MANAGER, sm_method_id::START_SESSION},
+use sed_packet::packet::Packet;
+use sed_packet::session_id::SessionId;
+use sed_packet::token_stream::ToTokens;
+use sed_spec::methods::{
+    CloseSession, ExtractResult, MethodCall, MethodParam, MethodStatus, MgmtMethodCall, MgmtMethodCallParams,
+    Properties, PropertiesMethod, SessionProperties, StartSession, SyncSession, extract_method,
 };
+use sed_spec::preconfig::core::shared::invoking_id::SESSION_MANAGER;
+use sed_spec::preconfig::core::shared::sm_method_id::START_SESSION;
 use tracing::{Span, debug, info_span, warn};
 
-use crate::{
-    Error,
-    protocol::{
-        sequence_number::SequenceNumber,
-        shared::{PacketAction, PropertiesChanged, StartedSession, link_both_ways, min_deadline, packetize_one},
-    },
+use crate::Error;
+use crate::protocol::sequence_number::SequenceNumber;
+use crate::protocol::shared::{
+    PacketAction, PropertiesChanged, StartedSession, link_both_ways, min_deadline, packetize_one,
 };
 
 #[derive(Debug)]
@@ -609,14 +606,10 @@ mod tests {
     use googletest::assert_that;
     use googletest::matchers::*;
     use oneshot::channel;
-    use sed_packet::packet::SubPacket;
-    use sed_packet::packet::SubPacketKind;
+    use sed_packet::packet::{SubPacket, SubPacketKind};
     use sed_packet::token_stream::ToTokens;
-    use sed_spec::methods::Limit;
-    use sed_spec::{
-        methods::{MethodCall, MethodParam},
-        preconfig::core::shared::invoking_id::SESSION_MANAGER,
-    };
+    use sed_spec::methods::{Limit, MethodCall, MethodParam};
+    use sed_spec::preconfig::core::shared::invoking_id::SESSION_MANAGER;
 
     use super::*;
     use crate::protocol::shared::tests::*;

@@ -3,7 +3,8 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use std::{any::Any, collections::BTreeMap};
+use std::any::Any;
+use std::collections::BTreeMap;
 
 use sed_packet::Object;
 use sed_spec::objects::{

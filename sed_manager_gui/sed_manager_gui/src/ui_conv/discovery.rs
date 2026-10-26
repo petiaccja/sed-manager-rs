@@ -3,8 +3,10 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use std::{rc::Rc, time::Duration};
+use std::rc::Rc;
+use std::time::Duration;
 
+use sed_manager_gui_slint as ui;
 use sed_packet::discovery::{
     AdditionalDataStoreTablesDescriptor, BlockSIDAuthDescriptor, DataRemovalDescriptor, Discovery,
     EnterpriseDescriptor, Feature, FeatureDescriptor, GeometryDescriptor, KeyPerIODescriptor, LockingDescriptor,
@@ -14,7 +16,6 @@ use sed_packet::discovery::{
 use slint::VecModel;
 
 use crate::ui_conv::FromBackend;
-use sed_manager_gui_slint as ui;
 
 fn owner_password_state_to_string(value: OwnerPasswordState) -> &'static str {
     match value {

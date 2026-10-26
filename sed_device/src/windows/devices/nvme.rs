@@ -6,14 +6,7 @@
 use core::mem::offset_of;
 use std::path::Path;
 
-use crate::Error as DeviceError;
-use crate::shared::aligned_array::AlignedArray;
-use crate::shared::memory::write_nonoverlapping;
-use crate::shared::nvme::IdentifyController;
-use crate::storage_device::{Interface, StorageDevice};
-use crate::windows::devices::generic::{DeviceDesc, GenericIoctlDevice};
-use crate::windows::ioctl_device::IoctlDevice;
-
+pub use ioctl::NvmeIoctlDevice;
 use sorbit::ser_de::FromBytes as _;
 use tracing::instrument;
 use windows::Win32::System::Ioctl::{
@@ -22,8 +15,13 @@ use windows::Win32::System::Ioctl::{
 };
 
 use super::GenericDevice;
-
-pub use ioctl::NvmeIoctlDevice;
+use crate::Error as DeviceError;
+use crate::shared::aligned_array::AlignedArray;
+use crate::shared::memory::write_nonoverlapping;
+use crate::shared::nvme::IdentifyController;
+use crate::storage_device::{Interface, StorageDevice};
+use crate::windows::devices::generic::{DeviceDesc, GenericIoctlDevice};
+use crate::windows::ioctl_device::IoctlDevice;
 
 pub struct NvmeDevice {
     ioctl_device: IoctlDevice,
@@ -138,7 +136,8 @@ mod ioctl {
     use windows::Win32::System::Ioctl::NVMeDataTypeIdentify;
 
     use super::*;
-    use crate::{shared::nvme::IdentifyNamespace, windows::devices::scsi::ScsiIoctlDevice as _};
+    use crate::shared::nvme::IdentifyNamespace;
+    use crate::windows::devices::scsi::ScsiIoctlDevice as _;
 
     pub trait NvmeIoctlDevice {
         async fn identify_controller(&self) -> Result<IdentifyController, DeviceError>;
@@ -267,7 +266,6 @@ mod ioctl {
 #[cfg(test)]
 mod test {
     use super::*;
-
     use crate::windows::device_list::list_storage_devices;
 
     async fn get_nvme_devices() -> Vec<NvmeDevice> {

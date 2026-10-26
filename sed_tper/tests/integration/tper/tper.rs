@@ -6,11 +6,9 @@
 use std::sync::Arc;
 
 use sed_async::{PolyRuntime, TokioRuntime};
-use sed_packet::{
-    com_id::ComIdExt,
-    com_id_request::ComIdState,
-    discovery::{GeometryDescriptor, LockingDescriptor, TperDescriptor},
-};
+use sed_packet::com_id::ComIdExt;
+use sed_packet::com_id_request::ComIdState;
+use sed_packet::discovery::{GeometryDescriptor, LockingDescriptor, TperDescriptor};
 use sed_telemetry::with_tracing;
 use sed_tper::{Error, Tper};
 use sed_virtual_device::{BASE_COM_ID, VirtualDevice};

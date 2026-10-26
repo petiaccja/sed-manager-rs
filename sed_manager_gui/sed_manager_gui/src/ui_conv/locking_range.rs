@@ -7,10 +7,8 @@ use std::num::NonZero;
 
 use sed_manager_gui_slint as ui;
 use sed_packet::discovery::FeatureDescriptor;
-use sed_spec::{
-    objects::{LockingRange, LockingRangeRef, SecurityProviderRef},
-    preconfig::opal_2::locking::locking::GLOBAL_RANGE,
-};
+use sed_spec::objects::{LockingRange, LockingRangeRef, SecurityProviderRef};
+use sed_spec::preconfig::opal_2::locking::locking::GLOBAL_RANGE;
 use slint::{SharedString, ToSharedString};
 
 use crate::ui_conv::{ConversionError, FromBackend, FromBackendName, TryFromUi, TryIntoBackend};
@@ -64,11 +62,11 @@ impl TryFromUi<&ui::LockingRange> for LockingRange {
 
 #[cfg(test)]
 mod tests {
+    use googletest::assert_that;
+    use googletest::matchers::*;
     use sed_spec::preconfig::opal_2;
 
     use super::*;
-
-    use googletest::{assert_that, matchers::*};
 
     // A sanity check for accidentally mixing up all the booleans and the length
     // conversion logic.

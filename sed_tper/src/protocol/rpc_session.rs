@@ -3,30 +3,22 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use std::{
-    collections::{HashMap, VecDeque},
-    time::{Duration, Instant},
-};
+use std::collections::{HashMap, VecDeque};
+use std::time::{Duration, Instant};
 
 use oneshot::Sender;
-use sed_packet::{
-    packet::{Packet, SubPacketKind},
-    session_id::SessionId,
-};
+use sed_packet::packet::{Packet, SubPacketKind};
+use sed_packet::session_id::SessionId;
 use sed_spec::methods::{Properties, SessionProperties};
 use tracing::Span;
 
-use crate::{
-    Error,
-    protocol::{
-        management::Management,
-        sequence_number::SequenceNumber,
-        session::Session,
-        shared::{PacketBatch, PropertiesChanged, StartedSession, eos, min_deadline},
-    },
-};
-
-use super::{management::ManagementAction, shared::PacketAction};
+use super::management::ManagementAction;
+use super::shared::PacketAction;
+use crate::Error;
+use crate::protocol::management::Management;
+use crate::protocol::sequence_number::SequenceNumber;
+use crate::protocol::session::Session;
+use crate::protocol::shared::{PacketBatch, PropertiesChanged, StartedSession, eos, min_deadline};
 
 #[derive(Debug)]
 pub struct RpcSession {
@@ -214,11 +206,9 @@ mod tests {
     use sed_packet::token_stream::ToTokens;
     use sed_spec::methods::MethodStatus;
 
-    use crate::protocol::shared::eos;
-    use crate::protocol::shared::packetize_one;
-    use crate::protocol::shared::tests::*;
-
     use super::*;
+    use crate::protocol::shared::tests::*;
+    use crate::protocol::shared::{eos, packetize_one};
 
     const SESSION_ID_1: SessionId = SessionId { hsn: 1, tsn: 2 };
     const TIMEOUT: Duration = Duration::from_secs(1);

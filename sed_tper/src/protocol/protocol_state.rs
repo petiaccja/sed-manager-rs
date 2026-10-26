@@ -3,38 +3,33 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use std::{
-    collections::VecDeque,
-    num::NonZero,
-    time::{Duration, Instant},
-};
+use std::collections::VecDeque;
+use std::num::NonZero;
+use std::time::{Duration, Instant};
 
 use oneshot::Sender;
-use sed_packet::discovery::SscFeatureDescriptor;
-use sed_packet::{
-    com_id::{ComId, ComIdExt},
-    com_id_request::{
-        COM_ID_PROTOCOL, COM_ID_RESPONSE_LEN, ComIdRequest, ComIdResponse, ComIdResponsePayload, StackResetStatus,
-    },
-    packet::{COM_PACKET_HEADER_LEN, ComPacket, PACKET_HEADER_LEN, PACKETIZED_PROTOCOL, SUB_PACKET_HEADER_LEN},
-    session_id::SessionId,
+use sed_packet::com_id::{ComId, ComIdExt};
+use sed_packet::com_id_request::{
+    COM_ID_PROTOCOL, COM_ID_RESPONSE_LEN, ComIdRequest, ComIdResponse, ComIdResponsePayload, StackResetStatus,
 };
+use sed_packet::discovery::SscFeatureDescriptor;
+use sed_packet::packet::{
+    COM_PACKET_HEADER_LEN, ComPacket, PACKET_HEADER_LEN, PACKETIZED_PROTOCOL, SUB_PACKET_HEADER_LEN,
+};
+use sed_packet::session_id::SessionId;
 use sed_spec::methods::{Limit, Properties, SessionProperties};
 use sorbit::ser_de::FromBytes;
 use tracing::{Span, info_span};
 
-use crate::{
-    Error,
-    protocol::{
-        com_id_session::ComIdSession,
-        rpc_session::RpcSession,
-        sequence_number::SequenceNumber,
-        shared::{Action, PropertiesChanged, StartedSession, min_deadline},
-        synchronous_protocol::SynchronousProtocol,
-    },
-};
-
-use super::{com_id_session::ComIdAction, rpc_session::RpcAction, shared::PacketAction};
+use super::com_id_session::ComIdAction;
+use super::rpc_session::RpcAction;
+use super::shared::PacketAction;
+use crate::Error;
+use crate::protocol::com_id_session::ComIdSession;
+use crate::protocol::rpc_session::RpcSession;
+use crate::protocol::sequence_number::SequenceNumber;
+use crate::protocol::shared::{Action, PropertiesChanged, StartedSession, min_deadline};
+use crate::protocol::synchronous_protocol::SynchronousProtocol;
 
 /// After the timeout, message sent between the host and device are considered
 /// lost.
@@ -401,15 +396,13 @@ mod tests {
     use googletest::assert_that;
     use googletest::matchers::*;
     use oneshot::channel;
-    use sed_packet::com_id_request::ComIdResponsePayload;
-    use sed_packet::com_id_request::StackResetStatus;
+    use sed_packet::com_id_request::{ComIdResponsePayload, StackResetStatus};
     use sed_packet::discovery::{EnterpriseDescriptor, OpalV2Descriptor, OwnerPasswordState};
     use sed_packet::token_stream::ToTokens;
     use sed_spec::methods::MethodStatus;
     use sorbit::ser_de::ToBytes;
 
     use super::*;
-
     use crate::protocol::shared::packetize_one;
     use crate::protocol::shared::tests::*;
 

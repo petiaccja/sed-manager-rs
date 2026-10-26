@@ -3,22 +3,19 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use std::{
-    cmp::{max, min},
-    collections::VecDeque,
-    marker::PhantomData,
-    time::Duration,
-};
+use std::cmp::{max, min};
+use std::collections::VecDeque;
+use std::marker::PhantomData;
+use std::time::{Duration, Instant};
 
-use sed_packet::{
-    com_id_request::{COM_ID_RESPONSE_LEN, ComIdRequest, ComIdResponse, ComIdResponsePayload},
-    packet::ComPacket,
-};
-use sorbit::{error::Error as SorbitError, ser_de::ToBytes};
-use std::time::Instant;
+use sed_packet::com_id_request::{COM_ID_RESPONSE_LEN, ComIdRequest, ComIdResponse, ComIdResponsePayload};
+use sed_packet::packet::ComPacket;
+use sorbit::error::Error as SorbitError;
+use sorbit::ser_de::ToBytes;
 use tracing::Span;
 
-use crate::{Error, protocol::shared::Action};
+use crate::Error;
+use crate::protocol::shared::Action;
 
 const MAX_BACKOFF: Duration = Duration::from_millis(500);
 const RECV_FAILURE_BACKOFF: Duration = Duration::from_millis(500);
@@ -322,12 +319,13 @@ impl InterfaceMessage for ComIdResponse {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
-    use googletest::{assert_that, matchers::*};
+    use googletest::assert_that;
+    use googletest::matchers::*;
     use sed_packet::com_id::{ComId, ComIdExt};
     use sed_packet::com_id_request::{COM_ID_PROTOCOL, ComIdRequest, ComIdState, Date, StackResetStatus};
     use sed_packet::packet::{PACKETIZED_PROTOCOL, Packet};
+
+    use super::*;
 
     const COM_ID: ComId = ComId(1);
     const COM_ID_EXT: ComIdExt = ComIdExt(0);

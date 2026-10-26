@@ -4,7 +4,6 @@
 //L-----------------------------------------------------------------------------
 
 use sed_packet::{ObjectUid, Uid};
-
 use sed_spec_macros::{DetokenizeStruct, FieldList, Object, TokenizeField, TokenizeStruct};
 
 use crate::objects::{ColumnRef, TableDescRef, TemplateRef};

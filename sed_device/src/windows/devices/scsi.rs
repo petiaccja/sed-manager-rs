@@ -7,21 +7,19 @@ use core::ffi::c_void;
 use std::mem::transmute;
 use std::path::Path;
 
+pub use ioctl::ScsiIoctlDevice;
 use sorbit::ser_de::{FromBytes as _, ToBytes as _};
 use tracing::instrument;
 use windows::Win32::Storage::IscsiDisc::{
     IOCTL_SCSI_PASS_THROUGH_DIRECT, SCSI_IOCTL_DATA_IN, SCSI_IOCTL_DATA_OUT, SCSI_PASS_THROUGH_DIRECT,
 };
 
+use super::GenericDevice;
 use crate::shared::aligned_array::AlignedArray;
 use crate::shared::scsi::{Command, ScsiError, SecurityProtocolIn, SecurityProtocolOut, SenseData, SenseKey};
 use crate::windows::devices::generic::{DeviceDesc, GenericIoctlDevice as _};
 use crate::windows::ioctl_device::IoctlDevice;
 use crate::{Error as DeviceError, Interface, StorageDevice};
-
-use super::GenericDevice;
-
-pub use ioctl::ScsiIoctlDevice;
 
 pub struct ScsiDevice {
     ioctl_device: IoctlDevice,

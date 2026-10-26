@@ -5,10 +5,8 @@
 
 use std::convert::Infallible;
 
-use sed_packet::{
-    Bytes, MaxBytes, Object, ObjectRef, Uid,
-    token_stream::{Detokenize, Detokenizer, MessageError as _, TokenType, Tokenize, Tokenizer},
-};
+use sed_packet::token_stream::{Detokenize, Detokenizer, MessageError as _, TokenType, Tokenize, Tokenizer};
+use sed_packet::{Bytes, MaxBytes, Object, ObjectRef, Uid};
 use sed_spec_macros::{DetokenizeStruct, TokenizeStruct};
 
 use crate::methods::SessionMethodParam;
@@ -301,17 +299,12 @@ pub struct SetResult;
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     use rstest::rstest;
-    use sed_packet::{
-        Uid,
-        token_stream::{
-            ToTokens as _,
-            token::{Atom as _, MediumAtom, ShortAtom, TinyAtom},
-        },
-    };
+    use sed_packet::Uid;
+    use sed_packet::token_stream::ToTokens as _;
+    use sed_packet::token_stream::token::{Atom as _, MediumAtom, ShortAtom, TinyAtom};
 
+    use super::*;
     use crate::methods::{MethodCall, MethodResult, MethodStatus};
 
     #[rstest]

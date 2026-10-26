@@ -3,32 +3,25 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use std::{
-    any::Any,
-    cell::UnsafeCell,
-    ffi::c_void,
-    ops::DerefMut,
-    pin::Pin,
-    sync::{Arc, Mutex, atomic::AtomicPtr},
-    task::{Context, Poll, Waker},
-};
+use std::any::Any;
+use std::cell::UnsafeCell;
+use std::ffi::c_void;
+use std::ops::DerefMut;
+use std::pin::Pin;
+use std::sync::atomic::AtomicPtr;
+use std::sync::{Arc, Mutex};
+use std::task::{Context, Poll, Waker};
 
 use pin_project::pin_project;
-use windows::{
-    Win32::{
-        Foundation::{ERROR_IO_PENDING, HANDLE},
-        Storage::FileSystem::SetFileCompletionNotificationModes,
-        System::{
-            IO::OVERLAPPED,
-            Threading::{
-                CancelThreadpoolIo, CloseThreadpoolIo, CreateThreadpoolIo, PTP_CALLBACK_INSTANCE, PTP_IO,
-                StartThreadpoolIo, TrySubmitThreadpoolCallback, WaitForThreadpoolIoCallbacks,
-            },
-            WindowsProgramming::{FILE_SKIP_COMPLETION_PORT_ON_SUCCESS, FILE_SKIP_SET_EVENT_ON_HANDLE},
-        },
-    },
-    core::{Error as WindowsError, HRESULT},
+use windows::Win32::Foundation::{ERROR_IO_PENDING, HANDLE};
+use windows::Win32::Storage::FileSystem::SetFileCompletionNotificationModes;
+use windows::Win32::System::IO::OVERLAPPED;
+use windows::Win32::System::Threading::{
+    CancelThreadpoolIo, CloseThreadpoolIo, CreateThreadpoolIo, PTP_CALLBACK_INSTANCE, PTP_IO, StartThreadpoolIo,
+    TrySubmitThreadpoolCallback, WaitForThreadpoolIoCallbacks,
 };
+use windows::Win32::System::WindowsProgramming::{FILE_SKIP_COMPLETION_PORT_ON_SUCCESS, FILE_SKIP_SET_EVENT_ON_HANDLE};
+use windows::core::{Error as WindowsError, HRESULT};
 
 #[derive(Debug)]
 pub enum ThreadPoolError {
@@ -302,19 +295,17 @@ extern "system" fn overlapped_io_callback(
 
 #[cfg(test)]
 mod tests {
-    use crate::windows::handle::Handle;
-
-    use super::*;
-
     use std::sync::atomic::{AtomicU64, Ordering};
 
     use googletest::assert_that;
     use googletest::matchers::*;
-    use windows::Win32::Foundation::GENERIC_READ;
-    use windows::Win32::Foundation::GENERIC_WRITE;
+    use windows::Win32::Foundation::{GENERIC_READ, GENERIC_WRITE};
     use windows::Win32::Storage::FileSystem::*;
     use windows::Win32::System::Pipes::*;
     use windows::core::HSTRING;
+
+    use super::*;
+    use crate::windows::handle::Handle;
 
     static PIPE_ID: AtomicU64 = AtomicU64::new(0);
 

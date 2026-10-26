@@ -4,8 +4,11 @@
 //L-----------------------------------------------------------------------------
 
 use sed_manager_gui_slint as ui;
-use sed_packet::{ObjectRef, TableRef, Uid, discovery::FeatureDescriptor};
-use sed_spec::{objects::SecurityProviderRef, path::Path, preconfig::GLOBAL_LOOKUP};
+use sed_packet::discovery::FeatureDescriptor;
+use sed_packet::{ObjectRef, TableRef, Uid};
+use sed_spec::objects::SecurityProviderRef;
+use sed_spec::path::Path;
+use sed_spec::preconfig::GLOBAL_LOOKUP;
 use slint::SharedString;
 
 use crate::ui_conv::{ConversionError, FromBackend, FromBackendName, FromUi, TryFromUi};

@@ -7,6 +7,7 @@ use std::ffi::CStr;
 use std::mem::transmute;
 use std::path::Path;
 
+pub use ioctl::GenericIoctlDevice;
 use tracing::instrument;
 use windows::Win32::Storage::FileSystem::*;
 use windows::Win32::System::Ioctl::{
@@ -16,8 +17,6 @@ use windows::Win32::System::Ioctl::{
 
 use crate::windows::ioctl_device::IoctlDevice;
 use crate::{Error, Interface, StorageDevice};
-
-pub use ioctl::GenericIoctlDevice;
 
 pub struct GenericDevice {
     ioctl_device: IoctlDevice,

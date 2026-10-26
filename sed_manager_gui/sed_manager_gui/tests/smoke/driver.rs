@@ -6,12 +6,11 @@
 use std::time::Duration;
 
 use i_slint_backend_testing::{ElementHandle, ElementRoot};
-use slint::{
-    ComponentHandle, SharedString, Window,
-    platform::{Key, PointerEventButton, WindowEvent},
-};
+use slint::platform::{Key, PointerEventButton, WindowEvent};
+use slint::{ComponentHandle, SharedString, Window};
 
-use crate::{element_handle_ext::ElementHandleEx as _, test_utils::sleep_until_condition};
+use crate::element_handle_ext::ElementHandleEx as _;
+use crate::test_utils::sleep_until_condition;
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum Error {

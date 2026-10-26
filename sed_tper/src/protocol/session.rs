@@ -3,23 +3,18 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use std::{
-    collections::VecDeque,
-    time::{Duration, Instant},
-};
+use std::collections::VecDeque;
+use std::time::{Duration, Instant};
 
 use oneshot::Sender;
-use sed_packet::{Ignore, session_id::SessionId};
+use sed_packet::Ignore;
+use sed_packet::session_id::SessionId;
 use sed_spec::methods::{ExtractResult, MethodResult, SessionProperties, extract_method};
 use tracing::Span;
 
-use crate::{
-    Error,
-    protocol::{
-        sequence_number::SequenceNumber,
-        shared::{PacketAction, eos, link_both_ways, packetize_one},
-    },
-};
+use crate::Error;
+use crate::protocol::sequence_number::SequenceNumber;
+use crate::protocol::shared::{PacketAction, eos, link_both_ways, packetize_one};
 
 #[derive(Debug)]
 pub struct Session {
@@ -262,8 +257,7 @@ mod tests {
 
     use googletest::assert_that;
     use googletest::matchers::*;
-    use oneshot::TryRecvError;
-    use oneshot::channel;
+    use oneshot::{TryRecvError, channel};
     use sed_packet::packet::{Packet, SubPacket, SubPacketKind};
 
     use super::*;

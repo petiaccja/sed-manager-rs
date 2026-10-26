@@ -3,23 +3,19 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use std::{
-    marker::PhantomData,
-    pin::Pin,
-    task::{Context, Poll},
-    time::{Duration, Instant},
-};
+use std::marker::PhantomData;
+use std::pin::Pin;
+use std::task::{Context, Poll};
+use std::time::{Duration, Instant};
 
 use pin_project::pin_project;
 
+use crate::Runtime;
+use crate::runtime::{JoinError, ShutdownError, TimeoutError};
 #[cfg(feature = "slint")]
 use crate::slint_runtime::SlintRuntime;
 #[cfg(feature = "tokio")]
 use crate::tokio_runtime::TokioRuntime;
-use crate::{
-    Runtime,
-    runtime::{JoinError, ShutdownError, TimeoutError},
-};
 
 #[derive(Debug)]
 pub enum PolyRuntime {

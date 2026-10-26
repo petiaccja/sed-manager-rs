@@ -3,15 +3,16 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use std::{
-    fs, io,
-    path::{Path, PathBuf},
-};
+use std::path::{Path, PathBuf};
+use std::{fs, io};
 
 use sed_telemetry::otlp;
-use tracing::{error, level_filters::LevelFilter, warn_span};
+use tracing::level_filters::LevelFilter;
+use tracing::{error, warn_span};
 use tracing_subscriber::filter::{Builder as EnvFilterBuilder, ParseError};
-use tracing_subscriber::{EnvFilter, Registry, layer::SubscriberExt as _, util::SubscriberInitExt as _};
+use tracing_subscriber::layer::SubscriberExt as _;
+use tracing_subscriber::util::SubscriberInitExt as _;
+use tracing_subscriber::{EnvFilter, Registry};
 
 pub fn init_telemetry(log_file: Option<PathBuf>, log_level: Option<&str>) -> Option<otlp::FlushGuard> {
     let registry = Registry::default();

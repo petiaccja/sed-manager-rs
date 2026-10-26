@@ -4,14 +4,12 @@
 //L-----------------------------------------------------------------------------
 
 use core::time::Duration;
-use std::{marker::PhantomData, ops::Range};
+use std::marker::PhantomData;
+use std::ops::Range;
 
-use sorbit::{
-    Deserialize, Serialize,
-    byte_order::ByteOrder,
-    collection,
-    ser_de::{Deserialize, MultiPassSerialize, RevisableSerializer, Serialize, Span},
-};
+use sorbit::byte_order::ByteOrder;
+use sorbit::ser_de::{Deserialize, MultiPassSerialize, RevisableSerializer, Serialize, Span};
+use sorbit::{Deserialize, Serialize, collection};
 
 use crate::com_id::ComId;
 

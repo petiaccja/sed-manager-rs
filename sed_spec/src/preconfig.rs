@@ -22,15 +22,12 @@ pub const GLOBAL_LOOKUP: GlobalLookup = GlobalLookup;
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
-    use crate::{
-        lookup::{FeatureLookup, SecurityProviderLookup, TableLookup},
-        path::Path,
-    };
+    use rstest::rstest;
     use sed_packet::{TableRef, Uid};
 
-    use rstest::rstest;
+    use super::*;
+    use crate::lookup::{FeatureLookup, SecurityProviderLookup, TableLookup};
+    use crate::path::Path;
 
     #[rstest]
     #[case(&self::core::LOOKUP)]

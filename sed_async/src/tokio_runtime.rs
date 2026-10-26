@@ -3,17 +3,13 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use std::{
-    pin::Pin,
-    task::{Context, Poll},
-};
+use std::pin::Pin;
+use std::task::{Context, Poll};
 
 use pin_project::pin_project;
 
-use crate::{
-    Runtime,
-    runtime::{JoinError, ShutdownError, TimeoutError},
-};
+use crate::Runtime;
+use crate::runtime::{JoinError, ShutdownError, TimeoutError};
 
 #[derive(Debug)]
 pub enum TokioRuntime {
@@ -156,14 +152,13 @@ where
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+    use std::time::{Duration, Instant};
+
+    use googletest::assert_that;
+    use googletest::matchers::*;
+
     use super::*;
-
-    use std::{
-        sync::Arc,
-        time::{Duration, Instant},
-    };
-
-    use googletest::{assert_that, matchers::*};
 
     #[test]
     fn spawn() {

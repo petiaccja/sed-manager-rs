@@ -5,7 +5,8 @@
 
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::{Data, DeriveInput, Error, Member, spanned::Spanned};
+use syn::spanned::Spanned;
+use syn::{Data, DeriveInput, Error, Member};
 
 pub fn tokenize_field(input: DeriveInput) -> Result<TokenStream, Error> {
     let Data::Struct(data) = &input.data else {

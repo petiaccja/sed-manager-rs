@@ -6,7 +6,6 @@
 use std::collections::{BTreeMap, HashSet, VecDeque};
 use std::ops::{Add, Bound, Range};
 
-use crate::internal_error::Expect;
 use sed_packet::packet::{Packet, SubPacket, SubPacketKind};
 use sed_packet::session_id::SessionId;
 use sed_packet::token_stream::{Command, ToTokens, Tokenize, Tokenizer};
@@ -27,6 +26,7 @@ use sed_spec::preconfig::core::shared::invoking_id::THIS_SP;
 use sed_spec::preconfig::core::shared::table_id;
 use sed_spec::types::LifeCycleState;
 
+use crate::internal_error::Expect;
 use crate::tper::{Locking, SecurityProvider, Table, Tper};
 
 #[derive(Debug)]
@@ -167,8 +167,7 @@ impl Session {
     }
 
     fn activate(&self, tper: &mut Tper, invoking_id: Uid, params: &Activate) -> Result<ActivateResult, MethodStatus> {
-        use sed_spec::preconfig::opal_2::admin;
-        use sed_spec::preconfig::opal_2::locking;
+        use sed_spec::preconfig::opal_2::{admin, locking};
 
         self.check_permission(tper, invoking_id, params.method_id(), [0].into_iter())?;
 

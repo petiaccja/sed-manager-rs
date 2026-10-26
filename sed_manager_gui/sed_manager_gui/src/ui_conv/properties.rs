@@ -4,7 +4,8 @@
 //L-----------------------------------------------------------------------------
 
 use sed_manager_gui_slint as ui;
-use sed_spec::{methods::Properties, property_name};
+use sed_spec::methods::Properties;
+use sed_spec::property_name;
 use slint::{ToSharedString, VecModel};
 
 use crate::ui_conv::{FromBackend, IntoUi};

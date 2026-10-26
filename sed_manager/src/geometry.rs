@@ -52,9 +52,9 @@ impl Default for Alignment {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     use rstest::rstest;
+
+    use super::*;
 
     // Only because writing it constructor out in rstest cases is too long.
     fn alignment(alignment_required: bool, alignment_granularity: u64, lowest_aligned_lba: u64) -> Alignment {

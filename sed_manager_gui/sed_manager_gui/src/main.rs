@@ -4,16 +4,15 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use std::{path::PathBuf, sync::Arc};
+use std::path::PathBuf;
+use std::sync::Arc;
 
 use clap::Parser;
 use sed_async::{PolyRuntime, TokioRuntime};
 use sed_manager::Host;
-use sed_manager_gui::{
-    app::App,
-    telemetry::{init_telemetry, parse_log_filter},
-    toast::ToastQueue,
-};
+use sed_manager_gui::app::App;
+use sed_manager_gui::telemetry::{init_telemetry, parse_log_filter};
+use sed_manager_gui::toast::ToastQueue;
 use sed_manager_gui_slint::{self as ui};
 use slint::ComponentHandle as _;
 

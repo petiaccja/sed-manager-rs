@@ -15,12 +15,10 @@ mod windows;
 #[cfg(target_os = "linux")]
 mod linux;
 
-#[cfg(target_os = "windows")]
-use windows as os;
-
+pub use error::Error;
 #[cfg(target_os = "linux")]
 use linux as os;
-
-pub use error::Error;
 pub use os::{list_storage_devices, open_storage_device};
 pub use storage_device::{Interface, StorageDevice};
+#[cfg(target_os = "windows")]
+use windows as os;

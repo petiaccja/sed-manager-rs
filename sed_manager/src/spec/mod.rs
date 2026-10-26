@@ -10,9 +10,9 @@ mod locking;
 pub use admin::Admin;
 pub use kpio::Kpio;
 pub use locking::Locking;
-
 use sed_packet::discovery::{Discovery, FeatureDescriptor, SscFeatureDescriptor};
-use sed_spec::{objects::SecurityProviderRef, preconfig::psid};
+use sed_spec::objects::SecurityProviderRef;
+use sed_spec::preconfig::psid;
 
 use crate::spec::admin::{AuthorityTable, CPinTable};
 

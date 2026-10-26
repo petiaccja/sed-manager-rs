@@ -5,17 +5,13 @@
 
 use std::collections::BTreeMap;
 
-use sed_spec::{
-    objects::{LockingRange, LockingRangeRef},
-    preconfig::opal_2::locking::locking::GLOBAL_RANGE,
-};
+use sed_spec::objects::{LockingRange, LockingRangeRef};
+use sed_spec::preconfig::opal_2::locking::locking::GLOBAL_RANGE;
 
-use crate::{
-    Alignment,
-    set_plan::{
-        MatchCurrent, ObjectChange, PlanError, diff_field, fill_in_desired_values, is_matching_current_field,
-        map_current_by_uid,
-    },
+use crate::Alignment;
+use crate::set_plan::{
+    MatchCurrent, ObjectChange, PlanError, diff_field, fill_in_desired_values, is_matching_current_field,
+    map_current_by_uid,
 };
 
 pub type LockingRangeChange = ObjectChange<LockingRange>;
@@ -273,12 +269,13 @@ impl MatchCurrent for LockingRange {
 mod tests {
     use std::num::NonZero;
 
-    use super::*;
-
-    use googletest::{assert_that, matchers::*};
+    use googletest::assert_that;
+    use googletest::matchers::*;
     use rstest::rstest;
     use sed_packet::UidRange;
     use sed_spec::objects::LockingRangeRef;
+
+    use super::*;
 
     const RANGE_UID: UidRange<LockingRangeRef> = UidRange {
         start: LockingRangeRef::from_half(NonZero::new(1).unwrap()),

@@ -5,21 +5,17 @@
 
 use std::sync::Arc;
 
-use googletest::{assert_that, matchers::*};
+use googletest::assert_that;
+use googletest::matchers::*;
 use sed_async::{PolyRuntime, TokioRuntime};
 use sed_manager::{Alignment, Error, LockingConfigSession, LockingRangePlanError, SetupSession, Spec};
-use sed_packet::{
-    MaxBytes,
-    com_id::ComIdExt,
-    discovery::{FeatureDescriptor, LockingDescriptor},
-};
-use sed_spec::{
-    objects::{Authority, AuthorityRef, LockingRange, LockingRangeRef, MbrControl, MediaKeyRef},
-    preconfig::{
-        core::shared::mbr_control,
-        opal_2::{admin::sp, locking as opal_locking},
-    },
-};
+use sed_packet::MaxBytes;
+use sed_packet::com_id::ComIdExt;
+use sed_packet::discovery::{FeatureDescriptor, LockingDescriptor};
+use sed_spec::objects::{Authority, AuthorityRef, LockingRange, LockingRangeRef, MbrControl, MediaKeyRef};
+use sed_spec::preconfig::core::shared::mbr_control;
+use sed_spec::preconfig::opal_2::admin::sp;
+use sed_spec::preconfig::opal_2::locking as opal_locking;
 use sed_telemetry::with_tracing;
 use sed_tper::Tper;
 use sed_virtual_device::{BASE_COM_ID, LOGICAL_SECTOR_COUNT, VirtualDevice};

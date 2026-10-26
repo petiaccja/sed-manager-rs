@@ -3,13 +3,11 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use std::{
-    collections::HashSet,
-    io,
-    path::{Path, PathBuf},
-    rc::{Rc, Weak},
-    sync::{Arc, Mutex},
-};
+use std::collections::HashSet;
+use std::io;
+use std::path::{Path, PathBuf};
+use std::rc::{Rc, Weak};
+use std::sync::{Arc, Mutex};
 
 use async_broadcast::RecvError;
 use async_lock::RwLock;
@@ -17,12 +15,12 @@ use futures::AsyncReadExt;
 use sed_async::PolyRuntime;
 use sed_manager::{Device, Error as SedError, Geometry, Host, Spec};
 use sed_manager_gui_slint as ui;
-use sed_packet::{MaxBytes, com_id_request::ComIdState};
-use sed_spec::{
-    methods::MethodStatus,
-    objects::{Authority, AuthorityRef, LockingRangeRef, MbrControl, SecurityProviderRef},
-    preconfig::{core::shared::authority::ANYBODY, opal_2::locking},
-};
+use sed_packet::MaxBytes;
+use sed_packet::com_id_request::ComIdState;
+use sed_spec::methods::MethodStatus;
+use sed_spec::objects::{Authority, AuthorityRef, LockingRangeRef, MbrControl, SecurityProviderRef};
+use sed_spec::preconfig::core::shared::authority::ANYBODY;
+use sed_spec::preconfig::opal_2::locking;
 use sed_tper::{Error as TperError, PropertiesChanged};
 use slint::{
     CloseRequestResponse, ComponentHandle, Model, ModelExt as _, ModelRc, SharedString, ToSharedString,
@@ -30,18 +28,16 @@ use slint::{
 };
 use tracing::{Instrument, Span, debug, error, info_span, instrument};
 
-use crate::{
-    Error,
-    algorithm::sector_lib,
-    command::{Command, ExpectInEventLoop},
-    device_list::{DeviceEntry, DeviceList},
-    diff_model::{self, DiffModel},
-    error::FileError,
-    session::Session,
-    toast::ToastQueue,
-    ui_conv::{CombinedProperties, ConversionError, FromUi as _, IntoUi, IntoUiName, MbrDesc, TryFromUi},
-    ui_ext::{DeviceExt as _, DiscoveryExt, StackStatusExt},
-};
+use crate::Error;
+use crate::algorithm::sector_lib;
+use crate::command::{Command, ExpectInEventLoop};
+use crate::device_list::{DeviceEntry, DeviceList};
+use crate::diff_model::{self, DiffModel};
+use crate::error::FileError;
+use crate::session::Session;
+use crate::toast::ToastQueue;
+use crate::ui_conv::{CombinedProperties, ConversionError, FromUi as _, IntoUi, IntoUiName, MbrDesc, TryFromUi};
+use crate::ui_ext::{DeviceExt as _, DiscoveryExt, StackStatusExt};
 
 pub struct App {
     ui: ui::MainWindow,

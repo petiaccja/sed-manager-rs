@@ -3,15 +3,12 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use sed_packet::{
-    Named,
-    token_stream::{Detokenize, Detokenizer, MessageError, Tokenize, Tokenizer},
-};
+use sed_packet::Named;
+use sed_packet::token_stream::{Detokenize, Detokenizer, MessageError, Tokenize, Tokenizer};
 
-use crate::{
-    objects::AuthorityRef,
-    types::{Type, boolean_op::BooleanOp},
-};
+use crate::objects::AuthorityRef;
+use crate::types::Type;
+use crate::types::boolean_op::BooleanOp;
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum AceOperand {

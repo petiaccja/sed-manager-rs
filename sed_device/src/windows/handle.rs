@@ -5,8 +5,7 @@
 
 use std::path::Path;
 
-use windows::Win32::Foundation::*;
-use windows::Win32::Foundation::{CloseHandle, HANDLE, INVALID_HANDLE_VALUE};
+use windows::Win32::Foundation::{CloseHandle, HANDLE, INVALID_HANDLE_VALUE, *};
 use windows::Win32::Storage::FileSystem::*;
 use windows::core::HSTRING;
 

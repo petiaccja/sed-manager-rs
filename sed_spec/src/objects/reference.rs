@@ -3,12 +3,11 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use sed_packet::{
-    ObjectRef, Uid,
-    token_stream::{Detokenize, Detokenizer, MessageError, Tokenize, Tokenizer},
-};
+use sed_packet::token_stream::{Detokenize, Detokenizer, MessageError, Tokenize, Tokenizer};
+use sed_packet::{ObjectRef, Uid};
 
-use crate::{preconfig::core::shared::table_id, types::Type};
+use crate::preconfig::core::shared::table_id;
+use crate::types::Type;
 
 /// The UID of an object in the ACE table.
 pub type AceRef = ObjectRef<{ table_id::ACE.to_u64() }>;
@@ -145,10 +144,10 @@ impl Detokenize for MediaKeyRef {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use rstest::rstest;
     use sed_packet::token_stream::{FromTokens, ToTokens};
 
+    use super::*;
     use crate::preconfig::opal_2::locking::{k_aes_128, k_aes_256, locking};
 
     #[rstest]

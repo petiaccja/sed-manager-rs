@@ -3,13 +3,13 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use std::{cmp::min, marker::PhantomData, time::Instant};
+use std::cmp::min;
+use std::marker::PhantomData;
+use std::time::Instant;
 
-use sed_packet::{
-    packet::{Packet, SubPacket, SubPacketKind},
-    session_id::SessionId,
-    token_stream::{Command, ToTokens as _},
-};
+use sed_packet::packet::{Packet, SubPacket, SubPacketKind};
+use sed_packet::session_id::SessionId;
+use sed_packet::token_stream::{Command, ToTokens as _};
 use sed_spec::methods::{Properties, SessionProperties, SyncSession};
 use tracing::Span;
 
@@ -77,20 +77,16 @@ pub struct StartedSession {
 
 #[cfg(test)]
 pub mod tests {
-    use sed_packet::{Bytes, session_id::SessionId, token_stream::ToTokens as _};
-    use sed_spec::{
-        methods::{
-            CloseSession, MethodCall, MethodParam, MethodResult, MethodStatus, Random, RandomResult,
-            SessionMethodParam as _, StartSession, SyncSession,
-        },
-        preconfig::{
-            core::shared::{
-                invoking_id::{SESSION_MANAGER, THIS_SP},
-                sm_method_id::{START_SESSION, SYNC_SESSION},
-            },
-            opal_2::admin::sp,
-        },
+    use sed_packet::Bytes;
+    use sed_packet::session_id::SessionId;
+    use sed_packet::token_stream::ToTokens as _;
+    use sed_spec::methods::{
+        CloseSession, MethodCall, MethodParam, MethodResult, MethodStatus, Random, RandomResult,
+        SessionMethodParam as _, StartSession, SyncSession,
     };
+    use sed_spec::preconfig::core::shared::invoking_id::{SESSION_MANAGER, THIS_SP};
+    use sed_spec::preconfig::core::shared::sm_method_id::{START_SESSION, SYNC_SESSION};
+    use sed_spec::preconfig::opal_2::admin::sp;
 
     pub fn start_session_call(session_id: SessionId) -> MethodCall<StartSession> {
         MethodCall {

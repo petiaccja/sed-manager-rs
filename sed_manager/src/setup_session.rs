@@ -4,19 +4,17 @@
 //L-----------------------------------------------------------------------------
 
 use sed_packet::MaxBytes;
-use sed_spec::{
-    methods::MethodStatus,
-    objects::{
-        Authority, AuthorityRef, AuthorityRefExt as _, CPinRef, CPinRefExt, SecurityProviderRef, SecurityProviderRefExt,
-    },
-    preconfig::core::shared::table_id,
-    types::LifeCycleState,
+use sed_spec::methods::MethodStatus;
+use sed_spec::objects::{
+    Authority, AuthorityRef, AuthorityRefExt as _, CPinRef, CPinRefExt, SecurityProviderRef, SecurityProviderRefExt,
 };
-use sed_tper::Tper;
-use sed_tper::{Error as TperError, TperHandle};
+use sed_spec::preconfig::core::shared::table_id;
+use sed_spec::types::LifeCycleState;
+use sed_tper::{Error as TperError, Tper, TperHandle};
 use tracing::instrument;
 
-use crate::{error::Error, spec::Spec};
+use crate::error::Error;
+use crate::spec::Spec;
 
 /// Performs simple device setup and information retrieval operations.
 ///

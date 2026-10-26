@@ -37,9 +37,9 @@ impl PartialOrd for SequenceNumber {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     use rstest::rstest;
+
+    use super::*;
 
     #[rstest]
     #[case(SequenceNumber(1), SequenceNumber(2), true)]

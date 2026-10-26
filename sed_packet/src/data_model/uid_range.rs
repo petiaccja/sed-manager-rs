@@ -114,9 +114,8 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::ObjectRef;
-
     use super::*;
+    use crate::ObjectRef;
 
     const START: ObjectRef<0x0000_0001_0000_0000> = ObjectRef::new(0x0000_0001_0000_0001);
     const END: ObjectRef<0x0000_0001_0000_0000> = ObjectRef::new(0x0000_0001_0000_0005);
