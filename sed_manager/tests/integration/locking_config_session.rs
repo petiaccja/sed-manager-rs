@@ -393,7 +393,7 @@ async fn write_mbr() {
 
     device.inspect(|tper| {
         assert!(tper.locking_sp().unwrap().mbr[0..500].iter().all(|x| *x == 0));
-        assert!(&tper.locking_sp().unwrap().mbr[500..987653] == &data);
-        assert!(&tper.locking_sp().unwrap().mbr[987653..988154].iter().all(|x| *x == 0));
+        assert!(tper.locking_sp().unwrap().mbr[500..987653] == data);
+        assert!(tper.locking_sp().unwrap().mbr[987653..988154].iter().all(|x| *x == 0));
     });
 }

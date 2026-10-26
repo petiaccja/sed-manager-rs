@@ -832,9 +832,12 @@ impl App {
                 // once the progress is first broadcast below, so requests
                 // meant for this upload can't arrive before this point.
                 cancel_requests.lock().unwrap().remove(&device_path_);
-                let mut file = async_fs::File::open(&image_path).await.map_err(FileError::Io)?;
+                let mut file = async_fs::File::open(&image_path)
+                    .await
+                    .map_err(|cause| FileError::Io { file: image_path.clone(), cause })?;
 
-                let metadata = file.metadata().await.map_err(FileError::Io)?;
+                let metadata =
+                    file.metadata().await.map_err(|cause| FileError::Io { file: image_path.clone(), cause })?;
                 let file_len = metadata.len();
                 let mbr_len = locking_session.get_mbr_size().await? as u64;
                 Span::current().record("file_len", file_len);
@@ -853,7 +856,7 @@ impl App {
                         Ok(0) => break Ok(()),
                         Ok(bytes_read) => bytes_read,
                         Err(err) if err.kind() == io::ErrorKind::UnexpectedEof => break Ok(()),
-                        Err(err) => break Err(FileError::Io(err).into()),
+                        Err(cause) => break Err(FileError::Io { file: image_path, cause }.into()),
                     };
                     let chunk = &buffer[..bytes_read];
                     locking_session.write_mbr(offset, chunk).await?;
