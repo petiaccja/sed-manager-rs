@@ -16,20 +16,17 @@ pub use locking::Locking;
 pub use opal_2::Opal2Tper;
 pub use preconfig_shared::{INITIAL_SID_PASSWORD, PSID_PASSWORD};
 pub use security_provider::{SecurityProvider, Table};
-
 use sed_packet::discovery::{
     BlockSIDAuthDescriptor, Discovery, FeatureDescriptor, GeometryDescriptor, LockingDescriptor, OpalV2Descriptor,
     OwnerPasswordState, TperDescriptor,
 };
+use sed_spec::methods::{MethodStatus, Properties};
+use sed_spec::objects::SecurityProviderRef;
+use sed_spec::preconfig::opal_2::admin::c_pin;
+use sed_spec::types::LifeCycleState;
 use sorbit::ser_de::ToBytes;
 
 use crate::device::{BASE_COM_ID, NUM_COM_IDS};
-use sed_spec::{
-    methods::{MethodStatus, Properties},
-    objects::SecurityProviderRef,
-    preconfig::opal_2::admin::c_pin,
-    types::LifeCycleState,
-};
 
 #[derive(Debug)]
 pub enum Tper {

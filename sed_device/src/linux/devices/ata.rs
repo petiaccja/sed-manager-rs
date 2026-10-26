@@ -14,6 +14,7 @@
 use std::io;
 use std::path::Path;
 
+pub use ioctl::AtaIoctlDevice;
 use sorbit::ser_de::FromBytes as _;
 use tracing::instrument;
 
@@ -21,8 +22,6 @@ use crate::linux::devices::generic::GenericIoctlDevice as _;
 use crate::linux::ioctl_device::IoctlDevice;
 use crate::shared::ata::{AtaError, IdentifyDevice};
 use crate::{Error as DeviceError, Interface, StorageDevice};
-
-pub use ioctl::AtaIoctlDevice;
 
 #[derive(Debug)]
 pub struct AtaDevice {

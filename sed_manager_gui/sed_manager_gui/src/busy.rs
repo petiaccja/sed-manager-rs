@@ -93,9 +93,9 @@ fn display_resource_status(device_list: &DeviceList, device_id: &Path, resource:
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     use sed_manager_gui_slint as ui;
+
+    use super::*;
 
     fn device_list(device_id: &Path) -> DeviceList {
         let mut device_list = DeviceList::default();

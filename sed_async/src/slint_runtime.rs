@@ -3,23 +3,19 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use std::{
-    any::Any,
-    panic::AssertUnwindSafe,
-    pin::Pin,
-    task::{Context, Poll},
-    time::{Duration, Instant},
-};
+use std::any::Any;
+use std::panic::AssertUnwindSafe;
+use std::pin::Pin;
+use std::task::{Context, Poll};
+use std::time::{Duration, Instant};
 
 use futures::future::FutureExt as _;
 use pin_project::pin_project;
 use slint::EventLoopError;
 
-use crate::{
-    Runtime,
-    runtime::{JoinError, ShutdownError, TimeoutError},
-    sync_wrapper::SyncWrapper,
-};
+use crate::Runtime;
+use crate::runtime::{JoinError, ShutdownError, TimeoutError};
+use crate::sync_wrapper::SyncWrapper;
 
 #[derive(Debug)]
 pub struct SlintRuntime;
@@ -211,11 +207,12 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     use std::sync::{Arc, OnceLock};
 
-    use googletest::{assert_that, matchers::*};
+    use googletest::assert_that;
+    use googletest::matchers::*;
+
+    use super::*;
 
     static EVENT_LOOP_INITIALIZED: OnceLock<std::thread::JoinHandle<()>> = OnceLock::new();
 

@@ -3,7 +3,9 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use std::{collections::VecDeque, path::Path, sync::Mutex};
+use std::collections::VecDeque;
+use std::path::Path;
+use std::sync::Mutex;
 
 use crate::{Error, Interface, StorageDevice};
 

@@ -6,7 +6,9 @@
 use std::sync::OnceLock;
 
 use tracing::{error, warn_span};
-use tracing_subscriber::{Registry, layer::SubscriberExt, util::SubscriberInitExt};
+use tracing_subscriber::Registry;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
 
 use crate::otlp;
 

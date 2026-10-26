@@ -5,10 +5,10 @@
 
 use proc_macro2::{Span, TokenStream};
 use quote::{ToTokens, format_ident, quote};
-use syn::{
-    Attribute, Data, DataStruct, DeriveInput, Error, Expr, Member, Meta, punctuated::Punctuated, spanned::Spanned,
-    token::Comma,
-};
+use syn::punctuated::Punctuated;
+use syn::spanned::Spanned;
+use syn::token::Comma;
+use syn::{Attribute, Data, DataStruct, DeriveInput, Error, Expr, Member, Meta};
 
 use crate::type_ext::TypeExt;
 

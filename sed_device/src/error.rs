@@ -3,15 +3,12 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use crate::shared::ata;
-use crate::shared::nvme;
-
-use crate::shared::scsi;
 #[cfg(target_os = "windows")]
 use windows::core::Error as PlatformError;
 
 #[cfg(target_os = "linux")]
 use crate::linux::Error as PlatformError;
+use crate::shared::{ata, nvme, scsi};
 
 #[derive(Debug, PartialEq, Eq, Clone, thiserror::Error)]
 pub enum Error {

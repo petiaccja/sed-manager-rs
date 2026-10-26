@@ -3,7 +3,8 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use std::{num::NonZero, time::Duration};
+use std::num::NonZero;
+use std::time::Duration;
 
 use sed_spec::methods::{Limit, OptionalLimit};
 use slint::{SharedString, ToSharedString};

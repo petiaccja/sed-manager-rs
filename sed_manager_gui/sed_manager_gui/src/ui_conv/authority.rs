@@ -53,11 +53,11 @@ impl TryFromUi<&ui::Authority> for Authority {
 
 #[cfg(test)]
 mod tests {
+    use googletest::assert_that;
+    use googletest::matchers::*;
     use sed_spec::preconfig::opal_2;
 
     use super::*;
-
-    use googletest::{assert_that, matchers::*};
 
     // A sanity check for accidentally mixing up all the booleans and the length
     // conversion logic.

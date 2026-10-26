@@ -5,11 +5,9 @@
 
 use sed_packet::{Object, TableRef};
 
-use crate::{
-    objects::{AccessControlRef, AceRef, LogListRef},
-    preconfig::core::shared::table_id,
-    types::LogSelect,
-};
+use crate::objects::{AccessControlRef, AceRef, LogListRef};
+use crate::preconfig::core::shared::table_id;
+use crate::types::LogSelect;
 
 #[derive(Debug)]
 pub struct AccessControl {

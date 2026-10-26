@@ -4,9 +4,9 @@
 //L-----------------------------------------------------------------------------
 
 use sed_device::StorageDevice;
+use sed_manager_gui_slint as ui;
 
 use crate::ui_conv::FromBackend;
-use sed_manager_gui_slint as ui;
 
 impl FromBackend<&dyn StorageDevice> for ui::Identity {
     fn from_backend(value: &dyn StorageDevice) -> Self {

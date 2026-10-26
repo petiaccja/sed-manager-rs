@@ -7,21 +7,19 @@ use core::ffi::c_void;
 use std::mem::transmute;
 use std::path::Path;
 
+pub use ioctl::AtaIoctlDevice;
 use sorbit::ser_de::FromBytes;
 use tracing::instrument;
 use windows::Win32::Storage::IscsiDisc::{
     ATA_FLAGS_DATA_IN, ATA_FLAGS_DATA_OUT, ATA_FLAGS_USE_DMA, ATA_PASS_THROUGH_DIRECT, IOCTL_ATA_PASS_THROUGH_DIRECT,
 };
 
+use super::GenericDevice;
 use crate::shared::aligned_array::AlignedArray;
 use crate::shared::ata::{AtaError, IdentifyDevice, Input};
 use crate::windows::devices::generic::{DeviceDesc, GenericIoctlDevice};
 use crate::windows::ioctl_device::IoctlDevice;
 use crate::{Error as DeviceError, Interface, StorageDevice};
-
-use super::GenericDevice;
-
-pub use ioctl::AtaIoctlDevice;
 
 pub struct AtaDevice {
     ioctl_device: IoctlDevice,

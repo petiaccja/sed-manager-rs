@@ -3,8 +3,9 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
+use std::collections::HashMap;
 use std::path::PathBuf;
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 use async_lock::{Mutex, RwLock};
 use sed_manager::Device;

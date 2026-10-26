@@ -6,11 +6,10 @@
 use sorbit::io::{FixedMemoryStream, GrowingMemoryStream};
 use sorbit::stream_ser_de::{StreamDeserializer, StreamSerializer};
 
-use crate::token_stream::MessageError;
-use crate::token_stream::token::Token;
-
 use super::command::Command;
 use super::error::Error;
+use crate::token_stream::MessageError;
+use crate::token_stream::token::Token;
 
 pub trait Tokenize {
     fn tokenize<T: Tokenizer>(&self, tokenizer: &mut T) -> Result<(), T::Error>;

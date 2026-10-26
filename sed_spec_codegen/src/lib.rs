@@ -3,10 +3,12 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use std::{collections::HashMap, str::FromStr as _};
+use std::collections::HashMap;
+use std::str::FromStr as _;
 
 use quote::{format_ident, quote};
-use serde::{Deserialize, Deserializer, de::Error as _};
+use serde::de::Error as _;
+use serde::{Deserialize, Deserializer};
 use syn::{Expr, File, Ident, ItemConst, ItemMod, parse_quote};
 
 type Error = Box<dyn std::error::Error>;

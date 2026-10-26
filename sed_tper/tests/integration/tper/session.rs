@@ -5,26 +5,20 @@
 
 use std::sync::Arc;
 
-use googletest::{assert_that, matchers::*};
+use googletest::assert_that;
+use googletest::matchers::*;
 use sed_async::{PolyRuntime, TokioRuntime};
-use sed_packet::{
-    com_id::ComIdExt,
-    discovery::LockingDescriptor,
-    token_stream::token::{Atom as _, MediumAtom},
-};
-use sed_spec::{
-    methods::{GetBytesResult, MethodStatus, Properties, SessionProperties, SetBytes},
-    objects::{AuthorityRef, CPin, CPinRefExt, SecurityProviderRef},
-    preconfig::{
-        core::shared::{self, method_id, table_id},
-        opal_2::{
-            admin::{self, sp},
-            locking,
-        },
-    },
-};
+use sed_packet::com_id::ComIdExt;
+use sed_packet::discovery::LockingDescriptor;
+use sed_packet::token_stream::token::{Atom as _, MediumAtom};
+use sed_spec::methods::{GetBytesResult, MethodStatus, Properties, SessionProperties, SetBytes};
+use sed_spec::objects::{AuthorityRef, CPin, CPinRefExt, SecurityProviderRef};
+use sed_spec::preconfig::core::shared::{self, method_id, table_id};
+use sed_spec::preconfig::opal_2::admin::{self, sp};
+use sed_spec::preconfig::opal_2::locking;
 use sed_telemetry::with_tracing;
-use sed_tper::{Error, Session, Tper, protocol::Protocol};
+use sed_tper::protocol::Protocol;
+use sed_tper::{Error, Session, Tper};
 use sed_virtual_device::{BASE_COM_ID, INITIAL_SID_PASSWORD, VirtualDevice};
 use tokio::task::JoinHandle;
 use tracing::instrument;

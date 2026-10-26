@@ -5,10 +5,8 @@
 
 use std::ops::{Add, Sub};
 
-use sed_packet::{
-    ObjectRef, TableRef, Uid, UidRange,
-    discovery::{FeatureDescriptor, SscFeatureDescriptor},
-};
+use sed_packet::discovery::{FeatureDescriptor, SscFeatureDescriptor};
+use sed_packet::{ObjectRef, TableRef, Uid, UidRange};
 
 use crate::path::Path;
 

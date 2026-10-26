@@ -3,20 +3,18 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use std::{collections::BTreeSet, sync::Arc};
+use std::collections::BTreeSet;
+use std::sync::Arc;
 
-use googletest::{assert_that, matchers::*};
+use googletest::assert_that;
+use googletest::matchers::*;
 use sed_async::{PolyRuntime, TokioRuntime};
 use sed_manager::{Error, SetupSession};
-use sed_packet::{
-    MaxBytes,
-    com_id::ComIdExt,
-    discovery::{BlockSIDAuthDescriptor, LockingDescriptor},
-};
-use sed_spec::preconfig::{
-    opal_2::{admin as opal_admin, locking as opal_locking},
-    psid,
-};
+use sed_packet::MaxBytes;
+use sed_packet::com_id::ComIdExt;
+use sed_packet::discovery::{BlockSIDAuthDescriptor, LockingDescriptor};
+use sed_spec::preconfig::opal_2::{admin as opal_admin, locking as opal_locking};
+use sed_spec::preconfig::psid;
 use sed_telemetry::with_tracing;
 use sed_tper::Tper;
 use sed_virtual_device::{BASE_COM_ID, INITIAL_SID_PASSWORD, PSID_PASSWORD, VirtualDevice};

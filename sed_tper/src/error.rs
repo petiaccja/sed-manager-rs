@@ -3,11 +3,11 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
+use sed_device::Error as DeviceError;
+use sed_packet::Uid;
+use sed_packet::token_stream::Error as TokenError;
 use sed_spec::methods::MethodStatus;
 use sorbit::error::Error as SorbitError;
-
-use sed_device::Error as DeviceError;
-use sed_packet::{Uid, token_stream::Error as TokenError};
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum Error {

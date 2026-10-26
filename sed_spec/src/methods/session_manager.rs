@@ -5,17 +5,14 @@
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use sed_packet::{
-    Bytes, MaxBytes, Named, Uid,
-    token_stream::{Detokenize, Detokenizer, MessageError as _, TokenType, Tokenize, Tokenizer},
-};
+use sed_packet::token_stream::{Detokenize, Detokenizer, MessageError as _, TokenType, Tokenize, Tokenizer};
+use sed_packet::{Bytes, MaxBytes, Named, Uid};
 use sed_spec_macros::{DetokenizeStruct, TokenizeStruct};
 
-use crate::{
-    methods::{MethodParam, properties::Properties},
-    objects::{AuthorityRef, SecurityProviderRef},
-    preconfig::core::shared::sm_method_id,
-};
+use crate::methods::MethodParam;
+use crate::methods::properties::Properties;
+use crate::objects::{AuthorityRef, SecurityProviderRef};
+use crate::preconfig::core::shared::sm_method_id;
 
 //------------------------------------------------------------------------------
 // Properties

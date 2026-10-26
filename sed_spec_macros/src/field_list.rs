@@ -5,7 +5,8 @@
 
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
-use syn::{Data, DeriveInput, Error, spanned::Spanned as _};
+use syn::spanned::Spanned as _;
+use syn::{Data, DeriveInput, Error};
 
 use crate::type_ext::TypeExt as _;
 

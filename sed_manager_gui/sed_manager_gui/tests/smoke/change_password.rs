@@ -8,7 +8,8 @@ use std::time::Duration;
 
 use sed_async::{PolyRuntime, SlintRuntime};
 use sed_manager::Host;
-use sed_manager_gui::{app::App, toast::ToastQueue};
+use sed_manager_gui::app::App;
+use sed_manager_gui::toast::ToastQueue;
 use sed_manager_gui_slint as ui;
 use sed_virtual_device::INITIAL_SID_PASSWORD;
 use slint::ComponentHandle as _;

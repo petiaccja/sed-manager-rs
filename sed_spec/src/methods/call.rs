@@ -315,11 +315,11 @@ impl Detokenize for SessionMethodCall {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     use rstest::rstest;
     use sed_packet::token_stream::{FromTokens as _, ToTokens as _};
     use sed_spec_macros::{DetokenizeStruct, TokenizeStruct};
+
+    use super::*;
 
     #[derive(Debug, Clone, PartialEq, Eq, DetokenizeStruct, TokenizeStruct)]
     struct Parameters {

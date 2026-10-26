@@ -5,13 +5,12 @@
 
 use std::time::Duration;
 
-use sed_packet::com_id::{ComId, ComIdExt};
-use sorbit::ser_de::ToBytes;
-
 use sed_device::Error as DeviceError;
 use sed_device::mock_device::MockEvent;
+use sed_packet::com_id::{ComId, ComIdExt};
 use sed_packet::packet::{ComPacket, Packet, SubPacket, SubPacketKind};
 use sed_packet::token_stream::ToTokens;
+use sorbit::ser_de::ToBytes;
 
 pub const TEST_TIMEOUT: Duration = Duration::from_secs(5);
 

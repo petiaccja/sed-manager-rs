@@ -4,7 +4,6 @@
 //L-----------------------------------------------------------------------------
 
 use rstest::rstest;
-
 use sed_packet::token_stream::{FromTokens, ToTokens};
 use sed_spec_macros::{DetokenizeStruct, TokenizeStruct};
 

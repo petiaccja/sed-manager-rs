@@ -8,11 +8,9 @@ use core::num::NonZero;
 use core::time::Duration;
 use std::cmp::Ordering;
 
+use sed_packet::Named;
 use sed_packet::packet::{COM_PACKET_HEADER_LEN, PACKET_HEADER_LEN, SUB_PACKET_HEADER_LEN};
-use sed_packet::{
-    Named,
-    token_stream::{Detokenize, Detokenizer, Tokenize, Tokenizer},
-};
+use sed_packet::token_stream::{Detokenize, Detokenizer, Tokenize, Tokenizer};
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Properties {
@@ -551,11 +549,10 @@ impl Detokenize for OptionalLimit<Duration> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     use rstest::rstest;
-
     use sed_packet::token_stream::{FromTokens, ToTokens};
+
+    use super::*;
 
     #[rstest]
     #[case::unlimited(Limit::Unlimited, &[0])]

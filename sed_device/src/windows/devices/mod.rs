@@ -10,14 +10,12 @@ mod scsi;
 
 use std::path::Path;
 
-use crate::Error;
-use crate::Interface;
-use crate::StorageDevice;
-
 pub use ata::AtaDevice;
 pub use generic::GenericDevice;
 pub use nvme::NvmeDevice;
 pub use scsi::ScsiDevice;
+
+use crate::{Error, Interface, StorageDevice};
 
 fn into_boxed<ConcreteDevice: StorageDevice + 'static>(device: ConcreteDevice) -> Box<dyn StorageDevice> {
     Box::from(device) as Box<dyn StorageDevice>

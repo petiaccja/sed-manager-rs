@@ -3,32 +3,22 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use std::sync::{
-    Arc,
-    atomic::{AtomicU32, Ordering},
-};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use sed_async::{PolyRuntime, Runtime};
 use sed_device::StorageDevice;
-use sed_packet::{
-    MaxBytes,
-    com_id_request::{ComIdRequest, ComIdResponsePayload, ComIdState, StackResetStatus},
-};
-use sed_packet::{
-    com_id::{ComId, ComIdExt},
-    discovery::{Discovery, SscFeatureDescriptor},
-};
-use sed_spec::{
-    methods::Properties,
-    objects::{AuthorityRef, SecurityProviderRef},
-};
+use sed_packet::MaxBytes;
+use sed_packet::com_id::{ComId, ComIdExt};
+use sed_packet::com_id_request::{ComIdRequest, ComIdResponsePayload, ComIdState, StackResetStatus};
+use sed_packet::discovery::{Discovery, SscFeatureDescriptor};
+use sed_spec::methods::Properties;
+use sed_spec::objects::{AuthorityRef, SecurityProviderRef};
 use sorbit::ser_de::FromBytes;
 use tracing::instrument;
 
-use crate::{
-    Error, Session,
-    protocol::{CAPABILITIES, Controller, PropertiesChanged, Protocol},
-};
+use crate::protocol::{CAPABILITIES, Controller, PropertiesChanged, Protocol};
+use crate::{Error, Session};
 
 /// A connection to the storage device using a particular ComID/ComIDExt pair.
 ///

@@ -5,28 +5,20 @@
 
 use std::ops::Range;
 
-use sed_spec::{
-    ace_expr,
-    objects::{
-        AccessControl, AccessControlRef, Ace, Authority, AuthorityRef, CPin, LockingInfoExt, LockingRange, MbrControl,
-        TableDesc,
-    },
-    preconfig::{
-        core::shared::{invoking_id::THIS_SP, locking_info, mbr_control, table},
-        opal_2::{
-            admin::sp,
-            locking::{ace, authority, c_pin, k_aes_256, locking},
-        },
-    },
-    types::{AuthMethod, EncryptionSupport, ResetType, TableKind},
+use sed_spec::ace_expr;
+use sed_spec::objects::{
+    AccessControl, AccessControlRef, Ace, Authority, AuthorityRef, CPin, KAes256, LockingInfoExt, LockingRange,
+    MbrControl, TableDesc,
 };
+use sed_spec::preconfig::core::shared::invoking_id::THIS_SP;
+use sed_spec::preconfig::core::shared::{locking_info, mbr_control, table};
+use sed_spec::preconfig::opal_2::admin::sp;
+use sed_spec::preconfig::opal_2::locking::{ace, authority, c_pin, k_aes_256, locking};
+use sed_spec::types::{AuthMethod, EncryptionSupport, ResetType, TableKind};
 
-use crate::tper::{
-    Locking,
-    preconfig_shared::{AllColumns, IntoTable},
-    security_provider::Table,
-};
-use sed_spec::objects::KAes256;
+use crate::tper::Locking;
+use crate::tper::preconfig_shared::{AllColumns, IntoTable};
+use crate::tper::security_provider::Table;
 
 const ADMINS: Range<usize> = 0..4;
 const USERS: Range<usize> = 0..8;
@@ -52,7 +44,8 @@ pub fn preconfig() -> Locking {
 }
 
 pub fn access_control() -> Table<AccessControl> {
-    use sed_spec::preconfig::core::shared::{method_id::*, table_id::*};
+    use sed_spec::preconfig::core::shared::method_id::*;
+    use sed_spec::preconfig::core::shared::table_id::*;
 
     let fixed = [
         // SP

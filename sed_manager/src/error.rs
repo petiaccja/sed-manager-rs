@@ -6,7 +6,8 @@
 use sed_device::Error as DeviceError;
 use sed_tper::Error as TperError;
 
-use crate::{authority_plan::AuthorityPlanError, locking_range_plan::LockingRangePlanError};
+use crate::authority_plan::AuthorityPlanError;
+use crate::locking_range_plan::LockingRangePlanError;
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum Error {

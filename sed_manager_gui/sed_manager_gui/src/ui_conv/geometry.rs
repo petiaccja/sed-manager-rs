@@ -4,9 +4,9 @@
 //L-----------------------------------------------------------------------------
 
 use sed_manager::{Alignment, Geometry};
+use sed_manager_gui_slint as ui;
 
 use crate::ui_conv::{FromBackend, FromUi};
-use sed_manager_gui_slint as ui;
 
 impl FromBackend<&Geometry> for ui::Geometry {
     fn from_backend(value: &Geometry) -> Self {

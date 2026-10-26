@@ -16,25 +16,22 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use async_channel::RecvError;
+pub use protocol_state::CAPABILITIES;
+use protocol_state::ProtocolState;
 use sed_async::{PolyRuntime, Runtime as _};
 use sed_device::StorageDevice;
-use sed_packet::{
-    com_id::{ComId, ComIdExt},
-    com_id_request::{ComIdRequest, ComIdResponse},
-    discovery::SscFeatureDescriptor,
-    session_id::SessionId,
-};
+use sed_packet::com_id::{ComId, ComIdExt};
+use sed_packet::com_id_request::{ComIdRequest, ComIdResponse};
+use sed_packet::discovery::SscFeatureDescriptor;
+use sed_packet::session_id::SessionId;
 #[cfg(feature = "test-utils")]
 use sed_spec::methods::SessionProperties;
 use sed_spec::methods::StartSession;
+use shared::{Action, link_both_ways};
+pub use shared::{PropertiesChanged, StartedSession};
 use tracing::{Instrument as _, Span, info_span};
 
 use crate::Error;
-use protocol_state::ProtocolState;
-use shared::{Action, link_both_ways};
-
-pub use protocol_state::CAPABILITIES;
-pub use shared::{PropertiesChanged, StartedSession};
 
 /// The full protocol to communicate with the TPer via packets and ComID requests.
 #[derive(Debug)]
@@ -264,26 +261,20 @@ async fn perform_action_or_recv(
 mod tests {
     use std::time::Duration;
 
-    use super::*;
-
     use googletest::assert_that;
     use googletest::matchers::*;
     use sed_async::TokioRuntime;
     use sed_device::mock_device::{MockDevice, MockEvent};
-    use sed_packet::com_id::ComId;
-    use sed_packet::com_id::ComIdExt;
+    use sed_packet::com_id::{ComId, ComIdExt};
     use sed_packet::packet::ComPacket;
     use sed_packet::token_stream::ToTokens;
     use sed_spec::methods::MethodStatus;
     use sorbit::ser_de::ToBytes as _;
 
-    use crate::protocol::{
-        sequence_number::SequenceNumber,
-        shared::{
-            packetize_one,
-            tests::{start_session_call, sync_session_call},
-        },
-    };
+    use super::*;
+    use crate::protocol::sequence_number::SequenceNumber;
+    use crate::protocol::shared::packetize_one;
+    use crate::protocol::shared::tests::{start_session_call, sync_session_call};
 
     const SESSION_ID: SessionId = SessionId { hsn: 1, tsn: 2 };
 

@@ -4,18 +4,15 @@
 //L-----------------------------------------------------------------------------
 
 use std::io;
+use std::io::Write;
 use std::sync::Mutex;
 
 use opentelemetry_proto::tonic::collector::trace::v1::ExportTraceServiceRequest;
 use opentelemetry_proto::transform::common::tonic::ResourceAttributesWithSchema;
 use opentelemetry_proto::transform::trace::tonic::group_spans_by_resource_and_scope;
 use opentelemetry_sdk::Resource;
-use opentelemetry_sdk::error::OTelSdkError;
-use opentelemetry_sdk::{
-    error::OTelSdkResult,
-    trace::{SpanData, SpanExporter},
-};
-use std::io::Write;
+use opentelemetry_sdk::error::{OTelSdkError, OTelSdkResult};
+use opentelemetry_sdk::trace::{SpanData, SpanExporter};
 
 use crate::otlp::Error;
 
@@ -86,7 +83,8 @@ mod tests {
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{Duration, SystemTime};
 
-    use googletest::{assert_that, matchers::*};
+    use googletest::assert_that;
+    use googletest::matchers::*;
     use opentelemetry::trace::{Span as _, SpanId, TraceContextExt as _, TraceId, Tracer as _, TracerProvider as _};
     use opentelemetry::{Context, KeyValue};
     use opentelemetry_sdk::trace::{IdGenerator, SdkTracerProvider};

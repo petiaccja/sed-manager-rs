@@ -6,7 +6,8 @@
 mod ioctl {
     use tracing::instrument;
 
-    use crate::{Error, linux::ioctl_device::IoctlDevice};
+    use crate::Error;
+    use crate::linux::ioctl_device::IoctlDevice;
 
     /// `BLKSSZGET`. Returns the logical sector size of a block device, in bytes.
     /// Despite returning data, this is a legacy `_IO(0x12, 104)` opcode with no

@@ -10,14 +10,13 @@
 use core::ptr::null_mut;
 use std::path::Path;
 
+pub use ioctl::NvmeIoctlDevice;
 use sorbit::ser_de::FromBytes as _;
 use tracing::instrument;
 
 use crate::linux::ioctl_device::IoctlDevice;
 use crate::shared::nvme::{GenericStatusCode, IdentifyController, Opcode, StatusCode, StatusField};
 use crate::{Error, Interface, StorageDevice};
-
-pub use ioctl::NvmeIoctlDevice;
 
 #[derive(Debug)]
 pub struct NvmeDevice {
@@ -180,9 +179,8 @@ impl Default for NvmeAdminCommand {
 }
 
 mod ioctl {
-    use crate::shared::nvme::IdentifyNamespace;
-
     use super::*;
+    use crate::shared::nvme::IdentifyNamespace;
 
     const NVME_ADMIN_CMD_OPCODE: rustix::ioctl::Opcode =
         rustix::ioctl::opcode::read_write::<NvmeAdminCommand>(b'N', 0x41);

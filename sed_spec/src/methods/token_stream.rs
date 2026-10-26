@@ -5,11 +5,10 @@
 
 use std::collections::VecDeque;
 
+use sed_packet::token_stream::{Command, Detokenize, Error as TokenError, SorbitDetokenizer};
 use sorbit::error::ErrorKind;
 use sorbit::io::{FixedMemoryStream, Seek as _};
 use sorbit::stream_ser_de::StreamDeserializer;
-
-use sed_packet::token_stream::{Command, Detokenize, Error as TokenError, SorbitDetokenizer};
 
 /// The result of extracting a method from a token stream.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -84,9 +83,9 @@ fn create_detokenizer(bytes: &[u8]) -> SorbitDetokenizer<StreamDeserializer<Fixe
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     use rstest::rstest;
+
+    use super::*;
 
     #[rstest]
     #[case(VecDeque::from([0xF0, 1, 2, 0xF1, 0xFA]), ExtractResult::Ok { value: vec![1, 2], tokens: vec![0xF0, 1, 2, 0xF1] }, VecDeque::from([0xFA]))]

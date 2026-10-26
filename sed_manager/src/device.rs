@@ -7,13 +7,12 @@ use std::sync::Arc;
 
 use sed_async::PolyRuntime;
 use sed_device::StorageDevice;
-use sed_packet::{
-    MaxBytes,
-    com_id::{ComId, ComIdExt},
-    com_id_request::ComIdState,
-    discovery::{Discovery, SecuritySubsystemClass},
-};
-use sed_spec::{methods::Properties, objects::AuthorityRef};
+use sed_packet::MaxBytes;
+use sed_packet::com_id::{ComId, ComIdExt};
+use sed_packet::com_id_request::ComIdState;
+use sed_packet::discovery::{Discovery, SecuritySubsystemClass};
+use sed_spec::methods::Properties;
+use sed_spec::objects::AuthorityRef;
 use sed_tper::{PropertiesChanged, Tper};
 use tracing::instrument;
 

@@ -5,30 +5,24 @@
 
 use std::cmp::min;
 
-use sed_packet::{
-    MaxBytes,
-    discovery::{LockingDescriptor, SscFeatureDescriptor},
-    token_stream::token::{Atom, LongAtom},
+use sed_packet::MaxBytes;
+use sed_packet::discovery::{LockingDescriptor, SscFeatureDescriptor};
+use sed_packet::token_stream::token::{Atom, LongAtom};
+use sed_spec::methods::{MethodStatus, SetBytes};
+use sed_spec::objects::{
+    Authority, AuthorityRef, AuthorityRefExt, CPinRef, CPinRefExt, LockingInfoExt, LockingRange, LockingRangeRef,
+    LockingRangeRefExt, MbrControl, TableDescRefExt,
 };
-use sed_spec::{
-    methods::{MethodStatus, SetBytes},
-    objects::{
-        Authority, AuthorityRef, AuthorityRefExt, CPinRef, CPinRefExt, LockingInfoExt, LockingRange, LockingRangeRef,
-        LockingRangeRefExt, MbrControl, TableDescRefExt,
-    },
-    preconfig::core::shared::{locking_info, mbr_control, table, table_id},
-};
+use sed_spec::preconfig::core::shared::{locking_info, mbr_control, table, table_id};
 use sed_tper::{Error as TperError, Session, Tper};
 use tracing::{debug, instrument};
 
-use crate::{
-    Alignment, LockingRangePlanError,
-    authority_plan::{AuthorityPlanError, AuthorityPlanner},
-    error::Error,
-    locking_range_plan::{LockingRangePlanner, LockingRangeStep},
-    set_plan::check_matching_current_all,
-    spec::Spec,
-};
+use crate::authority_plan::{AuthorityPlanError, AuthorityPlanner};
+use crate::error::Error;
+use crate::locking_range_plan::{LockingRangePlanner, LockingRangeStep};
+use crate::set_plan::check_matching_current_all;
+use crate::spec::Spec;
+use crate::{Alignment, LockingRangePlanError};
 
 /// Configures the locking SP of the TPer, like locking ranges and authorities.
 ///

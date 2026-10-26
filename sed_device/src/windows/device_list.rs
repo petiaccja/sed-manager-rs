@@ -5,19 +5,16 @@
 
 use std::path::PathBuf;
 
-use windows::{
-    Win32::{
-        Devices::DeviceAndDriverInstallation::{
-            DIGCF_DEVICEINTERFACE, DIGCF_PRESENT, SP_DEVICE_INTERFACE_DATA, SP_DEVICE_INTERFACE_DETAIL_DATA_W,
-            SetupDiEnumDeviceInterfaces, SetupDiGetClassDevsW, SetupDiGetDeviceInterfaceDetailW,
-        },
-        Foundation::ERROR_NO_MORE_ITEMS,
-        System::Ioctl::GUID_DEVINTERFACE_DISK,
-    },
-    core::{HRESULT, PCWSTR},
+use windows::Win32::Devices::DeviceAndDriverInstallation::{
+    DIGCF_DEVICEINTERFACE, DIGCF_PRESENT, SP_DEVICE_INTERFACE_DATA, SP_DEVICE_INTERFACE_DETAIL_DATA_W,
+    SetupDiEnumDeviceInterfaces, SetupDiGetClassDevsW, SetupDiGetDeviceInterfaceDetailW,
 };
+use windows::Win32::Foundation::ERROR_NO_MORE_ITEMS;
+use windows::Win32::System::Ioctl::GUID_DEVINTERFACE_DISK;
+use windows::core::{HRESULT, PCWSTR};
 
-use crate::{Error as DeviceError, windows::thread_pool::spawn};
+use crate::Error as DeviceError;
+use crate::windows::thread_pool::spawn;
 
 fn list_storage_devices_sync() -> Result<Vec<PathBuf>, DeviceError> {
     let dev_info = unsafe {

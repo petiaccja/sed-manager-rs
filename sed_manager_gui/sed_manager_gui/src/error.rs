@@ -3,7 +3,8 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use std::{io, path::PathBuf};
+use std::io;
+use std::path::PathBuf;
 
 use sed_manager::Error as SedError;
 

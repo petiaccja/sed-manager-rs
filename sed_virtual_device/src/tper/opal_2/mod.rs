@@ -3,11 +3,13 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use sed_spec::{
-    methods::MethodStatus, objects::SecurityProviderRef, preconfig::opal_2::admin::sp, types::LifeCycleState,
-};
+use sed_spec::methods::MethodStatus;
+use sed_spec::objects::SecurityProviderRef;
+use sed_spec::preconfig::opal_2::admin::sp;
+use sed_spec::types::LifeCycleState;
 
-use crate::tper::{Admin, Locking, security_provider::SecurityProvider};
+use crate::tper::security_provider::SecurityProvider;
+use crate::tper::{Admin, Locking};
 
 mod preconfig_admin;
 mod preconfig_locking;

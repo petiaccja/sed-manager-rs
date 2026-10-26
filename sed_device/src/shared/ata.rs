@@ -3,7 +3,8 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use sorbit::{Deserialize, ser_de::FromBytes as _};
+use sorbit::Deserialize;
+use sorbit::ser_de::FromBytes as _;
 
 use crate::{Error as DeviceError, Interface};
 
