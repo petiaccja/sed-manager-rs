@@ -31,6 +31,7 @@ import { AuthoritiesTab } from "locking/authorities.slint";
 import { ShadowMbrTab } from "locking/shadow_mbr.slint";
 import { LoginPanel } from "locking/login.slint";
 import { Icons } from "../../resources/lib.slint";
+import { AccessControlTab } from "locking/access_control.slint";
 
 
 export component ConfigureLockingView {
@@ -45,6 +46,7 @@ export component ConfigureLockingView {
     callback erase-locking-range(locking-range: Uid);
     callback commit-authorities();
     callback change-password(authority: Uid, password: string);
+    callback commit-access-control();
     callback commit-mbr-control();
     callback write-mbr(path: string);
     callback pick-and-write-mbr();
@@ -111,6 +113,26 @@ export component ConfigureLockingView {
 
                     change-password(authority, password) => {
                         change-password(authority, password)
+                    }
+
+                    logout() => {
+                        logout()
+                    }
+                }
+            }
+        }
+
+        Tab {
+            title: "Access control";
+
+            VerticalLayout {
+                padding-top: StyleMetrics.layout-spacing;
+
+                AccessControlTab {
+                    command-status: command-status;
+
+                    commit-access-control => {
+                        commit-access-control()
                     }
 
                     logout() => {

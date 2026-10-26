@@ -238,6 +238,7 @@ export component AuthoritiesTab {
                 colorize-icon: true;
                 preferred-width: 7rem;
                 accessible-id: "logout-submit";
+                enabled: !command-status.session-busy;
 
                 clicked => {
                     logout();

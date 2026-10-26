@@ -389,6 +389,7 @@ export component LockingRangesTab {
                     icon: Icons.logout;
                     colorize-icon: true;
                     preferred-width: 7rem;
+                    enabled: !command-status.session-busy;
 
                     clicked => {
                         logout();
