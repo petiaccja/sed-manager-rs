@@ -295,7 +295,7 @@ impl LockingConfigSession {
     ///
     /// If writing any of the chunks fails, an error is returned. In this case,
     /// the `data` is partially written.
-    #[instrument(skip(self, data), fields(data_len = data.len()))]
+    #[instrument(skip(self, data), fields(data_len = data.len()), err)]
     pub async fn write_mbr(&self, mut offset: u64, data: &[u8]) -> Result<(), Error> {
         let outbound_properties = &self.session.properties().outbound;
         let max_method_len = outbound_properties.max_method_len();

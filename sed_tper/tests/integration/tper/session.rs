@@ -306,7 +306,7 @@ async fn set_bytes_limit_size() {
     let _ = protocol.await;
 }
 
-/// [`GetBytesResult::HEADER_LEN`] assumes an 8-byte `where` argument, but we
+/// [`SetBytes::HEADER_LEN`] assumes an 8-byte `where` argument, but we
 /// only use zero bytes (encoded in tiny atom header).
 const WHERE_ARG_COMPENSATION: usize = 8;
 
