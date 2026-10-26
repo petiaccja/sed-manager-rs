@@ -267,7 +267,7 @@ async fn set_object() {
 async fn set_bytes() {
     let device = Arc::new(VirtualDevice::default());
     let (session, protocol) = spawn_session(&device, sp::LOCKING, Some(locking::authority::ADMIN.get(0).unwrap()));
-    assert_that!(session.set_bytes(table_id::MBR, 0, &[1, 2, 3]).await, ok(anything()));
+    assert_that!(session.set_bytes(table_id::MBR, 234, &[1, 2, 3]).await, ok(anything()));
     let _ = session.close().await;
     let _ = protocol.await;
 }
@@ -306,14 +306,18 @@ async fn set_bytes_limit_size() {
     let _ = protocol.await;
 }
 
-fn max_set_payload(outbound_properties: &Properties) -> usize {
-    // The initial properties will always use a medium atom (len: 16..2047).
-    let max_method_len = outbound_properties.max_method_len();
-    max_method_len - SetBytes::HEADER_LEN - MediumAtom::HEADER_LEN
-}
+/// [`SetBytes::HEADER_LEN`] assumes an 8-byte `where` argument, but we
+/// only use zero bytes (encoded in tiny atom header).
+const WHERE_ARG_COMPENSATION: usize = 8;
 
 fn max_get_payload(inbound_properties: &Properties) -> usize {
     // The initial properties will always use a medium atom (len: 16..2047).
     let max_method_len = inbound_properties.max_method_len();
     max_method_len - GetBytesResult::HEADER_LEN - MediumAtom::HEADER_LEN
+}
+
+fn max_set_payload(outbound_properties: &Properties) -> usize {
+    // The initial properties will always use a medium atom (len: 16..2047).
+    let max_method_len = outbound_properties.max_method_len();
+    max_method_len - SetBytes::HEADER_LEN - MediumAtom::HEADER_LEN + WHERE_ARG_COMPENSATION
 }

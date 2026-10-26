@@ -3,12 +3,15 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
+use std::cmp::min;
+
 use sed_packet::{
     MaxBytes,
     discovery::{LockingDescriptor, SscFeatureDescriptor},
+    token_stream::token::{Atom, LongAtom},
 };
 use sed_spec::{
-    methods::MethodStatus,
+    methods::{MethodStatus, SetBytes},
     objects::{
         Authority, AuthorityRef, AuthorityRefExt, CPinRef, CPinRefExt, LockingInfoExt, LockingRange, LockingRangeRef,
         LockingRangeRefExt, MbrControl, TableDescRefExt,
@@ -264,6 +267,10 @@ impl LockingConfigSession {
         Ok(())
     }
 
+    /// Change the password of the given `authority` to `password`.
+    ///
+    /// You need to be authenticated as an authority who has the permission to
+    /// change the given `authority's` password, or else this call will fail.
     #[instrument(skip(self), err)]
     pub async fn change_password(&self, authority: AuthorityRef, password: MaxBytes<32>) -> Result<(), Error> {
         let credential = self.session.get_field(authority.credential()).await?;
@@ -274,10 +281,36 @@ impl LockingConfigSession {
         }
     }
 
+    /// Set the new values for the MBR control object.
     #[instrument(skip(self), err)]
     pub async fn set_mbr_control(&self, mbr_control: MbrControl) -> Result<(), Error> {
         let mbr_control = MbrControl { uid: None, ..mbr_control };
         self.session.set_object(mbr_control::MBR_CONTROL, mbr_control).await.map_err(|err| err.into())
+    }
+
+    /// Write the `data` into the MBR table at the given `offset`.
+    ///
+    /// The data can be of arbitrary size. If it exceeds the device's transfer
+    /// length, it will be optimally chunked and split into multiple writes.
+    ///
+    /// If writing any of the chunks fails, an error is returned. In this case,
+    /// the `data` is partially written.
+    #[instrument(skip(self, data), fields(data_len = data.len()), err)]
+    pub async fn write_mbr(&self, mut offset: u64, data: &[u8]) -> Result<(), Error> {
+        let outbound_properties = &self.session.properties().outbound;
+        let max_method_len = outbound_properties.max_method_len();
+        let max_ind_token_size = outbound_properties.max_ind_token_size.get();
+
+        let method_call_overhead = SetBytes::HEADER_LEN + LongAtom::HEADER_LEN;
+        let max_method_payload_len = max_method_len.saturating_sub(method_call_overhead).max(1);
+        let max_token_payload_len = max_ind_token_size.saturating_sub(LongAtom::HEADER_LEN).max(1);
+        let max_payload_len = min(max_method_payload_len, max_token_payload_len);
+
+        for chunk in data.chunks(max_payload_len) {
+            self.session.set_bytes(table_id::MBR, offset, chunk).await?;
+            offset += chunk.len() as u64;
+        }
+        Ok(())
     }
 
     #[instrument(skip(self), err)]

@@ -60,8 +60,8 @@ component LockingRangeTable {
                         row: 0;
                         col: 0;
                         z: 2;
-                        offset-x: -viewport.viewport-x;
-                        offset-y: -viewport.viewport-y;
+                        offset-x: -viewport.content-x;
+                        offset-y: -viewport.content-y;
                         HeaderCell { }
                     }
 
@@ -77,7 +77,7 @@ component LockingRangeTable {
                         row: 0;
                         col: index + 1;
                         z: 1;
-                        offset-y: -viewport.viewport-y;
+                        offset-y: -viewport.content-y;
 
                         HeaderCell {
                             Text {
@@ -91,7 +91,7 @@ component LockingRangeTable {
                     for locking-range[index] in locking-ranges: Detached {
                         row: index + 1;
                         col: 0;
-                        offset-x: -viewport.viewport-x;
+                        offset-x: -viewport.content-x;
                         z: 1;
 
                         HeaderCell {

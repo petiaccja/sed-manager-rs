@@ -69,6 +69,7 @@ rustix = "1.1.4"
 # -- Testing
 rstest = { version = "0.26.1" }
 googletest = { version = "0.14.2" }
+tempfile = { version = "3.27.0" }
 
 # -- Tracing
 # The opentelemetry dependencies have to be pinned to the same version.
@@ -85,15 +86,16 @@ opentelemetry-semantic-conventions = { version = "=0.33.0", features = ["semconv
 rand = "0.10.1"
 
 # -- UI
-slint = { version = "=1.17.1", default-features = false, features = [
+slint = { version = "=1.18.1", default-features = false, features = [
     "std",
     "compat-1-2",
     "backend-winit",
     "renderer-femtovg",
 ] }
-slint-build = { version = "=1.17.1" }
-i-slint-backend-testing = { version = "=1.17.1" }
+slint-build = { version = "=1.18.1" }
+i-slint-backend-testing = { version = "=1.18.1" }
 clap = { version = "4.6.7", features = ["derive"] }
+rfd = { version = "0.17.2", features = ["xdg-portal"] }
 
 # -- Other
 chrono = "0.4.44"

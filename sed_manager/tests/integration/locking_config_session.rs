@@ -380,3 +380,20 @@ async fn set_mbr_control() {
         some(eq(true))
     );
 }
+
+#[instrument]
+#[tokio::test]
+#[with_tracing]
+async fn write_mbr() {
+    let (tper, device) = setup().await;
+    let session = login_admin1(&tper).await.unwrap();
+
+    let data: Vec<_> = (1..987154_u32).map(|value| value as u8).collect();
+    session.write_mbr(500, &data).await.unwrap();
+
+    device.inspect(|tper| {
+        assert!(tper.locking_sp().unwrap().mbr[0..500].iter().all(|x| *x == 0));
+        assert!(tper.locking_sp().unwrap().mbr[500..987653] == data);
+        assert!(tper.locking_sp().unwrap().mbr[987653..988154].iter().all(|x| *x == 0));
+    });
+}

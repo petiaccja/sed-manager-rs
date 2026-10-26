@@ -21,6 +21,8 @@ pub enum Error {
     AmbiguousElement { id: String },
     #[error("The element title=\"{title}\" not found")]
     ToastNotFound { title: String },
+    #[error("The element title=\"{title}\" is still present")]
+    ToastNotGone { title: String },
     #[error("The element id=\"{id}\" is still present")]
     ElementNotGone { id: String },
     #[error("The element id=\"{id}\" is not enabled (although present)")]
@@ -182,6 +184,20 @@ impl<Root: ElementRoot + ComponentHandle> Driver<Root> {
         match result {
             Ok(_) => Ok(()),
             Err(_) => Err(Error::ToastNotFound { title: title.into() }),
+        }
+    }
+
+    /// Check if all toasts with the title have disappeared within the timeout.
+    #[cfg_attr(not(target_os = "linux"), expect(unused))]
+    pub async fn check_disappearance_toast(&self, title: &str) -> Result<(), Error> {
+        let result = sleep_until_condition(
+            || ElementHandle::find_by_accessible_label(&self.root, title).next().is_none(),
+            self.timeout,
+        )
+        .await;
+        match result {
+            Ok(_) => Ok(()),
+            Err(_) => Err(Error::ToastNotGone { title: title.into() }),
         }
     }
 

@@ -28,8 +28,12 @@ export component ShadowMbrTab {
     in property <Geometry> geometry;
     in property <CommandStatus> command-status;
     in-out property <Mbr> mbr;
+    private property <bool> use-file-picker: true;
 
     callback commit-mbr-control();
+    callback write-mbr(path: string);
+    callback pick-and-write-mbr();
+    callback cancel-mbr-write();
     callback logout();
 
     VerticalLayout {
@@ -131,25 +135,41 @@ export component ShadowMbrTab {
                         spacing: 0.8rem;
                         padding: 0.8rem;
 
-                        LineEdit {
-                            placeholder-text: "Path to the PBA image file";
+                        path := LineEdit {
+                            accessible-id: "mbr-image-path";
+                            placeholder-text: "Enter path to PBA image";
+                            visible: !use-file-picker;
                         }
 
                         Button {
+                            accessible-id: "mbr-upload-submit";
                             width: 90px;
-                            icon: Icons.file-open;
-                            text: "Open";
-                            colorize-icon: true;
-                            enabled: !command-status.session-busy && !command-status.tper-busy && mbr.supported;
-                        }
-
-                        Button {
-                            width: 90px;
-                            icon: Icons.upload;
-                            text: "Upload";
+                            icon: use-file-picker ? Icons.file-open : Icons.upload;
+                            text: !mbr.writing-in-progress ? "Upload" : "Cancel";
                             colorize-icon: true;
                             primary: true;
+                            enabled: (!command-status.session-busy && !command-status.tper-busy && mbr.supported) || mbr.writing-in-progress;
+
+                            clicked => {
+                                if !mbr.writing-in-progress && !use-file-picker {
+                                    write-mbr(path.text)
+                                } else if !mbr.writing-in-progress && use-file-picker {
+                                    pick-and-write-mbr()
+                                } else {
+                                    cancel-mbr-write()
+                                }
+                            }
+                        }
+
+                        Button {
+                            accessible-id: "mbr-toggle-file-picker";
+                            icon: !use-file-picker ? Icons.file-open : Icons.text-fields;
+                            colorize-icon: true;
                             enabled: !command-status.session-busy && !command-status.tper-busy && mbr.supported;
+
+                            clicked => {
+                                use-file-picker = !use-file-picker;
+                            }
                         }
                     }
                 }

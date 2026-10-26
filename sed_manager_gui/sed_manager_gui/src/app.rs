@@ -5,14 +5,17 @@
 
 use std::{
     collections::HashSet,
+    io,
     path::{Path, PathBuf},
     rc::{Rc, Weak},
-    sync::Arc,
+    sync::{Arc, Mutex},
 };
 
+use async_broadcast::RecvError;
 use async_lock::RwLock;
+use futures::AsyncReadExt;
 use sed_async::PolyRuntime;
-use sed_manager::{Device, Error, Geometry, Host, Spec};
+use sed_manager::{Device, Error as SedError, Geometry, Host, Spec};
 use sed_manager_gui_slint as ui;
 use sed_packet::{MaxBytes, com_id_request::ComIdState};
 use sed_spec::{
@@ -25,13 +28,15 @@ use slint::{
     CloseRequestResponse, ComponentHandle, Model, ModelExt as _, ModelRc, SharedString, ToSharedString,
     quit_event_loop, spawn_local,
 };
-use tracing::{error, instrument};
+use tracing::{Instrument, Span, debug, error, info_span, instrument};
 
 use crate::{
+    Error,
     algorithm::sector_lib,
-    command::{Command, CommandError, ExpectInEventLoop},
+    command::{Command, ExpectInEventLoop},
     device_list::{DeviceEntry, DeviceList},
     diff_model::{self, DiffModel},
+    error::FileError,
     session::Session,
     toast::ToastQueue,
     ui_conv::{CombinedProperties, ConversionError, FromUi as _, IntoUi, IntoUiName, MbrDesc, TryFromUi},
@@ -44,6 +49,7 @@ pub struct App {
     toast_queue: Rc<ToastQueue>,
     host: Arc<Host>,
     runtime: Arc<PolyRuntime>,
+    cancel_requests: Arc<Mutex<HashSet<PathBuf>>>,
 }
 
 impl App {
@@ -62,6 +68,7 @@ impl App {
             device_list: Rc::new(RwLock::new(device_list)),
             host,
             runtime,
+            cancel_requests: Arc::new(Mutex::new(HashSet::new())),
         });
 
         // Algorithm callbacks.
@@ -153,6 +160,24 @@ impl App {
         {
             let view_model = view_model.clone();
             ui.on_commit_mbr_control(move |path| view_model.clone().commit_mbr_control(path.to_string().into()));
+        }
+        {
+            let view_model = view_model.clone();
+            ui.on_write_mbr(move |device_path, image_path| {
+                view_model.clone().write_mbr(device_path.to_string().into(), image_path.to_string().into())
+            });
+        }
+        {
+            let view_model = view_model.clone();
+            ui.on_pick_and_write_mbr(move |device_path| {
+                view_model.clone().pick_and_write_mbr(device_path.to_string().into())
+            });
+        }
+        {
+            let view_model = view_model.clone();
+            ui.on_cancel_mbr_write(move |device_path| {
+                view_model.cancel_requests.lock().unwrap().insert(device_path.to_string().into());
+            });
         }
         {
             let view_model = view_model.clone();
@@ -391,7 +416,7 @@ impl App {
         self.command()
             .on_device(path.clone(), async |device: &Device| {
                 let discovery = device.discover().await?;
-                Spec::try_from(discovery).map_err(|_| Error::NoSscAvailable.into())
+                Spec::try_from(discovery).map_err(|_| SedError::NoSscAvailable.into())
             })
             .on_success(move |mut ui_device, spec| {
                 let features = &spec.discovery.feature_descriptors;
@@ -491,7 +516,7 @@ impl App {
             .error_message("Could not get alignment")
             .on_session(path.clone(), async |_device: &Device, session: &mut Session| {
                 let Session::LockingConfig(locking_config_session) = &*session else {
-                    return Err(CommandError::Skipped);
+                    return Err(Error::CommandSkipped);
                 };
                 locking_config_session.get_alignment().await.map_err(Into::into)
             })
@@ -509,7 +534,7 @@ impl App {
             .error_message("Failed to list locking authorities")
             .on_session(path.clone(), async |_device: &Device, session: &mut Session| {
                 let Session::LockingConfig(locking_config_session) = &*session else {
-                    return Err(CommandError::Skipped);
+                    return Err(Error::CommandSkipped);
                 };
                 locking_config_session.get_authorities().await.map_err(Into::into)
             })
@@ -533,7 +558,7 @@ impl App {
             .error_message("Failed to update locking ranges")
             .on_session(path.clone(), async |_device: &Device, session: &mut Session| {
                 let Session::LockingConfig(locking_config_session) = &*session else {
-                    return Err(CommandError::Skipped);
+                    return Err(Error::CommandSkipped);
                 };
                 locking_config_session.get_locking_ranges().await.map_err(Into::into)
             })
@@ -555,14 +580,14 @@ impl App {
             .error_message("Failed to update shadow MBR status")
             .on_session(path.clone(), async |device: &Device, session: &mut Session| {
                 let Session::LockingConfig(locking_config_session) = &*session else {
-                    return Err(CommandError::Skipped);
+                    return Err(Error::CommandSkipped);
                 };
 
                 let geometry = device.geometry().await?;
 
                 let size = match locking_config_session.get_mbr_size().await {
                     Ok(size) => size,
-                    Err(Error::TperError(TperError::MethodCallFailed(MethodStatus::InvalidParameter))) => {
+                    Err(SedError::TperError(TperError::MethodCallFailed(MethodStatus::InvalidParameter))) => {
                         return Ok(MbrDesc { supported: false, size: None, control: None });
                     }
                     Err(err) => return Err(err.into()),
@@ -605,7 +630,7 @@ impl App {
                     .error_message("Could not write locking ranges")
                     .on_session(path, async move |device: &Device, session: &mut Session| {
                         let Session::LockingConfig(locking_session) = session else {
-                            return Err(CommandError::Skipped);
+                            return Err(Error::CommandSkipped);
                         };
                         let geometry = device.geometry().await?;
                         locking_session
@@ -619,7 +644,7 @@ impl App {
                     })
                     .on_error(move |ui_device, _spec, err| {
                         match err {
-                            Error::LockingRangeUpdateRejected(_) => (),
+                            Error::Sed(SedError::LockingRangeUpdateRejected(_)) => (),
                             _ => self_e.list_locking_ranges(path_e, true),
                         }
                         ui_device
@@ -646,7 +671,7 @@ impl App {
             .error_message("Failed to erase locking range")
             .on_session(path, async move |_: &Device, session: &mut Session| {
                 let Session::LockingConfig(locking_session) = session else {
-                    return Err(CommandError::Skipped);
+                    return Err(Error::CommandSkipped);
                 };
                 locking_session.erase_locking_range(locking_range).await?;
                 Ok(())
@@ -680,7 +705,7 @@ impl App {
                     .error_message("Could not write authorities")
                     .on_session(path, async move |_device: &Device, session: &mut Session| {
                         let Session::LockingConfig(locking_session) = session else {
-                            return Err(CommandError::Skipped);
+                            return Err(Error::CommandSkipped);
                         };
                         locking_session.set_authorities(committed.as_deref(), &desired).await?;
                         Ok(())
@@ -691,7 +716,7 @@ impl App {
                     })
                     .on_error(move |ui_device, _spec, err| {
                         match err {
-                            Error::AuthorityUpdateRejected(_) => (),
+                            Error::Sed(SedError::AuthorityUpdateRejected(_)) => (),
                             _ => self_e.list_locking_authorities_ext(path_e, true),
                         }
                         ui_device
@@ -719,7 +744,7 @@ impl App {
             .error_message("Could not change password")
             .on_session(path.clone(), async move |_device: &Device, session: &mut Session| {
                 let Session::LockingConfig(locking_session) = session else {
-                    return Err(CommandError::Skipped);
+                    return Err(Error::CommandSkipped);
                 };
                 locking_session.change_password(authority, new_password).await?;
                 Ok(())
@@ -743,7 +768,7 @@ impl App {
                     .error_message("Could not update MBR control")
                     .on_session(path, async move |_device: &Device, session: &mut Session| {
                         let Session::LockingConfig(locking_session) = session else {
-                            return Err(CommandError::Skipped);
+                            return Err(Error::CommandSkipped);
                         };
                         locking_session.set_mbr_control(mbr_control).await?;
                         Ok(())
@@ -753,6 +778,107 @@ impl App {
                         ui_device
                     })
                     .run();
+            }
+        })
+        .expect_in_event_loop();
+    }
+
+    #[instrument(skip(self), fields(file_len))]
+    fn write_mbr(self: Rc<Self>, device_path: PathBuf, image_path: PathBuf) {
+        let (mut progress_tx, mut progress_rx) = async_broadcast::broadcast::<f32>(1);
+        progress_tx.set_overflow(true);
+
+        let self_ = self.clone();
+        let device_path_ = device_path.clone();
+        slint::spawn_local(
+            async move {
+                let device_list = self_.device_list.read().await;
+                let set_progress = |progress: f32, in_progress: bool| {
+                    if let Some(mut ui_device) = device_list.ui.get(&device_path_) {
+                        ui_device.locking_sp.mbr.writing_in_progress = in_progress;
+                        ui_device.locking_sp.mbr.upload_progress = progress;
+                        debug!(progress);
+                        device_list.ui.set(&device_path_, ui_device);
+                    }
+                };
+
+                loop {
+                    match progress_rx.recv().await {
+                        Ok(progress) => set_progress(progress, true),
+                        Err(RecvError::Overflowed(_)) => continue,
+                        Err(RecvError::Closed) => break,
+                    };
+                }
+                set_progress(0.0, false);
+            }
+            .instrument(info_span!(parent: Span::current(), "write_mbr_progress")),
+        )
+        .expect_in_event_loop();
+
+        let cancel_requests = self.cancel_requests.clone();
+        let device_path_ = device_path.clone();
+
+        self.command()
+            .success_message("MBR image written")
+            .error_message("Failed to write MBR image")
+            .on_session(device_path, async move |_device: &Device, session: &mut Session| {
+                let Session::LockingConfig(locking_session) = session else {
+                    return Err(Error::CommandSkipped);
+                };
+                // A cancel request may linger from a previous upload if it
+                // arrived after that upload's last check, such as when the
+                // user clicks "Cancel" just as the upload finishes. It must
+                // not cancel this upload. The "Cancel" button is only shown
+                // once the progress is first broadcast below, so requests
+                // meant for this upload can't arrive before this point.
+                cancel_requests.lock().unwrap().remove(&device_path_);
+                let mut file = async_fs::File::open(&image_path)
+                    .await
+                    .map_err(|cause| FileError::Io { file: image_path.clone(), cause })?;
+
+                let metadata =
+                    file.metadata().await.map_err(|cause| FileError::Io { file: image_path.clone(), cause })?;
+                let file_len = metadata.len();
+                let mbr_len = locking_session.get_mbr_size().await? as u64;
+                Span::current().record("file_len", file_len);
+                if file_len > mbr_len {
+                    return Err(FileError::FileTooBig { maximum_size: mbr_len, actual_size: file_len }.into());
+                }
+
+                let mut buffer = vec![0; 1048576];
+                let mut offset = 0;
+                let _ = progress_tx.try_broadcast(0.0);
+                loop {
+                    if cancel_requests.lock().unwrap().remove(&device_path_) {
+                        return Err(Error::CommandCancelled);
+                    }
+                    let bytes_read = match file.read(&mut buffer).await {
+                        Ok(0) => break Ok(()),
+                        Ok(bytes_read) => bytes_read,
+                        Err(err) if err.kind() == io::ErrorKind::UnexpectedEof => break Ok(()),
+                        Err(cause) => break Err(FileError::Io { file: image_path, cause }.into()),
+                    };
+                    let chunk = &buffer[..bytes_read];
+                    locking_session.write_mbr(offset, chunk).await?;
+                    offset += bytes_read as u64;
+                    let _ = progress_tx.try_broadcast(offset as f32 / file_len.max(1).max(offset) as f32);
+                }
+            })
+            .run();
+    }
+
+    #[instrument(skip(self))]
+    fn pick_and_write_mbr(self: Rc<Self>, device_path: PathBuf) {
+        slint::spawn_local(async {
+            let file = rfd::AsyncFileDialog::new()
+                .add_filter("Disk images", &["iso", "img", "bin", "raw", "dd"])
+                .add_filter("All files", &["*"])
+                .pick_file()
+                .await;
+
+            if let Some(file) = file {
+                let image_path = file.path().to_owned();
+                self.write_mbr(device_path, image_path);
             }
         })
         .expect_in_event_loop();
@@ -954,8 +1080,8 @@ impl App {
                         })
                         .run();
                 }
-                Err(async_broadcast::RecvError::Overflowed(_)) => (),
-                Err(async_broadcast::RecvError::Closed) => break,
+                Err(RecvError::Overflowed(_)) => (),
+                Err(RecvError::Closed) => break,
             }
         }
     }

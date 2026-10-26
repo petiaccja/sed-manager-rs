@@ -535,7 +535,9 @@ impl Session {
         }?;
 
         if let Some(values) = params.values {
-            let range = params.where_.map(|x| x as usize).unwrap_or(0)..values.0.len();
+            let start = params.where_.map(|x| x as usize).unwrap_or(0);
+            let end = start + values.0.len();
+            let range = start..end;
             let slice = table.get_mut(range).ok_or(MethodStatus::InvalidParameter)?;
             slice.copy_from_slice(&values.0);
             Ok(SetResult)

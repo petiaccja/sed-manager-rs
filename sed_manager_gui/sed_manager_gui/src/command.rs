@@ -11,23 +11,16 @@ use std::sync::Arc;
 
 use async_lock::RwLock;
 use sed_async::{PolyRuntime, Runtime as _};
-use sed_manager::{Device, Error, Spec};
+use sed_manager::{Device, Spec};
 use sed_manager_gui_slint as ui;
 use slint::EventLoopError;
 use tracing::Instrument;
 
+use crate::Error;
 use crate::busy::{BusyGuard, Resource};
 use crate::device_list::{DeviceEntry, DeviceList};
 use crate::session::Session;
 use crate::toast::ToastQueue;
-
-#[derive(Debug, thiserror::Error)]
-pub enum CommandError {
-    #[error("The command was skipped.")]
-    Skipped,
-    #[error(transparent)]
-    Failed(#[from] Error),
-}
 
 //------------------------------------------------------------------------------
 // Command initial
@@ -64,7 +57,7 @@ impl Command {
 
     pub fn on_device_list<RunFn, Output>(self, run_fn: RunFn) -> CommandOnDeviceList<RunFn, Output>
     where
-        RunFn: for<'a> AsyncFnOnce(&'a mut DeviceList) -> Result<Output, CommandError> + 'static,
+        RunFn: for<'a> AsyncFnOnce(&'a mut DeviceList) -> Result<Output, Error> + 'static,
     {
         let Self { success_msg, error_msg, device_list, toast_queue, .. } = self;
         CommandOnDeviceList {
@@ -81,7 +74,7 @@ impl Command {
 
     pub fn on_device_entry<RunFn, Output>(self, device: PathBuf, run_fn: RunFn) -> CommandOnDeviceEntry<RunFn, Output>
     where
-        RunFn: for<'x> OnDeviceEntryRunFn<'x, Output = Result<Output, CommandError>> + Send + 'static,
+        RunFn: for<'x> OnDeviceEntryRunFn<'x, Output = Result<Output, Error>> + Send + 'static,
         for<'x> <RunFn as OnDeviceEntryRunFn<'x>>::Future: Send,
         Output: Send + 'static,
     {
@@ -102,7 +95,7 @@ impl Command {
 
     pub fn on_device<RunFn, Output>(self, device_id: PathBuf, run_fn: RunFn) -> CommandOnDevice<RunFn, Output>
     where
-        RunFn: for<'x> OnDeviceRunFn<'x, Output = Result<Output, CommandError>> + Send + 'static,
+        RunFn: for<'x> OnDeviceRunFn<'x, Output = Result<Output, Error>> + Send + 'static,
         for<'x> <RunFn as OnDeviceRunFn<'x>>::Future: Send,
         Output: Send + 'static,
     {
@@ -123,7 +116,7 @@ impl Command {
 
     pub fn on_session<RunFn, Output>(self, device_id: PathBuf, run_fn: RunFn) -> CommandOnSession<RunFn, Output>
     where
-        RunFn: for<'x> OnSessionRunFn<'x, Output = Result<Output, CommandError>> + Send + 'static,
+        RunFn: for<'x> OnSessionRunFn<'x, Output = Result<Output, Error>> + Send + 'static,
         for<'x> <RunFn as OnSessionRunFn<'x>>::Future: Send,
         Output: Send + 'static,
     {
@@ -214,7 +207,7 @@ pub struct CommandOnDeviceList<RunFn, Output> {
 
 impl<RunFn, Output> CommandOnDeviceList<RunFn, Output>
 where
-    RunFn: for<'a> AsyncFnOnce(&'a mut DeviceList) -> Result<Output, CommandError> + 'static,
+    RunFn: for<'a> AsyncFnOnce(&'a mut DeviceList) -> Result<Output, Error> + 'static,
     Output: 'static,
 {
     pub fn on_success<SuccessFn>(self, success_fn: SuccessFn) -> Self
@@ -252,12 +245,12 @@ where
                         success_msg.map(|m| toast_queue.success(m, ""));
                         success_fn.map(|f| f(device_list.deref_mut(), output));
                     }
-                    Err(CommandError::Failed(err)) => {
+                    Err(Error::CommandSkipped) => tracing::debug!("command skipped"),
+                    Err(err) => {
                         tracing::error!(error = %err);
                         error_msg.map(|m| toast_queue.error(m, err.to_string()));
                         error_fn.map(|f| f(device_list.deref_mut(), err));
                     }
-                    Err(CommandError::Skipped) => tracing::debug!("command skipped"),
                 };
                 finally_fn.map(|f| f(device_list.deref_mut()));
             }
@@ -285,7 +278,7 @@ pub struct CommandOnDeviceEntry<RunFn, Output> {
 
 impl<RunFn, Output> CommandOnDeviceEntry<RunFn, Output>
 where
-    RunFn: for<'x> OnDeviceEntryRunFn<'x, Output = Result<Output, CommandError>> + Send + 'static,
+    RunFn: for<'x> OnDeviceEntryRunFn<'x, Output = Result<Output, Error>> + Send + 'static,
     for<'x> <RunFn as OnDeviceEntryRunFn<'x>>::Future: Send,
     Output: Send + 'static,
 {
@@ -358,7 +351,7 @@ where
 #[expect(clippy::too_many_arguments, reason = "fix it if possible")]
 #[expect(clippy::option_map_unit_fn)]
 fn process_result<Output>(
-    result: Result<Output, CommandError>,
+    result: Result<Output, Error>,
     toast_queue: Rc<ToastQueue>,
     success_fn: Option<Box<dyn FnOnce(ui::Device, Output) -> ui::Device + 'static>>,
     error_fn: Option<Box<dyn FnOnce(ui::Device, Error) -> ui::Device + 'static>>,
@@ -372,14 +365,14 @@ fn process_result<Output>(
             success_msg.map(|m| toast_queue.success(m, ""));
             if let Some(f) = success_fn { f(value, output) } else { value }
         }
-        Err(CommandError::Failed(err)) => {
+        Err(Error::CommandSkipped) => {
+            tracing::debug!("command skipped");
+            value
+        }
+        Err(err) => {
             tracing::error!(error = %err);
             error_msg.map(|m| toast_queue.error(m, err.to_string()));
             if let Some(f) = error_fn { f(value, err) } else { value }
-        }
-        Err(CommandError::Skipped) => {
-            tracing::debug!("command skipped");
-            value
         }
     };
     if let Some(f) = finally_fn { f(value) } else { value }
@@ -404,7 +397,7 @@ pub struct CommandOnDevice<RunFn, Output> {
 
 impl<RunFn, Output> CommandOnDevice<RunFn, Output>
 where
-    RunFn: for<'x> OnDeviceRunFn<'x, Output = Result<Output, CommandError>> + Send + 'static,
+    RunFn: for<'x> OnDeviceRunFn<'x, Output = Result<Output, Error>> + Send + 'static,
     for<'x> <RunFn as OnDeviceRunFn<'x>>::Future: Send,
     Output: Send + 'static,
 {
@@ -517,7 +510,7 @@ pub struct CommandOnSession<RunFn, Output> {
 
 impl<RunFn, Output> CommandOnSession<RunFn, Output>
 where
-    RunFn: for<'x> OnSessionRunFn<'x, Output = Result<Output, CommandError>> + Send + 'static,
+    RunFn: for<'x> OnSessionRunFn<'x, Output = Result<Output, Error>> + Send + 'static,
     for<'x> <RunFn as OnSessionRunFn<'x>>::Future: Send,
     Output: Send + 'static,
 {
@@ -628,7 +621,7 @@ where
 #[expect(clippy::option_map_unit_fn)]
 #[expect(clippy::too_many_arguments, reason = "not critical, but fix it possible")]
 fn process_result_with_spec<Output>(
-    result: Result<Output, CommandError>,
+    result: Result<Output, Error>,
     spec: Option<&Spec>,
     toast_queue: Rc<ToastQueue>,
     success_fn: Option<Box<dyn FnOnce(ui::Device, Option<&Spec>, Output) -> ui::Device + 'static>>,
@@ -643,14 +636,14 @@ fn process_result_with_spec<Output>(
             success_msg.map(|m| toast_queue.success(m, ""));
             if let Some(f) = success_fn { f(value, spec, output) } else { value }
         }
-        Err(CommandError::Failed(err)) => {
+        Err(Error::CommandSkipped) => {
+            tracing::debug!("command skipped");
+            value
+        }
+        Err(err) => {
             tracing::error!(error = %err);
             error_msg.map(|m| toast_queue.error(m, err.to_string()));
             if let Some(f) = error_fn { f(value, spec, err) } else { value }
-        }
-        Err(CommandError::Skipped) => {
-            tracing::debug!("command skipped");
-            value
         }
     };
     if let Some(f) = finally_fn { f(value) } else { value }
