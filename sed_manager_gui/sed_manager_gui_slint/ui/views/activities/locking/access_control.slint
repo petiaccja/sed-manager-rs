@@ -1,9 +1,190 @@
-import { Button, StyleMetrics } from "std-widgets.slint";
-import { CommandStatus } from "../../../data/lib.slint";
+import {
+    Button,
+    StyleMetrics,
+    ScrollView,
+    CheckBox,
+    Palette,
+} from "std-widgets.slint";
+import {
+    CommandStatus,
+    LockingRangeAccess,
+    Mbr,
+} from "../../../data/lib.slint";
 import { Icons } from "../../../resources/lib.slint";
+import {
+    PaletteExtra,
+    Detached,
+    HeaderCell,
+    Cell,
+    CyclicColor,
+    ToastQueue,
+    ToastLevel,
+} from "../../../widgets/lib.slint";
+import { AccessControl, MbrAccess } from "../../../data/device.slint";
+
+
+
+component AccessControlTable {
+    preferred-width: table.preferred-width;
+    preferred-height: table.preferred-height;
+
+    in property <[string]> locking-range-names;
+    in property <[string]> authority-names;
+    in-out property <[LockingRangeAccess]> locking-range-accesses;
+    in-out property <[MbrAccess]> mbr-accesses;
+    in property <bool> mbr-supported: mbr-accesses.length != 0;
+
+    callback change-password(authority-index: int);
+
+    viewport := ScrollView {
+        GridLayout {
+            Rectangle {
+                background: PaletteExtra.separator.with-alpha(0.25);
+                clip: true;
+                border-radius: 0.6rem;
+                border-width: 0.1rem;
+                border-color: self.background;
+
+                table := GridLayout {
+                    spacing: 0.1rem;
+
+                    Detached {
+                        row: 0;
+                        col: 0;
+                        z: 2;
+                        offset-x: -viewport.content-x;
+                        offset-y: -viewport.content-y;
+                        HeaderCell { }
+                    }
+
+                    if mbr-supported: Detached {
+                        row: 0;
+                        col: 1;
+                        z: 1;
+                        offset-y: -viewport.content-y;
+
+                        HeaderCell {
+                            Text {
+                                text: "MBR control";
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                                color: PaletteExtra.make-accented(#4060FF, Palette.control-foreground, Palette.control-background);
+                            }
+                        }
+                    }
+
+                    for locking-range-name[index] in locking-range-names: Detached {
+                        row: 0;
+                        col: index + (mbr-supported ? 2 : 1);
+                        z: 1;
+                        offset-y: -viewport.content-y;
+
+                        HeaderCell {
+                            Text {
+                                text: locking-range-name;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                                color: CyclicColor.foreground(index);
+                            }
+                        }
+                    }
+
+                    for authority-name[index] in authority-names: Detached {
+                        row: index + 1;
+                        col: 0;
+                        offset-x: -viewport.content-x;
+                        z: 1;
+
+                        HeaderCell {
+                            HorizontalLayout {
+                                alignment: space-between;
+
+                                Text {
+                                    text: authority-name;
+                                    vertical-alignment: center;
+                                }
+                            }
+                        }
+                    }
+
+                    for mbr-access[index] in mbr-accesses: Cell {
+                        row: index + 1;
+                        col: 1;
+
+                        HorizontalLayout {
+                            spacing: StyleMetrics.layout-spacing / 2;
+                            alignment: center;
+
+                            Text {
+                                text: "Done";
+                            }
+
+                            CheckBox {
+                                accessible-id: "mbr-access-done-" + authority-names[index];
+                                checked <=> mbr-access.set-done;
+                            }
+                        }
+                    }
+
+                    for locking-range-access[index] in locking-range-accesses: Cell {
+                        property <int> authority-idx: index / locking-range-names.length;
+                        property <int> locking-range-idx: index.mod(locking-range-names.length);
+
+                        row: authority-idx + 1;
+                        col: locking-range-idx + (mbr-supported ? 2 : 1);
+
+                        HorizontalLayout {
+                            spacing: StyleMetrics.layout-spacing * 1.5;
+                            alignment: center;
+
+                            HorizontalLayout {
+                                spacing: StyleMetrics.layout-spacing / 2;
+
+                                Text {
+                                    text: "R";
+                                }
+
+                                CheckBox {
+                                    accessible-id: "locking-range-access-rd-" + authority-names[authority-idx] + "-" + locking-range-names[locking-range-idx];
+                                    checked <=> locking-range-access.read-unlock;
+                                }
+                            }
+
+                            HorizontalLayout {
+                                spacing: StyleMetrics.layout-spacing / 2;
+                                Text {
+                                    text: "W";
+                                }
+
+                                CheckBox {
+                                    accessible-id: "locking-range-access-wr-" + authority-names[authority-idx] + "-" + locking-range-names[locking-range-idx];
+                                    checked <=> locking-range-access.write-unlock;
+                                }
+                            }
+
+                            HorizontalLayout {
+                                spacing: StyleMetrics.layout-spacing / 2;
+                                Text {
+                                    text: "E";
+                                }
+
+                                CheckBox {
+                                    accessible-id: "locking-range-access-rm-" + authority-names[authority-idx] + "-" + locking-range-names[locking-range-idx];
+                                    checked <=> locking-range-access.erase;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 
 export component AccessControlTab {
     in property <CommandStatus> command-status;
+    in-out property <AccessControl> access-control;
 
     callback commit-access-control();
     callback logout();
@@ -11,13 +192,59 @@ export component AccessControlTab {
     VerticalLayout {
         spacing: StyleMetrics.layout-spacing;
 
-        VerticalLayout { }
+        VerticalLayout {
+            alignment: start;
+
+            AccessControlTable {
+                authority-names: access-control.authority-names;
+                locking-range-names: access-control.locking-range-names;
+                locking-range-accesses: access-control.locking-range-accesses;
+                mbr-accesses: access-control.mbr-accesses;
+            }
+        }
 
         VerticalLayout {
             alignment: end;
 
             HorizontalLayout {
-                alignment: end;
+                alignment: stretch;
+                spacing: StyleMetrics.layout-spacing;
+
+                Button {
+                    accessible-id: "save-authorities-submit";
+                    text: "Apply";
+                    primary: true;
+                    enabled: !command-status.session-busy; // TODO: check dirty!
+                    icon: Icons.check;
+                    colorize-icon: true;
+                    preferred-width: 7rem;
+
+                    clicked => {
+                        commit-access-control();
+                    }
+                }
+
+                Button {
+                    accessible-id: "discard-authorities-submit";
+                    text: "Discard";
+                    enabled: true; // TODO: check dirty!
+                    icon: Icons.cancel;
+                    colorize-icon: true;
+                    preferred-width: 7rem;
+
+                    clicked => {
+                    // TODO: actually discard stuff!
+                    ToastQueue.push({
+                            level: ToastLevel.error,
+                            title: "Could not discard changes",
+                            message: "You won't be able to discard your changes, but you can keep working and save them. This is a bug, please report it.",
+                        })
+                    }
+                }
+
+                Rectangle {
+                    horizontal-stretch: 100%;
+                }
 
                 Button {
                     accessible-id: "logout-submit";

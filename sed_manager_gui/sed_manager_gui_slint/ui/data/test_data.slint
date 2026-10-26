@@ -175,6 +175,58 @@ export global TestData {
                 is-admin: false,
             },
         ],
+        access-control: {
+            authority-names: ["Anybody", "User1"],
+            locking-range-names: ["GlobalRange", "Range1", "Range2"],
+            locking-range-accesses: [
+                {
+                    authority: { value: 0ms },
+                    locking-range: { value: 0ms },
+                    read-unlock: false,
+                    write-unlock: false,
+                    erase: false,
+                },
+                {
+                    authority: { value: 0ms },
+                    locking-range: { value: 0ms },
+                    read-unlock: true,
+                    write-unlock: false,
+                    erase: false,
+                },
+                {
+                    authority: { value: 0ms },
+                    locking-range: { value: 0ms },
+                    read-unlock: false,
+                    write-unlock: false,
+                    erase: false,
+                },
+                {
+                    authority: { value: 0ms },
+                    locking-range: { value: 0ms },
+                    read-unlock: true,
+                    write-unlock: false,
+                    erase: false,
+                },
+                {
+                    authority: { value: 0ms },
+                    locking-range: { value: 0ms },
+                    read-unlock: true,
+                    write-unlock: true,
+                    erase: true,
+                },
+                {
+                    authority: { value: 0ms },
+                    locking-range: { value: 0ms },
+                    read-unlock: true,
+                    write-unlock: false,
+                    erase: false,
+                },
+            ],
+            mbr-accesses: [
+                { set-done: false },
+                { set-done: true },
+            ],
+        },
         mbr: {
             supported: true,
         },

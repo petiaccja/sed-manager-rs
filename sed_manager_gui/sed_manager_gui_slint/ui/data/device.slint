@@ -90,14 +90,23 @@ export struct LockingRange {
 }
 
 export struct LockingRangeAccess {
-    uid: Uid,
-    name: string,
+    locking-range: Uid,
+    authority: Uid,
     read-unlock: bool,
     write-unlock: bool,
+    erase: bool,
 }
 
 export struct MbrAccess {
+    authority: Uid,
     set-done: bool,
+}
+
+export struct AccessControl {
+    authority-names: [string],
+    locking-range-names: [string],
+    locking-range-accesses: [LockingRangeAccess],
+    mbr-accesses: [MbrAccess],
 }
 
 export struct Authority {
@@ -124,6 +133,7 @@ export struct SecurityProvider {
     name: string,
     locking_ranges: [LockingRange],
     authorities: [Authority],
+    access-control: AccessControl,
     mbr: Mbr,
     // Derive this with a filter-map from `authorities`. Delete it as soon as Slint
     // supports in-Slint filter-map on models.
