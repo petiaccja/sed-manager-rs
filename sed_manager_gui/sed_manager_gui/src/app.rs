@@ -825,6 +825,13 @@ impl App {
                 let Session::LockingConfig(locking_session) = session else {
                     return Err(Error::CommandSkipped);
                 };
+                // A cancel request may linger from a previous upload if it
+                // arrived after that upload's last check, such as when the
+                // user clicks "Cancel" just as the upload finishes. It must
+                // not cancel this upload. The "Cancel" button is only shown
+                // once the progress is first broadcast below, so requests
+                // meant for this upload can't arrive before this point.
+                cancel_requests.lock().unwrap().remove(&device_path_);
                 let mut file = async_fs::File::open(&image_path).await.map_err(FileError::Io)?;
 
                 let metadata = file.metadata().await.map_err(FileError::Io)?;

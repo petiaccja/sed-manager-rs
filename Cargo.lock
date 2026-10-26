@@ -4385,6 +4385,7 @@ dependencies = [
  "pin-project",
  "rfd",
  "rstest",
+ "rustix 1.1.4",
  "sed_async",
  "sed_device",
  "sed_manager",

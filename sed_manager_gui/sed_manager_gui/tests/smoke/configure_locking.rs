@@ -326,6 +326,137 @@ fn upload_mbr() {
     drop(image_file);
 }
 
+/// This test takes ownership, activates locking, logs into the locking SP as "Admin1" to reach
+/// the "Configure locking" page, and cancels an upload to the shadow MBR. It then cancels an
+/// upload too late, after it has finished, and checks that the late cancellation doesn't
+/// affect the next upload.
+///
+/// The uploads are read from a named pipe, which lets the test control when the upload
+/// proceeds and when it finishes. This makes the cancellation deterministic, as opposed to
+/// racing a large file.
+///
+/// This test exercises the following functionality:
+/// - Take ownership
+/// - Activate locking
+/// - Login (to the locking SP)
+/// - Writing the shadow MBR
+/// - Cancelling the writing of the shadow MBR
+/// - Logout
+#[cfg(target_os = "linux")]
+#[test]
+fn cancel_mbr_upload() {
+    let dir = tempfile::tempdir().unwrap();
+    let fifo_path = dir.path().join("image.fifo");
+    rustix::fs::mknodat(
+        rustix::fs::CWD,
+        &fifo_path,
+        rustix::fs::FileType::Fifo,
+        rustix::fs::Mode::RUSR | rustix::fs::Mode::WUSR,
+        0,
+    )
+    .unwrap();
+    let fifo_path = fifo_path.to_str().unwrap().to_owned();
+
+    let mut image_file = tempfile::NamedTempFile::new().unwrap();
+    image_file.write_all(&[0xA5; 4099]).unwrap();
+    image_file.flush().unwrap();
+    let image_path = image_file.path().to_str().unwrap().to_owned();
+
+    run_test(move || async move {
+        let runtime = Arc::new(PolyRuntime::Slint(SlintRuntime));
+        let ui = ui::MainWindow::new().unwrap();
+        let notification_queue = ToastQueue::new(ui.clone_strong());
+        let host = Arc::new(Host::new(runtime.clone()));
+        let _app = App::new(ui.clone_strong(), notification_queue, host, runtime.clone());
+
+        let ui = Driver::new(ui, Duration::from_secs(5));
+
+        scan_devices(&ui).await;
+        select_virtual_device(&ui).await;
+        take_ownership(&ui).await;
+        activate_locking(&ui).await;
+        login_admin1(&ui).await;
+
+        ui.single_click_by_label("Shadow MBR", Left).await.unwrap();
+        ui.check_enabled("mbr-toggle-file-picker").await.unwrap();
+        ui.invoke_default_action("mbr-toggle-file-picker").unwrap();
+        ui.enter_text("mbr-image-path", &fifo_path).await.unwrap();
+
+        // Start uploading from the pipe, but don't write anything yet. The
+        // button turns into "Cancel" only after the upload has checked for
+        // cancel requests and started reading the pipe. The read blocks until
+        // the test writes to or closes the pipe, so the upload can't finish
+        // while the test cancels it.
+        let writer = spawn_fifo_writer(&fifo_path);
+        ui.check_enabled("mbr-upload-submit").await.unwrap();
+        ui.invoke_default_action("mbr-upload-submit").unwrap();
+        check_mbr_upload_button(&ui, "Cancel").await;
+        ui.invoke_default_action("mbr-upload-submit").unwrap();
+
+        // Writing to the pipe unblocks the read, and the cancel request is
+        // picked up before reading the next chunk. The pipe must not be closed
+        // before that, or the upload would finish successfully instead.
+        writer.send(vec![0x5A; 4099]).unwrap();
+        ui.check_appearance_toast("Failed to write MBR image").await.unwrap();
+        check_mbr_upload_button(&ui, "Upload").await;
+        drop(writer);
+
+        // Start uploading from the pipe again, but this time, close the pipe
+        // after cancelling. The upload finishes successfully, since the cancel
+        // request comes too late, when there is nothing more to read.
+        let writer = spawn_fifo_writer(&fifo_path);
+        ui.check_enabled("mbr-upload-submit").await.unwrap();
+        ui.invoke_default_action("mbr-upload-submit").unwrap();
+        check_mbr_upload_button(&ui, "Cancel").await;
+        ui.invoke_default_action("mbr-upload-submit").unwrap();
+        drop(writer);
+        ui.check_appearance_toast("MBR image written").await.unwrap();
+        check_mbr_upload_button(&ui, "Upload").await;
+
+        // The late cancel request must not cancel the next upload. Wait for the
+        // previous toasts to go away, so that they can't be mistaken for the
+        // outcome of the next upload.
+        ui.check_disappearance_toast("MBR image written").await.unwrap();
+        ui.check_disappearance_toast("Failed to write MBR image").await.unwrap();
+        ui.enter_text("mbr-image-path", &image_path).await.unwrap();
+        ui.check_enabled("mbr-upload-submit").await.unwrap();
+        ui.invoke_default_action("mbr-upload-submit").unwrap();
+        ui.check_appearance_toast("MBR image written").await.unwrap();
+        check_mbr_upload_button(&ui, "Upload").await;
+
+        logout(&ui).await;
+    });
+
+    drop(image_file);
+}
+
+/// Opens the named pipe for writing on a separate thread, since opening blocks until the
+/// other end is opened for reading. The data sent to the returned channel is written to
+/// the pipe, and the pipe is closed when the channel is dropped.
+#[cfg(target_os = "linux")]
+fn spawn_fifo_writer(path: &str) -> std::sync::mpsc::Sender<Vec<u8>> {
+    let (tx, rx) = std::sync::mpsc::channel::<Vec<u8>>();
+    let path = path.to_owned();
+    std::thread::spawn(move || {
+        let mut fifo = std::fs::OpenOptions::new().write(true).open(path).unwrap();
+        for data in rx {
+            // The reader may have closed the pipe already, which is not an
+            // error for the test.
+            let _ = fifo.write_all(&data);
+        }
+    });
+    tx
+}
+
+#[cfg(target_os = "linux")]
+async fn check_mbr_upload_button(ui: &Driver<sed_manager_gui_slint::MainWindow>, label: &str) {
+    ui.check_condition("mbr-upload-submit", |element| {
+        element.accessible_enabled() == Some(true) && element.accessible_label().as_deref() == Some(label)
+    })
+    .await
+    .unwrap();
+}
+
 async fn scan_devices(ui: &Driver<sed_manager_gui_slint::MainWindow>) {
     // Scan for devices; the virtual device is always included in debug builds.
     ui.single_click("scan-button", Left).await.unwrap();

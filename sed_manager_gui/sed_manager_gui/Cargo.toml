@@ -39,5 +39,8 @@ rstest.workspace = true
 googletest.workspace = true
 tempfile.workspace = true
 
+[target.'cfg(target_os = "linux")'.dev-dependencies]
+rustix = { workspace = true, features = ["fs"] }
+
 [features]
 virtual_device = []
