@@ -9,7 +9,7 @@ use sed_spec::objects::{LockingRange, LockingRangeRef};
 use sed_spec::preconfig::opal_2::locking::locking::GLOBAL_RANGE;
 
 use crate::Alignment;
-use crate::set_plan::{
+use crate::locking_config::plan::{
     MatchCurrent, ObjectChange, PlanError, diff_field, fill_in_desired_values, is_matching_current_field,
     map_current_by_uid,
 };

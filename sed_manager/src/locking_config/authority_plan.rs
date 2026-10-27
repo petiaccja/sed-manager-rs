@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 
 use sed_spec::objects::{Authority, AuthorityRef};
 
-use crate::set_plan::{
+use crate::locking_config::plan::{
     MatchCurrent, ObjectChange, PlanError, diff_field, fill_in_desired_values, is_matching_current_field,
     map_current_by_uid,
 };
