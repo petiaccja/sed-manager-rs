@@ -5,6 +5,7 @@
 
 use std::cmp::max;
 
+/// The geometry of a device, or in the case of NVMe, a namespace.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Geometry {
     /// The size of a logical sector in bytes.
@@ -14,6 +15,7 @@ pub struct Geometry {
     pub logical_sector_count: u64,
 }
 
+/// The alignment requirements of locking ranges with respect to logical sectors.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Alignment {
     /// True if the locking ranges need to be aligned.
