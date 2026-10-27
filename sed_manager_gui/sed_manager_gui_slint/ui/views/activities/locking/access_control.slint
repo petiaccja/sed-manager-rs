@@ -21,6 +21,7 @@ import {
     ToastLevel,
 } from "../../../widgets/lib.slint";
 import { AccessControl, MbrAccess } from "../../../data/device.slint";
+import { AccessControlLib } from "../../../algorithm/access_control.slint";
 
 
 
@@ -181,7 +182,6 @@ component AccessControlTable {
     }
 }
 
-
 export component AccessControlTab {
     in property <CommandStatus> command-status;
     in-out property <AccessControl> access-control;
@@ -214,7 +214,7 @@ export component AccessControlTab {
                     accessible-id: "save-authorities-submit";
                     text: "Apply";
                     primary: true;
-                    enabled: !command-status.session-busy; // TODO: check dirty!
+                    enabled: !command-status.session-busy && AccessControlLib.is-any-dirty(access-control);
                     icon: Icons.check;
                     colorize-icon: true;
                     preferred-width: 7rem;
@@ -233,12 +233,13 @@ export component AccessControlTab {
                     preferred-width: 7rem;
 
                     clicked => {
-                    // TODO: actually discard stuff!
-                    ToastQueue.push({
-                            level: ToastLevel.error,
-                            title: "Could not discard changes",
-                            message: "You won't be able to discard your changes, but you can keep working and save them. This is a bug, please report it.",
-                        })
+                        if !AccessControlLib.discard(access-control) {
+                            ToastQueue.push({
+                                level: ToastLevel.error,
+                                title: "Could not discard changes",
+                                message: "You won't be able to discard your changes, but you can keep working and save them. This is a bug, please report it.",
+                            })
+                        }
                     }
                 }
 

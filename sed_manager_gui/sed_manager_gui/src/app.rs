@@ -71,9 +71,19 @@ impl App {
         ui.global::<ui::LockingRangeLib>().on_is_any_dirty(diff_model::is_any_dirty);
         ui.global::<ui::LockingRangeLib>().on_is_individual_dirty(diff_model::is_individual_dirty);
         ui.global::<ui::LockingRangeLib>().on_discard(diff_model::discard);
+
         ui.global::<ui::AuthorityLib>().on_is_any_dirty(diff_model::is_any_dirty);
         ui.global::<ui::AuthorityLib>().on_is_individual_dirty(diff_model::is_individual_dirty);
         ui.global::<ui::AuthorityLib>().on_discard(diff_model::discard);
+
+        ui.global::<ui::AccessControlLib>().on_is_any_dirty(|access_control| {
+            diff_model::is_any_dirty(access_control.locking_range_accesses)
+                || diff_model::is_any_dirty(access_control.mbr_accesses)
+        });
+        ui.global::<ui::AccessControlLib>().on_discard(|access_control| {
+            diff_model::discard(access_control.locking_range_accesses)
+                && diff_model::discard(access_control.mbr_accesses)
+        });
 
         ui.global::<ui::SectorLib>().on_to_string(sector_lib::to_string);
         ui.global::<ui::SectorLib>().on_is_valid(sector_lib::is_valid);
