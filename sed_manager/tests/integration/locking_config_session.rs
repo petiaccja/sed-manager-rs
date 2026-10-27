@@ -8,7 +8,7 @@ use std::sync::Arc;
 use googletest::assert_that;
 use googletest::matchers::*;
 use sed_async::{PolyRuntime, TokioRuntime};
-use sed_manager::{Alignment, Error, LockingConfigSession, LockingRangePlanError, SetupSession, Spec};
+use sed_manager::{Alignment, DeviceSpec, Error, LockingConfigSession, LockingRangePlanError, SetupSession};
 use sed_packet::MaxBytes;
 use sed_packet::com_id::ComIdExt;
 use sed_packet::discovery::{FeatureDescriptor, LockingDescriptor};
@@ -33,7 +33,7 @@ async fn setup() -> (Tper, Arc<VirtualDevice>) {
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
     let device = Arc::new(VirtualDevice::default());
     let tper = Tper::connect(BASE_COM_ID, ComIdExt(0), None, device.clone(), runtime);
-    let spec = Spec::try_new(tper.discover_current().await.unwrap()).unwrap();
+    let spec = DeviceSpec::try_new(tper.discover_current().await.unwrap()).unwrap();
     let setup_session = SetupSession::new(&tper, spec);
 
     setup_session.take_owneship(NEW_SID_PASSWORD).await.unwrap();
@@ -48,7 +48,7 @@ fn locking_admin1() -> AuthorityRef {
 
 async fn login_admin1(tper: &Tper) -> Result<LockingConfigSession, Error> {
     let admin1 = locking_admin1();
-    let spec = Spec::try_new(tper.discover_current().await.unwrap()).unwrap();
+    let spec = DeviceSpec::try_new(tper.discover_current().await.unwrap()).unwrap();
     LockingConfigSession::login(tper, spec, admin1, Some(NEW_SID_PASSWORD)).await
 }
 
@@ -91,7 +91,7 @@ async fn login_wrong_password() {
     let wrong_password = MaxBytes::<32>::from(b"wrong_password".as_slice());
 
     let admin1 = locking_admin1();
-    let spec = Spec::try_new(tper.discover_current().await.unwrap()).unwrap();
+    let spec = DeviceSpec::try_new(tper.discover_current().await.unwrap()).unwrap();
     let result = LockingConfigSession::login(&tper, spec, admin1, Some(wrong_password)).await;
     assert_that!(result, err(anything()));
 }
@@ -312,7 +312,7 @@ async fn erase_locking_range_no_media_encryption() {
             *media_encryption = false;
         }
     }
-    let spec = Spec::try_new(discovery).unwrap();
+    let spec = DeviceSpec::try_new(discovery).unwrap();
     let session = LockingConfigSession::login(&tper, spec, locking_admin1(), Some(NEW_SID_PASSWORD)).await.unwrap();
 
     let key_before = get_media_encryption_key(&device);

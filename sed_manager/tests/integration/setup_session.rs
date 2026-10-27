@@ -9,7 +9,7 @@ use std::sync::Arc;
 use googletest::assert_that;
 use googletest::matchers::*;
 use sed_async::{PolyRuntime, TokioRuntime};
-use sed_manager::Spec;
+use sed_manager::DeviceSpec;
 use sed_manager::{Error, SetupSession};
 use sed_packet::MaxBytes;
 use sed_packet::com_id::ComIdExt;
@@ -25,7 +25,7 @@ async fn setup() -> (SetupSession, Arc<VirtualDevice>) {
     let device = Arc::new(VirtualDevice::default());
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
     let tper = Tper::connect(BASE_COM_ID, ComIdExt(0), None, device.clone(), runtime);
-    let spec = Spec::try_new(tper.discover_current().await.unwrap()).unwrap();
+    let spec = DeviceSpec::try_new(tper.discover_current().await.unwrap()).unwrap();
     let session = SetupSession::new(&tper, spec);
     (session, device)
 }

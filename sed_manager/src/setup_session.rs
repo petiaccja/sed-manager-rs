@@ -15,8 +15,8 @@ use sed_spec::types::LifeCycleState;
 use sed_tper::{Error as TperError, Tper, TperHandle};
 use tracing::instrument;
 
-use crate::error::Error;
-use crate::spec::Spec;
+use crate::DeviceSpec;
+use crate::Error;
 
 /// Performs simple device setup and information retrieval operations.
 ///
@@ -27,17 +27,17 @@ use crate::spec::Spec;
 /// supports, though only intermittently.
 #[derive(Debug)]
 pub struct SetupSession {
-    spec: Spec,
+    spec: DeviceSpec,
     tper: TperHandle,
 }
 
 impl SetupSession {
     /// Open a session on the SSC given by `spec`.
-    pub fn new(tper: &Tper, spec: Spec) -> Self {
+    pub fn new(tper: &Tper, spec: DeviceSpec) -> Self {
         Self { tper: tper.handle(), spec }
     }
 
-    pub fn spec(&self) -> &Spec {
+    pub fn spec(&self) -> &DeviceSpec {
         &self.spec
     }
 

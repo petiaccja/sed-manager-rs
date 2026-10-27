@@ -13,7 +13,7 @@ use async_broadcast::RecvError;
 use async_lock::RwLock;
 use futures::AsyncReadExt;
 use sed_async::PolyRuntime;
-use sed_manager::{Device, Error as SedError, Geometry, Host, Spec};
+use sed_manager::{Device, DeviceSpec, Error as SedError, Geometry, Host};
 use sed_manager_gui_slint as ui;
 use sed_packet::MaxBytes;
 use sed_packet::com_id_request::ComIdState;
@@ -542,7 +542,7 @@ impl App {
             })
             .on_success(move |mut ui_device, spec, authorities| {
                 let (authorities, individual_authority_names, individual_authority_uids) =
-                    display_authorities(spec, &authorities, spec.map(Spec::secondary_sp));
+                    display_authorities(spec, &authorities, spec.map(DeviceSpec::secondary_sp));
 
                 ui_device.locking_sp.authorities = authorities.into();
                 ui_device.locking_sp.individual_authority_names = Rc::from(individual_authority_names).into();
@@ -1089,7 +1089,7 @@ impl App {
 }
 
 fn display_authorities(
-    spec: Option<&Spec>,
+    spec: Option<&DeviceSpec>,
     authorities: &[Authority],
     sp_ref: Option<SecurityProviderRef>,
 ) -> (

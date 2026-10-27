@@ -14,25 +14,36 @@ use sed_spec::preconfig::{kpio, opal_2};
 
 use crate::Error;
 
+/// The specifications a self-encrypting drive implements.
 #[derive(Debug, Clone)]
-pub struct Spec {
+pub struct DeviceSpec {
     pub tper_desc: TperDescriptor,
+    /// The most capable SSC of the device. For example, if the device supports
+    /// both Opal 2.0 and Opalite, Opal 2.0 will be selected as its essentially
+    /// a superset of Opalite.
     pub ssc_desc: SscFeatureDescriptor,
     pub locking_desc: Option<LockingDescriptor>,
     pub geometry_desc: Option<GeometryDescriptor>,
     pub data_removal_desc: Option<DataRemovalDescriptor>,
     pub block_sid_auth_desc: Option<BlockSIDAuthDescriptor>,
     pub additional_data_stores_desc: Option<AdditionalDataStoreTablesDescriptor>,
+    /// SSCs that the device supports in addition to its most capable SSC.
     pub additional_ssc_descs: Vec<SscFeatureDescriptor>,
 }
 
-impl Spec {
+impl DeviceSpec {
+    /// Determine the specifications a device implements from its L0 discovery.
+    ///
+    /// # Errors
+    ///
+    /// If the drive is not a TCG SED, or if it supports no SSCs, an error is
+    /// returned.
     pub fn try_new(discovery: Discovery) -> Result<Self, Error> {
         // Take SSC descriptors from discovery.
         let (mut ssc_descs, generic_descs): (Vec<_>, Vec<_>) =
             discovery.into_iter().partition(FeatureDescriptor::is_ssc);
 
-        // Find primary SSC.
+        // Find the most capable SSC.
         sort_by_priority(&mut ssc_descs);
         ssc_descs.reverse();
         let mut ssc_descs: Vec<_> = ssc_descs

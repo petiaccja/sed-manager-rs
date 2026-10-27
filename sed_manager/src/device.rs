@@ -16,12 +16,12 @@ use sed_spec::objects::AuthorityRef;
 use sed_tper::{PropertiesChanged, Tper};
 use tracing::instrument;
 
-use crate::{Error, Geometry, LockingConfigSession, SetupSession, Spec};
+use crate::{DeviceSpec, Error, Geometry, LockingConfigSession, SetupSession};
 
 #[derive(Debug)]
 pub struct Device {
     storage_device: Arc<dyn StorageDevice>,
-    spec: Result<Spec, Error>,
+    spec: Result<DeviceSpec, Error>,
     tper: Option<Tper>,
 }
 
@@ -33,7 +33,7 @@ impl Device {
         let spec = Tper::discover(&*storage_device)
             .await
             .map_err(Error::from)
-            .and_then(|discovery| Spec::try_new(discovery));
+            .and_then(|discovery| DeviceSpec::try_new(discovery));
         let tper = spec
             .as_ref()
             .map(|spec| {
@@ -68,7 +68,7 @@ impl Device {
     }
 
     // Return the specification corresponding to the chosen SSC.
-    pub fn spec(&self) -> Result<&Spec, Error> {
+    pub fn spec(&self) -> Result<&DeviceSpec, Error> {
         self.spec.as_ref().map_err(Clone::clone)
     }
 

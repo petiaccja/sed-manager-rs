@@ -17,11 +17,11 @@ use sed_spec::preconfig::core::shared::{locking_info, mbr_control, table, table_
 use sed_tper::{Error as TperError, Session, Tper};
 use tracing::{debug, instrument};
 
+use crate::DeviceSpec;
+use crate::Error;
 use crate::authority_plan::{AuthorityPlanError, AuthorityPlanner};
-use crate::error::Error;
 use crate::locking_range_plan::{LockingRangePlanner, LockingRangeStep};
 use crate::set_plan::check_matching_current_all;
-use crate::spec::Spec;
 use crate::{Alignment, LockingRangePlanError};
 
 /// Configures the locking SP of the TPer, like locking ranges and authorities.
@@ -31,7 +31,7 @@ use crate::{Alignment, LockingRangePlanError};
 /// within that session.
 #[derive(Debug)]
 pub struct LockingConfigSession {
-    spec: Spec,
+    spec: DeviceSpec,
     session: Session,
 }
 
@@ -44,7 +44,7 @@ impl LockingConfigSession {
     #[instrument(level = "info", skip(tper, password), ret, err)]
     pub async fn login(
         tper: &Tper,
-        spec: Spec,
+        spec: DeviceSpec,
         authority: AuthorityRef,
         password: Option<MaxBytes<32>>,
     ) -> Result<Self, Error> {
@@ -56,7 +56,7 @@ impl LockingConfigSession {
     }
 
     /// Return the [`Spec`] this session is using.
-    pub fn spec(&self) -> &Spec {
+    pub fn spec(&self) -> &DeviceSpec {
         &self.spec
     }
 
