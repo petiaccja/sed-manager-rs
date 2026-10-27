@@ -33,7 +33,8 @@ async fn setup() -> (Tper, Arc<VirtualDevice>) {
     let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
     let device = Arc::new(VirtualDevice::default());
     let tper = Tper::connect(BASE_COM_ID, ComIdExt(0), None, device.clone(), runtime);
-    let setup_session = SetupSession::new_on_primary_ssc(&tper).await.unwrap();
+    let spec = Spec::try_new(tper.discover_current().await.unwrap()).unwrap();
+    let setup_session = SetupSession::new(&tper, spec);
 
     setup_session.take_owneship(NEW_SID_PASSWORD).await.unwrap();
     setup_session.activate_secondary_sp(NEW_SID_PASSWORD).await.unwrap();
@@ -47,7 +48,8 @@ fn locking_admin1() -> AuthorityRef {
 
 async fn login_admin1(tper: &Tper) -> Result<LockingConfigSession, Error> {
     let admin1 = locking_admin1();
-    LockingConfigSession::login_on_primary_ssc(tper, admin1, Some(NEW_SID_PASSWORD)).await
+    let spec = Spec::try_new(tper.discover_current().await.unwrap()).unwrap();
+    LockingConfigSession::login(tper, spec, admin1, Some(NEW_SID_PASSWORD)).await
 }
 
 fn range_uid(index: usize) -> LockingRangeRef {
@@ -89,7 +91,8 @@ async fn login_wrong_password() {
     let wrong_password = MaxBytes::<32>::from(b"wrong_password".as_slice());
 
     let admin1 = locking_admin1();
-    let result = LockingConfigSession::login_on_primary_ssc(&tper, admin1, Some(wrong_password)).await;
+    let spec = Spec::try_new(tper.discover_current().await.unwrap()).unwrap();
+    let result = LockingConfigSession::login(&tper, spec, admin1, Some(wrong_password)).await;
     assert_that!(result, err(anything()));
 }
 
@@ -309,7 +312,7 @@ async fn erase_locking_range_no_media_encryption() {
             *media_encryption = false;
         }
     }
-    let spec = Spec::try_from(discovery).unwrap();
+    let spec = Spec::try_new(discovery).unwrap();
     let session = LockingConfigSession::login(&tper, spec, locking_admin1(), Some(NEW_SID_PASSWORD)).await.unwrap();
 
     let key_before = get_media_encryption_key(&device);

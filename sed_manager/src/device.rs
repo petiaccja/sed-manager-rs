@@ -33,10 +33,15 @@ impl Device {
         let spec = Tper::discover(&*storage_device)
             .await
             .map_err(Error::from)
-            .and_then(|discovery| Spec::try_from(discovery).map_err(|_| Error::NoSscAvailable));
-        let tper = spec.as_ref().ok().and_then(|spec| spec.default_ssc()).map(|ssc| {
-            Tper::connect(ssc.static_com_ids_p1().start, ComIdExt(0), Some(&ssc), storage_device.clone(), runtime)
-        });
+            .and_then(|discovery| Spec::try_new(discovery));
+        let tper = spec
+            .as_ref()
+            .map(|spec| {
+                let com_id = spec.ssc_desc.static_com_ids_p1().start;
+                let com_id_ext = ComIdExt(0);
+                Tper::connect(com_id, com_id_ext, Some(&spec.ssc_desc), storage_device.clone(), runtime)
+            })
+            .ok();
         Self { storage_device, spec, tper }
     }
 

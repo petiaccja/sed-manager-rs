@@ -17,10 +17,12 @@ use sed_manager::{Device, Error as SedError, Geometry, Host, Spec};
 use sed_manager_gui_slint as ui;
 use sed_packet::MaxBytes;
 use sed_packet::com_id_request::ComIdState;
+use sed_packet::discovery::FeatureDescriptor;
 use sed_spec::methods::MethodStatus;
 use sed_spec::objects::{Authority, AuthorityRef, LockingRangeRef, MbrControl, SecurityProviderRef};
-use sed_spec::preconfig::core::shared::authority::ANYBODY;
+use sed_spec::preconfig::core::shared::authority::{ANYBODY, SID};
 use sed_spec::preconfig::opal_2::locking;
+use sed_spec::preconfig::psid::admin::authority::PSID;
 use sed_tper::{Error as TperError, PropertiesChanged};
 use slint::{
     CloseRequestResponse, ComponentHandle, Model, ModelExt as _, ModelRc, SharedString, ToSharedString,
@@ -366,11 +368,7 @@ impl App {
     #[instrument(skip(self))]
     fn discover(self: Rc<Self>, path: PathBuf) {
         self.command()
-            .on_device(path.clone(), async move |device: &Device| {
-                let mut discovery = device.discover().await?;
-                Spec::sort(&mut discovery);
-                Ok(discovery)
-            })
+            .on_device(path.clone(), async move |device: &Device| device.discover().await.map_err(Into::into))
             .on_success(move |ui_device, discovery| {
                 let (ui_config, ui_discovery) = (&discovery).into_ui();
                 ui_device.with_discovery(ui_discovery).with_config(ui_config)
@@ -420,17 +418,14 @@ impl App {
     #[instrument(skip(self))]
     fn list_security_providers(self: Rc<Self>, path: PathBuf) {
         self.command()
-            .on_device(path.clone(), async |device: &Device| {
-                let discovery = device.discover().await?;
-                Spec::try_from(discovery).map_err(|_| SedError::NoSscAvailable.into())
-            })
-            .on_success(move |mut ui_device, spec| {
-                let features = &spec.discovery.feature_descriptors;
-                ui_device.admin_sp.uid = (&spec.admin.uid).into_ui();
-                ui_device.admin_sp.name = (&spec.admin.uid).into_ui_name(features, Some(spec.admin.uid));
-                if let Some(locking_sp) = spec.locking {
-                    ui_device.locking_sp.uid = (&locking_sp.uid).into_ui();
-                    ui_device.locking_sp.name = (&locking_sp.uid).into_ui_name(features, Some(spec.admin.uid))
+            .on_device(path.clone(), async |device: &Device| Ok((device.spec().cloned()?, device.discover().await?)))
+            .on_success(move |mut ui_device, (spec, discovery)| {
+                let features = &discovery.feature_descriptors;
+                ui_device.admin_sp.uid = (&spec.admin_sp()).into_ui();
+                ui_device.admin_sp.name = (&spec.admin_sp()).into_ui_name(features, Some(spec.admin_sp()));
+                if spec.locking_desc.is_some() {
+                    ui_device.locking_sp.uid = (&spec.secondary_sp()).into_ui();
+                    ui_device.locking_sp.name = (&spec.secondary_sp()).into_ui_name(features, Some(spec.admin_sp()))
                 }
                 ui_device
             })
@@ -444,7 +439,7 @@ impl App {
             .error_message("Failed to list admin authorities")
             .on_session(path.clone(), async |device: &Device, session: &mut Session| {
                 let setup_session = session.start_setup_session(device).await?;
-                let sp_ref = setup_session.spec().admin.uid;
+                let sp_ref = setup_session.spec().admin_sp();
                 let authorities = setup_session.list_authorities(sp_ref).await?;
                 Ok((authorities, Some(sp_ref)))
             })
@@ -468,9 +463,10 @@ impl App {
             .error_message("Failed to list locking authorities")
             .on_session(path.clone(), async |device: &Device, session: &mut Session| {
                 let setup_session = session.start_setup_session(device).await?;
-                if let Some(locking_sp) = &setup_session.spec().locking {
-                    let authorities = setup_session.list_authorities(locking_sp.uid).await?;
-                    Ok((authorities, Some(locking_sp.uid)))
+                let spec = setup_session.spec();
+                if spec.locking_desc.is_some() {
+                    let authorities = setup_session.list_authorities(spec.secondary_sp()).await?;
+                    Ok((authorities, Some(spec.secondary_sp())))
                 } else {
                     Ok((vec![], None))
                 }
@@ -545,9 +541,8 @@ impl App {
                 locking_config_session.get_authorities().await.map_err(Into::into)
             })
             .on_success(move |mut ui_device, spec, authorities| {
-                let sp_ref = spec.and_then(|spec| spec.locking.as_ref()).map(|sp| sp.uid);
                 let (authorities, individual_authority_names, individual_authority_uids) =
-                    display_authorities(spec, &authorities, sp_ref);
+                    display_authorities(spec, &authorities, spec.map(Spec::secondary_sp));
 
                 ui_device.locking_sp.authorities = authorities.into();
                 ui_device.locking_sp.individual_authority_names = Rc::from(individual_authority_names).into();
@@ -569,10 +564,10 @@ impl App {
                 locking_config_session.get_locking_ranges().await.map_err(Into::into)
             })
             .on_success(move |mut ui_device, spec, ranges| {
-                let features = spec.map(|spec| spec.discovery.feature_descriptors.as_slice()).unwrap_or(&[]);
-                let sp_ref = spec.and_then(|spec| spec.locking.as_ref()).map(|sp| sp.uid);
+                let ssc_feature = spec.map(|spec| FeatureDescriptor::from(spec.ssc_desc.clone()));
+                let secondary_sp = spec.map(|spec| spec.secondary_sp());
                 let ranges: Vec<ui::LockingRange> =
-                    ranges.iter().map(|range| range.into_ui_name(features, sp_ref)).collect();
+                    ranges.iter().map(|range| range.into_ui_name(ssc_feature.as_slice(), secondary_sp)).collect();
                 ui_device.locking_sp.locking_ranges = Rc::from(DiffModel::from(ranges)).into();
                 ui_device
             })
@@ -1014,8 +1009,8 @@ impl App {
             .on_session(path.clone(), async move |device: &Device, session: &mut Session| {
                 let sid_session = session.start_setup_session(device).await?;
                 let authority = match authority {
-                    ui::RevertAuthority::Sid => sid_session.spec().admin.authorities.sid,
-                    ui::RevertAuthority::Psid => sid_session.spec().admin.authorities.psid,
+                    ui::RevertAuthority::Sid => SID,
+                    ui::RevertAuthority::Psid => PSID,
                 };
                 match scope {
                     ui::RevertScope::Locking => sid_session.revert_secondary_sp(password).await,
@@ -1103,8 +1098,9 @@ fn display_authorities(
     impl Model<Data = ui::Uid> + use<>,
 ) {
     // Convert the authority structures to their UI counterparts.
-    let features = spec.map(|spec| spec.discovery.feature_descriptors.as_slice()).unwrap_or(&[]);
-    let authorities: Vec<ui::Authority> = authorities.iter().map(|auth| auth.into_ui_name(features, sp_ref)).collect();
+    let ssc_desc = spec.map(|spec| FeatureDescriptor::from(spec.ssc_desc.clone()));
+    let authorities: Vec<ui::Authority> =
+        authorities.iter().map(|auth| auth.into_ui_name(ssc_desc.as_slice(), sp_ref)).collect();
     let authorities = Rc::from(DiffModel::from(authorities));
 
     // Map and filter user names and UIDs for the password change

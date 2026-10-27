@@ -6,7 +6,7 @@
 use std::cmp::min;
 
 use sed_packet::MaxBytes;
-use sed_packet::discovery::{LockingDescriptor, SscFeatureDescriptor};
+use sed_packet::discovery::SscFeatureDescriptor;
 use sed_packet::token_stream::token::{Atom, LongAtom};
 use sed_spec::methods::{MethodStatus, SetBytes};
 use sed_spec::objects::{
@@ -48,25 +48,11 @@ impl LockingConfigSession {
         authority: AuthorityRef,
         password: Option<MaxBytes<32>>,
     ) -> Result<Self, Error> {
-        let locking_sp_uid = spec.locking.as_ref().map(|sp| sp.uid).ok_or(Error::IncompatibleSsc)?;
-        let session = tper.start_session(locking_sp_uid, Some(authority), password).await?;
+        if spec.locking_desc.is_none() {
+            return Err(Error::IncompatibleSsc);
+        }
+        let session = tper.start_session(spec.secondary_sp(), Some(authority), password).await?;
         Ok(Self { spec, session })
-    }
-
-    /// Start the configuration session on the locking SP as `authority`. The
-    /// permissions of the authority determine which actions can be performed.
-    ///
-    /// For devices that support multiple SSCs, the primary SSC is chosen. See
-    /// [`Spec`] about how the primary SSC is chosen.
-    #[instrument(level = "info", skip(tper, password), ret, err)]
-    pub async fn login_on_primary_ssc(
-        tper: &Tper,
-        authority: AuthorityRef,
-        password: Option<MaxBytes<32>>,
-    ) -> Result<Self, Error> {
-        let discovery = tper.discover_current().await?;
-        let spec = Spec::try_from(discovery).map_err(|_| Error::NoSscAvailable)?;
-        Self::login(tper, spec, authority, password).await
     }
 
     /// Return the [`Spec`] this session is using.
@@ -223,12 +209,9 @@ impl LockingConfigSession {
     /// Currently, Enterprise is not implemented and an error is always returned.
     #[instrument(skip(self), err)]
     pub async fn erase_locking_range(&self, locking_range: LockingRangeRef) -> Result<(), Error> {
-        let locking_descriptor = self.spec.discovery.get::<LockingDescriptor>();
-        let ssc_descriptor = self.spec.default_ssc();
-
-        if !locking_descriptor.is_some_and(|desc| desc.media_encryption) {
+        if !self.spec.locking_desc.as_ref().is_some_and(|desc| desc.media_encryption) {
             Err(Error::NotSupported)
-        } else if matches!(ssc_descriptor, Some(SscFeatureDescriptor::Enterprise(_))) {
+        } else if matches!(self.spec.ssc_desc, SscFeatureDescriptor::Enterprise(_)) {
             Err(Error::NotImplemented)
         } else {
             let key = self.session.get_field(locking_range.active_key()).await?;

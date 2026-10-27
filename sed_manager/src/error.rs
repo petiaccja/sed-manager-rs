@@ -21,6 +21,8 @@ pub enum Error {
     NotSupported,
     #[error("The device does not support any TCG SSCs")]
     NoSscAvailable,
+    #[error("The device is not TCG Storage specification compliant")]
+    NotTcgDevice,
     #[error("The feature is supported by the device, but isn't not implemented")]
     NotImplemented,
     #[error("Ownership has already been set up on this device")]
