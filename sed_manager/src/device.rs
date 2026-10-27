@@ -18,6 +18,7 @@ use tracing::instrument;
 
 use crate::{DeviceSpec, Error, Geometry, LockingConfigSession, SetupSession};
 
+/// A handle to a physical drive, which may or may not be a self-encrypting drive.
 #[derive(Debug)]
 pub struct Device {
     storage_device: Arc<dyn StorageDevice>,
