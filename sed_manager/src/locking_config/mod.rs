@@ -1,3 +1,8 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
 mod authority_plan;
 mod locking_config_session;
 mod locking_range_plan;

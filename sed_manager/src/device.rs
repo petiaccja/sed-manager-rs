@@ -31,10 +31,7 @@ impl Device {
     #[instrument(level = "info")]
     pub async fn new(storage_device: Box<dyn StorageDevice>, runtime: Arc<PolyRuntime>) -> Self {
         let storage_device = Arc::from(storage_device);
-        let spec = Tper::discover(&*storage_device)
-            .await
-            .map_err(Error::from)
-            .and_then(|discovery| DeviceSpec::try_new(discovery));
+        let spec = Tper::discover(&*storage_device).await.map_err(Error::from).and_then(DeviceSpec::try_new);
         let tper = spec
             .as_ref()
             .map(|spec| {
