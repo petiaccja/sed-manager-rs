@@ -1,0 +1,15 @@
+//L-----------------------------------------------------------------------------
+//L Copyright (C) Péter Kardos
+//L Please refer to the full license distributed with this software.
+//L-----------------------------------------------------------------------------
+
+import { AccessControl } from "../data/device.slint";
+
+// See the Rust code for documentation.
+export global AccessControlLib {
+    pure callback is-any-dirty(access-control: AccessControl) -> bool;
+    pure callback discard(access-control: AccessControl) -> bool;
+
+    is-any-dirty => { true }
+    discard => { false }
+}

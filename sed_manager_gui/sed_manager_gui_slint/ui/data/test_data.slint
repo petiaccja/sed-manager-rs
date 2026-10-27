@@ -175,6 +175,58 @@ export global TestData {
                 is-admin: false,
             },
         ],
+        access-control: {
+            authority-names: ["Anybody", "User1"],
+            locking-range-names: ["GlobalRange", "Range1", "Range2"],
+            locking-range-accesses: [
+                {
+                    authority: { value: 0ms },
+                    locking-range: { value: 0ms },
+                    read-unlock: false,
+                    write-unlock: false,
+                    erase: false,
+                },
+                {
+                    authority: { value: 0ms },
+                    locking-range: { value: 0ms },
+                    read-unlock: true,
+                    write-unlock: false,
+                    erase: false,
+                },
+                {
+                    authority: { value: 0ms },
+                    locking-range: { value: 0ms },
+                    read-unlock: false,
+                    write-unlock: false,
+                    erase: false,
+                },
+                {
+                    authority: { value: 0ms },
+                    locking-range: { value: 0ms },
+                    read-unlock: true,
+                    write-unlock: false,
+                    erase: false,
+                },
+                {
+                    authority: { value: 0ms },
+                    locking-range: { value: 0ms },
+                    read-unlock: true,
+                    write-unlock: true,
+                    erase: true,
+                },
+                {
+                    authority: { value: 0ms },
+                    locking-range: { value: 0ms },
+                    read-unlock: true,
+                    write-unlock: false,
+                    erase: false,
+                },
+            ],
+            mbr-accesses: [
+                { set-done: false },
+                { set-done: true },
+            ],
+        },
         mbr: {
             supported: true,
         },
@@ -182,24 +234,6 @@ export global TestData {
     };
 
     out property <[Device]> devices: [
-        {
-            identity: {
-                name: "Storaginator Idle",
-                serial: "SERIAL#3244",
-                path: "/dev/nvme0",
-                firmware: "FIRMWARE#4543",
-                interface: "NVMe",
-                security_commands: true,
-                is_removable: false,
-            },
-            geometry: geometry,
-            alignment: alignment,
-            discovery: discovery-opal-1,
-            config: { sid_msid_pin_differ: true, locking_enabled: true },
-            stack-status: stack-status-normal,
-            admin-sp: admin-sp-opal-2,
-            locking-sp: locking-sp-opal-2,
-        },
         {
             identity: {
                 name: "Storaginator Lock",
@@ -220,6 +254,24 @@ export global TestData {
                 session-busy: false,
                 secondary-session-active: true,
             },
+            admin-sp: admin-sp-opal-2,
+            locking-sp: locking-sp-opal-2,
+        },
+        {
+            identity: {
+                name: "Storaginator Idle",
+                serial: "SERIAL#3244",
+                path: "/dev/nvme0",
+                firmware: "FIRMWARE#4543",
+                interface: "NVMe",
+                security_commands: true,
+                is_removable: false,
+            },
+            geometry: geometry,
+            alignment: alignment,
+            discovery: discovery-opal-1,
+            config: { sid_msid_pin_differ: true, locking_enabled: true },
+            stack-status: stack-status-normal,
             admin-sp: admin-sp-opal-2,
             locking-sp: locking-sp-opal-2,
         },

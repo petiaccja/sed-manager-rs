@@ -222,7 +222,7 @@ export component AuthoritiesTab {
                         ToastQueue.push({
                             level: ToastLevel.error,
                             title: "Could not discard changes",
-                            message: "You won't be able to discard you changes, but you can keep working and save them. This is a bug, please report it.",
+                            message: "You won't be able to discard your changes, but you can keep working and save them. This is a bug, please report it.",
                         })
                     }
                 }
@@ -238,6 +238,7 @@ export component AuthoritiesTab {
                 colorize-icon: true;
                 preferred-width: 7rem;
                 accessible-id: "logout-submit";
+                enabled: !command-status.session-busy;
 
                 clicked => {
                     logout();
