@@ -8,13 +8,15 @@ use sed_spec::methods::MethodStatus;
 use sed_spec::objects::{
     Authority, AuthorityRef, AuthorityRefExt as _, CPinRef, CPinRefExt, SecurityProviderRef, SecurityProviderRefExt,
 };
+use sed_spec::preconfig::core::shared::authority::SID;
 use sed_spec::preconfig::core::shared::table_id;
+use sed_spec::preconfig::opal_2::admin::c_pin::{MSID as C_PIN_MSID, SID as C_PIN_SID};
 use sed_spec::types::LifeCycleState;
 use sed_tper::{Error as TperError, Tper, TperHandle};
 use tracing::instrument;
 
-use crate::error::Error;
-use crate::spec::Spec;
+use crate::DeviceSpec;
+use crate::Error;
 
 /// Performs simple device setup and information retrieval operations.
 ///
@@ -25,29 +27,17 @@ use crate::spec::Spec;
 /// supports, though only intermittently.
 #[derive(Debug)]
 pub struct SetupSession {
-    spec: Spec,
+    spec: DeviceSpec,
     tper: TperHandle,
 }
 
 impl SetupSession {
     /// Open a session on the SSC given by `spec`.
-    pub fn new(tper: &Tper, spec: Spec) -> Self {
+    pub fn new(tper: &Tper, spec: DeviceSpec) -> Self {
         Self { tper: tper.handle(), spec }
     }
 
-    /// Open a session on the primary SSC of the TPer.
-    ///
-    /// # Errors
-    ///
-    /// An error is returned when no SSC or no recognzied SSC is found on the
-    /// device.
-    pub async fn new_on_primary_ssc(tper: &Tper) -> Result<Self, Error> {
-        let discovery = tper.discover_current().await?;
-        let spec = Spec::try_from(discovery).map_err(|_| Error::NoSscAvailable)?;
-        Ok(Self::new(tper, spec))
-    }
-
-    pub fn spec(&self) -> &Spec {
+    pub fn spec(&self) -> &DeviceSpec {
         &self.spec
     }
 
@@ -62,25 +52,25 @@ impl SetupSession {
     /// The method may also fail due to any common Tper RPC errors.
     #[instrument(level = "info", skip(self, new_sid_password), ret, err)]
     pub async fn take_owneship(&self, new_sid_password: MaxBytes<32>) -> Result<(), Error> {
-        let admin = &self.spec.admin;
+        let spec = &self.spec;
 
         // Get the MSID password.
         let initial_password = self
             .tper
-            .start_session(admin.uid, None, None)
+            .start_session(spec.admin_sp(), None, None)
             .await?
-            .with(async |session| session.get_field(admin.c_pins.msid.pin()).await)
+            .with(async |session| session.get_field(C_PIN_MSID.pin()).await)
             .await?;
 
         // Change the SID password to the new one.
         self.tper
-            .start_session(admin.uid, Some(admin.authorities.sid), Some(initial_password))
+            .start_session(spec.admin_sp(), Some(SID), Some(initial_password))
             .await
             .map_err(|err| match err {
                 TperError::MethodCallFailed(MethodStatus::NotAuthorized) => Error::AlreadyOwned,
                 err => err.into(),
             })?
-            .with(async |session| session.set_field(admin.c_pins.sid.pin(), new_sid_password).await)
+            .with(async |session| session.set_field(C_PIN_SID.pin(), new_sid_password).await)
             .await?;
 
         Ok(())
@@ -99,24 +89,15 @@ impl SetupSession {
     /// [`Manufactured`]: LifeCycleState::Manufactured
     #[instrument(level = "info", skip(self, sid_password), ret, err)]
     pub async fn activate_secondary_sp(&self, sid_password: MaxBytes<32>) -> Result<(), Error> {
-        let admin = &self.spec.admin;
-        let secondary_sp_uid = self
-            .spec
-            .locking
-            .as_ref()
-            .map(|sp| sp.uid)
-            .or_else(|| self.spec.kpio.as_ref().map(|sp| sp.uid))
-            .ok_or(Error::IncompatibleSsc)?;
-
         self.tper
-            .start_session(admin.uid, Some(admin.authorities.sid), Some(sid_password))
+            .start_session(self.spec.admin_sp(), Some(SID), Some(sid_password))
             .await?
             .with(async |session| {
-                let life_cycle_state = session.get_field(secondary_sp_uid.life_cycle_state()).await?;
+                let life_cycle_state = session.get_field(self.spec.secondary_sp().life_cycle_state()).await?;
                 if life_cycle_state != LifeCycleState::ManufacturedInactive {
                     return Err(Error::AlreadyActivated);
                 }
-                session.activate(secondary_sp_uid).await?;
+                session.activate(self.spec.secondary_sp()).await?;
                 Ok(())
             })
             .await?;
@@ -136,12 +117,12 @@ impl SetupSession {
     /// - `password`: the password of the `authority`.
     #[instrument(level = "info", skip(self, password), ret, err)]
     pub async fn revert_tper(&self, authority: AuthorityRef, password: MaxBytes<32>) -> Result<(), Error> {
-        let admin = &self.spec.admin;
+        let spec = &self.spec;
 
         self.tper
-            .start_session(admin.uid, Some(authority), Some(password))
+            .start_session(spec.admin_sp(), Some(authority), Some(password))
             .await?
-            .with(async |session| session.revert(admin.uid).await)
+            .with(async |session| session.revert(spec.admin_sp()).await)
             .await?;
 
         Ok(())
@@ -153,13 +134,12 @@ impl SetupSession {
     /// Only the secondary SP will be reverted, the Admin SP is unaffected.
     #[instrument(level = "info", skip(self, sid_password), ret, err)]
     pub async fn revert_secondary_sp(&self, sid_password: MaxBytes<32>) -> Result<(), Error> {
-        let admin = &self.spec.admin;
-        let secondary_sp_uid = self.spec.secondary_sp_uid().ok_or(Error::IncompatibleSsc)?;
+        let spec = &self.spec;
 
         self.tper
-            .start_session(admin.uid, Some(admin.authorities.sid), Some(sid_password))
+            .start_session(spec.admin_sp(), Some(SID), Some(sid_password))
             .await?
-            .with(async |session| session.revert(secondary_sp_uid).await)
+            .with(async |session| session.revert(spec.secondary_sp()).await)
             .await?;
 
         Ok(())
@@ -176,9 +156,9 @@ impl SetupSession {
         password: MaxBytes<32>,
         keep_global_range_key: Option<bool>,
     ) -> Result<(), Error> {
-        let secondary_sp_uid = self.spec.secondary_sp_uid().ok_or(Error::IncompatibleSsc)?;
+        let spec = &self.spec;
 
-        let session = self.tper.start_session(secondary_sp_uid, Some(admin), Some(password)).await?;
+        let session = self.tper.start_session(spec.secondary_sp(), Some(admin), Some(password)).await?;
         match session.revert_sp(keep_global_range_key).await {
             Ok(()) => Ok(()),
             Err((session, err)) => {

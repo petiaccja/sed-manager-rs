@@ -9,6 +9,7 @@ use std::sync::Arc;
 use googletest::assert_that;
 use googletest::matchers::*;
 use sed_async::{PolyRuntime, TokioRuntime};
+use sed_manager::DeviceSpec;
 use sed_manager::{Error, SetupSession};
 use sed_packet::MaxBytes;
 use sed_packet::com_id::ComIdExt;
@@ -20,14 +21,20 @@ use sed_tper::Tper;
 use sed_virtual_device::{BASE_COM_ID, INITIAL_SID_PASSWORD, PSID_PASSWORD, VirtualDevice};
 use tracing::instrument;
 
+async fn setup() -> (SetupSession, Arc<VirtualDevice>) {
+    let device = Arc::new(VirtualDevice::default());
+    let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
+    let tper = Tper::connect(BASE_COM_ID, ComIdExt(0), None, device.clone(), runtime);
+    let spec = DeviceSpec::try_new(tper.discover_current().await.unwrap()).unwrap();
+    let session = SetupSession::new(&tper, spec);
+    (session, device)
+}
+
 #[instrument]
 #[tokio::test]
 #[with_tracing]
 async fn take_ownership() {
-    let device = Arc::new(VirtualDevice::default());
-    let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
-    let tper = Tper::connect(BASE_COM_ID, ComIdExt(0), None, device.clone(), runtime);
-    let session = SetupSession::new_on_primary_ssc(&tper).await.unwrap();
+    let (session, device) = setup().await;
 
     let block_sid_before = device.discover().get::<BlockSIDAuthDescriptor>().unwrap().clone();
     assert_that!(block_sid_before.sid_msid_pin_differ, eq(false));
@@ -43,10 +50,7 @@ async fn take_ownership() {
 #[tokio::test]
 #[with_tracing]
 async fn take_ownership_already_owned() {
-    let device = Arc::new(VirtualDevice::default());
-    let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
-    let tper = Tper::connect(BASE_COM_ID, ComIdExt(0), None, device.clone(), runtime);
-    let session = SetupSession::new_on_primary_ssc(&tper).await.unwrap();
+    let (session, _device) = setup().await;
 
     session.take_owneship(b"not_default".as_slice().into()).await.unwrap();
     let result = session.take_owneship(b"not_default".as_slice().into()).await;
@@ -57,10 +61,7 @@ async fn take_ownership_already_owned() {
 #[tokio::test]
 #[with_tracing]
 async fn activate_secondary_sp() {
-    let device = Arc::new(VirtualDevice::default());
-    let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
-    let tper = Tper::connect(BASE_COM_ID, ComIdExt(0), None, device.clone(), runtime);
-    let session = SetupSession::new_on_primary_ssc(&tper).await.unwrap();
+    let (session, device) = setup().await;
 
     let locking_before = device.discover().get::<LockingDescriptor>().unwrap().clone();
     assert_that!(locking_before.locking_enabled, eq(false));
@@ -76,10 +77,7 @@ async fn activate_secondary_sp() {
 #[tokio::test]
 #[with_tracing]
 async fn activate_secondary_sp_already_activated() {
-    let device = Arc::new(VirtualDevice::default());
-    let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
-    let tper = Tper::connect(BASE_COM_ID, ComIdExt(0), None, device.clone(), runtime);
-    let session = SetupSession::new_on_primary_ssc(&tper).await.unwrap();
+    let (session, _device) = setup().await;
 
     session.activate_secondary_sp(INITIAL_SID_PASSWORD).await.unwrap();
     let result = session.activate_secondary_sp(INITIAL_SID_PASSWORD).await;
@@ -91,10 +89,7 @@ async fn activate_secondary_sp_already_activated() {
 #[with_tracing]
 async fn revert_tper_with_sid() {
     let new_sid_password = MaxBytes::<32>::from(b"not_default".as_slice());
-    let device = Arc::new(VirtualDevice::default());
-    let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
-    let tper = Tper::connect(BASE_COM_ID, ComIdExt(0), None, device.clone(), runtime);
-    let session = SetupSession::new_on_primary_ssc(&tper).await.unwrap();
+    let (session, device) = setup().await;
 
     session.take_owneship(new_sid_password.clone()).await.unwrap();
     session.activate_secondary_sp(new_sid_password.clone()).await.unwrap();
@@ -113,10 +108,7 @@ async fn revert_tper_with_sid() {
 #[with_tracing]
 async fn revert_tper_with_psid() {
     let new_sid_password = MaxBytes::<32>::from(b"not_default".as_slice());
-    let device = Arc::new(VirtualDevice::default());
-    let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
-    let tper = Tper::connect(BASE_COM_ID, ComIdExt(0), None, device.clone(), runtime);
-    let session = SetupSession::new_on_primary_ssc(&tper).await.unwrap();
+    let (session, device) = setup().await;
 
     session.take_owneship(new_sid_password.clone()).await.unwrap();
     session.activate_secondary_sp(new_sid_password).await.unwrap();
@@ -135,10 +127,7 @@ async fn revert_tper_with_psid() {
 #[with_tracing]
 async fn revert_secondary_sp() {
     let new_sid_password = MaxBytes::<32>::from(b"not_default".as_slice());
-    let device = Arc::new(VirtualDevice::default());
-    let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
-    let tper = Tper::connect(BASE_COM_ID, ComIdExt(0), None, device.clone(), runtime);
-    let session = SetupSession::new_on_primary_ssc(&tper).await.unwrap();
+    let (session, device) = setup().await;
 
     session.take_owneship(new_sid_password.clone()).await.unwrap();
     session.activate_secondary_sp(new_sid_password.clone()).await.unwrap();
@@ -160,10 +149,7 @@ async fn revert_secondary_sp() {
 #[with_tracing]
 async fn revert_secondary_sp_ex() {
     let new_sid_password = MaxBytes::<32>::from(b"not_default".as_slice());
-    let device = Arc::new(VirtualDevice::default());
-    let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
-    let tper = Tper::connect(BASE_COM_ID, ComIdExt(0), None, device.clone(), runtime);
-    let session = SetupSession::new_on_primary_ssc(&tper).await.unwrap();
+    let (session, device) = setup().await;
 
     session.take_owneship(new_sid_password.clone()).await.unwrap();
     session.activate_secondary_sp(new_sid_password.clone()).await.unwrap();
@@ -185,10 +171,7 @@ async fn revert_secondary_sp_ex() {
 #[tokio::test]
 #[with_tracing]
 async fn change_password() {
-    let device = Arc::new(VirtualDevice::default());
-    let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
-    let tper = Tper::connect(BASE_COM_ID, ComIdExt(0), None, device.clone(), runtime);
-    let session = SetupSession::new_on_primary_ssc(&tper).await.unwrap();
+    let (session, _device) = setup().await;
     const NEW_PASSWORD: &[u8] = b"not_default".as_slice();
 
     // Change the password of SID, authenticating in with the MSID password.
@@ -208,10 +191,7 @@ async fn change_password() {
 #[tokio::test]
 #[with_tracing]
 async fn list_authorities() {
-    let device = Arc::new(VirtualDevice::default());
-    let runtime = Arc::new(PolyRuntime::Tokio(TokioRuntime::current().unwrap()));
-    let tper = Tper::connect(BASE_COM_ID, ComIdExt(0), None, device.clone(), runtime);
-    let session = SetupSession::new_on_primary_ssc(&tper).await.unwrap();
+    let (session, _device) = setup().await;
 
     let result = session.list_authorities(opal_admin::sp::ADMIN).await;
     assert_that!(result, ok(anything()));

@@ -6,8 +6,8 @@
 use sed_device::Error as DeviceError;
 use sed_tper::Error as TperError;
 
-use crate::authority_plan::AuthorityPlanError;
-use crate::locking_range_plan::LockingRangePlanError;
+use crate::locking_config::AuthorityPlanError;
+use crate::locking_config::LockingRangePlanError;
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum Error {
@@ -21,6 +21,8 @@ pub enum Error {
     NotSupported,
     #[error("The device does not support any TCG SSCs")]
     NoSscAvailable,
+    #[error("The device is not TCG Storage specification compliant")]
+    NotTcgDevice,
     #[error("The feature is supported by the device, but isn't not implemented")]
     NotImplemented,
     #[error("Ownership has already been set up on this device")]

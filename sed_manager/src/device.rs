@@ -16,12 +16,13 @@ use sed_spec::objects::AuthorityRef;
 use sed_tper::{PropertiesChanged, Tper};
 use tracing::instrument;
 
-use crate::{Error, Geometry, LockingConfigSession, SetupSession, Spec};
+use crate::{DeviceSpec, Error, Geometry, LockingConfigSession, SetupSession};
 
+/// A handle to a physical drive, which may or may not be a self-encrypting drive.
 #[derive(Debug)]
 pub struct Device {
     storage_device: Arc<dyn StorageDevice>,
-    spec: Result<Spec, Error>,
+    spec: Result<DeviceSpec, Error>,
     tper: Option<Tper>,
 }
 
@@ -30,13 +31,15 @@ impl Device {
     #[instrument(level = "info")]
     pub async fn new(storage_device: Box<dyn StorageDevice>, runtime: Arc<PolyRuntime>) -> Self {
         let storage_device = Arc::from(storage_device);
-        let spec = Tper::discover(&*storage_device)
-            .await
-            .map_err(Error::from)
-            .and_then(|discovery| Spec::try_from(discovery).map_err(|_| Error::NoSscAvailable));
-        let tper = spec.as_ref().ok().and_then(|spec| spec.default_ssc()).map(|ssc| {
-            Tper::connect(ssc.static_com_ids_p1().start, ComIdExt(0), Some(&ssc), storage_device.clone(), runtime)
-        });
+        let spec = Tper::discover(&*storage_device).await.map_err(Error::from).and_then(DeviceSpec::try_new);
+        let tper = spec
+            .as_ref()
+            .map(|spec| {
+                let com_id = spec.ssc_desc.static_com_ids_p1().start;
+                let com_id_ext = ComIdExt(0);
+                Tper::connect(com_id, com_id_ext, Some(&spec.ssc_desc), storage_device.clone(), runtime)
+            })
+            .ok();
         Self { storage_device, spec, tper }
     }
 
@@ -63,7 +66,7 @@ impl Device {
     }
 
     // Return the specification corresponding to the chosen SSC.
-    pub fn spec(&self) -> Result<&Spec, Error> {
+    pub fn spec(&self) -> Result<&DeviceSpec, Error> {
         self.spec.as_ref().map_err(Clone::clone)
     }
 

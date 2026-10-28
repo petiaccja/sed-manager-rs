@@ -11,7 +11,7 @@ use std::sync::Arc;
 
 use async_lock::RwLock;
 use sed_async::{PolyRuntime, Runtime as _};
-use sed_manager::{Device, Spec};
+use sed_manager::{Device, DeviceSpec};
 use sed_manager_gui_slint as ui;
 use slint::EventLoopError;
 use tracing::Instrument;
@@ -501,8 +501,8 @@ pub struct CommandOnSession<RunFn, Output> {
     toast_queue: Rc<ToastQueue>,
     device_id: PathBuf,
     run_fn: RunFn,
-    success_fn: Option<Box<dyn FnOnce(ui::Device, Option<&Spec>, Output) -> ui::Device>>,
-    error_fn: Option<Box<dyn FnOnce(ui::Device, Option<&Spec>, Error) -> ui::Device>>,
+    success_fn: Option<Box<dyn FnOnce(ui::Device, Option<&DeviceSpec>, Output) -> ui::Device>>,
+    error_fn: Option<Box<dyn FnOnce(ui::Device, Option<&DeviceSpec>, Error) -> ui::Device>>,
     finally_fn: Option<Box<dyn FnOnce(ui::Device) -> ui::Device>>,
     success_msg: Option<String>,
     error_msg: Option<String>,
@@ -516,14 +516,14 @@ where
 {
     pub fn on_success<SuccessFn>(self, success_fn: SuccessFn) -> Self
     where
-        SuccessFn: FnOnce(ui::Device, Option<&Spec>, Output) -> ui::Device + 'static,
+        SuccessFn: FnOnce(ui::Device, Option<&DeviceSpec>, Output) -> ui::Device + 'static,
     {
         Self { success_fn: Some(Box::new(success_fn)), ..self }
     }
 
     pub fn on_error<ErrorFn>(self, error_fn: ErrorFn) -> Self
     where
-        ErrorFn: FnOnce(ui::Device, Option<&Spec>, Error) -> ui::Device + 'static,
+        ErrorFn: FnOnce(ui::Device, Option<&DeviceSpec>, Error) -> ui::Device + 'static,
     {
         Self { error_fn: Some(Box::new(error_fn)), ..self }
     }
@@ -622,10 +622,10 @@ where
 #[expect(clippy::too_many_arguments, reason = "not critical, but fix it possible")]
 fn process_result_with_spec<Output>(
     result: Result<Output, Error>,
-    spec: Option<&Spec>,
+    spec: Option<&DeviceSpec>,
     toast_queue: Rc<ToastQueue>,
-    success_fn: Option<Box<dyn FnOnce(ui::Device, Option<&Spec>, Output) -> ui::Device + 'static>>,
-    error_fn: Option<Box<dyn FnOnce(ui::Device, Option<&Spec>, Error) -> ui::Device + 'static>>,
+    success_fn: Option<Box<dyn FnOnce(ui::Device, Option<&DeviceSpec>, Output) -> ui::Device + 'static>>,
+    error_fn: Option<Box<dyn FnOnce(ui::Device, Option<&DeviceSpec>, Error) -> ui::Device + 'static>>,
     finally_fn: Option<Box<dyn FnOnce(ui::Device) -> ui::Device + 'static>>,
     value: ui::Device,
     success_msg: Option<String>,

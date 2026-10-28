@@ -3,9 +3,11 @@
 //L Please refer to the full license distributed with this software.
 //L-----------------------------------------------------------------------------
 
-use sed_spec::objects::SecurityProviderRef;
+mod authority_plan;
+mod locking_config_session;
+mod locking_range_plan;
+mod plan;
 
-#[derive(Debug, Clone)]
-pub struct Locking {
-    pub uid: SecurityProviderRef,
-}
+pub use authority_plan::AuthorityPlanError;
+pub use locking_config_session::LockingConfigSession;
+pub use locking_range_plan::LockingRangePlanError;
